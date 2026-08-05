@@ -1,0 +1,14 @@
+target/
+**/target/
+.idea/
+*.iml
+.DS_Store
+
+# 第 0 阶段备份包含生产配置和数据库快照，禁止提交。
+backups/*
+!backups/.gitkeep
+
+# 本地自检配置可能包含数据库凭据。
+.env
+phase0.local.yml
+

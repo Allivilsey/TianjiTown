@@ -1,0 +1,172 @@
+schema-version: 1
+mode: dry-run
+# 此文件由只读扫描生成；town-id、mayor 和 Residence 映射必须人工复核。
+legacy-groups:
+  aucuba:
+    display-name: "Aucuba"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  cxz:
+    display-name: "春雪镇"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  emskz:
+    display-name: "鄂木斯克镇"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  hfld:
+    display-name: "和风流地"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  hsz:
+    display-name: "黑水镇"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  jmz:
+    display-name: "基米镇"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  krs:
+    display-name: "烤肉社"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  mys:
+    display-name: "米游社"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  qxh:
+    display-name: "卿小黑"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  sc:
+    display-name: "拾城"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  sdb:
+    display-name: "斯德堡"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  sjx:
+    display-name: "四季乡"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  sxwqz:
+    display-name: "水箱温泉镇"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  tds:
+    display-name: "塔迪斯镇"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  tkg:
+    display-name: "天空港"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  tlz:
+    display-name: "塔罗镇"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  tsz:
+    display-name: "趟水镇"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  xlc:
+    display-name: "香来村"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  xyzm:
+    display-name: "下一终末"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  yhz:
+    display-name: "圆蛤镇"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  yyx:
+    display-name: "云烟乡"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  yz:
+    display-name: "夜镇"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  zlc:
+    display-name: "杂粮村"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true
+  zmz:
+    display-name: "筑梦镇"
+    town-id: null
+    mayor-uuid: null
+    residence-names: []
+    block-new-membership: true
+    block-new-town-name: true

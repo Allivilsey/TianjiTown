@@ -1,0 +1,21 @@
+name: TianjiTown
+version: '${project.version}'
+main: cn.tianji.town.paper.TianjiTownPlugin
+api-version: '1.21'
+load: POSTWORLD
+authors: [Tianji]
+description: 天际服小镇系统（第0阶段门禁构建）
+depend: [Vault, Residence, QuickShop-Hikari]
+commands:
+  townadmin:
+    description: TianjiTown 管理命令
+    usage: /townadmin phase0 status
+    permission: tianjitown.admin
+permissions:
+  tianjitown.admin:
+    description: TianjiTown 全部管理权限
+    default: op
+  tianjitown.admin.phase0:
+    description: 执行第0阶段预发验证
+    default: op
+
