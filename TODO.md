@@ -42,11 +42,11 @@
 - [x] Residence 当前启用多世界、忽略 Y 轴选区，且仍允许玩家创建普通领地。
 - [x] 现服存在 DailyTaxEconomy，上线前必须确认它与 TianjiTown 清算账户的关系。
 - [x] 2025-11-18 的最近 QuickShop 诊断快照显示：Leaf/Paper 兼容服务端 1.21.8、Java 21、QuickShop-Hikari 6.2.0.10、Residence 6.0.1.1、Vault 1.7.3-b131、XConomy 2.26.3。
-- [x] 采用默认开发锁：Minecraft/Paper API `1.21.8`、Java 21；实际运行版本由插件上线门禁复核。
-- [ ] 仅使用 Paper API 编译，在 Leaf 上做生产兼容测试，不依赖 Leaf 内部 API。
-  - [x] 已锁定 Paper API `1.21.8` 唯一快照并完成编译，代码不引用 Leaf API。
-  - [ ] 待在当前生产同版本 Leaf 预发服验证。
-- [x] 采用默认插件锁：Residence `6.0.1.1`、Vault `1.7.3-b131`、XConomy `2.26.3`、QuickShop-Hikari `6.2.0.10`。
+- [x] 采用当前生产开发锁：Minecraft `26.2`、Paper API `26.2.build.84-stable`、Java 25；实际运行版本由插件上线门禁复核。
+- [x] 仅使用 Paper API 编译，在生产同版本 Paper 上做兼容测试，不依赖服务端内部 API。
+  - [x] 已锁定 Paper API `26.2.build.84-stable` 并完成编译配置，代码不引用服务端内部 API。
+  - [x] 已在当前生产同版本 Paper `26.2-84` 测试服完成联合验证。
+- [x] 采用当前插件锁：Residence `6.0.2.4`、Vault `1.7.3-b131`、XConomy `2.26.3`、QuickShop-Hikari `6.2.0.10`。
 - [x] 已建立运行版本锁定清单；实际 JAR 不一致时插件保持 `LOCKED`，升级前必须在测试服验证。
 - [x] TianjiTown 使用 MySQL。
 - [x] 确定 TianjiTown 独立数据库名、账户权限、连接池上限和备份策略。
@@ -548,7 +548,7 @@
 - [x] 建立 Maven 聚合工程骨架、CI 构建、单元测试和可重现的生产 JAR。
 - [x] 实现最小验证程序，覆盖 Residence API 的创建、成员权限、删除、重建和区块碰撞判断。
   - [x] 已实现带预发世界白名单、空区块确认和自动清理的冒烟程序。
-  - [ ] 待在生产同版本预发服实际执行并保存结果。
+  - [x] 已于 2026-08-05 在 Paper 26.2-84 / Java 25 同版本测试服执行并保存结果。
 - [x] 确定 MySQL 数据库、最小权限账户、连接池、Flyway 和备份/恢复方案。
 - [x] 完成 YAML 的 schema、revision、checksum、原子替换和可编辑字段白名单设计。
 - [x] 确认新周目采用独立空业务 schema，全量重建小镇、成员、名称和领地关系。
@@ -558,8 +558,8 @@
 
 #### 完成门槛
 
-- [ ] 能在生产同版本的预发服上启动空插件，通过依赖、MySQL、YAML 和 Residence 自检。
-- [ ] 确认首次启动时业务表为空，只有阶段门禁和 Flyway 元数据。
+- [x] 能在生产同版本的预发服上启动空插件，通过依赖、MySQL、YAML 和 Residence 自检。
+- [x] 确认首次启动时业务表为空，只有阶段门禁和 Flyway 元数据。
 
 ### 第 1 阶段：申请、批准与可运行小镇（`1.0.0`）
 
@@ -569,53 +569,53 @@
 
 #### 1. 基础运行能力
 
-- [ ] 完成 `tianjitown-core`、`tianjitown-storage`、`tianjitown-paper` 和 Residence/Vault 集成的最小可生产实现。
-- [ ] 实现首批 MySQL 表：`towns`、`town_members`、`town_applications`、`application_reviews`、`site_reservations`、`territory_units`、`audit_logs`、`town_profile_sync`。
-- [ ] 实现 MySQL 异步访问、事务、幂等键、乐观锁、连接失效降级和主线程保护。
-- [ ] 实现 YAML 基本资料镜像、自动导出、校验、手工导入、备份和审计。
-- [ ] 提供 `/townadmin status`、`reload`、`audit`、`data validate/export/import` 和必需权限。
-- [ ] 启动失败和部分依赖不可用时给出可操作的中文错误，不静默创建半成品小镇。
+- [x] 完成 `tianjitown-core`、`tianjitown-storage`、`tianjitown-paper` 和 Residence/Vault 集成的最小可生产实现。
+- [x] 实现首批 MySQL 表：`towns`、`town_members`、`town_applications`、`application_reviews`、`site_reservations`、`territory_units`、`audit_logs`、`town_profile_sync`。
+- [x] 实现 MySQL 异步访问、事务、幂等键、乐观锁、连接失效降级和主线程保护。
+- [x] 实现 YAML 基本资料镜像、自动导出、校验、手工导入、备份和审计。
+- [x] 提供 `/townadmin status`、`reload`、`audit`、`data validate/export/import` 和必需权限。
+- [x] 启动失败和部分依赖不可用时给出可操作的中文错误，不静默创建半成品小镇。
 
 #### 2. 玩家申请与基本资料
 
-- [ ] 实现讲台小镇服务台、小镇手册和第 1 版主 GUI，不开放玩家命令。
-- [ ] 实现书本申请表单：名称、简称、简介、规则和确认页。
-- [ ] 实现 `DRAFT → SITE_SELECTED → SUBMITTED → UNDER_REVIEW/NEED_CHANGES → APPROVED_PROVISIONING → ACTIVE` 完整状态机。
-- [ ] 实现申请人资格、名称唯一性、文本安全、未完成申请和冷却校验。
-- [ ] 实现申请摘要、管理员意见、补充后重新提交和申请人撤回。
-- [ ] 批准后生成 MySQL 小镇记录与 `towns/<uuid>.yml`，并向玩家提供只读小镇详情 GUI。
-- [ ] 镇长可通过书本 UI 修改简介和规则；名称/简称修改需要管理员审核或代办。
+- [x] 实现讲台小镇服务台、小镇手册和第 1 版主 GUI，不开放玩家命令。
+- [x] 实现书本申请表单：名称、简称、简介、规则和确认页。
+- [x] 实现 `DRAFT → SITE_SELECTED → SUBMITTED → UNDER_REVIEW/NEED_CHANGES → APPROVED_PROVISIONING → ACTIVE` 完整状态机。
+- [x] 实现申请人资格、名称唯一性、文本安全、未完成申请和冷却校验。
+- [x] 实现申请摘要、管理员意见、补充后重新提交和申请人撤回。
+- [x] 批准后生成 MySQL 小镇记录与 `towns/<uuid>.yml`，并向玩家提供只读小镇详情 GUI。
+- [x] 镇长可通过书本 UI 修改简介和规则；名称/简称修改需要管理员审核或代办。
 
 #### 3. 选址与初始领地
 
-- [ ] 玩家通过 GUI 记录当前区块为中心，预览 3×3 区块并生成有效期选址预留。
-- [ ] 校验服务区、世界边界、黑名单区、已有 Residence、已有 TianjiTown 领地、其他申请预留和小镇缓冲距离。
-- [ ] 批准时在 MySQL 事务内占用初始领地，再生成 `tt_` 命名空间的 Residence 投影。
-- [ ] 实现 `PROVISION_FAILED`、管理员幂等重试、Residence 对账/重建和完整审计。
-- [ ] 第 1 阶段领地固定为初始 3×3，不提供扩张 UI。
+- [x] 玩家通过 GUI 记录当前区块为中心，预览 3×3 区块并生成有效期选址预留。
+- [x] 校验服务区、世界边界、黑名单区、已有 Residence、已有 TianjiTown 领地、其他申请预留和小镇缓冲距离。
+- [x] 批准时在 MySQL 事务内占用初始领地，再生成 `tt_` 命名空间的 Residence 投影。
+- [x] 实现 `PROVISION_FAILED`、管理员幂等重试、Residence 对账/重建和完整审计。
+- [x] 第 1 阶段领地固定为初始 3×3，不提供扩张 UI。
 
 #### 4. 最小成员体系
 
-- [ ] 申请人在批准后自动成为 `MAYOR`。
-- [ ] 支持镇长通过 GUI 邀请玩家，被邀者查看完整小镇资料/规则并确认后加入为 `MEMBER`。
-- [ ] 支持普通成员主动退出；第 1 阶段不提供官员、投票踢人或强制换镇长。
-- [ ] 提供管理员应急移除成员、转移镇长和归档小镇命令，全部需要原因和审计。
-- [ ] 成员数不设上限，成员列表从第 1 阶段开始使用分页查询。
+- [x] 申请人在批准后自动成为 `MAYOR`。
+- [x] 支持镇长通过 GUI 邀请玩家，被邀者查看完整小镇资料/规则并确认后加入为 `MEMBER`。
+- [x] 支持普通成员主动退出；第 1 阶段不提供官员、投票踢人或强制换镇长。
+- [x] 提供管理员应急移除成员、转移镇长和归档小镇命令，全部需要原因和审计。
+- [x] 成员数不设上限，成员列表从第 1 阶段开始使用分页查询。
 
 #### 5. 新周目数据边界
 
-- [ ] 申请、成员、角色和名称唯一性只查询 TianjiTown MySQL。
-- [ ] 所有名称均按本系统规则申请并建立唯一约束。
-- [ ] 任何新小镇选址必须避开当前世界内的所有外部 Residence，以免覆盖非 TianjiTown 领地。
-- [ ] 成员关系、角色和权限均由 TianjiTown 领域模型管理。
-- [ ] 启动与运行过程中只加载 TianjiTown 自有数据库、配置和 YAML 镜像。
+- [x] 申请、成员、角色和名称唯一性只查询 TianjiTown MySQL。
+- [x] 所有名称均按本系统规则申请并建立唯一约束。
+- [x] 任何新小镇选址必须避开当前世界内的所有外部 Residence，以免覆盖非 TianjiTown 领地。
+- [x] 成员关系、角色和权限均由 TianjiTown 领域模型管理。
+- [x] 启动与运行过程中只加载 TianjiTown 自有数据库、配置和 YAML 镜像。
 
 #### 6. 第 1 阶段管理命令
 
-- [ ] 完成服务台/手册命令、申请列表/详情/补件/批准/拒绝/重试命令。
-- [ ] 完成小镇详情、成员邀请/添加/移除、镇长紧急转移和小镇归档命令。
-- [ ] 完成领地预览、Residence 对账/重建和 YAML 数据维护命令。
-- [ ] 未实现的 money/tax/buff/order/vote/expand 管理命令不在第 1 阶段注册。
+- [x] 完成服务台/手册命令、申请列表/详情/补件/批准/拒绝/重试命令。
+- [x] 完成小镇详情、成员邀请/添加/移除、镇长紧急转移和小镇归档命令。
+- [x] 完成领地预览、Residence 对账/重建和 YAML 数据维护命令。
+- [x] 未实现的 money/tax/buff/order/vote/expand 管理命令不在第 1 阶段注册。
 
 #### 第 1 阶段生产验收门槛
 

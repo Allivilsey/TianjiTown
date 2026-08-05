@@ -27,9 +27,10 @@ public final class DatabaseGate implements AutoCloseable {
         hikari.setReadOnly(false);
         hikari.setLeakDetectionThreshold(30_000);
         dataSource = new HikariDataSource(hikari);
-        flyway = Flyway.configure()
+        flyway = Flyway.configure(DatabaseGate.class.getClassLoader())
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
+                .failOnMissingLocations(true)
                 .validateMigrationNaming(true)
                 .cleanDisabled(true)
                 .load();
@@ -47,10 +48,13 @@ public final class DatabaseGate implements AutoCloseable {
             return HealthResult.failure(exception.getClass().getSimpleName() + ": " + exception.getMessage());
         }
         try {
-            flyway.validate();
             flyway.migrate();
+            flyway.validate();
             MigrationInfo current = flyway.info().current();
-            return HealthResult.success(current == null ? "empty" : current.getVersion().toString());
+            if (current == null) {
+                return HealthResult.failure("未发现或执行任何 Flyway 迁移");
+            }
+            return HealthResult.success(current.getVersion().toString());
         } catch (RuntimeException exception) {
             return HealthResult.failure(exception.getClass().getSimpleName() + ": " + exception.getMessage());
         }
@@ -58,6 +62,18 @@ public final class DatabaseGate implements AutoCloseable {
 
     public HikariDataSource dataSource() {
         return dataSource;
+    }
+
+    public boolean ping() {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("SELECT 1")) {
+            boolean healthy = result.next() && result.getInt(1) == 1;
+            connection.rollback();
+            return healthy;
+        } catch (SQLException exception) {
+            return false;
+        }
     }
 
     @Override

@@ -1,8 +1,46 @@
+# Maven / Java 构建产物
 target/
-**/target/
+out/
+*.class
+dependency-reduced-pom.xml
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+pom.xml.tag
+pom.xml.branch
+release.properties
+buildNumber.properties
+
+# IDE 与编辑器本地状态
 .idea/
 *.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+*.swp
+*.swo
+*~
+
+# 操作系统生成文件
 .DS_Store
+Thumbs.db
+Desktop.ini
+
+# 本地运行、诊断与临时文件
+logs/
+reports/
+*.log
+*.pid
+*.jfr
+*.tmp
+*.temp
+*.orig
+hs_err_pid*
+replay_pid*
 
 # 第 0 阶段回滚备份包含生产配置和数据库快照，禁止提交。
 backups/*
@@ -10,4 +48,7 @@ backups/*
 
 # 本地自检配置可能包含数据库凭据。
 .env
-phase0.local.yml
+.env.*
+!.env.example
+*.local.yml
+*.local.yaml

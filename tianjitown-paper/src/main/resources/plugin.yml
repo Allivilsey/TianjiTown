@@ -1,15 +1,15 @@
 name: TianjiTown
 version: '${project.version}'
 main: cn.tianji.town.paper.TianjiTownPlugin
-api-version: '1.21'
+api-version: '26.2'
 load: POSTWORLD
 authors: [Tianji]
-description: 天际服小镇系统（第0阶段门禁构建）
+description: 天际服小镇系统（阶段1生产版）
 depend: [Vault, Residence, QuickShop-Hikari]
 commands:
   townadmin:
     description: TianjiTown 管理命令
-    usage: /townadmin phase0 status
+    usage: /townadmin help
     permission: tianjitown.admin
 permissions:
   tianjitown.admin:

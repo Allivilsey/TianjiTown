@@ -40,4 +40,20 @@ class YamlProfileStoreTest {
         assertFalse(result.valid());
         assertTrue(result.errors().stream().anyMatch(error -> error.contains("unknown-money")));
     }
+
+    @Test
+    void importAcceptsEditedAllowedFieldsWithStaleChecksum() throws Exception {
+        YamlProfileStore store = new YamlProfileStore();
+        Path file = directory.resolve("edited.yml");
+        TownProfile profile = new TownProfile(1, UUID.randomUUID(), 2,
+                Instant.parse("2026-08-04T00:00:00Z"), "原名称", "原名", "原简介",
+                List.of("规则"), Map.of("listed", true), "");
+        store.writeAtomically(file, profile);
+        String edited = Files.readString(file).replace("原简介", "人工修改后的简介");
+        Files.writeString(file, edited);
+        assertFalse(store.readAndValidate(file).valid());
+        YamlProfileStore.ReadResult importResult = store.readForImport(file);
+        assertTrue(importResult.valid(), () -> String.join("; ", importResult.errors()));
+        assertEquals("人工修改后的简介", importResult.profile().description());
+    }
 }

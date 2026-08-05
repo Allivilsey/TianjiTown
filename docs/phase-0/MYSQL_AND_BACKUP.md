@@ -8,7 +8,7 @@
 | 应用账户 | `tianjitown_app`，仅允许游戏服来源地址（服主已确认） |
 | 连接池 | maximum `6`，minimum idle `1`，连接超时 `5s`（服主已确认） |
 | 字符集/时区 | `utf8mb4` / `Asia/Shanghai` |
-| Flyway | 插件启动时先 validate 再 migrate；禁止 clean |
+| Flyway | 插件启动时执行 migrate，并在迁移后 validate；禁止 clean |
 | 备份 | 每日一次，保留 14 个日备份、8 个周备份；每次上线前额外备份（服主已确认） |
 
 应用账户最小权限：目标 schema 上的 `SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES`。不要授予全局权限、`DROP`、`GRANT OPTION`、`FILE` 或用户管理权限。备份使用独立只读账号，额外按实际对象授予 `SHOW VIEW, TRIGGER, EVENT`。

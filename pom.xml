@@ -6,7 +6,7 @@
 
     <groupId>cn.tianji</groupId>
     <artifactId>tianjitown-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <packaging>pom</packaging>
 
     <name>TianjiTown</name>
@@ -21,16 +21,16 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.release>25</maven.compiler.release>
         <project.build.outputTimestamp>2026-08-04T00:00:00Z</project.build.outputTimestamp>
 
-        <paper.version>1.21.8-R0.1-20250906.215025-55</paper.version>
-        <!-- 生产基线是 6.0.1.1，但该版本没有可解析的公开 Maven 构件；
-             先以相邻公开 API 6.0.0.1 编译，并在运行时严格校验 6.0.1.1。 -->
+        <paper.version>26.2.build.84-stable</paper.version>
+        <!-- 生产运行基线是 6.0.2.4，但该版本没有可解析的公开 Maven 构件；
+             先以公开 API 6.0.0.1 编译，并在运行时严格校验 6.0.2.4。 -->
         <residence.api.version>6.0.0.1</residence.api.version>
         <vault.api.version>1.7</vault.api.version>
         <hikari.version>5.1.0</hikari.version>
-        <flyway.version>10.22.0</flyway.version>
+        <flyway.version>13.1.0</flyway.version>
         <mysql.version>8.4.0</mysql.version>
         <snakeyaml.version>2.3</snakeyaml.version>
         <junit.version>5.11.4</junit.version>

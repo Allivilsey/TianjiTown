@@ -2,7 +2,8 @@ package cn.tianji.town.paper;
 
 import cn.tianji.town.core.profile.TownProfile;
 import cn.tianji.town.integrations.DependencyVersions;
-import cn.tianji.town.integrations.residence.ResidenceSmokeTest;
+import cn.tianji.town.integrations.residence.ResidenceLandProtectionService;
+import cn.tianji.town.integrations.residence.ResidenceCommandGuard;
 import cn.tianji.town.integrations.vault.VaultEconomyProbe;
 import cn.tianji.town.storage.database.DatabaseConfig;
 import cn.tianji.town.storage.database.DatabaseGate;
@@ -25,6 +26,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
     private final AtomicReference<GateStatus> gateStatus = new AtomicReference<>(
             new GateStatus(GateStatus.State.CHECKING, List.of("尚未开始")));
     private volatile DatabaseGate databaseGate;
+    private volatile PhaseOneRuntime phaseOneRuntime;
+    private volatile TownUiController townUi;
 
     @Override
     public void onEnable() {
@@ -34,9 +37,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
         boolean yamlHealthy = checkYamlMirror(synchronousChecks);
         gateStatus.set(new GateStatus(GateStatus.State.CHECKING, synchronousChecks));
 
-        PhaseZeroCommand command = new PhaseZeroCommand(this, new ResidenceSmokeTest());
         java.util.Objects.requireNonNull(getCommand("townadmin"), "plugin.yml 缺少 townadmin")
-                .setExecutor(command);
+                .setExecutor(new TownAdminCommand(this));
 
         if (!dependenciesHealthy || !yamlHealthy) {
             lock("同步门禁未通过", synchronousChecks);
@@ -51,10 +53,20 @@ public final class TianjiTownPlugin extends JavaPlugin {
             databaseGate.close();
             databaseGate = null;
         }
+        phaseOneRuntime = null;
+        townUi = null;
     }
 
     public GateStatus gateStatus() {
         return gateStatus.get();
+    }
+
+    PhaseOneRuntime phaseOneRuntime() {
+        return phaseOneRuntime;
+    }
+
+    TownUiController townUi() {
+        return townUi;
     }
 
     private boolean checkRuntimeAndDependencies(List<String> details) {
@@ -145,20 +157,43 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 candidate.close();
                 return;
             }
-            databaseGate = candidate;
-            details.add("OK " + result.detail());
-            gateStatus.set(new GateStatus(GateStatus.State.READY, details));
-            getLogger().info("第0阶段启动门禁通过；本构建不开放玩家功能。");
+            getServer().getScheduler().runTask(this, () -> activatePhaseOne(candidate, details,
+                    result.detail()));
         } catch (RuntimeException exception) {
             details.add("FAIL MySQL config: " + exception.getMessage());
             lock("数据库配置无效", details);
         }
     }
 
+    private void activatePhaseOne(DatabaseGate candidate, List<String> previousDetails,
+                                  String databaseDetail) {
+        if (!isEnabled()) {
+            candidate.close();
+            return;
+        }
+        databaseGate = candidate;
+        PhaseOneRuntime runtime = new PhaseOneRuntime(this, candidate,
+                new ResidenceLandProtectionService(getServer()));
+        TownUiController ui = new TownUiController(this, runtime);
+        phaseOneRuntime = runtime;
+        townUi = ui;
+        getServer().getPluginManager().registerEvents(ui, this);
+        getServer().getPluginManager().registerEvents(new ResidenceCommandGuard(), this);
+        getServer().getScheduler().runTaskTimer(this, runtime::checkRecovery, 20L * 30, 20L * 30);
+        getServer().getScheduler().runTaskLater(this, runtime::inspectProfileMirrors, 20L * 5);
+        getServer().getScheduler().runTaskTimer(this, runtime::reconcileAll, 20L * 10,
+                20L * 60 * 60);
+        List<String> details = new ArrayList<>(previousDetails);
+        details.add("OK " + databaseDetail);
+        details.add("OK 阶段1玩家 UI、审批事务与 Residence 投影已启用");
+        gateStatus.set(new GateStatus(GateStatus.State.READY, details));
+        getLogger().info("阶段1启动完成；玩家入口仅限服务台和小镇手册。");
+    }
+
     private void lock(String reason, List<String> details) {
         List<String> copy = new ArrayList<>(details);
         copy.add("LOCKED " + reason);
         gateStatus.set(new GateStatus(GateStatus.State.LOCKED, copy));
-        getLogger().severe(reason + "；TianjiTown 所有写功能保持锁定。使用 /townadmin phase0 status 查看详情。");
+        getLogger().severe(reason + "；TianjiTown 所有写功能保持锁定。使用 /townadmin status 查看详情。");
     }
 }

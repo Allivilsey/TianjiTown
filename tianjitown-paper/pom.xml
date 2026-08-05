@@ -6,7 +6,7 @@
     <parent>
         <groupId>cn.tianji</groupId>
         <artifactId>tianjitown-parent</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>1.0.0</version>
     </parent>
     <artifactId>tianjitown-paper</artifactId>
     <name>TianjiTown Paper</name>

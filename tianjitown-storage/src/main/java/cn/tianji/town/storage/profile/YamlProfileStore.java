@@ -69,6 +69,14 @@ public final class YamlProfileStore {
     }
 
     public ReadResult readAndValidate(Path source) throws IOException {
+        return read(source, true);
+    }
+
+    public ReadResult readForImport(Path source) throws IOException {
+        return read(source, false);
+    }
+
+    private ReadResult read(Path source, boolean requireMatchingChecksum) throws IOException {
         Object loaded;
         try (Reader reader = Files.newBufferedReader(source, StandardCharsets.UTF_8)) {
             loaded = yaml.load(reader);
@@ -81,7 +89,8 @@ public final class YamlProfileStore {
                 .forEach(key -> errors.add("不允许的字段: " + key));
         try {
             TownProfile profile = fromMap(raw);
-            errors.addAll(validator.validate(profile));
+            TownProfile validated = requireMatchingChecksum ? profile : sign(profile.withoutChecksum());
+            errors.addAll(validator.validate(validated));
             return errors.isEmpty() ? ReadResult.valid(profile) : ReadResult.invalid(errors);
         } catch (RuntimeException exception) {
             errors.add("字段格式错误: " + exception.getMessage());

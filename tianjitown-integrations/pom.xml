@@ -6,11 +6,16 @@
     <parent>
         <groupId>cn.tianji</groupId>
         <artifactId>tianjitown-parent</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <version>1.0.0</version>
     </parent>
     <artifactId>tianjitown-integrations</artifactId>
     <name>TianjiTown Integrations</name>
     <dependencies>
+        <dependency>
+            <groupId>cn.tianji</groupId>
+            <artifactId>tianjitown-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>

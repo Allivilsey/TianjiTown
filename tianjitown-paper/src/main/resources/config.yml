@@ -11,10 +11,10 @@ database:
     connection-timeout-ms: 5000
 
 version-lock:
-  minecraft: '1.21.8'
-  java-feature: 21
+  minecraft: '26.2'
+  java-feature: 25
   plugins:
-    Residence: '6.0.1.1'
+    Residence: '6.0.2.4'
     Vault: '1.7.3-b131'
     XConomy: '2.26.3'
     QuickShop-Hikari: '6.2.0.10'
@@ -23,4 +23,34 @@ phase0:
   # 必须只在预发服临时开启。生产服保持 false。
   allow-residence-smoke: false
   residence-smoke-world: '__SET_PREPRODUCTION_WORLD__'
+
+phase1:
+  # YAML 人工导入前设为 true 并 reload；此时玩家 UI 全部暂停。
+  maintenance-mode: false
+  application:
+    # 撤回或被拒绝后的再次申请冷却。
+    cooldown-hours: 24
+    # 选址提交后的临时保留时间。
+    reservation-minutes: 60
+  site:
+    # 只允许在明确列出的世界选址。
+    allowed-worlds:
+      - world
+    # 生产环境建议保持 true，并至少配置一个服务区。
+    require-service-area: true
+    minimum-buffer-chunks: 1
+    # 坐标均为区块坐标；3×3 初始领地必须完整位于矩形内。
+    service-areas:
+      - world: world
+        min-chunk-x: -1000
+        max-chunk-x: 1000
+        min-chunk-z: -1000
+        max-chunk-z: 1000
+    # 出生点、活动区和管理区应在此配置；以下示例保护出生区。
+    blacklist:
+      - world: world
+        min-chunk-x: -8
+        max-chunk-x: 8
+        min-chunk-z: -8
+        max-chunk-z: 8
 
