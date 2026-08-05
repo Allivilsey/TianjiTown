@@ -22,7 +22,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES
 ON tianjitown.* TO 'tianjitown_app'@'<paper-host>';
 ```
 
-凭据只通过环境变量注入，不写入仓库。现服配置快照中存在明文数据库凭据，上线前应轮换相关密码。
+凭据只通过环境变量注入，不写入仓库。提供的插件配置中存在明文数据库凭据，上线前应轮换相关密码。
 
 ## 备份与恢复演练
 

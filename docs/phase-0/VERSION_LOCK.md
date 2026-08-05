@@ -22,6 +22,5 @@ Residence `6.0.1.1` 没有可解析的公开 Maven tag/artifact，不能假装�
 
 1. 更新本文与插件 `config.yml` 的运行版本锁；
 2. 在独立预发服完成依赖启动、MySQL/YAML 自检和 Residence 冒烟；
-3. 对比旧系统只读盘点，确认没有写入或吸收玩家 Residence；
+3. 确认 TianjiTown 数据库为空白初始化，且只管理自己创建的 `tt_` Residence；
 4. 生成新的构建哈希和验收记录后才进入生产。
-

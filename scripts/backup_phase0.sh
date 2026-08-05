@@ -9,7 +9,7 @@ fi
 
 plugins_root="${1%/}"
 backup_root="${2%/}"
-if [[ ! -d "$plugins_root/Residence" || ! -d "$plugins_root/LuckPerms" ]]; then
+if [[ ! -d "$plugins_root/Residence" || ! -d "$plugins_root/QuickShop-Hikari" ]]; then
   echo "目标不像有效的 plugins 目录: $plugins_root" >&2
   exit 66
 fi
@@ -23,14 +23,11 @@ timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 archive="$backup_root/tianjitown-phase0-$timestamp.tar.gz"
 
 items=(
-  Residence/config.yml Residence/flags.yml Residence/groups.yml Residence/uuids.yml Residence/Save Residence/Backup
-  LuckPerms/config.yml LuckPerms/contexts.json LuckPerms/save2.json.gz
-  DeluxeMenus/config.yml DeluxeMenus/gui_menus DeluxeMenus/修改说明.txt
-  PlaceholderAPI/javascript_placeholders.yml PlaceholderAPI/javascripts
-  ZNPCsPlus/data/town.yml
+  Residence/config.yml Residence/flags.yml Residence/groups.yml Residence/uuids.yml Residence/Save
   QuickShop-Hikari/config.yml QuickShop-Hikari/shops.mv.db QuickShop-Hikari/qs.log
   DailyTaxEconomy/config.yml
   XConomy/config.yml XConomy/database.yml XConomy/playerdata
+  Vault/config.yml
 )
 
 existing=()
@@ -47,4 +44,3 @@ else
 fi
 chmod 600 "$archive.sha256"
 echo "$archive"
-

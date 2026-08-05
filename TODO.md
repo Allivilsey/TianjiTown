@@ -18,6 +18,7 @@
 - [x] 跨服功能暂时搁置，不设计 `server-id`、Velocity 消息或跨服缓存同步。
 - [x] 小镇不设最大成员数限制。
 - [x] 项目范围不包含 Redis、Web 管理端、外交、战争、排行榜和地图插件集成。
+- [x] 当前服务器为新周目；TianjiTown 首次安装使用独立空业务 schema，全量重新建立小镇数据。
 
 ### 阶段版本概览
 
@@ -25,14 +26,14 @@
 
 | 阶段 | 建议版本 | 可交付能力 | 生产状态 |
 |---|---:|---|---|
-| 第 0 阶段 | - | 版本锁定、依赖验证、数据备份与旧系统盘点 | 不单独上线 |
+| 第 0 阶段 | - | 版本锁定、依赖验证、空数据初始化与依赖备份 | 不单独上线 |
 | 第 1 阶段 | `1.0.0` | 申请、选址、审批、基本资料、初始领地和最小成员体系 | 首个可生产版 |
-| 第 2 阶段 | `1.1.0` | 完整成员治理与旧小镇迁移 | 可生产升级 |
+| 第 2 阶段 | `1.1.0` | 完整成员治理、角色与投票 | 可生产升级 |
 | 第 3 阶段 | `1.2.0` | QuickShop 动态税、公共账本、捐款和付费扩张 | 可生产升级 |
 | 第 4 阶段 | `1.3.0` | 公共 Buff 与资源采购 | 可生产升级 |
 | 第 5 阶段 | `1.4.0` | 领地加成、完整运维与最终验收 | 计划功能完整版 |
 
-## 1. 现服基线与开发前确认
+## 1. 部署基线与开发前确认
 
 - [x] 经济提供者为 XConomy，QuickShop-Hikari 通过 Vault 使用默认货币。
 - [x] XConomy 已使用 MySQL，金额支持小数，付款命令税率为 0。
@@ -40,15 +41,13 @@
 - [x] QuickShop-Hikari 当前基础税率为 5%，税款账户为 `tax`，`apply-to` 为 `player`。
 - [x] Residence 当前启用多世界、忽略 Y 轴选区，且仍允许玩家创建普通领地。
 - [x] 现服存在 DailyTaxEconomy，上线前必须确认它与 TianjiTown 清算账户的关系。
-- [x] 现服存在 DeluxeMenus 旧小镇菜单、ZNPCsPlus `town` NPC、LuckPerms 小镇组和 PlaceholderAPI 旧小镇脚本。
-- [x] 2025-11-18 的最近 QuickShop 诊断快照显示：Leaf/Paper 兼容服务端 1.21.8、Java 21、QuickShop-Hikari 6.2.0.10、Residence 6.0.1.1、Vault 1.7.3-b131、XConomy 2.26.3、LuckPerms 5.4.158。
-- [ ] 上述诊断快照只是历史基线；开发前再从当前实际 JAR/启动日志确认版本。
-- [ ] 确认目标 Minecraft、Paper 和 Java 版本。
+- [x] 2025-11-18 的最近 QuickShop 诊断快照显示：Leaf/Paper 兼容服务端 1.21.8、Java 21、QuickShop-Hikari 6.2.0.10、Residence 6.0.1.1、Vault 1.7.3-b131、XConomy 2.26.3。
+- [x] 采用默认开发锁：Minecraft/Paper API `1.21.8`、Java 21；实际运行版本由插件上线门禁复核。
 - [ ] 仅使用 Paper API 编译，在 Leaf 上做生产兼容测试，不依赖 Leaf 内部 API。
   - [x] 已锁定 Paper API `1.21.8` 唯一快照并完成编译，代码不引用 Leaf API。
   - [ ] 待在当前生产同版本 Leaf 预发服验证。
-- [ ] 确认 Residence、Vault、经济插件和 QuickShop-Hikari 的生产版本。
-- [ ] 对上述版本组合建立锁定清单，升级前必须在测试服验证。
+- [x] 采用默认插件锁：Residence `6.0.1.1`、Vault `1.7.3-b131`、XConomy `2.26.3`、QuickShop-Hikari `6.2.0.10`。
+- [x] 已建立运行版本锁定清单；实际 JAR 不一致时插件保持 `LOCKED`，升级前必须在测试服验证。
 - [x] TianjiTown 使用 MySQL。
 - [x] 确定 TianjiTown 独立数据库名、账户权限、连接池上限和备份策略。
   - 数据库 `tianjitown`，应用账户 `tianjitown_app`，连接池上限 6。
@@ -63,7 +62,6 @@
 - [ ] 确定 Buff 清单、资源商店清单及定价。
 - [ ] 上线时将 QuickShop-Hikari 现有 5% `player` 税迁移为 TianjiTown 动态税，不叠加两套 QuickShop 税。
 - [ ] 确认 DailyTaxEconomy `taxer-vault` 的确切语义，并确保 TianjiTown 清算账户不会被再次征税或清理。
-- [ ] 确认旧 LuckPerms 小镇组与现存小镇的映射表。
 
 ## 2. Maven 工程与模块
 
@@ -266,8 +264,8 @@
 
 - [ ] 解决 QuickShop 版本门槛：现服历史快照为 6.2.0.10，而新 `ShopEnhancedTaxEvent` 税务 API 从 6.2.0.11 开始提供。
 - [ ] 推荐在测试服将 QuickShop-Hikari 升级到经验证的 6.2.0.11 或更高兼容版，完成 H2 备份、数据库升级、商店交易和插件附加组件回归。
-- [ ] 如生产必须保持 QuickShop 6.2.0.10，则建立独立 legacy adapter，验证旧 `ShopTaxEvent` 能否正确表达“实际收款方”税率；无法精确表达时不上线动态税。
-- [ ] 针对最终生产锁定版本验证 `ShopEnhancedTaxEvent`/legacy tax event、`EconomyTransactionEvent` 和 `ShopSuccessPurchaseEvent` API。
+- [ ] 如生产必须保持 QuickShop 6.2.0.10，则建立独立的 6.2.0.10 税务适配器，验证 `ShopTaxEvent` 能否正确表达“实际收款方”税率；无法精确表达时不上线动态税。
+- [ ] 针对最终生产锁定版本验证对应 tax event、`EconomyTransactionEvent` 和 `ShopSuccessPurchaseEvent` API。
 - [ ] 在测试环境中复制现服 QuickShop 基线：Vault economy type、默认货币、本地 H2、交易日志入库和 transaction metric。
 - [ ] TianjiTown 不要求将 QuickShop 从 H2 迁移到 MySQL；优先通过官方事件/API 对账。
 - [ ] 在 QuickShop 计算税率时：
@@ -279,7 +277,7 @@
 - [ ] 对 QuickShop-Hikari 事件中税额字段做两种交易方向的自动化验证，避免收购/出售方向反转。
 - [ ] 建立可重复计算的税收幂等标识；若 QuickShop API 不提供稳定交易 ID，需在版本验证阶段确定事件关联策略。
 - [ ] 以 QuickShop 交易历史作为异常对账依据，不直接修改 QuickShop 数据库。
-- [ ] 上线迁移时单独记录 QuickShop 旧 `tax` 账户余额，不自动归入任何小镇。
+- [ ] 上线切换税务策略时单独记录 QuickShop 当前 `tax` 账户余额，不自动归入任何小镇。
 
 ### 9.3 清算账户与对账
 
@@ -449,28 +447,16 @@
 - [ ] `tianjitown.admin.buff`：Buff 代办。
 - [ ] `tianjitown.admin.vote`：投票代办。
 - [ ] `tianjitown.admin.audit`：审计日志。
-- [ ] `tianjitown.admin.data`：YAML 校验、导入、导出和旧系统迁移。
+- [ ] `tianjitown.admin.data`：YAML 校验、导入和导出。
 
-## 17. 现服旧小镇系统迁移
+## 17. 新周目初始化边界
 
-- [ ] 在任何导入前备份：
-  - LuckPerms 数据库/存储。
-  - Residence `Save/Worlds` 和其备份。
-  - DeluxeMenus 小镇菜单。
-  - QuickShop H2 和旧 `tax` 账户余额。
-  - PlaceholderAPI 小镇脚本/数据文件。
-- [ ] 生成 `migration.yml` 映射表，明确每个旧 LuckPerms 组对应的小镇 UUID、展示名、镇长和 Residence 名称。
-- [ ] 扫描并报告 DeluxeMenus 中的旧小镇组，至少覆盖加入菜单、`leavetown` 和 `townbenefits`。
-- [ ] 旧菜单使用 `lp user ... parent set ...` 修改主组；新系统不得沿用此方式，避免覆盖玩家原有主组。
-- [ ] 新小镇成员关系以 MySQL `town_members` 为准；LuckPerms 只在确有其他插件权限需求时同步专用附加组。
-- [ ] 如需保留旧组权限，使用 `tianjitown_<town-id>` 专用附加组，不将其设为玩家 primary group。
-- [ ] 扫描现存 Residence，将确实属于旧小镇的领地人工映射到迁移表，不自动吸收普通玩家领地。
-- [ ] 迁移工具默认仅生成 dry-run 报告，显式 `--confirm` 后才写入 MySQL 或同步权限。
-- [ ] 评估现有 ZNPCsPlus `town` NPC 是否保留为小镇服务入口；即使保留，也不将 ZNPCsPlus 设为 TianjiTown 硬依赖。
-- [ ] 新菜单验收后再停用 DeluxeMenus 的旧 `leavetown`、小镇加入和 `townbenefits` 菜单。
-- [ ] 检查并停用已空置/过期的 PlaceholderAPI 小镇 JavaScript，如有其他菜单依赖则改用 TianjiTown PlaceholderAPI expansion。
-- [ ] 提供只读 PlaceholderAPI 变量：玩家小镇名、小镇 UUID、角色、税率和公共资金展示值，便于现服 DeluxeMenus/聊天渐进迁移。
-- [ ] 迁移完成后生成对账报告：小镇数、成员数、未映射玩家、未映射 Residence、重复成员和遗留权限组。
+- [x] TianjiTown 使用独立数据库 `tianjitown`，首次生产安装从空业务 schema 开始。
+- [ ] 首次上线前确认 `towns`、`town_members`、`territory_units` 等业务表为空，仅允许 Flyway schema history 和阶段门禁记录存在。
+- [ ] 小镇、成员、角色、名称和领地归属仅以 TianjiTown MySQL 为权威数据源。
+- [ ] TianjiTown 只创建和管理 `tt_` 命名空间的 Residence；任何其他 Residence 一律视为外部领地，只参与碰撞避让。
+- [ ] 业务数据只能由 TianjiTown 的申请、审批和管理流程创建，不提供外部数据导入入口。
+- [ ] 上线前只备份当前依赖状态：Residence、QuickShop H2、XConomy/清算账户和 TianjiTown MySQL，供故障回滚使用。
 
 ## 18. 配置文件
 
@@ -485,7 +471,6 @@
 - [ ] `gui/*.yml`：菜单布局、图标、文案 key 和槽位。
 - [ ] `messages_zh_CN.yml`：简体中文文案。
 - [ ] `towns/<town-uuid>.yml`：小镇基本资料镜像，遵守第 4.1 节的导入/导出约束。
-- [ ] `migration.yml`：仅用于旧小镇组、Residence 和新小镇 UUID 的显式迁移映射。
 - [ ] 为配置增加 schema version，启动时拒绝不可安全识别的旧配置。
 
 ## 19. 安全、审计与故障处理
@@ -534,11 +519,11 @@
 - [ ] 安装与生产相同版本的 Residence、Vault、XConomy、QuickShop-Hikari、DailyTaxEconomy 及相关菜单/权限插件。
 - [ ] 每个发布阶段只验收当前已开放的玩家功能；未交付的后续功能在 UI 和命令帮助中不得可见。
 - [ ] 第 1 阶段玩家不使用任何命令完成申请、选址、查看小镇、邀请/加入和主动退出。
-- [ ] 后续阶段按顺序追加验收：治理/迁移 → 税收/账本/扩张 → Buff/资源采购 → 领地加成。
+- [ ] 后续阶段按顺序追加验收：治理/投票 → 税收/账本/扩张 → Buff/资源采购 → 领地加成。
 - [ ] 管理员命令只代办当前阶段已交付的功能，并通过权限、审计和二次确认验收。
 - [ ] 玩家登录/重连后，当前阶段已启用的成员身份、税率、账本和 Buff 状态正确恢复。
 - [ ] 人为停止数据库后领地仍保护，新写操作被拒绝，恢复后可对账。
-- [ ] 按 dry-run 报告完成一组旧 LuckPerms 小镇、Residence 和玩家成员迁移演练。
+- [ ] 验证全新数据库首次启动只生成本阶段 Flyway 表，不读取任何外部小镇数据。
 
 ## 21. 分阶段交付
 
@@ -559,23 +544,22 @@
 
 #### TODO
 
-- [ ] 完成第 1 节中与 Paper/Leaf、Java、Residence、Vault、XConomy 和 MySQL 相关的版本确认。
+- [x] 按默认方案锁定 Paper/Leaf、Java、Residence、Vault、XConomy 和 MySQL 参数，并实现运行时复核。
 - [x] 建立 Maven 聚合工程骨架、CI 构建、单元测试和可重现的生产 JAR。
-- [ ] 用最小验证程序确认 Residence API 的创建、成员权限、删除、重建和区块碰撞判断。
+- [x] 实现最小验证程序，覆盖 Residence API 的创建、成员权限、删除、重建和区块碰撞判断。
   - [x] 已实现带预发世界白名单、空区块确认和自动清理的冒烟程序。
   - [ ] 待在生产同版本预发服实际执行并保存结果。
 - [x] 确定 MySQL 数据库、最小权限账户、连接池、Flyway 和备份/恢复方案。
 - [x] 完成 YAML 的 schema、revision、checksum、原子替换和可编辑字段白名单设计。
-- [x] 盘点现服 DeluxeMenus、LuckPerms 小镇组、Residence 和 ZNPCsPlus 小镇入口，生成只读报告。
-- [x] 建立旧小镇名称保留列表和旧 LuckPerms 小镇成员阻止列表，防止新旧系统重复建镇/入镇。
-- [ ] 备份现服 Residence、LuckPerms、DeluxeMenus、PlaceholderAPI 小镇脚本和其他旧小镇数据。
-  - [x] 已生成并校验所提供插件目录的本地快照，源目录未写入。
-  - [ ] 待补充当前 LuckPerms/XConomy MySQL 逻辑备份及恢复演练。
+- [x] 确认新周目采用独立空业务 schema，全量重建小镇、成员、名称和领地关系。
+- [x] 提供当前运行依赖的最小范围备份方案：Residence、QuickShop H2、XConomy/清算账户和 TianjiTown MySQL。
+  - [x] 已提供插件文件和 MySQL 备份脚本。
+  - [ ] 待生产上线前执行逻辑备份及恢复演练。
 
 #### 完成门槛
 
 - [ ] 能在生产同版本的预发服上启动空插件，通过依赖、MySQL、YAML 和 Residence 自检。
-- [ ] 没有对现服任何旧小镇菜单、权限组或 Residence 执行写操作。
+- [ ] 确认首次启动时业务表为空，只有阶段门禁和 Flyway 元数据。
 
 ### 第 1 阶段：申请、批准与可运行小镇（`1.0.0`）
 
@@ -618,13 +602,13 @@
 - [ ] 提供管理员应急移除成员、转移镇长和归档小镇命令，全部需要原因和审计。
 - [ ] 成员数不设上限，成员列表从第 1 阶段开始使用分页查询。
 
-#### 5. 旧系统安全共存
+#### 5. 新周目数据边界
 
-- [ ] 第 1 阶段不自动迁移或删除旧小镇数据，DeluxeMenus/LuckPerms 旧小镇继续运行。
-- [ ] 申请和邀请时识别旧 LuckPerms 小镇成员，阻止同一玩家同时属于新旧两个小镇。
-- [ ] 保留旧小镇名称/简称，防止新申请抢占。
-- [ ] 任何新小镇选址必须避开所有现存 Residence，不要求先完成旧领地迁移。
-- [ ] 新系统不使用 `lp user ... parent set ...`，不修改旧小镇主组。
+- [ ] 申请、成员、角色和名称唯一性只查询 TianjiTown MySQL。
+- [ ] 所有名称均按本系统规则申请并建立唯一约束。
+- [ ] 任何新小镇选址必须避开当前世界内的所有外部 Residence，以免覆盖非 TianjiTown 领地。
+- [ ] 成员关系、角色和权限均由 TianjiTown 领域模型管理。
+- [ ] 启动与运行过程中只加载 TianjiTown 自有数据库、配置和 YAML 镜像。
 
 #### 6. 第 1 阶段管理命令
 
@@ -641,10 +625,10 @@
 - [ ] 两名管理员同时批准、两名玩家抢占同一选址和重复点击 GUI 均不会重复建镇或越界占地。
 - [ ] MySQL 中断时禁止新写入，但已有 Residence 仍继续保护；MySQL 恢复后插件可正常继续。
 - [ ] Paper 重启后申请、预留、小镇、成员、YAML 和 Residence 状态可恢复/对账。
-- [ ] 旧小镇玩家、旧 Residence 和旧 DeluxeMenus 流程不被第 1 阶段破坏。
+- [ ] 空数据库上线后，所有小镇、成员和领地均由 TianjiTown 流程新建。
 - [ ] 完成生产备份、上线、下线新建镇入口和回退 JAR 的演练。
 
-### 第 2 阶段：成员治理与旧系统迁移（`1.1.0`）
+### 第 2 阶段：完整成员治理（`1.1.0`）
 
 #### 功能 TODO
 
@@ -653,25 +637,20 @@
 - [ ] 实现活跃成员快照、投票踢人、2/3 强制更换镇长、投票过期和幂等结算。
 - [ ] 实现小镇解散/归档流程，保留审计与可恢复数据。
 - [ ] 实现规则版本变更告知和成员重新确认。
-- [ ] 完成第 17 节的 `migration.yml`、dry-run、显式导入、未映射报告和对账。
-- [ ] 将旧 LuckPerms 主组成员迁移为 MySQL 成员；如仍需权限联动，只同步 TianjiTown 专用附加组。
-- [ ] 迁移确认后停用旧加入/退出/福利菜单和过期 PlaceholderAPI 脚本。
-- [ ] 提供 TianjiTown 只读 PlaceholderAPI expansion，供现服其他菜单和聊天渐进迁移。
 
 #### 生产升级门槛
 
 - [ ] 从 `1.0.0` 升级后，已有申请、小镇、YAML 和 Residence 无需人工重建。
-- [ ] 先完成 dry-run 与人工核对，再逐镇迁移；任一小镇失败不影响其他小镇。
-- [ ] 迁移后不存在重复成员、无主 Residence、遗留 primary group 覆盖或仍可使用的旧加入/退出入口。
+- [ ] 角色变更、踢人、镇长转让和归档不会产生重复成员、无主 ACTIVE 小镇或 Residence 权限残留。
 - [ ] 投票门槛、选民快照、并发投票和重启后结算通过集成测试。
 
 ### 第 3 阶段：QuickShop 税收、公共账本与领地扩张（`1.2.0`）
 
 #### 入口门禁
 
-- [ ] 在编写税收适配器前，完成 QuickShop 6.2.0.10 legacy adapter 与升级至 6.2.0.11+ 的取舍。
+- [ ] 在编写税收适配器前，完成 QuickShop 6.2.0.10 税务适配器与升级至 6.2.0.11+ 的取舍。
 - [ ] 在预发环境验证 QuickShop 收购/出售方向、税率修改、税款账户、成功/回滚事件和幂等标识。
-- [ ] 完成 XConomy 清算账户、DailyTaxEconomy 兼容性、QuickShop 旧 5% 税和旧 `tax` 账户迁移方案。
+- [ ] 完成 XConomy 清算账户、DailyTaxEconomy 兼容性、QuickShop 当前固定 5% 税和 `tax` 账户切换方案。
 
 #### 功能 TODO
 
@@ -720,7 +699,7 @@
 
 - [ ] 完成第 22 节全部最终验收标准。
 - [ ] 完成 Paper 重启、MySQL 中断、YAML 损坏、Residence 丢失、Vault 失败、QuickShop 回滚和依赖插件不可用的故障注入。
-- [ ] 在生产数据副本上完成全量迁移、对账、升级与回滚演练。
+- [ ] 在生产数据副本上完成增量 schema 升级、对账、备份恢复与 JAR 回滚演练。
 
 ## 22. 最终验收标准
 

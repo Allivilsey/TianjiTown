@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 
 
-TARGETS = {"Residence", "Vault", "XConomy", "QuickShop-Hikari", "LuckPerms"}
+TARGETS = {"Residence", "Vault", "XConomy", "QuickShop-Hikari"}
 
 
 def checksum(path: Path) -> str:
@@ -90,4 +90,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

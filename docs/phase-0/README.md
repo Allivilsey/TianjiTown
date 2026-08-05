@@ -4,7 +4,7 @@
 
 代码侧门禁已具备：四模块 Maven 工程、可重现单 JAR、单元测试、依赖/版本/Vault Economy 自检、异步 MySQL/Flyway 自检、YAML 镜像自检，以及带预发双重开关的 Residence API 冒烟测试。
 
-现服插件目录的扫描和备份均为只读，未向 DeluxeMenus、LuckPerms、Residence、ZNPCsPlus 或任何旧小镇资产执行写操作。
+本项目按新周目空数据启动设计：首次安装使用独立空业务 schema，所有小镇、成员、名称和领地关系均由 TianjiTown 重新建立。
 
 ## 已知生产基线（历史证据）
 
@@ -18,7 +18,6 @@
 | Vault | `1.7.3-b131` |
 | XConomy | `2.26.3` |
 | QuickShop-Hikari | `6.2.0.10` |
-| LuckPerms | `5.4.158` |
 
 TianjiTown 针对 Paper API `1.21.8` 编译，不引用 Leaf 内部 API。Leaf 只作为生产兼容目标，必须在预发服验证。
 
@@ -56,7 +55,7 @@ phase0:
 
 - 首次安装门禁 JAR 时，由 `/townadmin phase0 status` 直接采集当前运行版本；无需提前取得 JAR 目录或日志路径。版本不一致时插件保持 `LOCKED`。
 - 在生产同版本隔离环境完成空插件启动及 Residence 冒烟测试。当前无法提供预发环境，因此此项延期到生产上线准备阶段，不阻塞第 1 阶段开发。
-- 当前 LuckPerms 导出只在第 2 阶段旧镇正式迁移前必需。第 1 阶段先依据已识别的 24 个旧组做名称保留；成员加入/建镇时应实时检查旧组身份。
+- TianjiTown 使用独立空数据库开始第一个周目。首次启动若发现业务表已有记录，应停止上线并人工确认数据库目标，不自动继续。
 - MySQL 已采用默认锁定方案：数据库 `tianjitown`、应用账户 `tianjitown_app`、连接池上限 6、每日备份保留 14 份、周备份保留 8 份。
 
 取得当前服务端目录后，可直接生成不可变 JAR 哈希和日志证据：
