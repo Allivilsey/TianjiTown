@@ -17,7 +17,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 public final class ResidenceLandProtectionService implements LandProtectionService {
-    private static final String SYSTEM_OWNER = "TianjiTownSystem";
+    private static final String SYSTEM_OWNER_HINT = "TianjiTownSystem";
     private static final Collection<String> MEMBER_FLAGS =
             java.util.List.of("build", "destroy", "place", "container", "use", "move");
     private final Server server;
@@ -55,7 +55,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             return Result.failure("目标 3×3 区块与 Residence 冲突: " + collision.getName());
         }
         try {
-            if (!manager.addResidence(name, SYSTEM_OWNER, bounds.low(), bounds.high())) {
+            if (!manager.addResidence(name, SYSTEM_OWNER_HINT, bounds.low(), bounds.high())) {
                 return Result.failure("Residence API 拒绝创建系统领地 " + name);
             }
             ClaimedResidence created = manager.getByName(name);
@@ -121,9 +121,12 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         ResidenceManager manager = manager();
         if (residence.getAreaCount() != 1
                 || !residence.getMainArea().getLowVector().equals(bounds.area().getLowVector())
-                || !residence.getMainArea().getHighVector().equals(bounds.area().getHighVector())
-                || !SYSTEM_OWNER.equalsIgnoreCase(residence.getOwner())) {
-            return Result.failure("Residence 边界、区域数量或系统所有者不一致");
+                || !residence.getMainArea().getHighVector().equals(bounds.area().getHighVector())) {
+            return Result.failure("Residence 边界或区域数量不一致");
+        }
+        // Residence 会按服务端 UUID 动态返回 Server_Land 等展示名，不能依赖展示名判断所有权。
+        if (!residence.isServerLand()) {
+            return Result.failure("Residence 所有者不是受控服务端账户: " + residence.getOwner());
         }
         Location[] checks = {bounds.low(), bounds.high(),
                 new Location(bounds.low().getWorld(), bounds.low().getX(), bounds.low().getY(),

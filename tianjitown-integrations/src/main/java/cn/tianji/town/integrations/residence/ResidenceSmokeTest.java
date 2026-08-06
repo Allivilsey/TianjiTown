@@ -51,6 +51,10 @@ public final class ResidenceSmokeTest {
                 return Result.failure("创建后按名称/边界位置读取失败", steps);
             }
             steps.add("read-bounds");
+            if (!created.isServerLand()) {
+                return Result.failure("测试领地所有者不是受控服务端账户: " + created.getOwner(), steps);
+            }
+            steps.add("server-owner");
 
             boolean flagSet = created.getPermissions().setPlayerFlag(memberId, "build",
                     FlagPermissions.FlagState.TRUE);
