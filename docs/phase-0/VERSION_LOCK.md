@@ -12,7 +12,6 @@
 | HikariCP | `5.1.0` | 打入生产 JAR |
 | Flyway | `13.1.0` | core + mysql，打入生产 JAR；支持当前 MySQL 8.4 测试基线 |
 | MySQL Connector/J | `8.4.0` | 打入生产 JAR |
-| SnakeYAML | `2.3` | 打入生产 JAR |
 
 Residence `6.0.2.4` 没有可解析的公开 Maven tag/artifact，不能假装做到了源码级精确锁定。取得生产 JAR 后，应将它安装到服内私有 Maven 仓库并把 `residence.api.version` 改为 `6.0.2.4`，随后重新跑 CI 与预发冒烟。
 
@@ -21,6 +20,6 @@ Residence `6.0.2.4` 没有可解析的公开 Maven tag/artifact，不能假装�
 任何 Paper/Leaf、Java、Residence、Vault、XConomy 或 QuickShop 升级都必须：
 
 1. 更新本文与插件 `config.yml` 的运行版本锁；
-2. 在独立预发服完成依赖启动、MySQL/YAML 自检和 Residence 冒烟；
-3. 确认 TianjiTown 数据库为空白初始化，且只管理自己创建的 `tt_` Residence；
+2. 在独立预发服完成依赖启动、MySQL 自检和 Residence 冒烟；
+3. 确认 TianjiTown 数据库为空白初始化，且正式小镇只管理 MySQL 登记的专用英文 Residence 名称；阶段 0 冒烟测试仍只使用并清理 `tt_phase0_` 临时名称；
 4. 生成新的构建哈希和验收记录后才进入生产。

@@ -2,6 +2,7 @@ package cn.tianji.town.storage.phase1;
 
 import cn.tianji.town.core.application.ApplicationText;
 import cn.tianji.town.core.land.InitialTerritory;
+import cn.tianji.town.core.land.TownResidenceName;
 import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.core.town.TownStatus;
 
@@ -20,6 +21,10 @@ public record TownSnapshot(
         String projectionStatus,
         String projectionError
 ) {
+    public String residenceName() {
+        return TownResidenceName.initial(profile.residenceName());
+    }
+
     public record Member(UUID playerId, MemberRole role, Instant joinedAt) {
     }
 

@@ -6,7 +6,7 @@ import cn.tianji.town.core.application.ApplicationText;
 import cn.tianji.town.core.application.ApplicationWorkflow;
 import cn.tianji.town.core.land.ChunkPosition;
 import cn.tianji.town.core.land.InitialTerritory;
-import cn.tianji.town.core.profile.TownProfile;
+import cn.tianji.town.core.land.TownResidenceName;
 import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.core.town.TownStatus;
 
@@ -65,8 +65,8 @@ public final class PhaseOneRepository {
             try (PreparedStatement statement = connection.prepareStatement("""
                     INSERT INTO town_applications
                         (application_id, applicant_uuid, name, normalized_name, short_name,
-                         normalized_short_name, description, rules_text, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT')
+                         normalized_short_name, residence_name, description, rules_text, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT')
                     """)) {
                 setApplicationText(statement, 3, text);
                 statement.setBytes(1, uuid(applicationId));
@@ -95,12 +95,12 @@ public final class PhaseOneRepository {
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE town_applications
                        SET name = ?, normalized_name = ?, short_name = ?, normalized_short_name = ?,
-                           description = ?, rules_text = ?, version = version + 1
+                           residence_name = ?, description = ?, rules_text = ?, version = version + 1
                      WHERE application_id = ? AND version = ?
                     """)) {
                 setApplicationText(statement, 1, text);
-                statement.setBytes(7, uuid(applicationId));
-                statement.setLong(8, expectedVersion);
+                statement.setBytes(8, uuid(applicationId));
+                statement.setLong(9, expectedVersion);
                 requireUpdated(statement, "申请资料已被其他操作修改，请重新打开");
             }
             return requireApplication(connection, applicationId, false);
@@ -198,13 +198,6 @@ public final class PhaseOneRepository {
         });
     }
 
-    public ApplicationSnapshot beginReview(UUID applicationId, UUID reviewerId,
-                                           String reviewerName) {
-        requireWorkerThread();
-        return reviewTransition(applicationId, reviewerId, reviewerName,
-                ApplicationStatus.UNDER_REVIEW, "开始审核", "BEGIN_REVIEW");
-    }
-
     public ApplicationSnapshot requestChanges(UUID applicationId, UUID reviewerId,
                                               String reviewerName, String reason) {
         requireReason(reason);
@@ -265,7 +258,7 @@ public final class PhaseOneRepository {
 
             UUID townId = UUID.randomUUID();
             UUID unitId = UUID.randomUUID();
-            String residenceName = residenceName(townId, 0, 0);
+            String residenceName = TownResidenceName.initial(application.text().residenceName());
             insertTown(connection, townId, application, residenceName, unitId);
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE town_applications
@@ -328,6 +321,26 @@ public final class PhaseOneRepository {
         return query(connection -> findApplication(connection, applicationId, false));
     }
 
+    public Optional<ApplicationSnapshot> findReviewApplicationByName(String townName) {
+        requireWorkerThread();
+        String normalizedName = ApplicationText.normalizeNameKey(townName);
+        return query(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT application_id FROM town_applications
+                     WHERE normalized_name = ?
+                       AND status IN ('SUBMITTED', 'UNDER_REVIEW', 'PROVISION_FAILED')
+                     ORDER BY updated_at DESC LIMIT 1
+                    """)) {
+                statement.setString(1, normalizedName);
+                try (ResultSet result = statement.executeQuery()) {
+                    return result.next()
+                            ? findApplication(connection, readUuid(result, "application_id"), false)
+                            : Optional.empty();
+                }
+            }
+        });
+    }
+
     public Optional<ApplicationSnapshot> findOpenApplication(UUID applicantId) {
         requireWorkerThread();
         return query(connection -> {
@@ -367,9 +380,46 @@ public final class PhaseOneRepository {
         });
     }
 
+    public List<ApplicationSnapshot> listApplicationsForCompletion(int limit) {
+        requireWorkerThread();
+        int safeLimit = Math.max(1, Math.min(limit, 500));
+        return query(connection -> {
+            List<ApplicationSnapshot> applications = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT application_id FROM town_applications
+                     WHERE status IN ('SUBMITTED', 'UNDER_REVIEW', 'PROVISION_FAILED')
+                     ORDER BY updated_at DESC LIMIT ?
+                    """)) {
+                statement.setInt(1, safeLimit);
+                try (ResultSet result = statement.executeQuery()) {
+                    while (result.next()) {
+                        applications.add(requireApplication(connection,
+                                readUuid(result, "application_id"), false));
+                    }
+                }
+            }
+            return List.copyOf(applications);
+        });
+    }
+
     public Optional<TownSnapshot> findTown(UUID townId) {
         requireWorkerThread();
         return query(connection -> findTown(connection, townId));
+    }
+
+    public Optional<TownSnapshot> findTownByName(String townName) {
+        requireWorkerThread();
+        String normalizedName = ApplicationText.normalizeNameKey(townName);
+        return query(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT town_id FROM towns WHERE normalized_name = ? LIMIT 1")) {
+                statement.setString(1, normalizedName);
+                try (ResultSet result = statement.executeQuery()) {
+                    return result.next()
+                            ? findTown(connection, readUuid(result, "town_id")) : Optional.empty();
+                }
+            }
+        });
     }
 
     public Optional<TownSnapshot> findTownByMember(UUID playerId) {
@@ -480,6 +530,26 @@ public final class PhaseOneRepository {
                 }
             }
             return List.copyOf(members);
+        });
+    }
+
+    public Map<UUID, List<UUID>> listMemberIdsByTown() {
+        requireWorkerThread();
+        return query(connection -> {
+            Map<UUID, List<UUID>> mutable = new java.util.LinkedHashMap<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT town_id, player_uuid FROM town_members ORDER BY town_id, joined_at
+                    """);
+                 ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    UUID townId = readUuid(result, "town_id");
+                    mutable.computeIfAbsent(townId, ignored -> new ArrayList<>())
+                            .add(readUuid(result, "player_uuid"));
+                }
+            }
+            Map<UUID, List<UUID>> immutable = new java.util.LinkedHashMap<>();
+            mutable.forEach((townId, members) -> immutable.put(townId, List.copyOf(members)));
+            return Map.copyOf(immutable);
         });
     }
 
@@ -615,6 +685,38 @@ public final class PhaseOneRepository {
         });
     }
 
+    public UUID declineInvitation(UUID invitationId, UUID playerId) {
+        requireWorkerThread();
+        return transaction(connection -> {
+            UUID townId;
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT town_id FROM town_invitations
+                     WHERE invitation_id = ? AND player_uuid = ? AND accepted_at IS NULL
+                       AND revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP(6)
+                     FOR UPDATE
+                    """)) {
+                statement.setBytes(1, uuid(invitationId));
+                statement.setBytes(2, uuid(playerId));
+                try (ResultSet result = statement.executeQuery()) {
+                    if (!result.next()) {
+                        throw new ConflictException("邀请不存在、已过期或已处理");
+                    }
+                    townId = readUuid(result, "town_id");
+                }
+            }
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE town_invitations SET revoked_at = CURRENT_TIMESTAMP(6)
+                     WHERE invitation_id = ?
+                    """)) {
+                statement.setBytes(1, uuid(invitationId));
+                requireUpdated(statement, "邀请不存在、已过期或已处理");
+            }
+            audit(connection, null, playerId, playerId.toString(), "MEMBER_INVITE_DECLINE", "TOWN",
+                    townId.toString(), "玩家拒绝邀请", invitationId.toString());
+            return townId;
+        });
+    }
+
     public void leaveTown(UUID playerId) {
         requireWorkerThread();
         transaction(connection -> {
@@ -717,7 +819,7 @@ public final class PhaseOneRepository {
         });
     }
 
-    public void archiveTown(UUID townId, UUID actorId, String actorName, String reason) {
+    public void deleteTown(UUID townId, UUID actorId, String actorName, String reason) {
         requireWorkerThread();
         requireReason(reason);
         transaction(connection -> {
@@ -738,8 +840,8 @@ public final class PhaseOneRepository {
                 chunks.setBytes(1, uuid(townId));
                 chunks.executeUpdate();
             }
-            audit(connection, null, actorId, actorName, "TOWN_ARCHIVE", "TOWN", townId.toString(),
-                    reason, "成员关系已解除，领地投影等待管理员移除");
+            audit(connection, null, actorId, actorName, "TOWN_DELETE", "TOWN", townId.toString(),
+                    reason, "小镇已逻辑删除，成员关系已解除，领地投影等待移除");
             return null;
         });
     }
@@ -755,93 +857,14 @@ public final class PhaseOneRepository {
                         normalized_short_name = ?, description = ?, rules_text = ?, version = version + 1
                      WHERE town_id = ? AND version = ? AND status <> 'ARCHIVED'
                     """)) {
-                setApplicationText(statement, 1, profile);
+                setTownText(statement, 1, profile);
                 statement.setBytes(7, uuid(townId));
                 statement.setLong(8, expectedVersion);
                 requireUpdated(statement, "小镇资料已被其他操作修改，请重新读取后再试");
             }
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE town_profile_sync SET revision = revision + 1, sync_status = 'PENDING',
-                        last_error = NULL WHERE town_id = ?
-                    """)) {
-                statement.setBytes(1, uuid(townId));
-                statement.executeUpdate();
-            }
             audit(connection, null, actorId, actorName, "PROFILE_UPDATE", "TOWN", townId.toString(),
                     reason, profile.name());
             return requireTown(connection, townId);
-        });
-    }
-
-    public TownProfile profileForExport(UUID townId) {
-        requireWorkerThread();
-        return query(connection -> {
-            TownSnapshot town = requireTown(connection, townId);
-            long revision;
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT revision FROM town_profile_sync WHERE town_id = ?")) {
-                statement.setBytes(1, uuid(townId));
-                try (ResultSet result = statement.executeQuery()) {
-                    if (!result.next()) {
-                        throw new NotFoundException("找不到 YAML 同步记录");
-                    }
-                    revision = result.getLong("revision");
-                }
-            }
-            return new TownProfile(TownProfile.CURRENT_SCHEMA_VERSION, town.id(), revision,
-                    town.createdAt(), town.profile().name(), town.profile().shortName(),
-                    town.profile().description(), town.profile().rules(),
-                    Map.of("listed", true, "accepting-invites", true), "");
-        });
-    }
-
-    public void markProfileSynced(UUID townId, long revision, String checksum) {
-        requireWorkerThread();
-        transaction(connection -> {
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE town_profile_sync SET checksum = ?, sync_status = 'SYNCED', last_error = NULL,
-                        exported_at = CURRENT_TIMESTAMP(6)
-                     WHERE town_id = ? AND revision = ?
-                    """)) {
-                statement.setString(1, checksum);
-                statement.setBytes(2, uuid(townId));
-                statement.setLong(3, revision);
-                requireUpdated(statement, "YAML revision 已变化，请重新导出");
-            }
-            audit(connection, null, null, "SYSTEM", "PROFILE_EXPORT", "TOWN",
-                    townId.toString(), "YAML 基本资料镜像已导出", "revision=" + revision);
-            return null;
-        });
-    }
-
-    public void markProfileFailed(UUID townId, String error) {
-        requireWorkerThread();
-        transaction(connection -> {
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE town_profile_sync SET sync_status = 'FAILED', last_error = ? WHERE town_id = ?
-                    """)) {
-                statement.setString(1, safeDetail(error));
-                statement.setBytes(2, uuid(townId));
-                statement.executeUpdate();
-            }
-            return null;
-        });
-    }
-
-    public void markProfileManualChange(UUID townId, String detail) {
-        requireWorkerThread();
-        transaction(connection -> {
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE town_profile_sync SET sync_status = 'MANUAL_CHANGE', last_error = ?
-                     WHERE town_id = ?
-                    """)) {
-                statement.setString(1, safeDetail(detail));
-                statement.setBytes(2, uuid(townId));
-                statement.executeUpdate();
-            }
-            audit(connection, null, null, "SYSTEM", "PROFILE_MANUAL_CHANGE_DETECTED", "TOWN",
-                    townId.toString(), "检测到 YAML 与 MySQL 不一致", safeDetail(detail));
-            return null;
         });
     }
 
@@ -916,11 +939,9 @@ public final class PhaseOneRepository {
              PreparedStatement chunk = connection.prepareStatement("""
                      INSERT INTO territory_chunks (unit_id, world_uuid, chunk_x, chunk_z)
                      VALUES (?, ?, ?, ?)
-                     """);
-             PreparedStatement profile = connection.prepareStatement(
-                     "INSERT INTO town_profile_sync (town_id) VALUES (?)")) {
+                     """)) {
             town.setBytes(1, uuid(townId));
-            setApplicationText(town, 2, text);
+            setTownText(town, 2, text);
             town.setBytes(8, uuid(application.applicantId()));
             town.executeUpdate();
             member.setBytes(1, uuid(townId));
@@ -943,8 +964,6 @@ public final class PhaseOneRepository {
                 chunk.addBatch();
             }
             chunk.executeBatch();
-            profile.setBytes(1, uuid(townId));
-            profile.executeUpdate();
         }
     }
 
@@ -1024,21 +1043,31 @@ public final class PhaseOneRepository {
         ensureTownNameAvailable(connection, text, null);
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT application_id FROM town_applications
-                 WHERE (active_name = ? OR active_short_name = ?)
+                 WHERE (active_name = ? OR active_short_name = ? OR active_residence_name = ?)
                    AND (? IS NULL OR application_id <> ?) LIMIT 1 FOR UPDATE
                 """)) {
             statement.setString(1, text.normalizedName());
             statement.setString(2, text.normalizedShortName());
+            statement.setString(3, text.normalizedResidenceName());
             if (ignoredApplicationId == null) {
-                statement.setNull(3, java.sql.Types.BINARY);
                 statement.setNull(4, java.sql.Types.BINARY);
+                statement.setNull(5, java.sql.Types.BINARY);
             } else {
-                statement.setBytes(3, uuid(ignoredApplicationId));
                 statement.setBytes(4, uuid(ignoredApplicationId));
+                statement.setBytes(5, uuid(ignoredApplicationId));
             }
             try (ResultSet result = statement.executeQuery()) {
                 if (result.next()) {
-                    throw new ConflictException("名称或简称已被其他申请占用");
+                    throw new ConflictException("小镇名称、简称或领地名称已被其他申请占用");
+                }
+            }
+        }
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT unit_id FROM territory_units WHERE residence_name = ? LIMIT 1 FOR UPDATE")) {
+            statement.setString(1, TownResidenceName.initial(text.residenceName()));
+            try (ResultSet result = statement.executeQuery()) {
+                if (result.next()) {
+                    throw new ConflictException("领地名称已被现有小镇使用");
                 }
             }
         }
@@ -1099,7 +1128,7 @@ public final class PhaseOneRepository {
         Timestamp reservationExpiry = result.getTimestamp("reservation_expires_at");
         byte[] townBytes = result.getBytes("town_id");
         return new ApplicationSnapshot(readUuid(result, "application_id"),
-                readUuid(result, "applicant_uuid"), readText(result),
+                readUuid(result, "applicant_uuid"), readApplicationText(result),
                 ApplicationStatus.valueOf(result.getString("status")), territory,
                 reservationExpiry == null ? null : reservationExpiry.toInstant(),
                 townBytes == null ? null : uuid(townBytes), result.getString("review_message"),
@@ -1111,7 +1140,7 @@ public final class PhaseOneRepository {
     private Optional<TownSnapshot> findTown(Connection connection, UUID townId) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT t.*, u.world_uuid, u.world_name, u.center_chunk_x, u.center_chunk_z,
-                       u.projection_status, u.projection_error
+                       u.residence_name, u.projection_status, u.projection_error
                   FROM towns t LEFT JOIN territory_units u ON u.town_id = t.town_id
                                                    AND u.grid_x = 0 AND u.grid_z = 0
                  WHERE t.town_id = ?
@@ -1126,7 +1155,7 @@ public final class PhaseOneRepository {
                         : new InitialTerritory(new ChunkPosition(uuid(worldBytes),
                         result.getString("world_name"), result.getInt("center_chunk_x"),
                         result.getInt("center_chunk_z")));
-                return Optional.of(new TownSnapshot(readUuid(result, "town_id"), readText(result),
+                return Optional.of(new TownSnapshot(readUuid(result, "town_id"), readTownText(result),
                         TownStatus.valueOf(result.getString("status")),
                         readUuid(result, "mayor_uuid"), result.getLong("version"),
                         result.getTimestamp("created_at").toInstant(), territory,
@@ -1241,7 +1270,18 @@ public final class PhaseOneRepository {
     }
 
     private static void setApplicationText(PreparedStatement statement, int start,
-                                           ApplicationText text) throws SQLException {
+                                            ApplicationText text) throws SQLException {
+        statement.setString(start, text.name());
+        statement.setString(start + 1, text.normalizedName());
+        statement.setString(start + 2, text.shortName());
+        statement.setString(start + 3, text.normalizedShortName());
+        statement.setString(start + 4, text.residenceName());
+        statement.setString(start + 5, text.description());
+        statement.setString(start + 6, String.join(RULE_SEPARATOR, text.rules()));
+    }
+
+    private static void setTownText(PreparedStatement statement, int start,
+                                    ApplicationText text) throws SQLException {
         statement.setString(start, text.name());
         statement.setString(start + 1, text.normalizedName());
         statement.setString(start + 2, text.shortName());
@@ -1250,10 +1290,18 @@ public final class PhaseOneRepository {
         statement.setString(start + 5, String.join(RULE_SEPARATOR, text.rules()));
     }
 
-    private static ApplicationText readText(ResultSet result) throws SQLException {
+    private static ApplicationText readApplicationText(ResultSet result) throws SQLException {
+        return readText(result, result.getString("residence_name"));
+    }
+
+    private static ApplicationText readTownText(ResultSet result) throws SQLException {
+        return readText(result, TownResidenceName.key(result.getString("residence_name")));
+    }
+
+    private static ApplicationText readText(ResultSet result, String residenceName) throws SQLException {
         String rules = result.getString("rules_text");
         return new ApplicationText(result.getString("name"), result.getString("short_name"),
-                result.getString("description"),
+                residenceName, result.getString("description"),
                 rules == null || rules.isEmpty() ? List.of() : List.of(rules.split(RULE_SEPARATOR, -1)));
     }
 
@@ -1347,10 +1395,6 @@ public final class PhaseOneRepository {
 
     private static Timestamp timestamp(Instant instant) {
         return Timestamp.from(instant);
-    }
-
-    private static String residenceName(UUID townId, int gridX, int gridZ) {
-        return "tt_" + townId.toString().replace("-", "") + "_" + gridX + "_" + gridZ;
     }
 
     private static String safeDetail(String detail) {

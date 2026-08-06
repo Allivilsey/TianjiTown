@@ -32,7 +32,6 @@
         <hikari.version>5.1.0</hikari.version>
         <flyway.version>13.1.0</flyway.version>
         <mysql.version>8.4.0</mysql.version>
-        <snakeyaml.version>2.3</snakeyaml.version>
         <junit.version>5.11.4</junit.version>
         <mockito.version>5.15.2</mockito.version>
     </properties>
@@ -84,11 +83,6 @@
                 <groupId>com.mysql</groupId>
                 <artifactId>mysql-connector-j</artifactId>
                 <version>${mysql.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.yaml</groupId>
-                <artifactId>snakeyaml</artifactId>
-                <version>${snakeyaml.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.junit.jupiter</groupId>

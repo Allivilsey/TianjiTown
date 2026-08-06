@@ -14,7 +14,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -52,6 +51,9 @@ final class TownAdminCommand implements CommandExecutor {
                 sender.sendMessage("§a配置已重新读取。版本锁和数据库连接参数需重启后生效。");
                 return true;
             }
+            if (root.equals("maintenance")) {
+                return maintenance(sender, args);
+            }
             if (root.equals("phase0")) {
                 return phaseZeroCommand.onCommand(sender, command, label, args);
             }
@@ -67,9 +69,7 @@ final class TownAdminCommand implements CommandExecutor {
                 case "town" -> town(sender, runtime, args);
                 case "member" -> member(sender, runtime, args);
                 case "mayor" -> mayor(sender, runtime, args);
-                case "archive" -> archive(sender, runtime, args);
                 case "land" -> land(sender, runtime, args);
-                case "data" -> data(sender, runtime, args);
                 default -> {
                     help(sender);
                     yield true;
@@ -90,6 +90,35 @@ final class TownAdminCommand implements CommandExecutor {
             sender.sendMessage("§7- MySQL 运行状态: "
                     + (runtime.databaseAvailable() ? "READY" : "WRITE_LOCKED"));
         }
+        sender.sendMessage("§7- 玩家入口: " + (maintenanceMode() ? "MAINTENANCE" : "OPEN"));
+    }
+
+    private boolean maintenance(CommandSender sender, String[] args) {
+        if (args.length == 1) {
+            sender.sendMessage("§6维护模式: §f" + (maintenanceMode() ? "已开启" : "已关闭"));
+            return true;
+        }
+        if (args.length != 2) {
+            throw new IllegalArgumentException("用法: /townadmin maintenance <on|off|status>");
+        }
+        if (args[1].equalsIgnoreCase("status")) {
+            sender.sendMessage("§6维护模式: §f" + (maintenanceMode() ? "已开启" : "已关闭"));
+            return true;
+        }
+        boolean enabled;
+        if (args[1].equalsIgnoreCase("on") || args[1].equalsIgnoreCase("enable")) {
+            enabled = true;
+        } else if (args[1].equalsIgnoreCase("off") || args[1].equalsIgnoreCase("disable")) {
+            enabled = false;
+        } else {
+            throw new IllegalArgumentException("用法: /townadmin maintenance <on|off|status>");
+        }
+        plugin.getConfig().set("phase1.maintenance-mode", enabled);
+        plugin.saveConfig();
+        sender.sendMessage(enabled
+                ? "§e维护模式已开启；服务台、手册、玩家 GUI 和表单提交现已暂停。"
+                : "§a维护模式已关闭；玩家入口已恢复。");
+        return true;
     }
 
     private boolean audit(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
@@ -139,92 +168,128 @@ final class TownAdminCommand implements CommandExecutor {
         }
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("list")) {
-            runtime.read(sender, () -> runtime.repository().listReviewQueue(100), applications -> {
-                sender.sendMessage("§6待审核/待恢复申请: " + applications.size());
-                applications.forEach(app -> sender.sendMessage("§7" + app.id() + " "
-                        + app.status() + " " + app.text().name() + " applicant=" + app.applicantId()));
-            });
+            runtime.read(sender, () -> runtime.repository().listReviewQueue(100),
+                    applications -> plugin.townUi().showAdminApplicationList(sender, applications));
             return true;
         }
-        requireLength(args, 3, "application " + action + " <applicationUuid>");
-        UUID applicationId = UUID.fromString(args[2]);
-        if (action.equals("view")) {
-            runtime.read(sender, () -> requireApplication(runtime, applicationId),
-                    application -> showApplication(sender, application));
-            return true;
-        }
-        if (action.equals("review")) {
-            runtime.write(sender, () -> runtime.repository().beginReview(applicationId,
-                    actorId(sender), sender.getName()), application -> {
-                sender.sendMessage("§a申请已进入 UNDER_REVIEW。");
-                showApplication(sender, application);
-            });
-            return true;
-        }
-        String reason = joinReason(args, 3);
-        if (action.equals("changes")) {
-            runtime.write(sender, () -> runtime.repository().requestChanges(applicationId,
-                    actorId(sender), sender.getName(), reason), application ->
-                    sender.sendMessage("§a已要求申请人补充资料。"));
-        } else if (action.equals("reject")) {
-            runtime.write(sender, () -> runtime.repository().reject(applicationId, actorId(sender),
-                    sender.getName(), reason), application ->
-                    sender.sendMessage("§a申请已拒绝，选址预留已释放。"));
-        } else if (action.equals("approve") || action.equals("retry")) {
-            String key = action.equals("approve") ? "phase1:approve:" + applicationId
-                    : "phase1:retry:" + applicationId + ":" + UUID.randomUUID();
-            runtime.provision(sender, applicationId, actorId(sender), sender.getName(), reason, key);
-        } else {
+        if (!action.equals("approve") && !action.equals("reject") && !action.equals("change")) {
             applicationHelp(sender);
+            return true;
         }
-        return true;
-    }
-
-    private boolean town(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
-        requireLength(args, 3, "town view <townUuid>");
-        if (!args[1].equalsIgnoreCase("view")) {
-            throw new IllegalArgumentException("用法: /townadmin town view <townUuid>");
-        }
-        UUID townId = UUID.fromString(args[2]);
-        runtime.read(sender, () -> requireTown(runtime, townId), town -> {
-            sender.sendMessage("§6" + town.profile().name() + " [" + town.profile().shortName() + "]");
-            sender.sendMessage("§7ID=" + town.id() + " status=" + town.status()
-                    + " mayor=" + town.mayorId() + " version=" + town.version());
-            if (town.territory() != null) {
-                sender.sendMessage("§7领地=" + town.territory().center().worldName() + " "
-                        + town.territory().center().x() + "," + town.territory().center().z()
-                        + " projection=" + town.projectionStatus());
+        requireLength(args, 3, "application " + action + " <小镇全名> [--reason <原因>]");
+        String defaultReason = switch (action) {
+            case "approve" -> "管理员批准申请";
+            case "reject" -> "管理员拒绝申请";
+            default -> "请补充申请资料";
+        };
+        TownCommandParser.NamedReason parsed = TownCommandParser.namedReason(args, 2, defaultReason);
+        runtime.read(sender, () -> requireReviewApplication(runtime, parsed.townName()), application -> {
+            if (action.equals("approve")) {
+                String key = application.status() == cn.tianji.town.core.application.ApplicationStatus.PROVISION_FAILED
+                        ? "phase1:retry:" + application.id() + ":" + UUID.randomUUID()
+                        : "phase1:approve:" + application.id();
+                runtime.provision(sender, application.id(), actorId(sender), sender.getName(),
+                        parsed.reason(), key, plugin.townUi()::notifyApplicationDecision);
+            } else if (action.equals("reject")) {
+                runtime.write(sender, () -> runtime.repository().reject(application.id(), actorId(sender),
+                        sender.getName(), parsed.reason()), updated -> {
+                    sender.sendMessage("§a申请已拒绝，选址预留已释放。");
+                    plugin.townUi().notifyApplicationDecision(updated);
+                });
+            } else {
+                runtime.write(sender, () -> runtime.repository().requestChanges(application.id(),
+                        actorId(sender), sender.getName(), parsed.reason()), updated -> {
+                    sender.sendMessage("§a已要求申请人补充资料。");
+                    plugin.townUi().notifyApplicationDecision(updated);
+                });
             }
         });
         return true;
     }
 
-    private boolean member(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
-        requireLength(args, 5, "member <invite|add|remove> <townUuid> <player> <reason>");
+    private boolean town(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+        requireLength(args, 3, "town <view|delete> <小镇全名>");
         String action = args[1].toLowerCase(Locale.ROOT);
-        UUID townId = UUID.fromString(args[2]);
-        UUID playerId = playerId(args[3]);
-        String reason = joinReason(args, 4);
+        if (action.equals("view")) {
+            String townName = TownCommandParser.townName(args, 2);
+            runtime.read(sender, () -> requireTown(runtime, townName), town -> {
+                sender.sendMessage("§6" + town.profile().name() + " [" + town.profile().shortName() + "]");
+                sender.sendMessage("§7status=" + town.status() + " mayor=" + town.mayorId()
+                        + " version=" + town.version());
+                if (town.territory() != null) {
+                    sender.sendMessage("§7领地=" + town.territory().center().worldName() + " "
+                            + town.territory().center().x() + "," + town.territory().center().z()
+                            + " Residence=" + town.residenceName()
+                            + " projection=" + town.projectionStatus());
+                }
+            });
+            return true;
+        }
+        if (action.equals("delete")) {
+            TownCommandParser.NamedReason parsed = TownCommandParser.namedReason(
+                    args, 2, "管理员删除小镇");
+            if (!parsed.confirmed() || !parsed.explicitReason()) {
+                throw new IllegalArgumentException(
+                        "删除需要 --reason <原因> 和 --confirm；数据库审计记录会保留");
+            }
+            runtime.write(sender, () -> {
+                TownSnapshot town = requireTown(runtime, parsed.townName());
+                runtime.repository().deleteTown(town.id(), actorId(sender), sender.getName(),
+                        parsed.reason());
+                return town;
+            }, deleted -> {
+                LandProtectionService.Result result = runtime.landProtection().remove(
+                        deleted.residenceName(), deleted.territory());
+                if (result.success()) {
+                    sender.sendMessage("§a小镇“" + deleted.profile().name()
+                            + "”已删除，成员和区块占位已释放；Residence: " + result.message());
+                } else {
+                    sender.sendMessage("§c小镇数据库记录已停用，但 Residence 移除失败："
+                            + result.message() + "。遗留领地仍会阻止该区域被复用，请处理后再验收。");
+                    plugin.getLogger().warning("删除小镇后 Residence 移除失败 "
+                            + deleted.profile().name() + "/" + deleted.residenceName()
+                            + ": " + result.message());
+                }
+            });
+            return true;
+        }
+        throw new IllegalArgumentException("town 只支持 view 或 delete");
+    }
+
+    private boolean member(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+        requireLength(args, 5,
+                "member <invite|add|remove> <小镇全名> --player <玩家> --reason <原因>");
+        String action = args[1].toLowerCase(Locale.ROOT);
+        TownCommandParser.NamedPlayerReason parsed = TownCommandParser.namedPlayerReason(args, 2);
+        UUID playerId = playerId(parsed.player());
         if (action.equals("invite")) {
-            runtime.write(sender, () -> runtime.repository().adminInvite(townId, playerId,
-                    actorId(sender), sender.getName(), java.time.Duration.ofDays(7), reason), invitation ->
-                    sender.sendMessage("§a管理员邀请已创建，到期时间: " + invitation.expiresAt()));
+            runtime.write(sender, () -> {
+                TownSnapshot town = requireTown(runtime, parsed.townName());
+                return runtime.repository().adminInvite(town.id(), playerId,
+                        actorId(sender), sender.getName(), java.time.Duration.ofDays(7), parsed.reason());
+            }, invitation -> {
+                sender.sendMessage("§a管理员邀请已创建，到期时间: " + invitation.expiresAt());
+                plugin.townUi().notifyInvitation(invitation, playerId);
+            });
         } else if (action.equals("add")) {
             runtime.write(sender, () -> {
-                runtime.repository().addMember(townId, playerId, actorId(sender), sender.getName(), reason);
-                return townId;
-            }, id -> {
+                TownSnapshot town = requireTown(runtime, parsed.townName());
+                runtime.repository().addMember(town.id(), playerId, actorId(sender), sender.getName(),
+                        parsed.reason());
+                return town;
+            }, town -> {
                 sender.sendMessage("§a成员已添加，正在同步 Residence 权限。");
-                reconcileOne(sender, runtime, id, true);
+                reconcileOne(sender, runtime, town.id(), true);
             });
         } else if (action.equals("remove")) {
             runtime.write(sender, () -> {
-                runtime.repository().removeMember(townId, playerId, actorId(sender), sender.getName(),
-                        reason);
-                return townId;
-            }, id -> {
+                TownSnapshot town = requireTown(runtime, parsed.townName());
+                runtime.repository().removeMember(town.id(), playerId, actorId(sender), sender.getName(),
+                        parsed.reason());
+                return town;
+            }, town -> {
                 sender.sendMessage("§a成员已移除，正在同步 Residence 权限。");
-                reconcileOne(sender, runtime, id, true);
+                reconcileOne(sender, runtime, town.id(), true);
             });
         } else {
             throw new IllegalArgumentException("member 只支持 invite、add 或 remove");
@@ -233,49 +298,36 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private boolean mayor(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
-        requireLength(args, 5, "mayor transfer <townUuid> <player> <reason>");
+        requireLength(args, 5,
+                "mayor transfer <小镇全名> --player <玩家> --reason <原因>");
         if (!args[1].equalsIgnoreCase("transfer")) {
-            throw new IllegalArgumentException("用法: /townadmin mayor transfer <townUuid> <player> <reason>");
+            throw new IllegalArgumentException(
+                    "用法: /townadmin mayor transfer <小镇全名> --player <玩家> --reason <原因>");
         }
-        UUID townId = UUID.fromString(args[2]);
-        UUID newMayor = playerId(args[3]);
-        String reason = joinReason(args, 4);
+        TownCommandParser.NamedPlayerReason parsed = TownCommandParser.namedPlayerReason(args, 2);
+        UUID newMayor = playerId(parsed.player());
         runtime.write(sender, () -> {
-            runtime.repository().transferMayor(townId, newMayor, actorId(sender), sender.getName(), reason);
-            return townId;
-        }, id -> {
-            sender.sendMessage("§a镇长已紧急转移。");
-            reconcileOne(sender, runtime, id, true);
-        });
-        return true;
-    }
-
-    private boolean archive(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
-        requireLength(args, 3, "archive <townUuid> <reason>");
-        UUID townId = UUID.fromString(args[1]);
-        String reason = joinReason(args, 2);
-        runtime.write(sender, () -> {
-            TownSnapshot town = requireTown(runtime, townId);
-            runtime.repository().archiveTown(townId, actorId(sender), sender.getName(), reason);
+            TownSnapshot town = requireTown(runtime, parsed.townName());
+            runtime.repository().transferMayor(town.id(), newMayor, actorId(sender), sender.getName(),
+                    parsed.reason());
             return town;
         }, town -> {
-            LandProtectionService.Result result = runtime.landProtection().remove(town.id(), town.territory());
-            sender.sendMessage((result.success() ? "§a" : "§c")
-                    + "小镇已归档；Residence: " + result.message());
+            sender.sendMessage("§a镇长已紧急转移。");
+            reconcileOne(sender, runtime, town.id(), true);
         });
         return true;
     }
 
     private boolean land(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
-        requireLength(args, 3, "land <preview|reconcile|rebuild> <townUuid|all>");
+        requireLength(args, 3, "land <preview|reconcile|rebuild> <小镇全名|all>");
         String action = args[1].toLowerCase(Locale.ROOT);
+        String townName = TownCommandParser.townName(args, 2);
         if (action.equals("preview")) {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("§c领地粒子预览只能由游戏内玩家执行。");
                 return true;
             }
-            UUID townId = UUID.fromString(args[2]);
-            runtime.read(sender, () -> requireTown(runtime, townId),
+            runtime.read(sender, () -> requireTown(runtime, townName),
                     town -> plugin.townUi().previewTownForAdmin(player, town));
             return true;
         }
@@ -287,7 +339,7 @@ final class TownAdminCommand implements CommandExecutor {
         if (!action.equals("reconcile") && !action.equals("rebuild")) {
             throw new IllegalArgumentException("land 只支持 preview/reconcile/rebuild");
         }
-        if (args[2].equalsIgnoreCase("all")) {
+        if (townName.equalsIgnoreCase("all")) {
             runtime.read(sender, () -> {
                 List<TownMembers> states = new ArrayList<>();
                 for (TownSnapshot town : runtime.repository().listTowns(false)) {
@@ -297,7 +349,7 @@ final class TownAdminCommand implements CommandExecutor {
             }, states -> states.forEach(state -> {
                 if (action.equals("rebuild")) {
                     LandProtectionService.Result removal = runtime.landProtection()
-                            .remove(state.town().id(), state.town().territory());
+                            .remove(state.town().residenceName(), state.town().territory());
                     sender.sendMessage((removal.success() ? "§a" : "§c") + removal.message());
                     if (!removal.success()) {
                         return;
@@ -306,87 +358,22 @@ final class TownAdminCommand implements CommandExecutor {
                 runtime.reconcile(sender, state.town(), state.members(), repair);
             }));
         } else {
-            UUID townId = UUID.fromString(args[2]);
             if (action.equals("rebuild")) {
-                runtime.read(sender, () -> new TownMembers(requireTown(runtime, townId),
-                        runtime.repository().listMemberIds(townId)), state -> {
+                runtime.read(sender, () -> {
+                    TownSnapshot town = requireTown(runtime, townName);
+                    return new TownMembers(town, runtime.repository().listMemberIds(town.id()));
+                }, state -> {
                     LandProtectionService.Result removal = runtime.landProtection()
-                            .remove(state.town().id(), state.town().territory());
+                            .remove(state.town().residenceName(), state.town().territory());
                     sender.sendMessage((removal.success() ? "§a" : "§c") + removal.message());
                     if (removal.success()) {
                         runtime.reconcile(sender, state.town(), state.members(), true);
                     }
                 });
             } else {
-                reconcileOne(sender, runtime, townId, repair);
+                runtime.read(sender, () -> requireTown(runtime, townName),
+                        town -> reconcileOne(sender, runtime, town.id(), repair));
             }
-        }
-        return true;
-    }
-
-    private boolean data(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
-        requireLength(args, 3, "data <validate|export|import> <townUuid|all>");
-        String action = args[1].toLowerCase(Locale.ROOT);
-        if (action.equals("export") && args[2].equalsIgnoreCase("all")) {
-            runtime.write(sender, () -> {
-                int count = 0;
-                for (TownSnapshot town : runtime.repository().listTowns(true)) {
-                    try {
-                        runtime.exportProfile(town.id());
-                        count++;
-                    } catch (IOException exception) {
-                        runtime.repository().markProfileFailed(town.id(), exception.getMessage());
-                        throw new IllegalStateException("导出 " + town.id() + " 失败: "
-                                + exception.getMessage(), exception);
-                    }
-                }
-                return count;
-            }, count -> sender.sendMessage("§a已导出 " + count + " 个 YAML 基本资料镜像。"));
-            return true;
-        }
-        UUID townId = UUID.fromString(args[2]);
-        if (action.equals("validate")) {
-            runtime.read(sender, () -> {
-                try {
-                    return runtime.validateProfile(townId);
-                } catch (IOException exception) {
-                    throw new IllegalStateException("读取 YAML 失败: " + exception.getMessage(), exception);
-                }
-            }, result -> {
-                if (result.valid()) {
-                    sender.sendMessage("§aYAML schema、revision、UUID、字段和 checksum 均有效。");
-                } else {
-                    sender.sendMessage("§cYAML 校验失败: " + String.join("；", result.errors()));
-                }
-            });
-        } else if (action.equals("export")) {
-            runtime.write(sender, () -> {
-                try {
-                    return runtime.exportProfile(townId);
-                } catch (IOException exception) {
-                    runtime.repository().markProfileFailed(townId, exception.getMessage());
-                    throw new IllegalStateException("导出 YAML 失败: " + exception.getMessage(), exception);
-                }
-            }, profile -> sender.sendMessage("§a已导出 YAML，revision=" + profile.revision()
-                    + " checksum=" + profile.checksum()));
-        } else if (action.equals("import")) {
-            if (!plugin.getConfig().getBoolean("phase1.maintenance-mode", false)) {
-                sender.sendMessage("§cYAML 导入只能在 phase1.maintenance-mode=true 时执行。");
-                return true;
-            }
-            if (!contains(args, "--confirm")) {
-                sender.sendMessage("§c导入需要 --confirm；未修改任何数据。");
-                return true;
-            }
-            runtime.write(sender, () -> {
-                try {
-                    return runtime.importProfile(townId, actorId(sender), sender.getName());
-                } catch (IOException exception) {
-                    throw new IllegalStateException("导入 YAML 失败: " + exception.getMessage(), exception);
-                }
-            }, town -> sender.sendMessage("§aYAML 已导入 MySQL，并重新生成 checksum；原文件已备份。"));
-        } else {
-            throw new IllegalArgumentException("data 只支持 validate/export/import");
         }
         return true;
     }
@@ -398,34 +385,20 @@ final class TownAdminCommand implements CommandExecutor {
                 state -> runtime.reconcile(sender, state.town(), state.members(), repair));
     }
 
-    private static ApplicationSnapshot requireApplication(PhaseOneRuntime runtime, UUID id) {
-        return runtime.repository().findApplication(id)
-                .orElseThrow(() -> new IllegalArgumentException("找不到申请 " + id));
+    private static ApplicationSnapshot requireReviewApplication(PhaseOneRuntime runtime,
+                                                                 String townName) {
+        return runtime.repository().findReviewApplicationByName(townName)
+                .orElseThrow(() -> new IllegalArgumentException("找不到待处理申请 “" + townName + "”"));
     }
 
-    private static TownSnapshot requireTown(PhaseOneRuntime runtime, UUID id) {
-        return runtime.repository().findTown(id)
-                .orElseThrow(() -> new IllegalArgumentException("找不到小镇 " + id));
+    private static TownSnapshot requireTown(PhaseOneRuntime runtime, String townName) {
+        return runtime.repository().findTownByName(townName)
+                .orElseThrow(() -> new IllegalArgumentException("找不到小镇 “" + townName + "”"));
     }
 
-    private static void showApplication(CommandSender sender, ApplicationSnapshot application) {
-        sender.sendMessage("§6申请 " + application.id() + " §f" + application.text().name());
-        sender.sendMessage("§7applicant=" + application.applicantId() + " status="
-                + application.status() + " version=" + application.version());
-        sender.sendMessage("§7简称=" + application.text().shortName() + " 简介="
-                + application.text().description() + " 规则=" + String.join(" | ", application.text().rules()));
-        if (application.territory() != null) {
-            sender.sendMessage("§7选址=" + application.territory().center().worldName() + " "
-                    + application.territory().center().x() + ","
-                    + application.territory().center().z() + " 到期="
-                    + application.reservationExpiresAt());
-        }
-        if (application.reviewMessage() != null) {
-            sender.sendMessage("§e审核意见=" + application.reviewMessage());
-        }
-        if (application.lastError() != null) {
-            sender.sendMessage("§c创建错误=" + application.lastError());
-        }
+    private static TownSnapshot requireTown(PhaseOneRuntime runtime, UUID townId) {
+        return runtime.repository().findTown(townId)
+                .orElseThrow(() -> new IllegalArgumentException("找不到小镇记录"));
     }
 
     private PhaseOneRuntime requireRuntime(CommandSender sender) {
@@ -456,38 +429,30 @@ final class TownAdminCommand implements CommandExecutor {
         }
     }
 
-    private static String joinReason(String[] args, int start) {
-        if (args.length <= start) {
-            throw new IllegalArgumentException("必须填写原因");
-        }
-        String reason = String.join(" ", java.util.Arrays.copyOfRange(args, start, args.length));
-        if (reason.isBlank()) {
-            throw new IllegalArgumentException("必须填写原因");
-        }
-        return reason;
-    }
-
     private static boolean contains(String[] args, String value) {
         return java.util.Arrays.stream(args).anyMatch(value::equalsIgnoreCase);
     }
 
+    private boolean maintenanceMode() {
+        return plugin.getConfig().getBoolean("phase1.maintenance-mode", false);
+    }
+
     private static void applicationHelp(CommandSender sender) {
-        sender.sendMessage("§e/townadmin application list|view|review <id>");
-        sender.sendMessage("§e/townadmin application changes|reject|approve|retry <id> <reason>");
+        sender.sendMessage("§e/townadmin application list");
+        sender.sendMessage("§e/townadmin application approve|reject|change <小镇全名> [--reason <原因>]");
     }
 
     private static void help(CommandSender sender) {
         sender.sendMessage("§6TianjiTown 1.0.0 管理命令");
-        sender.sendMessage("§e/townadmin status | reload | audit [limit]");
+        sender.sendMessage("§e/townadmin status | reload | maintenance <on|off|status> | audit [limit]");
         sender.sendMessage("§e/townadmin phase0 status | residence-smoke ...");
         sender.sendMessage("§e/townadmin station create | handbook [player]");
-        sender.sendMessage("§e/townadmin application list|view|review|changes|approve|reject|retry ...");
-        sender.sendMessage("§e/townadmin town view <townUuid>");
-        sender.sendMessage("§e/townadmin member invite|add|remove <townUuid> <player> <reason>");
-        sender.sendMessage("§e/townadmin mayor transfer <townUuid> <player> <reason>");
-        sender.sendMessage("§e/townadmin archive <townUuid> <reason>");
-        sender.sendMessage("§e/townadmin land preview|reconcile|rebuild <townUuid|all> [--repair|--confirm]");
-        sender.sendMessage("§e/townadmin data validate|export|import <townUuid|all> [--confirm]");
+        sender.sendMessage("§e/townadmin application list|approve|reject|change ...");
+        sender.sendMessage("§e/townadmin town view <小镇全名>");
+        sender.sendMessage("§e/townadmin town delete <小镇全名> --reason <原因> --confirm");
+        sender.sendMessage("§e/townadmin member invite|add|remove <小镇全名> --player <玩家> --reason <原因>");
+        sender.sendMessage("§e/townadmin mayor transfer <小镇全名> --player <玩家> --reason <原因>");
+        sender.sendMessage("§e/townadmin land preview|reconcile|rebuild <小镇全名|all> [--repair|--confirm]");
     }
 
     private record TownMembers(TownSnapshot town, List<UUID> members) {

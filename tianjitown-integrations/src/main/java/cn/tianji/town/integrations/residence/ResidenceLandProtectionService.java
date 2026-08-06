@@ -1,6 +1,7 @@
 package cn.tianji.town.integrations.residence;
 
 import cn.tianji.town.core.land.InitialTerritory;
+import cn.tianji.town.core.land.TownResidenceName;
 import cn.tianji.town.core.ports.LandProtectionService;
 import com.bekvon.bukkit.residence.api.ResidenceApi;
 import com.bekvon.bukkit.residence.protection.ClaimedResidence;
@@ -12,8 +13,8 @@ import org.bukkit.Server;
 import org.bukkit.World;
 
 import java.util.Collection;
-import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 public final class ResidenceLandProtectionService implements LandProtectionService {
@@ -21,9 +22,11 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     private static final Collection<String> MEMBER_FLAGS =
             java.util.List.of("build", "destroy", "place", "container", "use", "move");
     private final Server server;
+    private final Set<String> managedNames;
 
-    public ResidenceLandProtectionService(Server server) {
+    public ResidenceLandProtectionService(Server server, Set<String> managedNames) {
         this.server = Objects.requireNonNull(server, "server");
+        this.managedNames = Objects.requireNonNull(managedNames, "managedNames");
     }
 
     @Override
@@ -38,9 +41,9 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     }
 
     @Override
-    public Result create(UUID townId, InitialTerritory territory, Collection<UUID> members) {
+    public Result create(String residenceName, InitialTerritory territory, Collection<UUID> members) {
         requireMainThread();
-        String name = residenceName(townId);
+        String name = registerManagedName(residenceName);
         ResidenceManager manager = manager();
         Bounds bounds = bounds(territory);
         if (bounds == null) {
@@ -69,15 +72,20 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     }
 
     @Override
-    public Result remove(UUID townId, InitialTerritory territory) {
+    public Result remove(String residenceName, InitialTerritory territory) {
         requireMainThread();
-        String name = residenceName(townId);
-        if (!name.startsWith("tt_")) {
-            return Result.failure("拒绝移除非 TianjiTown 领地");
-        }
+        String name = registerManagedName(residenceName);
         ResidenceManager manager = manager();
-        if (manager.getByName(name) == null) {
+        ClaimedResidence existing = manager.getByName(name);
+        if (existing == null) {
             return Result.ok("Residence 已不存在");
+        }
+        Bounds bounds = bounds(territory);
+        if (bounds == null) {
+            return Result.failure("目标世界未加载: " + territory.center().worldName());
+        }
+        if (!existing.isServerLand() || !matchesBounds(existing, bounds)) {
+            return Result.failure("拒绝移除同名但并非当前小镇投影的 Residence: " + name);
         }
         try {
             manager.removeResidence(name);
@@ -90,10 +98,10 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     }
 
     @Override
-    public Result reconcile(UUID townId, InitialTerritory territory, Collection<UUID> members,
+    public Result reconcile(String residenceName, InitialTerritory territory, Collection<UUID> members,
                             boolean repair) {
         requireMainThread();
-        String name = residenceName(townId);
+        String name = registerManagedName(residenceName);
         Bounds bounds = bounds(territory);
         if (bounds == null) {
             return Result.failure("目标世界未加载: " + territory.center().worldName());
@@ -101,27 +109,25 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         ResidenceManager manager = manager();
         ClaimedResidence residence = manager.getByName(name);
         if (residence == null) {
-            return repair ? create(townId, territory, members)
+            return repair ? create(name, territory, members)
                     : Result.failure("缺少 Residence 投影 " + name);
         }
         Result verification = verifyAndApply(name, residence, bounds, members, repair);
         if (verification.success() || !repair) {
             return verification;
         }
-        // 只允许重建插件自己的保留命名空间。
-        if (!name.startsWith("tt_")) {
-            return Result.failure("拒绝重建非 TianjiTown 领地");
+        if (!residence.isServerLand()) {
+            return Result.failure("同名 Residence 不属于受控服务端账户，拒绝重建: " + name);
         }
+        // 名称来自数据库登记清单；重建前仍要求现有投影属于受控服务端账户。
         manager.removeResidence(name);
-        return create(townId, territory, members);
+        return create(name, territory, members);
     }
 
     private Result verifyAndApply(String name, ClaimedResidence residence, Bounds bounds,
                                   Collection<UUID> members, boolean applyPermissions) {
         ResidenceManager manager = manager();
-        if (residence.getAreaCount() != 1
-                || !residence.getMainArea().getLowVector().equals(bounds.area().getLowVector())
-                || !residence.getMainArea().getHighVector().equals(bounds.area().getHighVector())) {
+        if (!matchesBounds(residence, bounds)) {
             return Result.failure("Residence 边界或区域数量不一致");
         }
         // Residence 会按服务端 UUID 动态返回 Server_Land 等展示名，不能依赖展示名判断所有权。
@@ -188,14 +194,22 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         return (ResidenceManager) ResidenceApi.getResidenceManager();
     }
 
+    private static boolean matchesBounds(ClaimedResidence residence, Bounds bounds) {
+        return residence.getAreaCount() == 1
+                && residence.getMainArea().getLowVector().equals(bounds.area().getLowVector())
+                && residence.getMainArea().getHighVector().equals(bounds.area().getHighVector());
+    }
+
     private void requireMainThread() {
         if (!server.isPrimaryThread()) {
             throw new IllegalStateException("Residence API 必须在 Paper 主线程调用");
         }
     }
 
-    private static String residenceName(UUID townId) {
-        return ("tt_" + townId.toString().replace("-", "") + "_0_0").toLowerCase(Locale.ROOT);
+    private String registerManagedName(String residenceName) {
+        String normalized = TownResidenceName.initial(residenceName);
+        managedNames.add(normalized);
+        return normalized;
     }
 
     private record Bounds(Location low, Location high, CuboidArea area) {

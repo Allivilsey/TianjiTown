@@ -14,11 +14,13 @@ class ApplicationWorkflowTest {
             ApplicationWorkflow.requireAllowed(ApplicationStatus.SITE_SELECTED,
                     ApplicationStatus.SUBMITTED, ApplicationActor.APPLICANT);
             ApplicationWorkflow.requireAllowed(ApplicationStatus.SUBMITTED,
-                    ApplicationStatus.UNDER_REVIEW, ApplicationActor.ADMINISTRATOR);
-            ApplicationWorkflow.requireAllowed(ApplicationStatus.UNDER_REVIEW,
                     ApplicationStatus.APPROVED_PROVISIONING, ApplicationActor.ADMINISTRATOR);
             ApplicationWorkflow.requireAllowed(ApplicationStatus.APPROVED_PROVISIONING,
                     ApplicationStatus.ACTIVE, ApplicationActor.SYSTEM);
+            ApplicationWorkflow.requireAllowed(ApplicationStatus.SUBMITTED,
+                    ApplicationStatus.NEED_CHANGES, ApplicationActor.ADMINISTRATOR);
+            ApplicationWorkflow.requireAllowed(ApplicationStatus.SUBMITTED,
+                    ApplicationStatus.REJECTED, ApplicationActor.ADMINISTRATOR);
         });
     }
 

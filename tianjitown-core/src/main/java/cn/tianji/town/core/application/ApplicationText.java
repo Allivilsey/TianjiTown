@@ -7,8 +7,10 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-public record ApplicationText(String name, String shortName, String description, List<String> rules) {
+public record ApplicationText(String name, String shortName, String residenceName,
+                              String description, List<String> rules) {
     private static final Pattern SAFE_NAME = Pattern.compile("[\\p{L}\\p{N}_\\-\\u00b7 ]+");
+    private static final Pattern RESIDENCE_NAME = Pattern.compile("[A-Za-z]+");
     private static final Pattern FORMAT_CODE = Pattern.compile("(?i)(?:§|&)[0-9A-FK-ORX]");
     private static final Pattern MINI_MESSAGE = Pattern.compile("<[^>\\r\\n]{1,64}>");
     private static final Pattern CONTROL = Pattern.compile("[\\p{Cc}&&[^\\r\\n\\t]]");
@@ -16,6 +18,7 @@ public record ApplicationText(String name, String shortName, String description,
     public ApplicationText {
         name = normalize(Objects.requireNonNull(name, "name"));
         shortName = normalize(Objects.requireNonNull(shortName, "shortName"));
+        residenceName = normalize(Objects.requireNonNull(residenceName, "residenceName"));
         description = normalizeMultiline(Objects.requireNonNull(description, "description"));
         rules = Objects.requireNonNull(rules, "rules").stream()
                 .map(ApplicationText::normalizeMultiline)
@@ -27,6 +30,11 @@ public record ApplicationText(String name, String shortName, String description,
         List<String> errors = new ArrayList<>();
         validateName(name, "名称", 2, 24, errors);
         validateName(shortName, "简称", 1, 8, errors);
+        if (residenceName.isEmpty() || residenceName.length() > 12) {
+            errors.add("领地名称长度必须为 1..12");
+        } else if (!RESIDENCE_NAME.matcher(residenceName).matches()) {
+            errors.add("领地名称只能包含英文字母，不允许空格、数字或特殊符号");
+        }
         validateSafeText(description, "简介", 500, errors);
         if (rules.isEmpty() || rules.size() > 50) {
             errors.add("规则数量必须为 1..50");
@@ -38,11 +46,19 @@ public record ApplicationText(String name, String shortName, String description,
     }
 
     public String normalizedName() {
-        return normalizeKey(name);
+        return normalizeNameKey(name);
     }
 
     public String normalizedShortName() {
         return normalizeKey(shortName);
+    }
+
+    public String normalizedResidenceName() {
+        return residenceName.toLowerCase(Locale.ROOT);
+    }
+
+    public static String normalizeNameKey(String value) {
+        return normalizeKey(Objects.requireNonNull(value, "value"));
     }
 
     public void requireValid() {

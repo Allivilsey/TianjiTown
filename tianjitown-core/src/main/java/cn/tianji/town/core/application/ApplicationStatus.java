@@ -37,7 +37,8 @@ public enum ApplicationStatus {
         Map<ApplicationStatus, Set<ApplicationStatus>> result = new EnumMap<>(ApplicationStatus.class);
         result.put(DRAFT, EnumSet.of(SITE_SELECTED, CANCELLED));
         result.put(SITE_SELECTED, EnumSet.of(DRAFT, SUBMITTED, CANCELLED));
-        result.put(SUBMITTED, EnumSet.of(UNDER_REVIEW, CANCELLED));
+        result.put(SUBMITTED, EnumSet.of(UNDER_REVIEW, NEED_CHANGES, APPROVED_PROVISIONING,
+                REJECTED, CANCELLED));
         result.put(UNDER_REVIEW, EnumSet.of(NEED_CHANGES, APPROVED_PROVISIONING, REJECTED,
                 CANCELLED));
         result.put(NEED_CHANGES, EnumSet.of(SITE_SELECTED, SUBMITTED, CANCELLED));

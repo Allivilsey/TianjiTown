@@ -1,25 +1,21 @@
 package cn.tianji.town.paper;
 
-import cn.tianji.town.core.profile.TownProfile;
 import cn.tianji.town.integrations.DependencyVersions;
-import cn.tianji.town.integrations.residence.ResidenceLandProtectionService;
 import cn.tianji.town.integrations.residence.ResidenceCommandGuard;
+import cn.tianji.town.integrations.residence.ResidenceLandProtectionService;
 import cn.tianji.town.integrations.vault.VaultEconomyProbe;
 import cn.tianji.town.storage.database.DatabaseConfig;
 import cn.tianji.town.storage.database.DatabaseGate;
-import cn.tianji.town.storage.profile.YamlProfileStore;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class TianjiTownPlugin extends JavaPlugin {
@@ -28,19 +24,23 @@ public final class TianjiTownPlugin extends JavaPlugin {
     private volatile DatabaseGate databaseGate;
     private volatile PhaseOneRuntime phaseOneRuntime;
     private volatile TownUiController townUi;
+    private volatile TownAdminTabCompleter townAdminTabCompleter;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         List<String> synchronousChecks = new ArrayList<>();
         boolean dependenciesHealthy = checkRuntimeAndDependencies(synchronousChecks);
-        boolean yamlHealthy = checkYamlMirror(synchronousChecks);
         gateStatus.set(new GateStatus(GateStatus.State.CHECKING, synchronousChecks));
 
-        java.util.Objects.requireNonNull(getCommand("townadmin"), "plugin.yml 缺少 townadmin")
-                .setExecutor(new TownAdminCommand(this));
+        org.bukkit.command.PluginCommand adminCommand = java.util.Objects.requireNonNull(
+                getCommand("townadmin"), "plugin.yml 缺少 townadmin");
+        TownAdminTabCompleter completer = new TownAdminTabCompleter(this);
+        townAdminTabCompleter = completer;
+        adminCommand.setExecutor(new TownAdminCommand(this));
+        adminCommand.setTabCompleter(completer);
 
-        if (!dependenciesHealthy || !yamlHealthy) {
+        if (!dependenciesHealthy) {
             lock("同步门禁未通过", synchronousChecks);
             return;
         }
@@ -55,6 +55,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         }
         phaseOneRuntime = null;
         townUi = null;
+        townAdminTabCompleter = null;
     }
 
     public GateStatus gateStatus() {
@@ -109,31 +110,6 @@ public final class TianjiTownPlugin extends JavaPlugin {
         return healthy && economy.healthy();
     }
 
-    private boolean checkYamlMirror(List<String> details) {
-        try {
-            Path directory = getDataFolder().toPath().resolve("healthcheck");
-            Files.createDirectories(directory);
-            Path target = directory.resolve("yaml-profile.yml");
-            YamlProfileStore store = new YamlProfileStore();
-            TownProfile profile = new TownProfile(1,
-                    UUID.fromString("00000000-0000-0000-0000-000000000001"), 0,
-                    Instant.EPOCH, "门禁测试镇", "门禁", "第0阶段 YAML 自检", List.of("只读验证"),
-                    Map.of("listed", false, "accepting-invites", false), "");
-            store.writeAtomically(target, profile);
-            YamlProfileStore.ReadResult result = store.readAndValidate(target);
-            Files.deleteIfExists(target);
-            if (!result.valid()) {
-                details.add("FAIL YAML: " + String.join("; ", result.errors()));
-                return false;
-            }
-            details.add("OK YAML schema/revision/checksum/atomic-write");
-            return true;
-        } catch (Exception exception) {
-            details.add("FAIL YAML: " + exception.getMessage());
-            return false;
-        }
-    }
-
     private void checkDatabase(List<String> previousChecks) {
         List<String> details = new ArrayList<>(previousChecks);
         try {
@@ -172,15 +148,28 @@ public final class TianjiTownPlugin extends JavaPlugin {
             return;
         }
         databaseGate = candidate;
+        Set<String> managedResidenceNames = ConcurrentHashMap.newKeySet();
         PhaseOneRuntime runtime = new PhaseOneRuntime(this, candidate,
-                new ResidenceLandProtectionService(getServer()));
+                new ResidenceLandProtectionService(getServer(), managedResidenceNames));
         TownUiController ui = new TownUiController(this, runtime);
         phaseOneRuntime = runtime;
         townUi = ui;
+        TownAdminTabCompleter completer = townAdminTabCompleter;
+        if (completer != null) {
+            completer.start(runtime);
+        }
         getServer().getPluginManager().registerEvents(ui, this);
-        getServer().getPluginManager().registerEvents(new ResidenceCommandGuard(), this);
+        getServer().getPluginManager().registerEvents(
+                new ResidenceCommandGuard(managedResidenceNames::contains), this);
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                runtime.repository().listTowns(true).stream().map(town -> town.residenceName())
+                        .forEach(managedResidenceNames::add);
+            } catch (RuntimeException exception) {
+                getLogger().severe("读取系统 Residence 名称清单失败: " + exception.getMessage());
+            }
+        });
         getServer().getScheduler().runTaskTimer(this, runtime::checkRecovery, 20L * 30, 20L * 30);
-        getServer().getScheduler().runTaskLater(this, runtime::inspectProfileMirrors, 20L * 5);
         getServer().getScheduler().runTaskTimer(this, runtime::reconcileAll, 20L * 10,
                 20L * 60 * 60);
         List<String> details = new ArrayList<>(previousDetails);

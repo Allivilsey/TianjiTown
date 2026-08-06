@@ -8,11 +8,12 @@ import java.util.UUID;
 public interface LandProtectionService {
     Collision findCollision(InitialTerritory territory);
 
-    Result create(UUID townId, InitialTerritory territory, Collection<UUID> members);
+    Result create(String residenceName, InitialTerritory territory, Collection<UUID> members);
 
-    Result remove(UUID townId, InitialTerritory territory);
+    Result remove(String residenceName, InitialTerritory territory);
 
-    Result reconcile(UUID townId, InitialTerritory territory, Collection<UUID> members, boolean repair);
+    Result reconcile(String residenceName, InitialTerritory territory,
+                     Collection<UUID> members, boolean repair);
 
     record Collision(boolean occupied, String residenceName) {
         public static Collision none() {
