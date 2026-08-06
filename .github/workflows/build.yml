@@ -18,11 +18,13 @@ jobs:
         run: mvn -B -ntp clean verify
       - name: Reproducibility check
         run: |
-          cp tianjitown-paper/target/TianjiTown-0.1.0-SNAPSHOT.jar /tmp/first.jar
+          artifact="$(find tianjitown-paper/target -maxdepth 1 -type f -name 'TianjiTown-*.jar' -print -quit)"
+          test -n "$artifact"
+          cp "$artifact" /tmp/first.jar
           mvn -B -ntp clean package -DskipTests
-          cmp /tmp/first.jar tianjitown-paper/target/TianjiTown-0.1.0-SNAPSHOT.jar
+          cmp /tmp/first.jar "$artifact"
       - uses: actions/upload-artifact@v4
         with:
-          name: TianjiTown-phase0
-          path: tianjitown-paper/target/TianjiTown-0.1.0-SNAPSHOT.jar
+          name: TianjiTown
+          path: tianjitown-paper/target/TianjiTown-*.jar
           if-no-files-found: error
