@@ -54,3 +54,4 @@ backups/*
 *.local.yml
 *.local.yaml
 /TestList.md
+/ManualTest.md
