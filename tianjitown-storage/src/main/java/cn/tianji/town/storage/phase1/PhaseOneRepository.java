@@ -228,10 +228,14 @@ public final class PhaseOneRepository {
         }
         return transaction(connection -> {
             ApplicationSnapshot application = requireApplication(connection, applicationId, true);
+            if (application.status() == ApplicationStatus.ACTIVE) {
+                return requireProvisioningTownStatus(connection, application, TownStatus.ACTIVE);
+            }
             if (application.status() == ApplicationStatus.APPROVED_PROVISIONING) {
-                return provisioning(connection, application);
+                return requireProvisioningTownStatus(connection, application, TownStatus.PROVISIONING);
             }
             if (application.status() == ApplicationStatus.PROVISION_FAILED) {
+                requireProvisioningTownStatus(connection, application, TownStatus.PROVISIONING);
                 ApplicationWorkflow.requireAllowed(application.status(),
                         ApplicationStatus.APPROVED_PROVISIONING, ApplicationActor.ADMINISTRATOR);
                 updateStatus(connection, applicationId, application.version(),
@@ -958,6 +962,19 @@ public final class PhaseOneRepository {
             }
         }
         return new Provisioning(application.id(), town, members);
+    }
+
+    private Provisioning requireProvisioningTownStatus(Connection connection,
+                                                        ApplicationSnapshot application,
+                                                        TownStatus expected) throws SQLException {
+        Provisioning existing = provisioning(connection, application);
+        if (existing.town().status() == expected) {
+            return existing;
+        }
+        if (existing.town().status() == TownStatus.ARCHIVED) {
+            throw new ConflictException("小镇已归档，不能继续或重复批准");
+        }
+        throw new ConflictException("申请与小镇建镇状态不一致，请先执行数据对账");
     }
 
     private void requireDatabaseSiteAvailable(Connection connection, UUID applicationId,

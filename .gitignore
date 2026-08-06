@@ -53,3 +53,4 @@ backups/*
 !.env.example
 *.local.yml
 *.local.yaml
+/TestList.md

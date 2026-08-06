@@ -31,6 +31,19 @@ final class SitePolicy {
     }
 
     Validation validate(InitialTerritory territory) {
+        Validation environment = validateEnvironment(territory);
+        if (!environment.valid()) {
+            return environment;
+        }
+        LandProtectionService.Collision collision = landProtection.findCollision(territory);
+        if (collision.occupied()) {
+            return Validation.failure("3×3 区块与现有 Residence 冲突: "
+                    + collision.residenceName());
+        }
+        return environment;
+    }
+
+    Validation validateEnvironment(InitialTerritory territory) {
         World world = plugin.getServer().getWorld(territory.center().worldId());
         if (world == null) {
             return Validation.failure("目标世界当前未加载");
@@ -51,11 +64,6 @@ final class SitePolicy {
         if (rectangles("phase1.site.blacklist", world.getName()).stream()
                 .anyMatch(area -> area.overlaps(territory))) {
             return Validation.failure("3×3 区块与出生点、活动区或管理黑名单重叠");
-        }
-        LandProtectionService.Collision collision = landProtection.findCollision(territory);
-        if (collision.occupied()) {
-            return Validation.failure("3×3 区块与现有 Residence 冲突: "
-                    + collision.residenceName());
         }
         return Validation.success(territory);
     }

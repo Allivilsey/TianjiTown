@@ -3,6 +3,7 @@ package cn.tianji.town.paper;
 import cn.tianji.town.core.ports.LandProtectionService;
 import cn.tianji.town.core.profile.TownProfile;
 import cn.tianji.town.core.profile.ProfileChecksum;
+import cn.tianji.town.core.town.TownStatus;
 import cn.tianji.town.storage.database.DatabaseGate;
 import cn.tianji.town.storage.phase1.PhaseOneRepository;
 import cn.tianji.town.storage.phase1.TownSnapshot;
@@ -29,6 +30,7 @@ final class PhaseOneRuntime {
     private final YamlProfileStore profiles;
     private final Path profileDirectory;
     private final AtomicBoolean databaseAvailable = new AtomicBoolean(true);
+    private final ProvisionCoordinator provisions = new ProvisionCoordinator();
 
     PhaseOneRuntime(TianjiTownPlugin plugin, DatabaseGate database,
                     LandProtectionService landProtection) {
@@ -144,39 +146,79 @@ final class PhaseOneRuntime {
 
     void provision(CommandSender sender, UUID applicationId, UUID reviewerId,
                    String reviewerName, String reason, String idempotencyKey) {
-        write(sender, () -> repository.beginProvision(applicationId, reviewerId, reviewerName,
-                reason, idempotencyKey), provisioning -> {
-            SitePolicy.Validation validation = sitePolicy.validate(provisioning.town().territory());
+        if (!databaseAvailable.get()) {
+            sender.sendMessage("§cMySQL 当前不可用，写操作已锁定；现有 Residence 保护不受影响。");
+            return;
+        }
+        if (!provisions.tryBegin(applicationId)) {
+            sender.sendMessage("§e该申请正在执行建镇流程，本次重复请求已合并。");
+            return;
+        }
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                PhaseOneRepository.Provisioning provisioning = repository.beginProvision(applicationId,
+                        reviewerId, reviewerName, reason, idempotencyKey);
+                databaseAvailable.set(true);
+                plugin.getServer().getScheduler().runTask(plugin,
+                        () -> projectProvision(sender, applicationId, provisioning));
+            } catch (RuntimeException exception) {
+                provisions.finish(applicationId);
+                handleFailure(sender, exception);
+            }
+        });
+    }
+
+    private void projectProvision(CommandSender sender, UUID applicationId,
+                                  PhaseOneRepository.Provisioning provisioning) {
+        if (provisioning.town().status() == TownStatus.ACTIVE) {
+            provisions.finish(applicationId);
+            sender.sendMessage("§a该申请已完成建镇，无需重复批准。");
+            return;
+        }
+        try {
+            // 碰撞由创建服务检查，使重试能够识别并复用本镇已经创建的系统投影。
+            SitePolicy.Validation validation = sitePolicy.validateEnvironment(
+                    provisioning.town().territory());
             LandProtectionService.Result land = validation.valid()
                     ? landProtection.create(provisioning.town().id(), provisioning.town().territory(),
                     provisioning.members())
                     : LandProtectionService.Result.failure("批准时选址复核失败: " + validation.error());
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-                String detail = land.message();
-                boolean success = land.success();
-                if (success) {
-                    try {
-                        exportProfile(provisioning.town().id());
-                    } catch (RuntimeException | IOException exception) {
-                        success = false;
-                        detail = "YAML 基本资料导出失败: " + exception.getMessage();
-                        repository.markProfileFailed(provisioning.town().id(), detail);
-                    }
-                }
-                boolean completed = success;
-                String completedDetail = detail;
+            plugin.getServer().getScheduler().runTaskAsynchronously(plugin,
+                    () -> finishProvision(sender, applicationId, provisioning, land));
+        } catch (RuntimeException exception) {
+            provisions.finish(applicationId);
+            handleFailure(sender, exception);
+        }
+    }
+
+    private void finishProvision(CommandSender sender, UUID applicationId,
+                                 PhaseOneRepository.Provisioning provisioning,
+                                 LandProtectionService.Result land) {
+        try {
+            String detail = land.message();
+            boolean success = land.success();
+            if (success) {
                 try {
-                    repository.finishProvision(applicationId, completed, completedDetail);
-                    databaseAvailable.set(true);
-                    plugin.getServer().getScheduler().runTask(plugin, () -> sender.sendMessage(
-                            completed ? "§a小镇已批准并完成 3×3 领地投影。"
-                                    : "§c自动创建失败，申请已进入 PROVISION_FAILED: "
-                                    + completedDetail));
-                } catch (RuntimeException exception) {
-                    handleFailure(sender, exception);
+                    exportProfile(provisioning.town().id());
+                } catch (RuntimeException | IOException exception) {
+                    success = false;
+                    detail = "YAML 基本资料导出失败: " + safeMessage(exception);
+                    repository.markProfileFailed(provisioning.town().id(), detail);
                 }
-            });
-        });
+            }
+            boolean completed = success;
+            String completedDetail = detail;
+            repository.finishProvision(applicationId, completed, completedDetail);
+            databaseAvailable.set(true);
+            plugin.getServer().getScheduler().runTask(plugin, () -> sender.sendMessage(
+                    completed ? "§a小镇已批准并完成 3×3 领地投影。"
+                            : "§c自动创建失败，申请已进入 PROVISION_FAILED: "
+                            + completedDetail));
+        } catch (RuntimeException exception) {
+            handleFailure(sender, exception);
+        } finally {
+            provisions.finish(applicationId);
+        }
     }
 
     TownProfile exportProfile(UUID townId) throws IOException {
