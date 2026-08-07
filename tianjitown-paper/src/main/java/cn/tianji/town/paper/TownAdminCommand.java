@@ -135,12 +135,31 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private boolean station(CommandSender sender, String[] args) {
-        if (args.length != 2 || !args[1].equalsIgnoreCase("create") || !(sender instanceof Player player)) {
-            sender.sendMessage("§e/townadmin station create（玩家看向讲台）");
+        if (args.length != 2) {
+            stationHelp(sender);
             return true;
         }
-        plugin.townUi().createStation(player);
+        String action = args[1].toLowerCase(Locale.ROOT);
+        if (action.equals("list")) {
+            plugin.townUi().listStations(sender);
+            return true;
+        }
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("§c该服务台操作需要游戏内管理员看向讲台执行。");
+            return true;
+        }
+        switch (action) {
+            case "create" -> plugin.townUi().createStation(player);
+            case "remove" -> plugin.townUi().removeStation(player);
+            case "info" -> plugin.townUi().showStationInfo(player);
+            default -> stationHelp(sender);
+        }
         return true;
+    }
+
+    private static void stationHelp(CommandSender sender) {
+        sender.sendMessage("§e/townadmin station create|remove|info（玩家看向讲台）");
+        sender.sendMessage("§e/townadmin station list");
     }
 
     private boolean handbook(CommandSender sender, String[] args) {
@@ -235,11 +254,16 @@ final class TownAdminCommand implements CommandExecutor {
                 LandProtectionService.Result result = runtime.landProtection().remove(
                         deleted.residenceName(), deleted.territory());
                 if (result.success()) {
-                    sender.sendMessage("§a小镇“" + deleted.profile().name()
-                            + "”已删除，成员和区块占位已释放；Residence: " + result.message());
+                    runtime.write(sender, () -> {
+                        runtime.repository().completeTownDeletion(deleted.id(), actorId(sender),
+                                sender.getName(), parsed.reason());
+                        return deleted;
+                    }, completed -> sender.sendMessage("§a小镇“" + completed.profile().name()
+                            + "”已删除，成员、名称和区块占位已释放；Residence: "
+                            + result.message()));
                 } else {
-                    sender.sendMessage("§c小镇数据库记录已停用，但 Residence 移除失败："
-                            + result.message() + "。遗留领地仍会阻止该区域被复用，请处理后再验收。");
+                    sender.sendMessage("§c小镇已安全归档，但 Residence 移除失败："
+                            + result.message() + "。名称、领地名称和区块仍保持锁定；处理后可重复执行删除命令。");
                     plugin.getLogger().warning("删除小镇后 Residence 移除失败 "
                             + deleted.profile().name() + "/" + deleted.residenceName()
                             + ": " + result.message());
@@ -440,7 +464,7 @@ final class TownAdminCommand implements CommandExecutor {
         sender.sendMessage("§6TianjiTown 1.0.0 管理命令");
         sender.sendMessage("§e/townadmin status | reload | maintenance <on|off|status> | audit [limit]");
         sender.sendMessage("§e/townadmin phase0 status | residence-smoke ...");
-        sender.sendMessage("§e/townadmin station create | handbook [player]");
+        sender.sendMessage("§e/townadmin station create|remove|info|list | handbook [player]");
         sender.sendMessage("§e/townadmin application list|approve|reject|change ...");
         sender.sendMessage("§e/townadmin town view <小镇全名>");
         sender.sendMessage("§e/townadmin town delete <小镇全名> --reason <原因> --confirm");

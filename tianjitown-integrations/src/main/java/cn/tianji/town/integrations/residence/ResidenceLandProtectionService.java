@@ -41,6 +41,25 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     }
 
     @Override
+    public Inspection inspect(String residenceName, InitialTerritory territory,
+                              Collection<UUID> members) {
+        requireMainThread();
+        String name = registerManagedName(residenceName);
+        Bounds bounds = bounds(territory);
+        if (bounds == null) {
+            return Inspection.invalid("目标世界未加载: " + territory.center().worldName());
+        }
+        ClaimedResidence residence = manager().getByName(name);
+        if (residence == null) {
+            return Inspection.missing("缺少 Residence 投影 " + name);
+        }
+        Result verification = verifyAndApply(name, residence, bounds, members, false);
+        return verification.success()
+                ? Inspection.healthy(verification.message())
+                : Inspection.invalid(verification.message());
+    }
+
+    @Override
     public Result create(String residenceName, InitialTerritory territory, Collection<UUID> members) {
         requireMainThread();
         String name = registerManagedName(residenceName);

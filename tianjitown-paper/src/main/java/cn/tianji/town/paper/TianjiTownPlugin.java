@@ -175,6 +175,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 getLogger().severe("读取系统 Residence 名称清单失败: " + exception.getMessage());
             }
         });
+        runtime.recoverStartupState();
         getServer().getScheduler().runTaskTimer(this, runtime::checkRecovery, 20L * 30, 20L * 30);
         getServer().getScheduler().runTaskTimer(this, runtime::reconcileAll, 20L * 10,
                 20L * 60 * 60);

@@ -56,6 +56,8 @@ class TownAdminCompletionEngineTest {
 
     @Test
     void completesTownMembersAndRepairFlags() {
+        assertEquals(List.of("create", "info", "list", "remove"), engine.complete(
+                new String[]{"station", ""}, snapshot, dynamic));
         assertEquals(List.of("MemberOne"), engine.complete(
                 new String[]{"member", "remove", "天际", "之城", "--player", ""},
                 snapshot, dynamic));
@@ -77,12 +79,14 @@ class TownAdminCompletionEngineTest {
     }
 
     @Test
-    void hidesPlayerOnlyAndPhaseZeroRootsWhenUnavailable() {
+    void limitsPlayerOnlyActionsAndPhaseZeroRootsWhenUnavailable() {
         TownAdminCompletionEngine.Dynamic console = new TownAdminCompletionEngine.Dynamic(
                 List.of(), List.of("world"), null, null, false, false);
         List<String> roots = engine.complete(new String[]{""}, snapshot, console);
-        assertFalse(roots.contains("station"));
+        assertTrue(roots.contains("station"));
         assertFalse(roots.contains("phase0"));
+        assertEquals(List.of("list"), engine.complete(
+                new String[]{"station", ""}, snapshot, console));
         assertFalse(engine.complete(new String[]{"land", ""}, snapshot, console)
                 .contains("preview"));
     }

@@ -3,6 +3,7 @@ package cn.tianji.town.paper;
 import cn.tianji.town.core.land.ChunkPosition;
 import cn.tianji.town.core.land.InitialTerritory;
 import cn.tianji.town.core.ports.LandProtectionService;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
@@ -18,6 +19,8 @@ import java.util.Map;
 import java.util.UUID;
 
 final class SitePolicy {
+    private static final Particle.DustOptions BOUNDARY_PARTICLE =
+            new Particle.DustOptions(Color.fromRGB(32, 220, 255), 1.35f);
     private final TianjiTownPlugin plugin;
     private final LandProtectionService landProtection;
     private final Map<UUID, BukkitTask> previews = new HashMap<>();
@@ -120,28 +123,21 @@ final class SitePolicy {
         double centerY = player.getLocation().getY() + 1;
         double minimumY = Math.max(world.getMinHeight() + 1, centerY - verticalRange);
         double maximumY = Math.min(world.getMaxHeight() - 1, centerY + verticalRange);
-        for (double x = minimumX; x <= maximumX; x += 3) {
-            particle(player, x, minimumY, minimumZ);
-            particle(player, x, minimumY, maximumZ);
-            particle(player, x, maximumY, minimumZ);
-            particle(player, x, maximumY, maximumZ);
-        }
-        for (double z = minimumZ; z <= maximumZ; z += 3) {
-            particle(player, minimumX, minimumY, z);
-            particle(player, maximumX, minimumY, z);
-            particle(player, minimumX, maximumY, z);
-            particle(player, maximumX, maximumY, z);
-        }
         for (double y = minimumY; y <= maximumY; y += 2) {
-            particle(player, minimumX, y, minimumZ);
-            particle(player, minimumX, y, maximumZ);
-            particle(player, maximumX, y, minimumZ);
-            particle(player, maximumX, y, maximumZ);
+            for (double x = minimumX; x <= maximumX; x += 2) {
+                particle(player, x, y, minimumZ);
+                particle(player, x, y, maximumZ);
+            }
+            for (double z = minimumZ + 2; z < maximumZ; z += 2) {
+                particle(player, minimumX, y, z);
+                particle(player, maximumX, y, z);
+            }
         }
     }
 
     private static void particle(Player player, double x, double y, double z) {
-        player.spawnParticle(Particle.END_ROD, x, y, z, 1, 0, 0, 0, 0);
+        player.spawnParticle(Particle.DUST, x, y, z, 1, 0, 0, 0, 0,
+                BOUNDARY_PARTICLE);
     }
 
     private boolean insideWorldBorder(World world, InitialTerritory territory) {

@@ -61,27 +61,78 @@ final class PhaseOneRuntime {
         });
     }
 
+    void recoverStartupState() {
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                int recovered = repository.recoverInterruptedProvisions(
+                        "服务器在 Residence 投影完成前停止，启动时已转为可重试失败状态");
+                databaseAvailable.set(true);
+                if (recovered > 0) {
+                    plugin.getLogger().warning("已恢复 " + recovered
+                            + " 个中断的建镇流程；申请进入 PROVISION_FAILED，等待管理员重试。");
+                }
+            } catch (RuntimeException exception) {
+                if (exception instanceof PhaseOneRepository.StorageUnavailableException) {
+                    databaseAvailable.set(false);
+                }
+                plugin.getLogger().severe("恢复中断建镇流程失败: " + safeMessage(exception));
+            }
+        });
+    }
+
     void reconcileAll() {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 List<TownMembers> states = repository.listTowns(false).stream()
+                        .filter(town -> town.status() == TownStatus.ACTIVE)
                         .map(town -> new TownMembers(town, repository.listMemberIds(town.id())))
                         .toList();
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
                     for (TownMembers state : states) {
-                        LandProtectionService.Result result = landProtection.reconcile(
+                        LandProtectionService.Inspection inspection = landProtection.inspect(
                                 state.town().residenceName(),
-                                state.town().territory(), state.members(), true);
-                        if (!result.success()) {
-                            plugin.getLogger().severe("Residence 对账失败 " + state.town().id()
-                                    + ": " + result.message());
+                                state.town().territory(), state.members());
+                        if (inspection.state() == LandProtectionService.ProjectionState.MISSING) {
+                            archiveMissingProjection(state.town(), inspection.message());
+                            continue;
                         }
-                        recordLandAudit(null, "SYSTEM", state.town().id(), true, result);
+                        boolean healthy = inspection.state()
+                                == LandProtectionService.ProjectionState.HEALTHY;
+                        LandProtectionService.Result result = healthy
+                                ? LandProtectionService.Result.ok(inspection.message())
+                                : LandProtectionService.Result.failure(inspection.message());
+                        if (!healthy) {
+                            plugin.getLogger().severe("Residence 对账发现异常 " + state.town().id()
+                                    + ": " + inspection.message()
+                                    + "；自动任务不会删除或重建投影，请由管理员检查。");
+                        }
+                        recordLandAudit(null, "SYSTEM", state.town().id(), false, result);
                     }
                 });
             } catch (RuntimeException exception) {
                 databaseAvailable.set(false);
                 plugin.getLogger().severe("Residence 对账读取 MySQL 失败: " + safeMessage(exception));
+            }
+        });
+    }
+
+    private void archiveMissingProjection(TownSnapshot town, String detail) {
+        plugin.getLogger().severe("ACTIVE 小镇缺少 Residence 投影 " + town.id() + "/"
+                + town.residenceName() + ": " + detail + "；正在执行安全归档并保留复用锁。");
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                boolean archived = repository.archiveTownForMissingProjection(town.id(), detail);
+                databaseAvailable.set(true);
+                if (archived) {
+                    plugin.getLogger().severe("小镇已安全归档 " + town.profile().name()
+                            + "；名称、领地名称和原区块保持锁定，未自动创建或删除 Residence。");
+                }
+            } catch (RuntimeException exception) {
+                if (exception instanceof PhaseOneRepository.StorageUnavailableException) {
+                    databaseAvailable.set(false);
+                }
+                plugin.getLogger().severe("小镇安全归档失败 " + town.id() + ": "
+                        + safeMessage(exception));
             }
         });
     }

@@ -21,7 +21,7 @@
 4. Flyway 会先保留阶段 0 门禁表，再创建阶段 1 业务表。禁止手工修改 Flyway history。
 5. 执行 `/townadmin status`。只有状态为 `READY` 时才开放服务台。
 6. 在专用空区块执行 `/townadmin phase0 residence-smoke <world> <chunkX> <chunkZ> <memberUuid> --confirm-empty-chunk --confirm-preproduction`，完成第 0 阶段 Residence 闭环。
-7. 用 `/townadmin station create` 将看向的讲台注册为服务台；用 `/townadmin handbook <player>` 做手册发放测试。
+7. 用 `/townadmin station create|info|list|remove` 创建、核对并移除服务台；用 `/townadmin handbook <player>` 做手册发放测试。
 
 从早期含 YAML 镜像的版本升级时，原 `plugins/TianjiTown/towns` 文件不会再被读取或改写。确认 MySQL 资料完整并保留一次备份后，可由管理员另行归档这些旧文件。已发布 Flyway `1.0` 中的 `town_profile_sync` 表为停用遗留表，运行代码不再访问；不要改写既有迁移文件或 Flyway history。
 
@@ -62,7 +62,7 @@
 - 成员：`/townadmin member invite|add|remove <小镇全名> --player <玩家> --reason <原因>`
 - 领地：`/townadmin land preview|reconcile|rebuild <小镇全名|all> [--repair|--confirm]`
 
-删除操作会解除成员关系、释放数据库区块占位并移除对应 Residence，同时保留小镇历史记录与审计记录。
+删除操作先安全归档并保持名称、领地名称和区块锁定；只有对应 Residence 确认移除后才释放这些占位，同时保留小镇历史记录与审计记录。升级前已经归档的小镇默认继续锁定，可重新执行带原因和确认参数的删除命令完成安全释放。若自动对账发现 `ACTIVE` 小镇的 Residence 已被外部删除，系统会安全归档并继续保留复用锁，不会自动重建或删除外部领地。
 
 ## 回滚
 

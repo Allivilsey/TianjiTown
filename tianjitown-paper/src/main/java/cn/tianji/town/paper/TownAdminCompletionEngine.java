@@ -18,7 +18,7 @@ import java.util.function.Predicate;
 final class TownAdminCompletionEngine {
     private static final int MAX_SUGGESTIONS = 100;
     private static final List<String> ROOTS = List.of(
-            "help", "status", "reload", "audit", "handbook", "application", "town",
+            "help", "status", "reload", "audit", "station", "handbook", "application", "town",
             "member", "mayor", "land", "maintenance");
 
     List<String> complete(String[] args, Snapshot snapshot, Dynamic dynamic) {
@@ -27,9 +27,6 @@ final class TownAdminCompletionEngine {
         Objects.requireNonNull(dynamic, "dynamic");
         if (args.length <= 1) {
             List<String> roots = new ArrayList<>(ROOTS);
-            if (dynamic.playerSender()) {
-                roots.add("station");
-            }
             if (dynamic.phaseZeroAllowed()) {
                 roots.add("phase0");
             }
@@ -39,8 +36,10 @@ final class TownAdminCompletionEngine {
             case "audit" -> args.length == 2
                     ? filter(List.of("10", "20", "50", "100", "200"), args[1]) : List.of();
             case "phase0" -> phaseZero(args, dynamic);
-            case "station" -> args.length == 2 && dynamic.playerSender()
-                    ? filter(List.of("create"), args[1]) : List.of();
+            case "station" -> args.length == 2
+                    ? filter(dynamic.playerSender()
+                    ? List.of("create", "info", "list", "remove") : List.of("list"), args[1])
+                    : List.of();
             case "handbook" -> args.length == 2
                     ? filter(dynamic.onlinePlayerNames(), args[1]) : List.of();
             case "maintenance" -> args.length == 2

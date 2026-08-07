@@ -8,6 +8,9 @@ import java.util.UUID;
 public interface LandProtectionService {
     Collision findCollision(InitialTerritory territory);
 
+    Inspection inspect(String residenceName, InitialTerritory territory,
+                       Collection<UUID> members);
+
     Result create(String residenceName, InitialTerritory territory, Collection<UUID> members);
 
     Result remove(String residenceName, InitialTerritory territory);
@@ -18,6 +21,26 @@ public interface LandProtectionService {
     record Collision(boolean occupied, String residenceName) {
         public static Collision none() {
             return new Collision(false, null);
+        }
+    }
+
+    enum ProjectionState {
+        HEALTHY,
+        MISSING,
+        INVALID
+    }
+
+    record Inspection(ProjectionState state, String message) {
+        public static Inspection healthy(String message) {
+            return new Inspection(ProjectionState.HEALTHY, message);
+        }
+
+        public static Inspection missing(String message) {
+            return new Inspection(ProjectionState.MISSING, message);
+        }
+
+        public static Inspection invalid(String message) {
+            return new Inspection(ProjectionState.INVALID, message);
         }
     }
 

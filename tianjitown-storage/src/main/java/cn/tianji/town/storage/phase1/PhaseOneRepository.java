@@ -321,6 +321,48 @@ public final class PhaseOneRepository {
         return query(connection -> findApplication(connection, applicationId, false));
     }
 
+    public int recoverInterruptedProvisions(String reason) {
+        requireWorkerThread();
+        requireReason(reason);
+        return transaction(connection -> {
+            List<UUID> applicationIds = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT application_id FROM town_applications
+                     WHERE status = 'APPROVED_PROVISIONING' FOR UPDATE
+                    """);
+                 ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    applicationIds.add(readUuid(result, "application_id"));
+                }
+            }
+            for (UUID applicationId : applicationIds) {
+                ApplicationSnapshot application = requireApplication(connection, applicationId, false);
+                try (PreparedStatement applicationUpdate = connection.prepareStatement("""
+                        UPDATE town_applications
+                           SET status = 'PROVISION_FAILED', last_error = ?, version = version + 1
+                         WHERE application_id = ? AND status = 'APPROVED_PROVISIONING'
+                        """);
+                     PreparedStatement unitUpdate = connection.prepareStatement("""
+                             UPDATE territory_units
+                                SET projection_status = 'FAILED', projection_error = ?
+                              WHERE town_id = ?
+                             """)) {
+                    applicationUpdate.setString(1, reason);
+                    applicationUpdate.setBytes(2, uuid(applicationId));
+                    requireUpdated(applicationUpdate, "中断的建镇申请已被其他恢复任务处理");
+                    if (application.townId() != null) {
+                        unitUpdate.setString(1, reason);
+                        unitUpdate.setBytes(2, uuid(application.townId()));
+                        unitUpdate.executeUpdate();
+                    }
+                }
+                audit(connection, null, null, "SYSTEM", "PROVISION_RECOVER", "APPLICATION",
+                        applicationId.toString(), reason, "已转为 PROVISION_FAILED，可由管理员幂等重试");
+            }
+            return applicationIds.size();
+        });
+    }
+
     public Optional<ApplicationSnapshot> findReviewApplicationByName(String townName) {
         requireWorkerThread();
         String normalizedName = ApplicationText.normalizeNameKey(townName);
@@ -411,8 +453,10 @@ public final class PhaseOneRepository {
         requireWorkerThread();
         String normalizedName = ApplicationText.normalizeNameKey(townName);
         return query(connection -> {
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT town_id FROM towns WHERE normalized_name = ? LIMIT 1")) {
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT town_id FROM towns WHERE normalized_name = ?
+                     ORDER BY (status = 'ARCHIVED'), reuse_blocked DESC, created_at DESC LIMIT 1
+                    """)) {
                 statement.setString(1, normalizedName);
                 try (ResultSet result = statement.executeQuery()) {
                     return result.next()
@@ -823,26 +867,112 @@ public final class PhaseOneRepository {
         requireWorkerThread();
         requireReason(reason);
         transaction(connection -> {
+            TownSnapshot current = requireTown(connection, townId);
+            boolean alreadyPrepared = current.status() == TownStatus.ARCHIVED
+                    && townReuseBlocked(connection, townId);
+            if (current.status() == TownStatus.ARCHIVED && !alreadyPrepared) {
+                throw new ConflictException("小镇已经删除并完成资源释放");
+            }
             try (PreparedStatement town = connection.prepareStatement("""
-                    UPDATE towns SET status = 'ARCHIVED', version = version + 1
+                    UPDATE towns
+                       SET status = 'ARCHIVED', reuse_blocked = TRUE, version = version + 1
                      WHERE town_id = ? AND status <> 'ARCHIVED'
                     """);
+                 PreparedStatement unit = connection.prepareStatement(
+                         "UPDATE territory_units SET reuse_blocked = TRUE WHERE town_id = ?");
                  PreparedStatement members = connection.prepareStatement(
                          "DELETE FROM town_members WHERE town_id = ?");
+                 PreparedStatement invitations = connection.prepareStatement("""
+                         UPDATE town_invitations SET revoked_at = CURRENT_TIMESTAMP(6)
+                          WHERE town_id = ? AND accepted_at IS NULL AND revoked_at IS NULL
+                         """)) {
+                if (!alreadyPrepared) {
+                    town.setBytes(1, uuid(townId));
+                    requireUpdated(town, "小镇不存在或已经归档");
+                }
+                unit.setBytes(1, uuid(townId));
+                unit.executeUpdate();
+                members.setBytes(1, uuid(townId));
+                members.executeUpdate();
+                invitations.setBytes(1, uuid(townId));
+                invitations.executeUpdate();
+            }
+            audit(connection, null, actorId, actorName,
+                    alreadyPrepared ? "TOWN_DELETE_RETRY" : "TOWN_DELETE_PREPARE", "TOWN",
+                    townId.toString(), reason, "已安全归档；名称、领地名称和区块保持锁定，等待移除投影");
+            return null;
+        });
+    }
+
+    public void completeTownDeletion(UUID townId, UUID actorId, String actorName, String reason) {
+        requireWorkerThread();
+        requireReason(reason);
+        transaction(connection -> {
+            TownSnapshot current = requireTown(connection, townId);
+            if (current.status() != TownStatus.ARCHIVED || !townReuseBlocked(connection, townId)) {
+                throw new ConflictException("小镇未处于等待资源释放的归档状态");
+            }
+            try (PreparedStatement town = connection.prepareStatement("""
+                    UPDATE towns SET reuse_blocked = FALSE, version = version + 1
+                     WHERE town_id = ? AND status = 'ARCHIVED' AND reuse_blocked = TRUE
+                    """);
+                 PreparedStatement units = connection.prepareStatement("""
+                         UPDATE territory_units SET reuse_blocked = FALSE
+                          WHERE town_id = ? AND reuse_blocked = TRUE
+                         """);
                  PreparedStatement chunks = connection.prepareStatement("""
                          DELETE c FROM territory_chunks c
                          JOIN territory_units u ON u.unit_id = c.unit_id WHERE u.town_id = ?
                          """)) {
                 town.setBytes(1, uuid(townId));
-                requireUpdated(town, "小镇不存在或已经归档");
-                members.setBytes(1, uuid(townId));
-                members.executeUpdate();
+                requireUpdated(town, "小镇删除资源已被其他操作释放");
+                units.setBytes(1, uuid(townId));
+                units.executeUpdate();
                 chunks.setBytes(1, uuid(townId));
                 chunks.executeUpdate();
             }
-            audit(connection, null, actorId, actorName, "TOWN_DELETE", "TOWN", townId.toString(),
-                    reason, "小镇已逻辑删除，成员关系已解除，领地投影等待移除");
+            audit(connection, null, actorId, actorName, "TOWN_DELETE_COMPLETE", "TOWN",
+                    townId.toString(), reason, "Residence 已移除；名称、领地名称和区块已允许复用");
             return null;
+        });
+    }
+
+    public boolean archiveTownForMissingProjection(UUID townId, String detail) {
+        requireWorkerThread();
+        requireReason(detail);
+        return transaction(connection -> {
+            try (PreparedStatement town = connection.prepareStatement("""
+                    UPDATE towns
+                       SET status = 'ARCHIVED', reuse_blocked = TRUE, version = version + 1
+                     WHERE town_id = ? AND status = 'ACTIVE'
+                    """);
+                 PreparedStatement units = connection.prepareStatement("""
+                         UPDATE territory_units
+                            SET projection_status = 'FAILED', projection_error = ?, reuse_blocked = TRUE
+                          WHERE town_id = ?
+                         """);
+                 PreparedStatement members = connection.prepareStatement(
+                         "DELETE FROM town_members WHERE town_id = ?");
+                 PreparedStatement invitations = connection.prepareStatement("""
+                         UPDATE town_invitations SET revoked_at = CURRENT_TIMESTAMP(6)
+                          WHERE town_id = ? AND accepted_at IS NULL AND revoked_at IS NULL
+                         """)) {
+                town.setBytes(1, uuid(townId));
+                if (town.executeUpdate() != 1) {
+                    return false;
+                }
+                units.setString(1, detail);
+                units.setBytes(2, uuid(townId));
+                units.executeUpdate();
+                members.setBytes(1, uuid(townId));
+                members.executeUpdate();
+                invitations.setBytes(1, uuid(townId));
+                invitations.executeUpdate();
+            }
+            audit(connection, null, null, "SYSTEM", "TOWN_SAFETY_ARCHIVE", "TOWN",
+                    townId.toString(), "Residence 投影缺失", detail
+                            + "；名称、领地名称和区块继续锁定，禁止自动复用");
+            return true;
         });
     }
 
@@ -1021,7 +1151,7 @@ public final class PhaseOneRepository {
         }
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT u.unit_id FROM territory_units u JOIN towns t ON t.town_id = u.town_id
-                 WHERE u.world_uuid = ? AND t.status <> 'ARCHIVED'
+                 WHERE u.world_uuid = ? AND u.reuse_blocked = TRUE
                    AND u.center_chunk_x BETWEEN ? AND ? AND u.center_chunk_z BETWEEN ? AND ?
                  LIMIT 1 FOR UPDATE
                 """)) {
@@ -1063,7 +1193,7 @@ public final class PhaseOneRepository {
             }
         }
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT unit_id FROM territory_units WHERE residence_name = ? LIMIT 1 FOR UPDATE")) {
+                "SELECT unit_id FROM territory_units WHERE residence_name = ? AND reuse_blocked = TRUE LIMIT 1 FOR UPDATE")) {
             statement.setString(1, TownResidenceName.initial(text.residenceName()));
             try (ResultSet result = statement.executeQuery()) {
                 if (result.next()) {
@@ -1076,7 +1206,9 @@ public final class PhaseOneRepository {
     private void ensureTownNameAvailable(Connection connection, ApplicationText text,
                                          UUID ignoredTownId) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT town_id FROM towns WHERE (normalized_name = ? OR normalized_short_name = ?)
+                SELECT town_id FROM towns
+                 WHERE reuse_blocked = TRUE
+                   AND (normalized_name = ? OR normalized_short_name = ?)
                   AND (? IS NULL OR town_id <> ?) LIMIT 1 FOR UPDATE
                 """)) {
             statement.setString(1, text.normalizedName());
@@ -1326,6 +1458,19 @@ public final class PhaseOneRepository {
     private static void requireUpdated(PreparedStatement statement, String message) throws SQLException {
         if (statement.executeUpdate() != 1) {
             throw new ConflictException(message);
+        }
+    }
+
+    private static boolean townReuseBlocked(Connection connection, UUID townId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT reuse_blocked FROM towns WHERE town_id = ? FOR UPDATE")) {
+            statement.setBytes(1, uuid(townId));
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) {
+                    throw new ConflictException("小镇不存在");
+                }
+                return result.getBoolean("reuse_blocked");
+            }
         }
     }
 

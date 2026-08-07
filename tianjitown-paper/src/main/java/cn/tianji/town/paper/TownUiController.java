@@ -20,6 +20,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.Lectern;
 import org.bukkit.command.CommandSender;
@@ -47,6 +48,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -67,6 +69,7 @@ final class TownUiController implements Listener {
     private final Map<UUID, FormSession> formSessions = new HashMap<>();
     private final Map<UUID, ApplicationFormSession> applicationForms = new ConcurrentHashMap<>();
     private final Map<UUID, ChatInputSession> chatInputs = new ConcurrentHashMap<>();
+    private final Map<UUID, ReviewReasonSession> reviewReasonInputs = new ConcurrentHashMap<>();
 
     TownUiController(TianjiTownPlugin plugin, PhaseOneRuntime runtime) {
         this.plugin = plugin;
@@ -85,11 +88,153 @@ final class TownUiController implements Listener {
             player.sendMessage("§c请看向 6 格内的讲台后重试。");
             return false;
         }
+        String existingId = lectern.getPersistentDataContainer().get(stationKey,
+                PersistentDataType.STRING);
+        if (existingId != null && !existingId.isBlank()) {
+            registerStation(block, existingId);
+            player.sendMessage("§e该讲台已经是小镇服务台，未重复创建。ID: " + existingId);
+            return false;
+        }
         String stationId = UUID.randomUUID().toString();
         lectern.getPersistentDataContainer().set(stationKey, PersistentDataType.STRING, stationId);
         lectern.update(true);
+        registerStation(block, stationId);
         player.sendMessage("§a已创建小镇服务台，ID: " + stationId);
         return true;
+    }
+
+    boolean removeStation(Player player) {
+        Block block = player.getTargetBlockExact(6);
+        if (block == null || !(block.getState() instanceof Lectern lectern)) {
+            player.sendMessage("§c请看向 6 格内的小镇服务台后重试。");
+            return false;
+        }
+        String stationId = lectern.getPersistentDataContainer().get(stationKey,
+                PersistentDataType.STRING);
+        if (stationId == null || stationId.isBlank()) {
+            player.sendMessage("§c当前讲台未注册为小镇服务台。");
+            return false;
+        }
+        lectern.getPersistentDataContainer().remove(stationKey);
+        lectern.update(true);
+        unregisterStation(block, stationId);
+        player.sendMessage("§a已移除小镇服务台，ID: " + stationId
+                + "；该讲台不再触发小镇菜单。");
+        return true;
+    }
+
+    void showStationInfo(Player player) {
+        Block block = player.getTargetBlockExact(6);
+        if (block == null || !(block.getState() instanceof Lectern lectern)) {
+            player.sendMessage("§c请看向 6 格内的讲台后重试。");
+            return;
+        }
+        String stationId = lectern.getPersistentDataContainer().get(stationKey,
+                PersistentDataType.STRING);
+        if (stationId == null || stationId.isBlank()) {
+            player.sendMessage("§e当前讲台未注册为小镇服务台。位置: "
+                    + stationLocation(block));
+            return;
+        }
+        registerStation(block, stationId);
+        player.sendMessage("§6小镇服务台详情");
+        player.sendMessage("§7ID: §f" + stationId);
+        player.sendMessage("§7位置: §f" + stationLocation(block));
+        player.sendMessage("§7状态: §a有效");
+    }
+
+    void listStations(CommandSender sender) {
+        List<StationRecord> stations = stationRecords();
+        sender.sendMessage("§6小镇服务台列表（" + stations.size() + "）");
+        if (stations.isEmpty()) {
+            sender.sendMessage("§7当前没有已登记的服务台。");
+            return;
+        }
+        for (StationRecord station : stations) {
+            sender.sendMessage("§e" + station.id() + " §7" + station.worldName() + " "
+                    + station.x() + "," + station.y() + "," + station.z() + " §8["
+                    + stationStatus(station) + "§8]");
+        }
+    }
+
+    private void registerStation(Block block, String stationId) {
+        List<StationRecord> stations = new ArrayList<>(stationRecords());
+        stations.removeIf(station -> station.id().equals(stationId)
+                || station.sameLocation(block.getWorld().getUID(), block.getX(), block.getY(), block.getZ()));
+        stations.add(new StationRecord(stationId, block.getWorld().getUID(), block.getWorld().getName(),
+                block.getX(), block.getY(), block.getZ()));
+        saveStationRecords(stations);
+    }
+
+    private void unregisterStation(Block block, String stationId) {
+        List<StationRecord> stations = new ArrayList<>(stationRecords());
+        stations.removeIf(station -> station.id().equals(stationId)
+                || station.sameLocation(block.getWorld().getUID(), block.getX(), block.getY(), block.getZ()));
+        saveStationRecords(stations);
+    }
+
+    private List<StationRecord> stationRecords() {
+        List<StationRecord> result = new ArrayList<>();
+        for (Map<?, ?> raw : plugin.getConfig().getMapList("phase1.service-stations")) {
+            try {
+                result.add(new StationRecord(String.valueOf(raw.get("id")),
+                        UUID.fromString(String.valueOf(raw.get("world-uuid"))),
+                        String.valueOf(raw.get("world")), number(raw, "x"), number(raw, "y"),
+                        number(raw, "z")));
+            } catch (IllegalArgumentException exception) {
+                plugin.getLogger().warning("忽略无效的小镇服务台登记: " + exception.getMessage());
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private void saveStationRecords(List<StationRecord> stations) {
+        List<Map<String, Object>> serialized = new ArrayList<>();
+        for (StationRecord station : stations) {
+            Map<String, Object> value = new LinkedHashMap<>();
+            value.put("id", station.id());
+            value.put("world-uuid", station.worldId().toString());
+            value.put("world", station.worldName());
+            value.put("x", station.x());
+            value.put("y", station.y());
+            value.put("z", station.z());
+            serialized.add(value);
+        }
+        plugin.getConfig().set("phase1.service-stations", serialized);
+        plugin.saveConfig();
+    }
+
+    private String stationStatus(StationRecord station) {
+        World world = Bukkit.getWorld(station.worldId());
+        if (world == null) {
+            world = Bukkit.getWorld(station.worldName());
+        }
+        if (world == null) {
+            return "世界未加载";
+        }
+        if (!world.isChunkLoaded(station.x() >> 4, station.z() >> 4)) {
+            return "区块未加载";
+        }
+        Block block = world.getBlockAt(station.x(), station.y(), station.z());
+        if (!(block.getState() instanceof Lectern lectern)) {
+            return "方块已变化";
+        }
+        String actualId = lectern.getPersistentDataContainer().get(stationKey,
+                PersistentDataType.STRING);
+        return station.id().equals(actualId) ? "§a有效" : "登记不一致";
+    }
+
+    private static int number(Map<?, ?> raw, String key) {
+        Object value = raw.get(key);
+        if (!(value instanceof Number number)) {
+            throw new IllegalArgumentException("缺少整数 " + key);
+        }
+        return number.intValue();
+    }
+
+    private static String stationLocation(Block block) {
+        return block.getWorld().getName() + " " + block.getX() + "," + block.getY() + ","
+                + block.getZ();
     }
 
     void giveHandbook(Player player) {
@@ -262,6 +407,7 @@ final class TownUiController implements Listener {
         formSessions.remove(event.getPlayer().getUniqueId());
         applicationForms.remove(event.getPlayer().getUniqueId());
         chatInputs.remove(event.getPlayer().getUniqueId());
+        reviewReasonInputs.remove(event.getPlayer().getUniqueId());
         sitePolicy.stopPreview(event.getPlayer().getUniqueId());
     }
 
@@ -269,13 +415,20 @@ final class TownUiController implements Listener {
     public void onChatInput(AsyncChatEvent event) {
         Player player = event.getPlayer();
         ChatInputSession input = chatInputs.remove(player.getUniqueId());
-        if (input == null) {
+        ReviewReasonSession review = input == null
+                ? reviewReasonInputs.remove(player.getUniqueId()) : null;
+        if (input == null && review == null) {
             return;
         }
         event.setCancelled(true);
         String value = PlainTextComponentSerializer.plainText().serialize(event.message()).strip();
-        plugin.getServer().getScheduler().runTask(plugin,
-                () -> applyChatInput(player, input, value));
+        if (input != null) {
+            plugin.getServer().getScheduler().runTask(plugin,
+                    () -> applyChatInput(player, input, value));
+        } else {
+            plugin.getServer().getScheduler().runTask(plugin,
+                    () -> applyReviewReason(player, review, value));
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -562,10 +715,10 @@ final class TownUiController implements Listener {
                         List.of("§7创建小镇并投影 3×3 Residence"), "CONFIRM_ADMIN_APPROVE",
                         application.id().toString())));
                 items.add(new MenuItem(12, button(Material.RED_CONCRETE, "§c拒绝",
-                        List.of("§7拒绝申请并释放选址"), "CONFIRM_ADMIN_REJECT",
+                        List.of("§7点击后在聊天栏填写拒绝原因"), "CONFIRM_ADMIN_REJECT",
                         application.id().toString())));
                 items.add(new MenuItem(14, button(Material.ORANGE_CONCRETE, "§e要求补件",
-                        List.of("§7退回申请供玩家修改"), "CONFIRM_ADMIN_CHANGE",
+                        List.of("§7点击后在聊天栏填写修改要求"), "CONFIRM_ADMIN_CHANGE",
                         application.id().toString())));
             } else if (application.status() == ApplicationStatus.PROVISION_FAILED) {
                 items.add(new MenuItem(12, button(Material.LIME_CONCRETE, "§a重试批准",
@@ -630,15 +783,11 @@ final class TownUiController implements Listener {
                 case "CONFIRM_ADMIN_APPROVE" -> openConfirmation(player, "确认批准申请",
                         "ADMIN_APPROVE", target, "将创建小镇并建立 Residence 投影",
                         "ADMIN_APPLICATION", target);
-                case "CONFIRM_ADMIN_REJECT" -> openConfirmation(player, "确认拒绝申请",
-                        "ADMIN_REJECT", target, "拒绝后会释放选址预留",
-                        "ADMIN_APPLICATION", target);
-                case "CONFIRM_ADMIN_CHANGE" -> openConfirmation(player, "确认要求补件",
-                        "ADMIN_CHANGE", target, "申请将退回给玩家修改",
-                        "ADMIN_APPLICATION", target);
+                case "CONFIRM_ADMIN_REJECT" -> beginAdminDecision(player,
+                        UUID.fromString(target), false);
+                case "CONFIRM_ADMIN_CHANGE" -> beginAdminDecision(player,
+                        UUID.fromString(target), true);
                 case "ADMIN_APPROVE" -> adminApprove(player, UUID.fromString(target));
-                case "ADMIN_REJECT" -> adminDecision(player, UUID.fromString(target), false);
-                case "ADMIN_CHANGE" -> adminDecision(player, UUID.fromString(target), true);
                 case "ADMIN_PREVIEW_SITE" -> adminPreviewSite(player, UUID.fromString(target));
                 default -> player.sendMessage("§c菜单操作已失效，请重新打开。");
             }
@@ -775,12 +924,44 @@ final class TownUiController implements Listener {
         });
     }
 
-    private void adminDecision(Player admin, UUID applicationId, boolean requestChanges) {
+    private void beginAdminDecision(Player admin, UUID applicationId, boolean requestChanges) {
         if (!admin.hasPermission("tianjitown.admin")) {
             admin.sendMessage("§c没有管理员权限。");
             return;
         }
-        String reason = requestChanges ? "请补充申请资料" : "管理员通过 GUI 拒绝申请";
+        applicationForms.remove(admin.getUniqueId());
+        chatInputs.remove(admin.getUniqueId());
+        reviewReasonInputs.put(admin.getUniqueId(),
+                new ReviewReasonSession(applicationId, requestChanges));
+        admin.closeInventory();
+        admin.sendMessage(requestChanges
+                ? "§e请在聊天栏输入具体修改要求；输入“取消”放弃，本次操作不会改变申请状态。"
+                : "§e请在聊天栏输入拒绝原因；输入“取消”放弃，本次操作不会改变申请状态。");
+        admin.sendMessage("§7原因不能为空，最多 500 个字符。");
+    }
+
+    private void applyReviewReason(Player admin, ReviewReasonSession input, String reason) {
+        if (!admin.hasPermission("tianjitown.admin")) {
+            admin.sendMessage("§c没有管理员权限，本次审批未执行。");
+            return;
+        }
+        if (reason.equals("取消") || reason.equalsIgnoreCase("cancel")) {
+            admin.sendMessage("§7已取消，本次审批未改变申请状态。");
+            openAdminApplication(admin, input.applicationId());
+            return;
+        }
+        if (reason.isBlank() || reason.length() > 500) {
+            reviewReasonInputs.put(admin.getUniqueId(), input);
+            admin.sendMessage(reason.isBlank()
+                    ? "§c原因不能为空，请直接重新输入；或输入“取消”放弃。"
+                    : "§c原因不能超过 500 个字符，请直接重新输入；或输入“取消”放弃。");
+            return;
+        }
+        adminDecision(admin, input.applicationId(), input.requestChanges(), reason);
+    }
+
+    private void adminDecision(Player admin, UUID applicationId, boolean requestChanges,
+                               String reason) {
         runtime.write(admin, () -> requestChanges
                         ? runtime.repository().requestChanges(applicationId, admin.getUniqueId(),
                         admin.getName(), reason)
@@ -851,6 +1032,7 @@ final class TownUiController implements Listener {
         applicationForms.put(player.getUniqueId(),
                 new ApplicationFormSession(formId, targetId, version, text));
         chatInputs.remove(player.getUniqueId());
+        reviewReasonInputs.remove(player.getUniqueId());
         player.closeInventory();
         renderApplicationForm(player, formId);
     }
@@ -892,11 +1074,18 @@ final class TownUiController implements Listener {
                 .append(Component.text("建议：" + field.suggestion(), NamedTextColor.GRAY))
                 .append(Component.newline())
                 .append(Component.text("点击后在聊天栏输入", NamedTextColor.AQUA));
-        return Component.text("• " + field.label() + "：", NamedTextColor.GOLD)
+        if (!errors.isEmpty()) {
+            hover = hover.append(Component.newline())
+                    .append(Component.text("当前错误：" + String.join("；", errors),
+                            NamedTextColor.RED));
+        }
+        Component line = Component.text("• " + field.label() + "：", NamedTextColor.GOLD)
                 .append(Component.text(display, valueColor))
                 .clickEvent(callbackEvent(player,
                         () -> beginChatInput(player, form.id(), field)))
                 .hoverEvent(HoverEvent.showText(hover));
+        return errors.isEmpty() ? line : line.append(Component.text(" ← " + errors.getFirst(),
+                NamedTextColor.RED));
     }
 
     private void beginChatInput(Player player, UUID formId, ApplicationField field) {
@@ -912,6 +1101,7 @@ final class TownUiController implements Listener {
             return;
         }
         chatInputs.put(player.getUniqueId(), new ChatInputSession(formId, field));
+        reviewReasonInputs.remove(player.getUniqueId());
         player.sendMessage(Component.text("请输入“" + field.label() + "”。",
                         NamedTextColor.YELLOW)
                 .append(Component.space())
@@ -939,8 +1129,10 @@ final class TownUiController implements Listener {
         ApplicationText updated = updateField(form.text(), input.field(), value);
         List<String> errors = fieldErrors(updated, input.field());
         if (!errors.isEmpty()) {
-            player.sendMessage("§c输入不符合要求: " + String.join("；", errors));
-            player.sendMessage("§7请重新点击该项目后输入。");
+            chatInputs.put(player.getUniqueId(), input);
+            player.sendMessage("§c输入已被拒绝: " + String.join("；", errors));
+            player.sendMessage("§e请直接重新输入“" + input.field().label()
+                    + "”；或输入“取消”放弃本次输入。");
             renderApplicationForm(player, form.id());
             return;
         }
@@ -972,8 +1164,8 @@ final class TownUiController implements Listener {
         applicationForms.remove(player.getUniqueId(), form);
         chatInputs.remove(player.getUniqueId());
         if (form.targetId() == null) {
-            Duration cooldown = Duration.ofHours(plugin.getConfig()
-                    .getLong("phase1.application.cooldown-hours", 24));
+            Duration cooldown = Duration.ofMinutes(plugin.getConfig()
+                    .getLong("phase1.application.cooldown-minutes", 5));
             runtime.write(player, () -> runtime.repository().createDraft(player.getUniqueId(),
                     form.text(), cooldown), application -> {
                 player.sendMessage("§a申请草稿已保存，请继续选择领地并确认提交。");
@@ -1263,6 +1455,26 @@ final class TownUiController implements Listener {
     }
 
     private record ChatInputSession(UUID formId, ApplicationField field) {
+    }
+
+    private record ReviewReasonSession(UUID applicationId, boolean requestChanges) {
+    }
+
+    private record StationRecord(String id, UUID worldId, String worldName, int x, int y, int z) {
+        StationRecord {
+            if (id == null || id.isBlank()) {
+                throw new IllegalArgumentException("服务台 ID 为空");
+            }
+            Objects.requireNonNull(worldId, "worldId");
+            if (worldName == null || worldName.isBlank()) {
+                throw new IllegalArgumentException("服务台世界名为空");
+            }
+        }
+
+        boolean sameLocation(UUID candidateWorld, int candidateX, int candidateY, int candidateZ) {
+            return worldId.equals(candidateWorld) && x == candidateX && y == candidateY
+                    && z == candidateZ;
+        }
     }
 
     private enum ApplicationField {

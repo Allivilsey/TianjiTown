@@ -27,9 +27,11 @@ phase0:
 phase1:
   # 可通过 /townadmin maintenance on|off 即时切换；开启时玩家 UI 和表单全部暂停。
   maintenance-mode: false
+  # 由服务台管理命令维护；列表同时保留方块 PDC 中的服务台 ID 和当前位置。
+  service-stations: []
   application:
     # 撤回或被拒绝后的再次申请冷却。
-    cooldown-hours: 24
+    cooldown-minutes: 5
     # 选址提交后的临时保留时间。
     reservation-minutes: 60
   site:
