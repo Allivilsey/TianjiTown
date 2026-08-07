@@ -56,7 +56,7 @@
 
 ## 管理员常用操作
 
-- 审批：`/townadmin application list|approve|reject|change <小镇全名> [--reason <原因>]`
+- 审批：`/townadmin application list|approve|reject|change <小镇全名> --reason <原因>`
 - 查看：`/townadmin town view <小镇全名>`
 - 删除：`/townadmin town delete <小镇全名> --reason <原因> --confirm`
 - 成员：`/townadmin member invite|add|remove <小镇全名> --player <玩家> --reason <原因>`

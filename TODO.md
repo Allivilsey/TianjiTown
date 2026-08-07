@@ -369,9 +369,9 @@
 ### 16.2 申请与审批
 
 - [x] `/townadmin application list`。
-- [x] `/townadmin application approve <小镇全名> [--reason <原因>]`。
-- [x] `/townadmin application reject <小镇全名> [--reason <原因>]`。
-- [x] `/townadmin application change <小镇全名> [--reason <原因>]`。
+- [x] `/townadmin application approve <小镇全名> --reason <原因>`。
+- [x] `/townadmin application reject <小镇全名> --reason <原因>`。
+- [x] `/townadmin application change <小镇全名> --reason <原因>`。
 
 ### 16.3 小镇、成员和领地
 

@@ -43,6 +43,10 @@ final class PhaseZeroCommand implements CommandExecutor {
     }
 
     private boolean runResidenceSmoke(CommandSender sender, String[] args) {
+        if (plugin.gateStatus().state() != GateStatus.State.READY) {
+            sender.sendMessage("§c运行时门禁未就绪；未执行 Residence 写操作。使用 /townadmin status 查看详情。");
+            return true;
+        }
         if (!plugin.getConfig().getBoolean("phase0.allow-residence-smoke", false)) {
             sender.sendMessage("§c配置未开启 phase0.allow-residence-smoke。");
             return true;

@@ -104,10 +104,16 @@ public final class TianjiTownPlugin extends JavaPlugin {
             healthy &= check.healthy();
         }
 
-        VaultEconomyProbe.Result economy = new VaultEconomyProbe(getServer()).verify();
-        details.add((economy.healthy() ? "OK " : "FAIL ") + "Vault Economy provider="
-                + economy.provider() + " (" + economy.message() + ")");
-        return healthy && economy.healthy();
+        boolean economyHealthy = false;
+        if (getServer().getPluginManager().isPluginEnabled("Vault")) {
+            VaultEconomyProbe.Result economy = new VaultEconomyProbe(getServer()).verify();
+            details.add((economy.healthy() ? "OK " : "FAIL ") + "Vault Economy provider="
+                    + economy.provider() + " (" + economy.message() + ")");
+            economyHealthy = economy.healthy();
+        } else {
+            details.add("FAIL Vault Economy provider=不可用 (Vault 未启用，已跳过服务探测)");
+        }
+        return healthy && economyHealthy;
     }
 
     private void checkDatabase(List<String> previousChecks) {

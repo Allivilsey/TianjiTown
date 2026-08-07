@@ -6,13 +6,16 @@ final class TownCommandParser {
     private TownCommandParser() {
     }
 
-    static NamedReason namedReason(String[] args, int nameStart, String defaultReason) {
+    static NamedReason requiredNamedReason(String[] args, int nameStart) {
         int firstOption = firstOption(args, nameStart);
-        String townName = join(args, nameStart, firstOption);
+        String townName = join(args, nameStart, firstOption, "必须填写小镇全名");
         int reasonIndex = indexOf(args, "--reason");
-        String reason = reasonIndex < 0
-                ? defaultReason : join(args, reasonIndex + 1, nextOption(args, reasonIndex + 1));
-        return new NamedReason(townName, reason, contains(args, "--confirm"), reasonIndex >= 0);
+        if (reasonIndex < 0) {
+            throw new IllegalArgumentException("必须使用 --reason <原因> 填写原因");
+        }
+        String reason = join(args, reasonIndex + 1, nextOption(args, reasonIndex + 1),
+                "必须填写原因");
+        return new NamedReason(townName, reason, contains(args, "--confirm"));
     }
 
     static NamedPlayerReason namedPlayerReason(String[] args, int nameStart) {
@@ -21,17 +24,18 @@ final class TownCommandParser {
                 || args[playerIndex + 1].startsWith("--")) {
             throw new IllegalArgumentException("必须使用 --player <玩家> 指定目标玩家");
         }
-        String townName = join(args, nameStart, playerIndex);
+        String townName = join(args, nameStart, playerIndex, "必须填写小镇全名");
         int reasonIndex = indexOf(args, "--reason");
         if (reasonIndex < 0) {
             throw new IllegalArgumentException("必须使用 --reason <原因> 填写原因");
         }
-        String reason = join(args, reasonIndex + 1, nextOption(args, reasonIndex + 1));
+        String reason = join(args, reasonIndex + 1, nextOption(args, reasonIndex + 1),
+                "必须填写原因");
         return new NamedPlayerReason(townName, args[playerIndex + 1], reason);
     }
 
     static String townName(String[] args, int nameStart) {
-        return join(args, nameStart, firstOption(args, nameStart));
+        return join(args, nameStart, firstOption(args, nameStart), "必须填写小镇全名");
     }
 
     static boolean contains(String[] args, String option) {
@@ -60,19 +64,18 @@ final class TownCommandParser {
         return -1;
     }
 
-    private static String join(String[] args, int start, int end) {
+    private static String join(String[] args, int start, int end, String missingMessage) {
         if (start >= end || start < 0 || end > args.length) {
-            throw new IllegalArgumentException("必须填写小镇全名");
+            throw new IllegalArgumentException(missingMessage);
         }
         String value = String.join(" ", Arrays.copyOfRange(args, start, end)).strip();
         if (value.isBlank()) {
-            throw new IllegalArgumentException("必须填写小镇全名");
+            throw new IllegalArgumentException(missingMessage);
         }
         return value;
     }
 
-    record NamedReason(String townName, String reason, boolean confirmed,
-                       boolean explicitReason) {
+    record NamedReason(String townName, String reason, boolean confirmed) {
         NamedReason {
             if (reason == null || reason.isBlank()) {
                 throw new IllegalArgumentException("必须填写原因");

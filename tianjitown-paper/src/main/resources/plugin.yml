@@ -5,7 +5,7 @@ api-version: '26.2'
 load: POSTWORLD
 authors: [Tianji]
 description: 天际服小镇系统（阶段1生产版）
-depend: [Vault, Residence, QuickShop-Hikari]
+softdepend: [Vault, Residence, QuickShop-Hikari, XConomy]
 commands:
   townadmin:
     description: TianjiTown 管理命令

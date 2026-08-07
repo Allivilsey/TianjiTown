@@ -176,13 +176,8 @@ final class TownAdminCommand implements CommandExecutor {
             applicationHelp(sender);
             return true;
         }
-        requireLength(args, 3, "application " + action + " <小镇全名> [--reason <原因>]");
-        String defaultReason = switch (action) {
-            case "approve" -> "管理员批准申请";
-            case "reject" -> "管理员拒绝申请";
-            default -> "请补充申请资料";
-        };
-        TownCommandParser.NamedReason parsed = TownCommandParser.namedReason(args, 2, defaultReason);
+        requireLength(args, 3, "application " + action + " <小镇全名> --reason <原因>");
+        TownCommandParser.NamedReason parsed = TownCommandParser.requiredNamedReason(args, 2);
         runtime.read(sender, () -> requireReviewApplication(runtime, parsed.townName()), application -> {
             if (action.equals("approve")) {
                 String key = application.status() == cn.tianji.town.core.application.ApplicationStatus.PROVISION_FAILED
@@ -226,9 +221,8 @@ final class TownAdminCommand implements CommandExecutor {
             return true;
         }
         if (action.equals("delete")) {
-            TownCommandParser.NamedReason parsed = TownCommandParser.namedReason(
-                    args, 2, "管理员删除小镇");
-            if (!parsed.confirmed() || !parsed.explicitReason()) {
+            TownCommandParser.NamedReason parsed = TownCommandParser.requiredNamedReason(args, 2);
+            if (!parsed.confirmed()) {
                 throw new IllegalArgumentException(
                         "删除需要 --reason <原因> 和 --confirm；数据库审计记录会保留");
             }
@@ -439,7 +433,7 @@ final class TownAdminCommand implements CommandExecutor {
 
     private static void applicationHelp(CommandSender sender) {
         sender.sendMessage("§e/townadmin application list");
-        sender.sendMessage("§e/townadmin application approve|reject|change <小镇全名> [--reason <原因>]");
+        sender.sendMessage("§e/townadmin application approve|reject|change <小镇全名> --reason <原因>");
     }
 
     private static void help(CommandSender sender) {
