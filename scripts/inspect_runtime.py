@@ -53,7 +53,7 @@ def inspect_jar(path: Path) -> dict | None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("server_root", type=Path)
-    parser.add_argument("--output", type=Path, default=Path("reports/runtime-lock.json"))
+    parser.add_argument("--output", type=Path, default=Path("reports/runtime-report.json"))
     args = parser.parse_args()
     root = args.server_root.resolve()
     plugins = root / "plugins"

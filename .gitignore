@@ -47,7 +47,7 @@ replay_pid*
 backups/*
 !backups/.gitkeep
 
-# 本地自检配置可能包含数据库凭据。
+# 本地自检配置可能包含机器专用路径。
 .env
 .env.*
 !.env.example

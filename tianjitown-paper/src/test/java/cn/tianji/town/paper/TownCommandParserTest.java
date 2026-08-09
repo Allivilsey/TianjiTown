@@ -2,28 +2,40 @@ package cn.tianji.town.paper;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TownCommandParserTest {
+    private static final List<String> TOWNS = List.of("天际", "天际 之城");
+
     @Test
-    void parsesFullTownNameAndReasonOptions() {
-        TownCommandParser.NamedReason parsed = TownCommandParser.requiredNamedReason(new String[]{
-                "town", "delete", "天际", "之城", "--reason", "测试", "删除", "--confirm"
-        }, 2);
+    void parsesLongestTownNameAndTrailingReason() {
+        TownCommandParser.NamedReason parsed = TownCommandParser.namedReason(new String[]{
+                "town", "delete", "天际", "之城", "测试", "删除"
+        }, 2, TOWNS);
 
         assertEquals("天际 之城", parsed.townName());
         assertEquals("测试 删除", parsed.reason());
-        assertTrue(parsed.confirmed());
+    }
+
+    @Test
+    void acceptsTownNameWithoutStoredSpaces() {
+        TownCommandParser.NamedReason parsed = TownCommandParser.namedReason(new String[]{
+                "application", "approve", "天际之城", "管理员", "批准"
+        }, 2, TOWNS);
+
+        assertEquals("天际 之城", parsed.townName());
+        assertEquals("管理员 批准", parsed.reason());
     }
 
     @Test
     void parsesPlayerAndRequiredReason() {
         TownCommandParser.NamedPlayerReason parsed = TownCommandParser.namedPlayerReason(new String[]{
-                "member", "add", "天际", "之城", "--player", "PlayerOne",
-                "--reason", "管理员", "代办"
-        }, 2);
+                "member", "add", "天际", "之城", "PlayerOne", "管理员", "代办"
+        }, 2, TOWNS);
 
         assertEquals("天际 之城", parsed.townName());
         assertEquals("PlayerOne", parsed.player());
@@ -31,28 +43,27 @@ class TownCommandParserTest {
     }
 
     @Test
-    void rejectsMissingPlayerDelimiter() {
-        assertThrows(IllegalArgumentException.class, () -> TownCommandParser.namedPlayerReason(
-                new String[]{"member", "add", "天际城", "PlayerOne"}, 2));
+    void parsesOptionalLiteralAfterTownName() {
+        TownCommandParser.NamedAction check = TownCommandParser.namedAction(new String[]{
+                "land", "reconcile", "天际之城"
+        }, 2, TOWNS, List.of("repair"));
+        TownCommandParser.NamedAction repair = TownCommandParser.namedAction(new String[]{
+                "land", "reconcile", "天际", "之城", "repair"
+        }, 2, TOWNS, List.of("repair"));
+
+        assertNull(check.action());
+        assertEquals("repair", repair.action());
     }
 
     @Test
-    void rejectsMissingReasonWithoutUsingDefault() {
+    void rejectsMissingReasonAndInsertedPlaceholder() {
+        assertThrows(IllegalArgumentException.class, () -> TownCommandParser.namedReason(
+                new String[]{"application", "change", "天际之城"}, 2, TOWNS));
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> TownCommandParser.requiredNamedReason(new String[]{
-                        "application", "change", "天际", "之城"
-                }, 2));
+                () -> TownCommandParser.namedReason(new String[]{
+                        "application", "approve", "天际之城", "<原因>"
+                }, 2, TOWNS));
 
-        assertEquals("必须使用 --reason <原因> 填写原因", exception.getMessage());
-    }
-
-    @Test
-    void rejectsEmptyExplicitReason() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> TownCommandParser.requiredNamedReason(new String[]{
-                        "application", "approve", "天际城", "--reason"
-                }, 2));
-
-        assertEquals("必须填写原因", exception.getMessage());
+        assertEquals("请将 <原因> 替换为实际内容", exception.getMessage());
     }
 }

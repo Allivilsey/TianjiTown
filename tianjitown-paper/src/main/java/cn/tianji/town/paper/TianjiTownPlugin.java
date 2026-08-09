@@ -1,19 +1,19 @@
 package cn.tianji.town.paper;
 
-import cn.tianji.town.integrations.DependencyVersions;
 import cn.tianji.town.integrations.residence.ResidenceCommandGuard;
 import cn.tianji.town.integrations.residence.ResidenceLandProtectionService;
 import cn.tianji.town.integrations.vault.VaultEconomyProbe;
 import cn.tianji.town.storage.database.DatabaseConfig;
 import cn.tianji.town.storage.database.DatabaseGate;
-import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -30,7 +30,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         List<String> synchronousChecks = new ArrayList<>();
-        boolean dependenciesHealthy = checkRuntimeAndDependencies(synchronousChecks);
+        boolean dependenciesHealthy = checkDependencies(synchronousChecks);
         gateStatus.set(new GateStatus(GateStatus.State.CHECKING, synchronousChecks));
 
         org.bukkit.command.PluginCommand adminCommand = java.util.Objects.requireNonNull(
@@ -70,38 +70,22 @@ public final class TianjiTownPlugin extends JavaPlugin {
         return townUi;
     }
 
-    private boolean checkRuntimeAndDependencies(List<String> details) {
+    private boolean checkDependencies(List<String> details) {
         boolean healthy = true;
-        String expectedMinecraft = getConfig().getString("version-lock.minecraft", "");
-        String actualMinecraft = getServer().getMinecraftVersion();
-        if (!expectedMinecraft.equals(actualMinecraft)) {
-            details.add("FAIL Minecraft: expected=" + expectedMinecraft + ", actual=" + actualMinecraft);
-            healthy = false;
-        } else {
-            details.add("OK Minecraft " + actualMinecraft + "（仅使用 Paper API）");
-        }
-
-        int expectedJava = getConfig().getInt("version-lock.java-feature", 21);
-        int actualJava = Runtime.version().feature();
-        if (expectedJava != actualJava) {
-            details.add("FAIL Java: expected=" + expectedJava + ", actual=" + actualJava);
-            healthy = false;
-        } else {
-            details.add("OK Java " + actualJava);
-        }
-
-        ConfigurationSection section = getConfig().getConfigurationSection("version-lock.plugins");
-        Map<String, String> expected = new LinkedHashMap<>();
-        if (section != null) {
-            section.getKeys(false).forEach(name -> expected.put(name, section.getString(name, "")));
-        }
-        Map<String, DependencyVersions.Check> checks = new DependencyVersions(getServer().getPluginManager())
-                .verify(expected);
-        for (Map.Entry<String, DependencyVersions.Check> entry : checks.entrySet()) {
-            DependencyVersions.Check check = entry.getValue();
-            details.add((check.healthy() ? "OK " : "FAIL ") + entry.getKey() + " expected="
-                    + check.expected() + ", actual=" + check.actual() + " (" + check.message() + ")");
-            healthy &= check.healthy();
+        details.add("INFO Minecraft " + getServer().getMinecraftVersion()
+                + " / Java " + Runtime.version().feature());
+        for (String name : List.of("Residence", "Vault", "XConomy", "QuickShop-Hikari")) {
+            Plugin dependency = getServer().getPluginManager().getPlugin(name);
+            if (dependency == null) {
+                details.add("FAIL " + name + " 未安装");
+                healthy = false;
+            } else if (!dependency.isEnabled()) {
+                details.add("FAIL " + name + " " + dependency.getPluginMeta().getVersion()
+                        + "（未启用）");
+                healthy = false;
+            } else {
+                details.add("OK " + name + " " + dependency.getPluginMeta().getVersion());
+            }
         }
 
         boolean economyHealthy = false;
@@ -119,19 +103,15 @@ public final class TianjiTownPlugin extends JavaPlugin {
     private void checkDatabase(List<String> previousChecks) {
         List<String> details = new ArrayList<>(previousChecks);
         try {
-            EnvironmentExpander expander = new EnvironmentExpander();
             DatabaseConfig config = new DatabaseConfig(
-                    expander.expand(getConfig().getString("database.jdbc-url", "")),
-                    expander.expand(getConfig().getString("database.username", "")),
-                    expander.expand(getConfig().getString("database.password", "")),
-                    getConfig().getInt("database.pool.maximum-size", 6),
-                    getConfig().getInt("database.pool.minimum-idle", 1),
-                    Duration.ofMillis(getConfig().getLong("database.pool.connection-timeout-ms", 5000)));
+                    resolveDatabaseUrl(),
+                    Duration.ofMillis(getConfig().getLong("database.connection-timeout-ms", 5000)),
+                    Duration.ofMillis(getConfig().getLong("database.busy-timeout-ms", 5000)));
             DatabaseGate candidate = new DatabaseGate(config);
             DatabaseGate.HealthResult result = candidate.verifyAndMigrate();
             if (!result.healthy()) {
                 candidate.close();
-                details.add("FAIL MySQL/Flyway: " + result.detail());
+                details.add("FAIL SQLite/Flyway: " + result.detail());
                 lock("数据库门禁未通过", details);
                 return;
             }
@@ -142,9 +122,31 @@ public final class TianjiTownPlugin extends JavaPlugin {
             getServer().getScheduler().runTask(this, () -> activatePhaseOne(candidate, details,
                     result.detail()));
         } catch (RuntimeException exception) {
-            details.add("FAIL MySQL config: " + exception.getMessage());
+            details.add("FAIL SQLite config: " + exception.getMessage());
             lock("数据库配置无效", details);
         }
+    }
+
+    private String resolveDatabaseUrl() {
+        String configured = getConfig().getString("database.file", "tianjitown.db");
+        if (configured == null || configured.isBlank()) {
+            throw new IllegalArgumentException("database.file 不能为空");
+        }
+        Path databaseFile = Path.of(configured);
+        if (!databaseFile.isAbsolute()) {
+            databaseFile = getDataFolder().toPath().resolve(databaseFile);
+        }
+        databaseFile = databaseFile.toAbsolutePath().normalize();
+        Path databaseDirectory = databaseFile.getParent();
+        if (databaseDirectory == null) {
+            throw new IllegalArgumentException("database.file 必须指向数据库文件");
+        }
+        try {
+            Files.createDirectories(databaseDirectory);
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("无法创建 SQLite 目录: " + databaseDirectory, exception);
+        }
+        return "jdbc:sqlite:" + databaseFile;
     }
 
     private void activatePhaseOne(DatabaseGate candidate, List<String> previousDetails,

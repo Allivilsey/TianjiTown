@@ -54,9 +54,9 @@ final class PhaseOneRuntime {
             boolean healthy = database.ping();
             boolean previous = databaseAvailable.getAndSet(healthy);
             if (healthy && !previous) {
-                plugin.getLogger().info("MySQL 连接已恢复，阶段1写操作重新开放。");
+                plugin.getLogger().info("SQLite 连接已恢复，阶段1写操作重新开放。");
             } else if (!healthy && previous) {
-                plugin.getLogger().severe("MySQL 连接中断，阶段1写操作已锁定；Residence 保护保持不变。");
+                plugin.getLogger().severe("SQLite 连接中断，阶段1写操作已锁定；Residence 保护保持不变。");
             }
         });
     }
@@ -111,7 +111,7 @@ final class PhaseOneRuntime {
                 });
             } catch (RuntimeException exception) {
                 databaseAvailable.set(false);
-                plugin.getLogger().severe("Residence 对账读取 MySQL 失败: " + safeMessage(exception));
+                plugin.getLogger().severe("Residence 对账读取 SQLite 失败: " + safeMessage(exception));
             }
         });
     }
@@ -149,7 +149,7 @@ final class PhaseOneRuntime {
                    String reviewerName, String reason, String idempotencyKey,
                    Consumer<ApplicationSnapshot> completion) {
         if (!databaseAvailable.get()) {
-            sender.sendMessage("§cMySQL 当前不可用，写操作已锁定；现有 Residence 保护不受影响。");
+            sender.sendMessage("§cSQLite 当前不可用，写操作已锁定；现有 Residence 保护不受影响。");
             return;
         }
         if (!provisions.tryBegin(applicationId)) {
@@ -243,7 +243,7 @@ final class PhaseOneRuntime {
     private <T> void execute(CommandSender sender, boolean write, Supplier<T> operation,
                              Consumer<T> success) {
         if (write && !databaseAvailable.get()) {
-            sender.sendMessage("§cMySQL 当前不可用，写操作已锁定；现有 Residence 保护不受影响。");
+            sender.sendMessage("§cSQLite 当前不可用，写操作已锁定；现有 Residence 保护不受影响。");
             return;
         }
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {

@@ -50,7 +50,7 @@ public final class PhaseOneRepository {
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT 1 FROM town_applications
                      WHERE applicant_uuid = ? AND status IN ('REJECTED', 'CANCELLED')
-                       AND updated_at > ? LIMIT 1 FOR UPDATE
+                       AND updated_at > ? LIMIT 1
                     """)) {
                 statement.setBytes(1, uuid(applicantId));
                 statement.setTimestamp(2, timestamp(Instant.now().minus(cooldown)));
@@ -75,7 +75,7 @@ public final class PhaseOneRepository {
             }
             audit(connection, null, applicantId, applicantId.toString(), "APPLICATION_CREATE",
                     "APPLICATION", applicationId.toString(), "玩家创建草稿", text.name());
-            return requireApplication(connection, applicationId, false);
+            return requireApplication(connection, applicationId);
         });
     }
 
@@ -84,7 +84,7 @@ public final class PhaseOneRepository {
         requireWorkerThread();
         text.requireValid();
         return transaction(connection -> {
-            ApplicationSnapshot current = requireApplication(connection, applicationId, true);
+            ApplicationSnapshot current = requireApplication(connection, applicationId);
             requireApplicant(current, applicantId);
             if (current.status() != ApplicationStatus.DRAFT
                     && current.status() != ApplicationStatus.SITE_SELECTED
@@ -103,7 +103,7 @@ public final class PhaseOneRepository {
                 statement.setLong(9, expectedVersion);
                 requireUpdated(statement, "申请资料已被其他操作修改，请重新打开");
             }
-            return requireApplication(connection, applicationId, false);
+            return requireApplication(connection, applicationId);
         });
     }
 
@@ -115,7 +115,7 @@ public final class PhaseOneRepository {
             throw new IllegalArgumentException("选址预留到期时间必须晚于当前时间");
         }
         return transaction(connection -> {
-            ApplicationSnapshot current = requireApplication(connection, applicationId, true);
+            ApplicationSnapshot current = requireApplication(connection, applicationId);
             requireApplicant(current, applicantId);
             if (current.status() != ApplicationStatus.DRAFT
                     && current.status() != ApplicationStatus.SITE_SELECTED
@@ -128,11 +128,13 @@ public final class PhaseOneRepository {
                         (reservation_id, application_id, world_uuid, world_name, center_chunk_x,
                          center_chunk_z, min_chunk_x, max_chunk_x, min_chunk_z, max_chunk_z, expires_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE world_uuid = VALUES(world_uuid), world_name = VALUES(world_name),
-                        center_chunk_x = VALUES(center_chunk_x), center_chunk_z = VALUES(center_chunk_z),
-                        min_chunk_x = VALUES(min_chunk_x), max_chunk_x = VALUES(max_chunk_x),
-                        min_chunk_z = VALUES(min_chunk_z), max_chunk_z = VALUES(max_chunk_z),
-                        expires_at = VALUES(expires_at), released_at = NULL
+                    ON CONFLICT (application_id) DO UPDATE SET
+                        world_uuid = excluded.world_uuid, world_name = excluded.world_name,
+                        center_chunk_x = excluded.center_chunk_x,
+                        center_chunk_z = excluded.center_chunk_z,
+                        min_chunk_x = excluded.min_chunk_x, max_chunk_x = excluded.max_chunk_x,
+                        min_chunk_z = excluded.min_chunk_z, max_chunk_z = excluded.max_chunk_z,
+                        expires_at = excluded.expires_at, released_at = NULL
                     """)) {
                 statement.setBytes(1, uuid(UUID.randomUUID()));
                 statement.setBytes(2, uuid(applicationId));
@@ -149,14 +151,14 @@ public final class PhaseOneRepository {
                     "APPLICATION", applicationId.toString(), "玩家选择初始领地",
                     territory.center().worldName() + ":" + territory.center().x() + ","
                             + territory.center().z());
-            return requireApplication(connection, applicationId, false);
+            return requireApplication(connection, applicationId);
         });
     }
 
     public ApplicationSnapshot submit(UUID applicationId, UUID applicantId) {
         requireWorkerThread();
         return transaction(connection -> {
-            ApplicationSnapshot current = requireApplication(connection, applicationId, true);
+            ApplicationSnapshot current = requireApplication(connection, applicationId);
             requireApplicant(current, applicantId);
             ApplicationWorkflow.requireAllowed(current.status(), ApplicationStatus.SUBMITTED,
                     ApplicationActor.APPLICANT);
@@ -168,7 +170,8 @@ public final class PhaseOneRepository {
             ensureNameAvailable(connection, current.text(), applicationId);
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE town_applications
-                       SET status = 'SUBMITTED', submitted_at = CURRENT_TIMESTAMP(6),
+                       SET status = 'SUBMITTED',
+                           submitted_at = CAST(unixepoch('subsec') * 1000 AS INTEGER),
                            review_message = NULL, version = version + 1
                      WHERE application_id = ? AND version = ?
                     """)) {
@@ -178,14 +181,14 @@ public final class PhaseOneRepository {
             }
             audit(connection, null, applicantId, applicantId.toString(), "APPLICATION_SUBMIT",
                     "APPLICATION", applicationId.toString(), "玩家确认提交", current.text().name());
-            return requireApplication(connection, applicationId, false);
+            return requireApplication(connection, applicationId);
         });
     }
 
     public ApplicationSnapshot cancel(UUID applicationId, UUID applicantId, String reason) {
         requireWorkerThread();
         return transaction(connection -> {
-            ApplicationSnapshot current = requireApplication(connection, applicationId, true);
+            ApplicationSnapshot current = requireApplication(connection, applicationId);
             requireApplicant(current, applicantId);
             ApplicationWorkflow.requireAllowed(current.status(), ApplicationStatus.CANCELLED,
                     ApplicationActor.APPLICANT);
@@ -194,7 +197,7 @@ public final class PhaseOneRepository {
             releaseReservation(connection, applicationId);
             audit(connection, null, applicantId, applicantId.toString(), "APPLICATION_CANCEL",
                     "APPLICATION", applicationId.toString(), reason, "");
-            return requireApplication(connection, applicationId, false);
+            return requireApplication(connection, applicationId);
         });
     }
 
@@ -220,7 +223,7 @@ public final class PhaseOneRepository {
             throw new IllegalArgumentException("批准操作必须提供幂等键");
         }
         return transaction(connection -> {
-            ApplicationSnapshot application = requireApplication(connection, applicationId, true);
+            ApplicationSnapshot application = requireApplication(connection, applicationId);
             if (application.status() == ApplicationStatus.ACTIVE) {
                 return requireProvisioningTownStatus(connection, application, TownStatus.ACTIVE);
             }
@@ -242,7 +245,7 @@ public final class PhaseOneRepository {
                 }
                 audit(connection, idempotencyKey, reviewerId, reviewerName, "PROVISION_RETRY",
                         "APPLICATION", applicationId.toString(), reason, "");
-                return provisioning(connection, requireApplication(connection, applicationId, false));
+                return provisioning(connection, requireApplication(connection, applicationId));
             }
             ApplicationWorkflow.requireAllowed(application.status(),
                     ApplicationStatus.APPROVED_PROVISIONING, ApplicationActor.ADMINISTRATOR);
@@ -276,14 +279,14 @@ public final class PhaseOneRepository {
             insertReview(connection, applicationId, reviewerId, "APPROVE", reason);
             audit(connection, idempotencyKey, reviewerId, reviewerName, "APPLICATION_APPROVE",
                     "APPLICATION", applicationId.toString(), reason, townId.toString());
-            return provisioning(connection, requireApplication(connection, applicationId, false));
+            return provisioning(connection, requireApplication(connection, applicationId));
         });
     }
 
     public ApplicationSnapshot finishProvision(UUID applicationId, boolean success, String detail) {
         requireWorkerThread();
         return transaction(connection -> {
-            ApplicationSnapshot application = requireApplication(connection, applicationId, true);
+            ApplicationSnapshot application = requireApplication(connection, applicationId);
             if (success && application.status() == ApplicationStatus.ACTIVE) {
                 return application;
             }
@@ -312,13 +315,13 @@ public final class PhaseOneRepository {
             audit(connection, null, null, "SYSTEM", success ? "PROVISION_COMPLETE" : "PROVISION_FAIL",
                     "TOWN", application.townId().toString(), success ? "自动创建完成" : "自动创建失败",
                     safeDetail(detail));
-            return requireApplication(connection, applicationId, false);
+            return requireApplication(connection, applicationId);
         });
     }
 
     public Optional<ApplicationSnapshot> findApplication(UUID applicationId) {
         requireWorkerThread();
-        return query(connection -> findApplication(connection, applicationId, false));
+        return query(connection -> findApplication(connection, applicationId));
     }
 
     public int recoverInterruptedProvisions(String reason) {
@@ -328,7 +331,7 @@ public final class PhaseOneRepository {
             List<UUID> applicationIds = new ArrayList<>();
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT application_id FROM town_applications
-                     WHERE status = 'APPROVED_PROVISIONING' FOR UPDATE
+                     WHERE status = 'APPROVED_PROVISIONING'
                     """);
                  ResultSet result = statement.executeQuery()) {
                 while (result.next()) {
@@ -336,7 +339,7 @@ public final class PhaseOneRepository {
                 }
             }
             for (UUID applicationId : applicationIds) {
-                ApplicationSnapshot application = requireApplication(connection, applicationId, false);
+                ApplicationSnapshot application = requireApplication(connection, applicationId);
                 try (PreparedStatement applicationUpdate = connection.prepareStatement("""
                         UPDATE town_applications
                            SET status = 'PROVISION_FAILED', last_error = ?, version = version + 1
@@ -376,7 +379,7 @@ public final class PhaseOneRepository {
                 statement.setString(1, normalizedName);
                 try (ResultSet result = statement.executeQuery()) {
                     return result.next()
-                            ? findApplication(connection, readUuid(result, "application_id"), false)
+                            ? findApplication(connection, readUuid(result, "application_id"))
                             : Optional.empty();
                 }
             }
@@ -393,7 +396,7 @@ public final class PhaseOneRepository {
                 statement.setBytes(1, uuid(applicantId));
                 try (ResultSet result = statement.executeQuery()) {
                     return result.next()
-                            ? findApplication(connection, readUuid(result, "application_id"), false)
+                            ? findApplication(connection, readUuid(result, "application_id"))
                             : Optional.empty();
                 }
             }
@@ -414,7 +417,7 @@ public final class PhaseOneRepository {
                 try (ResultSet result = statement.executeQuery()) {
                     while (result.next()) {
                         applications.add(requireApplication(connection,
-                                readUuid(result, "application_id"), false));
+                                readUuid(result, "application_id")));
                     }
                 }
             }
@@ -436,7 +439,7 @@ public final class PhaseOneRepository {
                 try (ResultSet result = statement.executeQuery()) {
                     while (result.next()) {
                         applications.add(requireApplication(connection,
-                                readUuid(result, "application_id"), false));
+                                readUuid(result, "application_id")));
                     }
                 }
             }
@@ -490,7 +493,7 @@ public final class PhaseOneRepository {
                 statement.setBytes(1, uuid(playerId));
                 try (ResultSet result = statement.executeQuery()) {
                     application = result.next()
-                            ? findApplication(connection, readUuid(result, "application_id"), false)
+                            ? findApplication(connection, readUuid(result, "application_id"))
                             : Optional.empty();
                 }
             }
@@ -499,7 +502,8 @@ public final class PhaseOneRepository {
                     SELECT i.invitation_id, i.town_id, t.name, i.invited_by, i.expires_at
                       FROM town_invitations i JOIN towns t ON t.town_id = i.town_id
                      WHERE i.player_uuid = ? AND i.accepted_at IS NULL AND i.revoked_at IS NULL
-                       AND i.expires_at > CURRENT_TIMESTAMP(6) AND t.status = 'ACTIVE'
+                       AND i.expires_at > CAST(unixepoch('subsec') * 1000 AS INTEGER)
+                       AND t.status = 'ACTIVE'
                      ORDER BY i.created_at DESC
                     """)) {
                 statement.setBytes(1, uuid(playerId));
@@ -610,8 +614,9 @@ public final class PhaseOneRepository {
                     INSERT INTO town_invitations
                         (invitation_id, town_id, player_uuid, invited_by, expires_at)
                     VALUES (?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE invitation_id = VALUES(invitation_id),
-                        invited_by = VALUES(invited_by), expires_at = VALUES(expires_at),
+                    ON CONFLICT (town_id, player_uuid) DO UPDATE SET
+                        invitation_id = excluded.invitation_id,
+                        invited_by = excluded.invited_by, expires_at = excluded.expires_at,
                         accepted_at = NULL, revoked_at = NULL
                     """)) {
                 statement.setBytes(1, uuid(invitationId));
@@ -646,8 +651,9 @@ public final class PhaseOneRepository {
                     INSERT INTO town_invitations
                         (invitation_id, town_id, player_uuid, invited_by, expires_at)
                     VALUES (?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE invitation_id = VALUES(invitation_id),
-                        invited_by = VALUES(invited_by), expires_at = VALUES(expires_at),
+                    ON CONFLICT (town_id, player_uuid) DO UPDATE SET
+                        invitation_id = excluded.invitation_id,
+                        invited_by = excluded.invited_by, expires_at = excluded.expires_at,
                         accepted_at = NULL, revoked_at = NULL
                     """)) {
                 statement.setBytes(1, uuid(invitationId));
@@ -672,7 +678,8 @@ public final class PhaseOneRepository {
                     SELECT i.invitation_id, i.town_id, t.name, i.invited_by, i.expires_at
                       FROM town_invitations i JOIN towns t ON t.town_id = i.town_id
                      WHERE i.player_uuid = ? AND i.accepted_at IS NULL AND i.revoked_at IS NULL
-                       AND i.expires_at > CURRENT_TIMESTAMP(6) AND t.status = 'ACTIVE'
+                       AND i.expires_at > CAST(unixepoch('subsec') * 1000 AS INTEGER)
+                       AND t.status = 'ACTIVE'
                      ORDER BY i.created_at DESC
                     """)) {
                 statement.setBytes(1, uuid(playerId));
@@ -698,8 +705,9 @@ public final class PhaseOneRepository {
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT i.town_id FROM town_invitations i JOIN towns t ON t.town_id = i.town_id
                      WHERE i.invitation_id = ? AND i.player_uuid = ? AND i.accepted_at IS NULL
-                       AND i.revoked_at IS NULL AND i.expires_at > CURRENT_TIMESTAMP(6)
-                       AND t.status = 'ACTIVE' FOR UPDATE
+                       AND i.revoked_at IS NULL
+                       AND i.expires_at > CAST(unixepoch('subsec') * 1000 AS INTEGER)
+                       AND t.status = 'ACTIVE'
                     """)) {
                 statement.setBytes(1, uuid(invitationId));
                 statement.setBytes(2, uuid(playerId));
@@ -714,7 +722,8 @@ public final class PhaseOneRepository {
                     INSERT INTO town_members (town_id, player_uuid, role) VALUES (?, ?, 'MEMBER')
                     """);
                  PreparedStatement invitation = connection.prepareStatement("""
-                         UPDATE town_invitations SET accepted_at = CURRENT_TIMESTAMP(6)
+                         UPDATE town_invitations
+                            SET accepted_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
                           WHERE invitation_id = ?
                          """)) {
                 member.setBytes(1, uuid(townId));
@@ -736,8 +745,8 @@ public final class PhaseOneRepository {
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT town_id FROM town_invitations
                      WHERE invitation_id = ? AND player_uuid = ? AND accepted_at IS NULL
-                       AND revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP(6)
-                     FOR UPDATE
+                       AND revoked_at IS NULL
+                       AND expires_at > CAST(unixepoch('subsec') * 1000 AS INTEGER)
                     """)) {
                 statement.setBytes(1, uuid(invitationId));
                 statement.setBytes(2, uuid(playerId));
@@ -749,7 +758,8 @@ public final class PhaseOneRepository {
                 }
             }
             try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE town_invitations SET revoked_at = CURRENT_TIMESTAMP(6)
+                    UPDATE town_invitations
+                       SET revoked_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
                      WHERE invitation_id = ?
                     """)) {
                 statement.setBytes(1, uuid(invitationId));
@@ -883,7 +893,8 @@ public final class PhaseOneRepository {
                  PreparedStatement members = connection.prepareStatement(
                          "DELETE FROM town_members WHERE town_id = ?");
                  PreparedStatement invitations = connection.prepareStatement("""
-                         UPDATE town_invitations SET revoked_at = CURRENT_TIMESTAMP(6)
+                         UPDATE town_invitations
+                            SET revoked_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
                           WHERE town_id = ? AND accepted_at IS NULL AND revoked_at IS NULL
                          """)) {
                 if (!alreadyPrepared) {
@@ -921,8 +932,8 @@ public final class PhaseOneRepository {
                           WHERE town_id = ? AND reuse_blocked = TRUE
                          """);
                  PreparedStatement chunks = connection.prepareStatement("""
-                         DELETE c FROM territory_chunks c
-                         JOIN territory_units u ON u.unit_id = c.unit_id WHERE u.town_id = ?
+                         DELETE FROM territory_chunks
+                          WHERE unit_id IN (SELECT unit_id FROM territory_units WHERE town_id = ?)
                          """)) {
                 town.setBytes(1, uuid(townId));
                 requireUpdated(town, "小镇删除资源已被其他操作释放");
@@ -954,7 +965,8 @@ public final class PhaseOneRepository {
                  PreparedStatement members = connection.prepareStatement(
                          "DELETE FROM town_members WHERE town_id = ?");
                  PreparedStatement invitations = connection.prepareStatement("""
-                         UPDATE town_invitations SET revoked_at = CURRENT_TIMESTAMP(6)
+                         UPDATE town_invitations
+                            SET revoked_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
                           WHERE town_id = ? AND accepted_at IS NULL AND revoked_at IS NULL
                          """)) {
                 town.setBytes(1, uuid(townId));
@@ -1036,7 +1048,7 @@ public final class PhaseOneRepository {
                                                  String reason, String action) {
         requireWorkerThread();
         return transaction(connection -> {
-            ApplicationSnapshot current = requireApplication(connection, applicationId, true);
+            ApplicationSnapshot current = requireApplication(connection, applicationId);
             ApplicationWorkflow.requireAllowed(current.status(), target, ApplicationActor.ADMINISTRATOR);
             updateStatus(connection, applicationId, current.version(), target, reason, null);
             if (target == ApplicationStatus.REJECTED) {
@@ -1045,7 +1057,7 @@ public final class PhaseOneRepository {
             insertReview(connection, applicationId, reviewerId, action, reason);
             audit(connection, null, reviewerId, reviewerName, "APPLICATION_" + action,
                     "APPLICATION", applicationId.toString(), reason, "");
-            return requireApplication(connection, applicationId, false);
+            return requireApplication(connection, applicationId);
         });
     }
 
@@ -1132,10 +1144,10 @@ public final class PhaseOneRepository {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT application_id FROM site_reservations
                  WHERE world_uuid = ? AND application_id <> ? AND released_at IS NULL
-                   AND expires_at > CURRENT_TIMESTAMP(6)
+                   AND expires_at > CAST(unixepoch('subsec') * 1000 AS INTEGER)
                    AND min_chunk_x <= ? AND max_chunk_x >= ?
                    AND min_chunk_z <= ? AND max_chunk_z >= ?
-                 LIMIT 1 FOR UPDATE
+                 LIMIT 1
                 """)) {
             statement.setBytes(1, uuid(territory.center().worldId()));
             statement.setBytes(2, uuid(applicationId));
@@ -1153,7 +1165,7 @@ public final class PhaseOneRepository {
                 SELECT u.unit_id FROM territory_units u JOIN towns t ON t.town_id = u.town_id
                  WHERE u.world_uuid = ? AND u.reuse_blocked = TRUE
                    AND u.center_chunk_x BETWEEN ? AND ? AND u.center_chunk_z BETWEEN ? AND ?
-                 LIMIT 1 FOR UPDATE
+                 LIMIT 1
                 """)) {
             statement.setBytes(1, uuid(territory.center().worldId()));
             statement.setInt(2, territory.minimumChunkX() - 1 - bufferChunks);
@@ -1174,7 +1186,7 @@ public final class PhaseOneRepository {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT application_id FROM town_applications
                  WHERE (active_name = ? OR active_short_name = ? OR active_residence_name = ?)
-                   AND (? IS NULL OR application_id <> ?) LIMIT 1 FOR UPDATE
+                   AND (? IS NULL OR application_id <> ?) LIMIT 1
                 """)) {
             statement.setString(1, text.normalizedName());
             statement.setString(2, text.normalizedShortName());
@@ -1193,7 +1205,7 @@ public final class PhaseOneRepository {
             }
         }
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT unit_id FROM territory_units WHERE residence_name = ? AND reuse_blocked = TRUE LIMIT 1 FOR UPDATE")) {
+                "SELECT unit_id FROM territory_units WHERE residence_name = ? AND reuse_blocked = TRUE LIMIT 1")) {
             statement.setString(1, TownResidenceName.initial(text.residenceName()));
             try (ResultSet result = statement.executeQuery()) {
                 if (result.next()) {
@@ -1209,7 +1221,7 @@ public final class PhaseOneRepository {
                 SELECT town_id FROM towns
                  WHERE reuse_blocked = TRUE
                    AND (normalized_name = ? OR normalized_short_name = ?)
-                  AND (? IS NULL OR town_id <> ?) LIMIT 1 FOR UPDATE
+                  AND (? IS NULL OR town_id <> ?) LIMIT 1
                 """)) {
             statement.setString(1, text.normalizedName());
             statement.setString(2, text.normalizedShortName());
@@ -1228,9 +1240,8 @@ public final class PhaseOneRepository {
         }
     }
 
-    private Optional<ApplicationSnapshot> findApplication(Connection connection, UUID applicationId,
-                                                          boolean forUpdate) throws SQLException {
-        String suffix = forUpdate ? " FOR UPDATE" : "";
+    private Optional<ApplicationSnapshot> findApplication(Connection connection, UUID applicationId)
+            throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT a.*, r.world_uuid, r.world_name, r.center_chunk_x, r.center_chunk_z,
                        r.expires_at AS reservation_expires_at
@@ -1238,7 +1249,7 @@ public final class PhaseOneRepository {
                   LEFT JOIN site_reservations r ON r.application_id = a.application_id
                                                AND r.released_at IS NULL
                  WHERE a.application_id = ?
-                """ + suffix)) {
+                """)) {
             statement.setBytes(1, uuid(applicationId));
             try (ResultSet result = statement.executeQuery()) {
                 return result.next() ? Optional.of(readApplication(result)) : Optional.empty();
@@ -1246,9 +1257,9 @@ public final class PhaseOneRepository {
         }
     }
 
-    private ApplicationSnapshot requireApplication(Connection connection, UUID applicationId,
-                                                   boolean forUpdate) throws SQLException {
-        return findApplication(connection, applicationId, forUpdate)
+    private ApplicationSnapshot requireApplication(Connection connection, UUID applicationId)
+            throws SQLException {
+        return findApplication(connection, applicationId)
                 .orElseThrow(() -> new NotFoundException("找不到申请 " + applicationId));
     }
 
@@ -1359,7 +1370,8 @@ public final class PhaseOneRepository {
 
     private void releaseReservation(Connection connection, UUID applicationId) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
-                UPDATE site_reservations SET released_at = CURRENT_TIMESTAMP(6)
+                UPDATE site_reservations
+                   SET released_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
                  WHERE application_id = ? AND released_at IS NULL
                 """)) {
             statement.setBytes(1, uuid(applicationId));
@@ -1463,7 +1475,7 @@ public final class PhaseOneRepository {
 
     private static boolean townReuseBlocked(Connection connection, UUID townId) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT reuse_blocked FROM towns WHERE town_id = ? FOR UPDATE")) {
+                "SELECT reuse_blocked FROM towns WHERE town_id = ?")) {
             statement.setBytes(1, uuid(townId));
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) {
@@ -1518,10 +1530,10 @@ public final class PhaseOneRepository {
 
     private static RuntimeException translate(SQLException exception) {
         if (exception instanceof SQLIntegrityConstraintViolationException
-                || "23000".equals(exception.getSQLState())) {
+                || "23000".equals(exception.getSQLState()) || exception.getErrorCode() == 19) {
             return new ConflictException("数据已被其他操作占用，请刷新后重试", exception);
         }
-        return new StorageUnavailableException("MySQL 操作失败: " + exception.getMessage(), exception);
+        return new StorageUnavailableException("SQLite 操作失败: " + exception.getMessage(), exception);
     }
 
     private static byte[] uuid(UUID value) {

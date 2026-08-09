@@ -16,16 +16,22 @@ public final class DatabaseGate implements AutoCloseable {
 
     public DatabaseGate(DatabaseConfig config) {
         HikariConfig hikari = new HikariConfig();
-        hikari.setPoolName("TianjiTown-MySQL");
+        hikari.setPoolName("TianjiTown-SQLite");
         hikari.setJdbcUrl(config.jdbcUrl());
-        hikari.setUsername(config.username());
-        hikari.setPassword(config.password());
-        hikari.setMaximumPoolSize(config.maximumPoolSize());
-        hikari.setMinimumIdle(config.minimumIdle());
+        hikari.setDriverClassName("org.sqlite.JDBC");
+        hikari.setMaximumPoolSize(1);
+        hikari.setMinimumIdle(1);
         hikari.setConnectionTimeout(config.connectionTimeout().toMillis());
-        hikari.setAutoCommit(false);
+        hikari.setAutoCommit(true);
         hikari.setReadOnly(false);
         hikari.setLeakDetectionThreshold(30_000);
+        hikari.addDataSourceProperty("busy_timeout", config.busyTimeout().toMillis());
+        hikari.addDataSourceProperty("foreign_keys", true);
+        hikari.addDataSourceProperty("journal_mode", "WAL");
+        hikari.addDataSourceProperty("synchronous", "NORMAL");
+        hikari.addDataSourceProperty("date_class", "INTEGER");
+        hikari.addDataSourceProperty("date_precision", "MILLISECONDS");
+        hikari.addDataSourceProperty("recursive_triggers", false);
         dataSource = new HikariDataSource(hikari);
         flyway = Flyway.configure(DatabaseGate.class.getClassLoader())
                 .dataSource(dataSource)
@@ -43,7 +49,6 @@ public final class DatabaseGate implements AutoCloseable {
             if (!result.next() || result.getInt(1) != 1) {
                 return HealthResult.failure("SELECT 1 返回异常");
             }
-            connection.rollback();
         } catch (SQLException exception) {
             return HealthResult.failure(exception.getClass().getSimpleName() + ": " + exception.getMessage());
         }
@@ -69,7 +74,6 @@ public final class DatabaseGate implements AutoCloseable {
              Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery("SELECT 1")) {
             boolean healthy = result.next() && result.getInt(1) == 1;
-            connection.rollback();
             return healthy;
         } catch (SQLException exception) {
             return false;
@@ -83,7 +87,7 @@ public final class DatabaseGate implements AutoCloseable {
 
     public record HealthResult(boolean healthy, String detail) {
         public static HealthResult success(String schemaVersion) {
-            return new HealthResult(true, "MySQL/Flyway 正常，schema=" + schemaVersion);
+            return new HealthResult(true, "SQLite/Flyway 正常，schema=" + schemaVersion);
         }
 
         public static HealthResult failure(String detail) {

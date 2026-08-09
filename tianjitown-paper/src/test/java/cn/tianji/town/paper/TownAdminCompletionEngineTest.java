@@ -40,6 +40,8 @@ class TownAdminCompletionEngineTest {
         assertTrue(engine.complete(new String[]{"phase"}, snapshot, dynamic).contains("phase0"));
         assertTrue(engine.complete(new String[]{"main"}, snapshot, dynamic).contains("maintenance"));
         assertFalse(engine.complete(new String[]{""}, snapshot, dynamic).contains("data"));
+        assertEquals(List.of("application"), engine.complete(
+                new String[]{"help", "app"}, snapshot, dynamic));
     }
 
     @Test
@@ -52,30 +54,38 @@ class TownAdminCompletionEngineTest {
                 new String[]{"application", "approve", "失"}, snapshot, dynamic));
         assertEquals(List.of("补件小镇"), engine.complete(
                 new String[]{"application", "change", "补"}, snapshot, dynamic));
+        assertEquals(List.of("<原因>"), engine.complete(
+                new String[]{"application", "approve", "待审小镇", ""}, snapshot, dynamic));
+        assertEquals(List.of(), engine.complete(
+                new String[]{"application", "approve", "待审小镇", "已"}, snapshot, dynamic));
     }
 
     @Test
-    void completesTownMembersAndRepairFlags() {
+    void completesTownMembersReasonHintsAndRepairAction() {
         assertEquals(List.of("create", "info", "list", "remove"), engine.complete(
                 new String[]{"station", ""}, snapshot, dynamic));
         assertEquals(List.of("MemberOne"), engine.complete(
-                new String[]{"member", "remove", "天际", "之城", "--player", ""},
+                new String[]{"member", "remove", "天际", "之城", ""},
                 snapshot, dynamic));
-        assertEquals(List.of("--repair"), engine.complete(
+        assertEquals(List.of("<原因>"), engine.complete(
+                new String[]{"member", "remove", "天际", "之城", "MemberOne", ""},
+                snapshot, dynamic));
+        assertEquals(List.of("repair"), engine.complete(
                 new String[]{"land", "reconcile", "天际", "之城", ""}, snapshot, dynamic));
+        assertEquals(List.of("<原因>"), engine.complete(
+                new String[]{"town", "delete", "天际之城", ""}, snapshot, dynamic));
         assertEquals(List.of("off", "on", "status"), engine.complete(
                 new String[]{"maintenance", ""}, snapshot, dynamic));
     }
 
     @Test
-    void completesPhaseZeroWorldCoordinatesAndConfirmation() {
+    void completesPhaseZeroWorldCoordinatesWithoutConfirmationFlags() {
         assertEquals(List.of("world"), engine.complete(
                 new String[]{"phase0", "residence-smoke", "wo"}, snapshot, dynamic));
         assertEquals(List.of("12"), engine.complete(
                 new String[]{"phase0", "residence-smoke", "world", ""}, snapshot, dynamic));
-        assertEquals(List.of("--confirm-preproduction"), engine.complete(new String[]{"phase0",
-                "residence-smoke", "world", "12", "-8", member.toString(),
-                "--confirm-empty-chunk", ""}, snapshot, dynamic));
+        assertEquals(List.of(), engine.complete(new String[]{"phase0", "residence-smoke",
+                "world", "12", "-8", member.toString(), ""}, snapshot, dynamic));
     }
 
     @Test
@@ -85,6 +95,8 @@ class TownAdminCompletionEngineTest {
         List<String> roots = engine.complete(new String[]{""}, snapshot, console);
         assertTrue(roots.contains("station"));
         assertFalse(roots.contains("phase0"));
+        assertFalse(roots.contains("confirm"));
+        assertFalse(roots.contains("cancel"));
         assertEquals(List.of("list"), engine.complete(
                 new String[]{"station", ""}, snapshot, console));
         assertFalse(engine.complete(new String[]{"land", ""}, snapshot, console)

@@ -10,7 +10,6 @@ import org.jetbrains.annotations.NotNull;
 import java.util.UUID;
 
 final class PhaseZeroCommand implements CommandExecutor {
-    private static final String CONFIRM = "--confirm-preproduction";
     private final TianjiTownPlugin plugin;
     private final ResidenceSmokeTest residenceSmokeTest;
 
@@ -33,52 +32,66 @@ final class PhaseZeroCommand implements CommandExecutor {
             status.details().forEach(detail -> sender.sendMessage("§7- " + detail));
             return true;
         }
-        if (args.length == 8 && args[0].equalsIgnoreCase("phase0")
-                && args[1].equalsIgnoreCase("residence-smoke")) {
-            return runResidenceSmoke(sender, args);
-        }
         sender.sendMessage("§e/townadmin phase0 status");
-        sender.sendMessage("§e/townadmin phase0 residence-smoke <world> <chunkX> <chunkZ> <memberUuid> --confirm-empty-chunk --confirm-preproduction");
+        sender.sendMessage("§e/townadmin phase0 residence-smoke <world> <chunkX> <chunkZ> <memberUuid>");
         return true;
     }
 
-    private boolean runResidenceSmoke(CommandSender sender, String[] args) {
+    boolean validateResidenceSmoke(CommandSender sender, String[] args) {
+        return smokeRequest(sender, args) != null;
+    }
+
+    void runResidenceSmoke(CommandSender sender, String[] args) {
+        SmokeRequest request = smokeRequest(sender, args);
+        if (request == null) {
+            return;
+        }
+        ResidenceSmokeTest.Result result = residenceSmokeTest.run(request.world(), request.chunkX(),
+                request.chunkZ(), request.memberId());
+        sender.sendMessage(result.success() ? "§aResidence 冒烟测试通过。"
+                : "§cResidence 冒烟测试失败: " + result.error());
+        sender.sendMessage("§7步骤: " + String.join(" -> ", result.steps()));
+    }
+
+    private SmokeRequest smokeRequest(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("tianjitown.admin.phase0")) {
+            sender.sendMessage("§c没有权限。");
+            return null;
+        }
+        if (args.length != 6 || !args[0].equalsIgnoreCase("phase0")
+                || !args[1].equalsIgnoreCase("residence-smoke")) {
+            sender.sendMessage("§c用法: /townadmin phase0 residence-smoke <world> <chunkX> <chunkZ> <memberUuid>");
+            return null;
+        }
         if (plugin.gateStatus().state() != GateStatus.State.READY) {
             sender.sendMessage("§c运行时门禁未就绪；未执行 Residence 写操作。使用 /townadmin status 查看详情。");
-            return true;
+            return null;
         }
         if (!plugin.getConfig().getBoolean("phase0.allow-residence-smoke", false)) {
             sender.sendMessage("§c配置未开启 phase0.allow-residence-smoke。");
-            return true;
-        }
-        if (!CONFIRM.equals(args[7])) {
-            sender.sendMessage("§c缺少预发确认参数；未执行任何写操作。");
-            return true;
+            return null;
         }
         String allowedWorld = plugin.getConfig().getString("phase0.residence-smoke-world", "");
         if (!allowedWorld.equals(args[2])) {
             sender.sendMessage("§c只能在配置指定的预发世界运行；未执行任何写操作。");
-            return true;
+            return null;
         }
         World world = plugin.getServer().getWorld(args[2]);
         if (world == null) {
             sender.sendMessage("§c世界未加载: " + args[2]);
-            return true;
+            return null;
         }
         try {
             int chunkX = Integer.parseInt(args[3]);
             int chunkZ = Integer.parseInt(args[4]);
             UUID memberId = UUID.fromString(args[5]);
-            if (!args[6].equals("--confirm-empty-chunk")) {
-                sender.sendMessage("§c缺少 --confirm-empty-chunk；未执行任何写操作。");
-                return true;
-            }
-            ResidenceSmokeTest.Result result = residenceSmokeTest.run(world, chunkX, chunkZ, memberId);
-            sender.sendMessage(result.success() ? "§aResidence 冒烟测试通过。" : "§cResidence 冒烟测试失败: " + result.error());
-            sender.sendMessage("§7步骤: " + String.join(" -> ", result.steps()));
+            return new SmokeRequest(world, chunkX, chunkZ, memberId);
         } catch (IllegalArgumentException | ArithmeticException exception) {
             sender.sendMessage("§c参数无效: " + exception.getMessage());
+            return null;
         }
-        return true;
+    }
+
+    private record SmokeRequest(World world, int chunkX, int chunkZ, UUID memberId) {
     }
 }

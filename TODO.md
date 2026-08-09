@@ -11,7 +11,7 @@
 - [x] Residence 是领地保护的必需依赖。
 - [x] Vault 及一个 Vault 兼容的经济插件是资金操作的必需依赖。
 - [x] QuickShop-Hikari 是首版税收系统的必需依赖和唯一收入来源。
-- [x] MySQL 是包括小镇基本资料在内的唯一业务数据源，不维护 YAML 数据镜像。
+- [x] SQLite 是包括小镇基本资料在内的唯一业务数据源，不维护 YAML 数据镜像。
 - [x] Residence 区域是数据库领地的游戏内投影，不得被玩家手工管理。
 - [x] 不注册或开放任何玩家命令；玩家通过箱子 GUI、可点击聊天申请表、书本和服务台完成全部操作。
 - [x] 命令仅向管理员开放，且每个玩家操作都应有对应的管理员代办/恢复命令。
@@ -26,7 +26,7 @@
 
 | 阶段 | 建议版本 | 可交付能力 | 生产状态 |
 |---|---:|---|---|
-| 第 0 阶段 | - | 版本锁定、依赖验证、空数据初始化与依赖备份 | 不单独上线 |
+| 第 0 阶段 | - | 依赖可用性验证、空数据初始化与依赖备份 | 不单独上线 |
 | 第 1 阶段 | `1.0.0` | 申请、选址、审批、基本资料、初始领地和最小成员体系 | 首个可生产版 |
 | 第 2 阶段 | `1.1.0` | 完整成员治理、角色与投票 | 可生产升级 |
 | 第 3 阶段 | `1.2.0` | QuickShop 动态税、公共账本、捐款和付费扩张 | 可生产升级 |
@@ -42,16 +42,16 @@
 - [x] Residence 当前启用多世界、忽略 Y 轴选区，且仍允许玩家创建普通领地。
 - [x] 现服存在 DailyTaxEconomy，上线前必须确认它与 TianjiTown 清算账户的关系。
 - [x] 2025-11-18 的最近 QuickShop 诊断快照显示：Leaf/Paper 兼容服务端 1.21.8、Java 21、QuickShop-Hikari 6.2.0.10、Residence 6.0.1.1、Vault 1.7.3-b131、XConomy 2.26.3。
-- [x] 采用当前生产开发锁：Minecraft `26.2`、Paper API `26.2.build.84-stable`、Java 25；实际运行版本由插件上线门禁复核。
+- [x] 使用 Minecraft `26.2`、Paper API `26.2.build.84-stable`、Java 25 作为开发与预发验证基线，运行时不做固定版本匹配。
 - [x] 仅使用 Paper API 编译，在生产同版本 Paper 上做兼容测试，不依赖服务端内部 API。
-  - [x] 已锁定 Paper API `26.2.build.84-stable` 并完成编译配置，代码不引用服务端内部 API。
+  - [x] 已使用 Paper API `26.2.build.84-stable` 完成编译配置，代码不引用服务端内部 API。
   - [x] 已在当前生产同版本 Paper `26.2-84` 测试服完成联合验证。
-- [x] 采用当前插件锁：Residence `6.0.2.4`、Vault `1.7.3-b131`、XConomy `2.26.3`、QuickShop-Hikari `6.2.0.10`。
-- [x] 已建立运行版本锁定清单；实际 JAR 不一致时插件保持 `LOCKED`，升级前必须在测试服验证。
-- [x] TianjiTown 使用 MySQL。
-- [x] 确定 TianjiTown 独立数据库名、账户权限、连接池上限和备份策略。
-  - 数据库 `tianjitown`，应用账户 `tianjitown_app`，连接池上限 6。
-  - 应用账户使用 schema 级最小权限；每日备份保留 14 份、周备份保留 8 份，上线前额外备份。
+- [x] 记录 Residence `6.0.2.4`、Vault `1.7.3-b131`、XConomy `2.26.3`、QuickShop-Hikari `6.2.0.10` 的已验证组合，升级前在测试服回归。
+- [x] 已移除运行时版本匹配；仅当必需依赖未启用或自检失败时保持 `LOCKED`。
+- [x] TianjiTown 使用 SQLite。
+- [x] 确定 TianjiTown 独立 SQLite 文件、目录权限、单连接池和备份策略。
+  - 默认文件为 `plugins/TianjiTown/tianjitown.db`，连接池上限为 1。
+  - 服务器进程只需插件目录读写权限；使用 SQLite 在线备份脚本，并在上线前完成隔离恢复演练。
 - [ ] 确定服务区的表达方式：坐标矩形、多边形、区块列表或现有 Residence 管理区。
 - [ ] 确定其他小镇与服务区边界的最小缓冲距离。
 - [ ] 确定小镇名称/简称规则、申请条件、申请冷却和选址保留时间。
@@ -89,10 +89,10 @@
 
 ## 3. 数据存储与单服一致性
 
-- [ ] MySQL 是基本资料、申请、成员关系、角色、领地、资金、税收、Buff、订单和投票的唯一权威数据源。
+- [ ] SQLite 是基本资料、申请、成员关系、角色、领地、资金、税收、Buff、订单和投票的唯一权威数据源。
 - [ ] 领地使用 `world-uuid + chunk-x + chunk-z` 标识，同时保存世界名作为人类可读信息。
 - [ ] 每个小镇保存自增版本号，高冲突写操作使用乐观锁。
-- [ ] 扩张、资金扣除、镇长转让和投票结算在 MySQL 事务中完成。
+- [ ] 扩张、资金扣除、镇长转让和投票结算在 SQLite 事务中完成。
 - [ ] 所有资金与审批操作使用唯一幂等键。
 - [ ] 插件在单个 Paper 进程内使用内存缓存，业务写入成功后立即失效/刷新对应缓存。
 - [ ] 不开发数据库事件轮询、跨服 outbox、Redis 或服务器 ID 机制。
@@ -214,7 +214,7 @@
 - [x] 初始 3×3 领地单元映射为一个系统 Residence，直接使用申请中的专用英文领地名称，不添加前缀、后缀、网格坐标或小镇 UUID。
 - [ ] Residence 范围严格对齐区块边界，竖直范围按当前世界最低/最高高度生成。
 - [ ] Residence 所有者使用受控系统账户，不直接设置为镇长。
-- [x] 系统 Residence 通过 MySQL 登记的专用领地名称清单识别；同名外部领地只参与碰撞检查，不得删除或重建，也不修改 Residence 全局限额。
+- [x] 系统 Residence 通过 SQLite 登记的专用领地名称清单识别；同名外部领地只参与碰撞检查，不得删除或重建，也不修改 Residence 全局限额。
 - [ ] 利用现服 `Selection.IgnoreY: true` 的设定创建全高度区域，同时以 Paper 当前世界最小/最大高度做边界验证。
 - [ ] 成员、官员和镇长的 Residence 权限由插件统一同步。
 - [ ] 阻止玩家通过 Residence 命令改名、转让、删除或改变边界。
@@ -252,7 +252,7 @@
 - [ ] 解决 QuickShop 版本门槛：现服历史快照为 6.2.0.10，而新 `ShopEnhancedTaxEvent` 税务 API 从 6.2.0.11 开始提供。
 - [ ] 推荐在测试服将 QuickShop-Hikari 升级到经验证的 6.2.0.11 或更高兼容版，完成 H2 备份、数据库升级、商店交易和插件附加组件回归。
 - [ ] 如生产必须保持 QuickShop 6.2.0.10，则建立独立的 6.2.0.10 税务适配器，验证 `ShopTaxEvent` 能否正确表达“实际收款方”税率；无法精确表达时不上线动态税。
-- [ ] 针对最终生产锁定版本验证对应 tax event、`EconomyTransactionEvent` 和 `ShopSuccessPurchaseEvent` API。
+- [ ] 针对最终生产候选版本验证对应 tax event、`EconomyTransactionEvent` 和 `ShopSuccessPurchaseEvent` API。
 - [ ] 在测试环境中复制现服 QuickShop 基线：Vault economy type、默认货币、本地 H2、交易日志入库和 transaction metric。
 - [ ] TianjiTown 不要求将 QuickShop 从 H2 迁移到 MySQL；优先通过官方事件/API 对账。
 - [ ] 在 QuickShop 计算税率时：
@@ -369,22 +369,22 @@
 ### 16.2 申请与审批
 
 - [x] `/townadmin application list`。
-- [x] `/townadmin application approve <小镇全名> --reason <原因>`。
-- [x] `/townadmin application reject <小镇全名> --reason <原因>`。
-- [x] `/townadmin application change <小镇全名> --reason <原因>`。
+- [x] `/townadmin application approve <小镇全名> <原因>`。
+- [x] `/townadmin application reject <小镇全名> <原因>`。
+- [x] `/townadmin application change <小镇全名> <原因>`。
 
 ### 16.3 小镇、成员和领地
 
 - [x] `/townadmin town view <小镇全名>`。
 - [ ] `/townadmin town create <owner> <name>`：受控应急创建。
-- [x] `/townadmin town delete <小镇全名> --reason <原因> --confirm`。
-- [x] `/townadmin member invite|add|remove <小镇全名> --player <玩家> --reason <原因>`。
+- [x] `/townadmin town delete <小镇全名> <原因>`，通过聊天按钮确认。
+- [x] `/townadmin member invite|add|remove <小镇全名> <玩家> <原因>`。
 - [ ] `/townadmin member role <town> <player> <role>`。
-- [x] `/townadmin mayor transfer <小镇全名> --player <玩家> --reason <原因>`。
+- [x] `/townadmin mayor transfer <小镇全名> <玩家> <原因>`。
 - [ ] `/townadmin territory preview <town> <direction>`。
 - [ ] `/townadmin territory expand <town> <direction> [--free]`。
-- [x] `/townadmin land reconcile <小镇全名|all> [--repair]`。
-- [x] `/townadmin land rebuild <小镇全名|all> --confirm`。
+- [x] `/townadmin land reconcile <小镇全名|all> [repair]`。
+- [x] `/townadmin land rebuild <小镇全名|all>`，通过聊天按钮确认。
 
 ### 16.4 规则、资金、Buff 和投票
 
@@ -431,14 +431,14 @@
 
 - [x] TianjiTown 使用独立数据库 `tianjitown`，首次生产安装从空业务 schema 开始。
 - [ ] 首次上线前确认 `towns`、`town_members`、`territory_units` 等业务表为空，仅允许 Flyway schema history 和阶段门禁记录存在。
-- [ ] 小镇、成员、角色、名称和领地归属仅以 TianjiTown MySQL 为权威数据源。
-- [x] TianjiTown 只创建和管理 MySQL 已登记的专用英文名称；未登记 Residence 一律视为外部领地，只参与碰撞避让。
+- [ ] 小镇、成员、角色、名称和领地归属仅以 TianjiTown SQLite 为权威数据源。
+- [x] TianjiTown 只创建和管理 SQLite 已登记的专用英文名称；未登记 Residence 一律视为外部领地，只参与碰撞避让。
 - [ ] 业务数据只能由 TianjiTown 的申请、审批和管理流程创建，不提供外部数据导入入口。
-- [ ] 上线前只备份当前依赖状态：Residence、QuickShop H2、XConomy/清算账户和 TianjiTown MySQL，供故障回滚使用。
+- [ ] 上线前只备份当前依赖状态：Residence、QuickShop H2、XConomy/清算账户和 TianjiTown SQLite，供故障回滚使用。
 
 ## 18. 配置文件
 
-- [ ] `config.yml`：MySQL、线程池、时区和运维选项；不包含 `server-id`。
+- [ ] `config.yml`：SQLite 文件、超时和运维选项；不包含 `server-id`。
 - [ ] `application.yml`：申请条件、冷却、预留时间和名称规则。
 - [ ] `service-areas.yml`：世界、服务区、黑名单区和缓冲距离。
 - [ ] `territory.yml`：扩张价格、单元上限和 Residence 标志模板。
@@ -455,13 +455,13 @@
 - [ ] 不接受客户端或未验证插件消息直接改变小镇数据。
 - [ ] 所有管理员代办操作记录执行者、参数、原因、结果和执行世界。
 - [ ] 删除 Residence、归档小镇、调整资金和强制转让需要二次确认。
-- [ ] 后台任务在单 Paper 进程内使用单实例锁，并以 MySQL 中的业务状态保证重启后幂等结算。
+- [ ] 后台任务在单 Paper 进程内使用单实例锁，并以 SQLite 中的业务状态保证重启后幂等结算。
 - [ ] 定时处理过期选址、过期 Buff、投票结算、未完成订单和资金补偿。
 - [ ] 插件启动时检查：
   - 数据库 schema 版本。
-  - MySQL 连接、schema 和必需表约束是否正常。
+  - SQLite 文件、Flyway schema history 和必需表约束是否正常。
   - Residence、Vault Economy 和 QuickShop-Hikari 是否可用。
-  - QuickShop-Hikari API 是否与编译时锁定版本兼容。
+  - QuickShop-Hikari API 是否与编译时选用版本兼容。
 - [ ] 必需依赖或数据库不可用时，以明确错误停止启用写功能，不静默降级为不保护领地。
 
 ## 20. 测试计划
@@ -478,7 +478,7 @@
 
 ### 20.2 集成测试
 
-- [ ] 使用 Testcontainers 启动与生产同主版本的 MySQL。
+- [x] 使用临时 SQLite 文件验证 Flyway 初始化、外键与完整申请/邀请数据链路。
 - [ ] 并发批准同一申请时只创建一个小镇。
 - [ ] 并发申请/扩张时同一区块只被一个小镇占用。
 - [ ] Residence 创建失败、重试和对账修复。
@@ -507,7 +507,7 @@
 - [ ] 数据库迁移优先使用向前兼容的增量变更；不在普通发布中删表、改已有字段语义或破坏旧版本读取。
 - [ ] 后续模块使用功能开关，但关闭的功能不在玩家 UI 中出现。
 - [ ] 每个阶段都提供：发布前检查、备份、安装/升级步骤、验收用例和回滚步骤。
-- [ ] 回滚默认只回退 JAR/配置并关闭新功能，不自动删除 MySQL 数据或 Residence 领地。
+- [ ] 回滚默认只回退 JAR/配置并关闭新功能，不自动删除 SQLite 数据或 Residence 领地。
 - [ ] 在预发环境通过本阶段验收后才允许生产部署，不以“后续阶段会修复”作为带病上线理由。
 
 ### 第 0 阶段：首版上线门禁（不单独发布）
@@ -518,21 +518,21 @@
 
 #### TODO
 
-- [x] 按默认方案锁定 Paper/Leaf、Java、Residence、Vault、XConomy 和 MySQL 参数，并实现运行时复核。
+- [x] 移除 Paper/Leaf、Java 和外部插件的运行时版本匹配，保留依赖可用性与 Vault Economy 复核。
 - [x] 建立 Maven 聚合工程骨架、CI 构建、单元测试和可重现的生产 JAR。
 - [x] 实现最小验证程序，覆盖 Residence API 的创建、成员权限、删除、重建和区块碰撞判断。
   - [x] 已实现带预发世界白名单、空区块确认和自动清理的冒烟程序。
   - [x] 已于 2026-08-05 在 Paper 26.2-84 / Java 25 同版本测试服执行并保存结果。
-- [x] 确定 MySQL 数据库、最小权限账户、连接池、Flyway 和备份/恢复方案。
-- [x] 首轮手测后取消 YAML 基本资料镜像，统一以 MySQL 为唯一数据源。
+- [x] 确定 SQLite 文件、单连接、WAL、Flyway 和备份/恢复方案。
+- [x] 首轮手测后取消 YAML 基本资料镜像，统一以 SQLite 为唯一数据源。
 - [x] 确认新周目采用独立空业务 schema，全量重建小镇、成员、名称和领地关系。
-- [x] 提供当前运行依赖的最小范围备份方案：Residence、QuickShop H2、XConomy/清算账户和 TianjiTown MySQL。
-  - [x] 已提供插件文件和 MySQL 备份脚本。
+- [x] 提供当前运行依赖的最小范围备份方案：Residence、QuickShop H2、XConomy/清算账户和 TianjiTown SQLite。
+  - [x] 已提供插件文件和 SQLite 在线备份脚本。
   - [ ] 待生产上线前执行逻辑备份及恢复演练。
 
 #### 完成门槛
 
-- [x] 能在生产同版本的预发服上启动空插件，通过依赖、MySQL 和 Residence 自检。
+- [x] 能在生产候选环境的预发服上启动空插件，通过依赖、SQLite 和 Residence 自检。
 - [x] 确认首次启动时业务表为空，只有阶段门禁和 Flyway 元数据。
 
 ### 第 1 阶段：申请、批准与可运行小镇（`1.0.0`）
@@ -544,9 +544,9 @@
 #### 1. 基础运行能力
 
 - [x] 完成 `tianjitown-core`、`tianjitown-storage`、`tianjitown-paper` 和 Residence/Vault 集成的最小可生产实现。
-- [x] 实现首批 MySQL 表：`towns`、`town_members`、`town_applications`、`application_reviews`、`site_reservations`、`territory_units` 和 `audit_logs`；已发布迁移中的 `town_profile_sync` 保留为停用遗留表。
-- [x] 实现 MySQL 异步访问、事务、幂等键、乐观锁、连接失效降级和主线程保护。
-- [x] 基本资料只保存于 MySQL，修改使用校验、乐观锁和审计。
+- [x] 实现首批 SQLite 表：`towns`、`town_members`、`town_applications`、`application_reviews`、`site_reservations`、`territory_units` 和 `audit_logs`；`town_profile_sync` 保留为停用遗留表。
+- [x] 实现 SQLite 异步访问、事务、幂等键、乐观锁、连接失效降级和主线程保护。
+- [x] 基本资料只保存于 SQLite，修改使用校验、乐观锁和审计。
 - [x] 提供 `/townadmin status`、`reload`、`maintenance`、`audit` 和必需权限。
 - [x] 启动失败和部分依赖不可用时给出可操作的中文错误，不静默创建半成品小镇。
 
@@ -557,14 +557,14 @@
 - [x] 实现 `DRAFT → SITE_SELECTED → SUBMITTED → UNDER_REVIEW/NEED_CHANGES → APPROVED_PROVISIONING → ACTIVE` 完整状态机。
 - [x] 实现申请人资格、名称唯一性、文本安全、未完成申请和冷却校验。
 - [x] 实现申请摘要、管理员意见、补充后重新提交和申请人撤回。
-- [x] 批准后生成 MySQL 小镇记录，并向玩家提供只读小镇详情 GUI。
+- [x] 批准后生成 SQLite 小镇记录，并向玩家提供只读小镇详情 GUI。
 - [x] 镇长可通过书本 UI 修改简介和规则；名称/简称修改需要管理员审核或代办。
 
 #### 3. 选址与初始领地
 
 - [x] 玩家通过 GUI 记录当前区块为中心，预览 3×3 区块并生成有效期选址预留。
 - [x] 不设世界白名单；校验已配置服务区、世界边界、黑名单区、已有 Residence、已有 TianjiTown 领地、其他申请预留和小镇缓冲距离。
-- [x] 批准时在 MySQL 事务内占用初始领地，再以申请中的专用英文名称直接生成 Residence 投影。
+- [x] 批准时在 SQLite 事务内占用初始领地，再以申请中的专用英文名称直接生成 Residence 投影。
 - [x] 实现 `PROVISION_FAILED`、管理员幂等重试、Residence 对账/重建和完整审计。
 - [x] 第 1 阶段领地固定为初始 3×3，不提供扩张 UI。
 
@@ -578,7 +578,7 @@
 
 #### 5. 新周目数据边界
 
-- [x] 申请、成员、角色和名称唯一性只查询 TianjiTown MySQL。
+- [x] 申请、成员、角色和名称唯一性只查询 TianjiTown SQLite。
 - [x] 所有名称均按本系统规则申请并建立唯一约束。
 - [x] 任何新小镇选址必须避开当前世界内的所有外部 Residence，以免覆盖非 TianjiTown 领地。
 - [x] 成员关系、角色和权限均由 TianjiTown 领域模型管理。
@@ -595,9 +595,9 @@
 
 - [ ] 玩家全程不使用命令，完成“领取手册/打开服务台 → 填写申请 → 选址 → 提交 → 收到批准 → 查看小镇”。
 - [ ] 管理员能审核、要求补件、拒绝、批准和重试失败创建。
-- [ ] 批准后 MySQL、初始成员和 Residence 3×3 领地一致，不存在“已批准但无保护领地”的 ACTIVE 小镇。
+- [ ] 批准后 SQLite、初始成员和 Residence 3×3 领地一致，不存在“已批准但无保护领地”的 ACTIVE 小镇。
 - [ ] 两名管理员同时批准、两名玩家抢占同一选址和重复点击 GUI 均不会重复建镇或越界占地。
-- [ ] MySQL 中断时禁止新写入，但已有 Residence 仍继续保护；MySQL 恢复后插件可正常继续。
+- [ ] SQLite 发生磁盘 I/O 或权限故障时禁止新写入，但已有 Residence 仍继续保护；文件可写恢复后插件可正常继续。
 - [ ] Paper 重启后申请、预留、小镇、成员和 Residence 状态可恢复/对账。
 - [ ] 空数据库上线后，所有小镇、成员和领地均由 TianjiTown 流程新建。
 - [ ] 完成生产备份、上线、下线新建镇入口和回退 JAR 的演练。
@@ -637,7 +637,7 @@
 
 #### 生产升级门槛
 
-- [ ] 上线前备份 QuickShop H2、XConomy、TianjiTown MySQL 和清算账户余额。
+- [ ] 上线前备份 QuickShop H2、XConomy、TianjiTown SQLite 和清算账户余额。
 - [ ] 收购/出售、在线/离线商店所有者、交易失败/回滚、数据库中断和事件重放均不会重复征税或丢失税款。
 - [ ] QuickShop 历史、Vault 清算账户和各小镇账本能完整对账。
 - [ ] 扩张并发、余额不足、Residence 失败和重试均不会重复扣款或占地。
@@ -665,14 +665,14 @@
 
 - [ ] 实现建筑方块白名单、概率返还、每日上限和特殊方块/自动化防刷。
 - [ ] 实现小镇 Residence 内的信标范围/等级增强与移除清理。
-- [ ] 完成 MySQL、Residence、Vault 清算账户和 QuickShop 交易历史的统一自检/对账报告。
+- [ ] 完成 SQLite、Residence、Vault 清算账户和 QuickShop 交易历史的统一自检/对账报告。
 - [ ] 完成配置 schema 升级、数据库增量升级、定时备份、一键诊断信息和告警文档。
 - [ ] 完成管理员运维手册、玩家使用说明、上线/回滚手册和依赖升级检查清单。
 
 #### `1.4.0` 门槛
 
 - [ ] 完成第 22 节全部最终验收标准。
-- [ ] 完成 Paper 重启、MySQL 中断、Residence 丢失、Vault 失败、QuickShop 回滚和依赖插件不可用的故障注入。
+- [ ] 完成 Paper 重启、SQLite 磁盘 I/O 失败、Residence 丢失、Vault 失败、QuickShop 回滚和依赖插件不可用的故障注入。
 - [ ] 在生产数据副本上完成增量 schema 升级、对账、备份恢复与 JAR 回滚演练。
 
 ## 22. 最终验收标准
@@ -687,7 +687,7 @@
 - [ ] Vault 清算账户与小镇内部账本可对账，所有差异可定位到交易或管理员操作。
 - [ ] 所有高风险操作都可审计、可重试且不会重复扣款/入账。
 - [ ] Paper 服务器或 TianjiTown 重启后不会损坏小镇状态或重复结算任务。
-- [ ] 小镇基本资料只能通过受校验和审计的 MySQL 业务入口修改，不能绕过成员、资金、税率或领地事务。
+- [ ] 小镇基本资料只能通过受校验和审计的 SQLite 业务入口修改，不能绕过成员、资金、税率或领地事务。
 - [ ] 小镇成员数没有插件层上限，且大成员列表使用分页/索引查询而不阻塞主线程。
 - [ ] 成员可自由查看最近至少 180 天的公共资金流水。
 
