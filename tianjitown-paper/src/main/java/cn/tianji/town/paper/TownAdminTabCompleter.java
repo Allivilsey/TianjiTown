@@ -14,6 +14,7 @@ import org.jetbrains.annotations.NotNull;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -52,14 +53,27 @@ final class TownAdminTabCompleter implements TabCompleter {
                                                @NotNull Command command,
                                                @NotNull String alias,
                                                @NotNull String[] args) {
-        if (!sender.hasPermission("tianjitown.admin")) {
+        if (!TownAdminPermissions.hasAny(sender::hasPermission)) {
             return List.of();
         }
         if (System.nanoTime() - refreshedAt.get() > STALE_NANOS) {
             requestRefresh();
         }
         TownAdminCompletionEngine.Snapshot current = snapshot.get();
-        return engine.complete(args, current, dynamic(sender, current));
+        List<String> suggestions = engine.complete(args, current, dynamic(sender, current));
+        if (args.length <= 1) {
+            return suggestions.stream().filter(root -> TownAdminPermissions.canUseRoot(
+                    sender::hasPermission, root)).toList();
+        }
+        String root = args[0].toLowerCase(Locale.ROOT);
+        if (!TownAdminPermissions.canUseRoot(sender::hasPermission, root)) {
+            return List.of();
+        }
+        if (root.equals("help") && args.length == 2) {
+            return suggestions.stream().filter(topic -> TownAdminPermissions.canViewHelpTopic(
+                    sender::hasPermission, topic)).toList();
+        }
+        return suggestions;
     }
 
     private void requestRefresh() {
@@ -129,7 +143,8 @@ final class TownAdminTabCompleter implements TabCompleter {
         return new TownAdminCompletionEngine.Dynamic(List.copyOf(players.values()),
                 plugin.getServer().getWorlds().stream().map(World::getName).toList(),
                 chunkX, chunkZ, sender instanceof Player,
-                sender.hasPermission("tianjitown.admin.phase0"));
+                TownAdminPermissions.has(sender::hasPermission,
+                        TownAdminPermissions.PHASE_ZERO));
     }
 
     private static String safeMessage(Throwable throwable) {

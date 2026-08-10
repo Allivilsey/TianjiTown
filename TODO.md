@@ -622,18 +622,18 @@
 
 #### 入口门禁
 
-- [ ] 在编写税收适配器前，完成 QuickShop 6.2.0.10 税务适配器与升级至 6.2.0.11+ 的取舍。
+- [x] 在编写税收适配器前，完成 QuickShop 6.2.0.10 税务适配器与升级至 6.2.0.11+ 的取舍。
 - [ ] 在预发环境验证 QuickShop 收购/出售方向、税率修改、税款账户、成功/回滚事件和幂等标识。
 - [ ] 完成 XConomy 清算账户、DailyTaxEconomy 兼容性、QuickShop 当前固定 5% 税和 `tax` 账户切换方案。
 
 #### 功能 TODO
 
-- [ ] 启用 QuickShop 实际收款方动态小镇税，不对普通 Vault 变动或其他收入征税。
-- [ ] 实现 Vault/XConomy 清算账户、小镇分账、`town_accounts`、`ledger_entries`、`quickshop_tax_records` 和差异锁定。
-- [ ] 实现镇长税率设置、成员税率变更告知、税收来源说明和最近 180 天流水 GUI。
-- [ ] 实现成员捐款、Vault 失败补偿、管理员资金调整和清算账户对账。
-- [ ] 启用 3×3 网格扩张、方向预览、指数价格、公共资金扣款和 Residence 补偿/重建。
-- [ ] 注册 money/tax/ledger/expand 管理命令和权限。
+- [x] 启用 QuickShop 实际收款方动态小镇税，不对普通 Vault 变动或其他收入征税。
+- [x] 实现 Vault/XConomy 清算账户、小镇分账、`town_accounts`、`ledger_entries`、`quickshop_tax_records` 和差异锁定。
+- [x] 实现镇长税率设置、成员税率变更告知、税收来源说明和最近 180 天流水 GUI。
+- [x] 实现成员捐款、Vault 失败补偿、管理员资金调整和清算账户对账。
+- [x] 启用 3×3 网格扩张、方向预览、指数价格、公共资金扣款和 Residence 补偿/重建。
+- [x] 注册 money/tax/ledger/expand 管理命令和权限。
 
 #### 生产升级门槛
 

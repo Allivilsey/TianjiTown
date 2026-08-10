@@ -44,9 +44,33 @@ final class SitePolicy {
         if (!environment.valid()) {
             return environment;
         }
-        LandProtectionService.Collision collision = landProtection.findCollision(territory);
+        LandProtectionService.Collision collision;
+        try {
+            collision = landProtection.findCollision(territory);
+        } catch (RuntimeException | LinkageError exception) {
+            return Validation.failure("Residence 碰撞检查不可用: " + safeMessage(exception));
+        }
         if (collision.occupied()) {
             return Validation.failure("3×3 区块与现有 Residence 冲突: "
+                    + collision.residenceName());
+        }
+        return environment;
+    }
+
+    Validation validateExpansion(InitialTerritory territory, String residenceName) {
+        Validation environment = validateEnvironment(territory);
+        if (!environment.valid()) {
+            return environment;
+        }
+        LandProtectionService.Collision collision;
+        try {
+            collision = landProtection.findCollision(territory);
+        } catch (RuntimeException | LinkageError exception) {
+            return Validation.failure("Residence 碰撞检查不可用: " + safeMessage(exception));
+        }
+        if (collision.occupied() && (collision.residenceName() == null
+                || !collision.residenceName().equalsIgnoreCase(residenceName))) {
+            return Validation.failure("3×3 区块与其他 Residence 冲突: "
                     + collision.residenceName());
         }
         return environment;
@@ -210,6 +234,11 @@ final class SitePolicy {
             throw new IllegalArgumentException("缺少整数 " + key);
         }
         return number.intValue();
+    }
+
+    private static String safeMessage(Throwable throwable) {
+        String message = throwable.getMessage();
+        return message == null || message.isBlank() ? throwable.getClass().getSimpleName() : message;
     }
 
     record Validation(boolean valid, String error, InitialTerritory territory) {

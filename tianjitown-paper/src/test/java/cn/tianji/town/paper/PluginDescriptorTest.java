@@ -14,11 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PluginDescriptorTest {
     @Test
     void runtimeIntegrationsAreSoftDependencies() throws IOException {
-        String descriptor;
-        try (InputStream stream = PluginDescriptorTest.class.getResourceAsStream("/plugin.yml")) {
-            assertNotNull(stream, "plugin.yml 应进入测试类路径");
-            descriptor = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        }
+        String descriptor = descriptor();
 
         assertFalse(descriptor.lines().map(String::stripLeading)
                 .anyMatch(line -> line.startsWith("depend:")));
@@ -29,6 +25,28 @@ class PluginDescriptorTest {
         for (String plugin : List.of("Vault", "Residence", "QuickShop-Hikari", "XConomy",
                 "WorldGuard")) {
             assertTrue(softDependencies.contains(plugin), plugin + " 必须声明为软依赖");
+        }
+    }
+
+    @Test
+    void adminCommandAllowsScopedPermissionsToReachExecutor() throws IOException {
+        String descriptor = descriptor();
+        String commandSection = descriptor.substring(descriptor.indexOf("commands:"),
+                descriptor.indexOf("permissions:"));
+
+        assertFalse(commandSection.lines().map(String::strip)
+                .anyMatch(line -> line.startsWith("permission:")),
+                "townadmin 不能在命令根节点要求完整管理员权限");
+        for (String permission : List.of("tianjitown.admin.money", "tianjitown.admin.tax",
+                "tianjitown.admin.ledger", "tianjitown.admin.expand")) {
+            assertTrue(descriptor.contains(permission + ":"), permission + " 必须被声明");
+        }
+    }
+
+    private static String descriptor() throws IOException {
+        try (InputStream stream = PluginDescriptorTest.class.getResourceAsStream("/plugin.yml")) {
+            assertNotNull(stream, "plugin.yml 应进入测试类路径");
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 }

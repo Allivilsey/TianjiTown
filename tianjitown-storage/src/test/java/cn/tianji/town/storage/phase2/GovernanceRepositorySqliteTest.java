@@ -72,11 +72,25 @@ class GovernanceRepositorySqliteTest {
                     pendingRules.townRulesRevision());
             assertFalse(governance.dashboard(officerId).orElseThrow().requiresRulesConfirmation());
 
+            Duration overflowingDuration = Duration.ofSeconds(Long.MAX_VALUE);
+            assertThrows(IllegalArgumentException.class,
+                    () -> governance.createVote(created.town().id(), VoteType.KICK_MEMBER,
+                            targetId, created.mayorId(), overflowingDuration, Duration.ZERO,
+                            Duration.ofHours(72), false));
+            assertThrows(IllegalArgumentException.class,
+                    () -> governance.createVote(created.town().id(), VoteType.KICK_MEMBER,
+                            targetId, created.mayorId(), Duration.ofDays(30), Duration.ZERO,
+                            overflowingDuration, false));
+
             VoteSnapshot kick = governance.createVote(created.town().id(), VoteType.KICK_MEMBER,
                     targetId, created.mayorId(), Duration.ofDays(30), Duration.ZERO,
                     Duration.ofHours(72), false);
             assertThrows(GovernanceRepository.ConflictException.class,
                     () -> governance.createVote(created.town().id(), VoteType.KICK_MEMBER,
+                            candidateId, created.mayorId(), Duration.ofDays(30), Duration.ZERO,
+                            Duration.ofHours(72), false));
+            assertThrows(GovernanceRepository.ConflictException.class,
+                    () -> governance.createVote(created.town().id(), VoteType.REPLACE_MAYOR,
                             candidateId, created.mayorId(), Duration.ofDays(30), Duration.ZERO,
                             Duration.ofHours(72), false));
             for (UUID voter : List.of(created.mayorId(), officerId, candidateId, applicantId)) {
@@ -94,6 +108,9 @@ class GovernanceRepositorySqliteTest {
             assertEquals(VoteStatus.PASSED, settledKick.status());
             assertFalse(phaseOne.listMemberIds(created.town().id()).contains(targetId));
 
+            assertThrows(IllegalArgumentException.class,
+                    () -> governance.requestMayorTransfer(created.town().id(), candidateId,
+                            created.mayorId(), overflowingDuration));
             TransferSnapshot transfer = governance.requestMayorTransfer(created.town().id(),
                     candidateId, created.mayorId(), Duration.ofHours(24));
             governance.decideMayorTransfer(transfer.id(), candidateId, true);

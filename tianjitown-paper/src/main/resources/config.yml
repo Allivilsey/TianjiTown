@@ -1,4 +1,4 @@
-schema-version: 2
+schema-version: 3
 
 database:
   # 相对路径以 plugins/TianjiTown 为基准，也可填写绝对路径。
@@ -62,4 +62,22 @@ phase2:
     minimum-membership-days: 0
     # 投票到期后由每分钟执行一次的幂等任务结算。
     duration-hours: 72
+
+phase3:
+  # 按 Paper 离线玩家身份（UUID 和实际名称大小写）访问的 Vault 清算账户；需与 QuickShop 原 tax 账户切换方案一致。
+  settlement-account: 'tax'
+  # Economy provider 未声明 fractionalDigits 时使用此精度。
+  money-scale: 2
+  # 可立即停止新税收；已存在账本查询和清算对账仍保持可用。
+  tax:
+    enabled: true
+    maximum-basis-points: 2500
+  # 可立即停止捐款、扩张等新资金写入，不影响税款入账、退款和查询。
+  consumption:
+    enabled: true
+  reconciliation-interval-minutes: 5
+  expansion:
+    base-cost: '1000.00'
+    growth-factor: '1.50'
+    maximum-units: 9
 

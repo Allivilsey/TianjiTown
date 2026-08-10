@@ -22,7 +22,8 @@ final class TownAdminCompletionEngine {
     private static final String PLAYER_HINT = "<玩家>";
     private static final List<String> ROOTS = List.of(
             "help", "status", "reload", "audit", "station", "handbook", "application", "town",
-            "member", "mayor", "vote", "land", "maintenance");
+            "member", "mayor", "vote", "land", "money", "tax", "ledger", "expand",
+            "maintenance");
 
     List<String> complete(String[] args, Snapshot snapshot, Dynamic dynamic) {
         Objects.requireNonNull(args, "args");
@@ -55,6 +56,7 @@ final class TownAdminCompletionEngine {
             case "mayor" -> mayor(args, snapshot, dynamic);
             case "vote" -> vote(args, snapshot, dynamic);
             case "land" -> land(args, snapshot, dynamic);
+            case "money", "tax", "ledger", "expand" -> phaseThree(args, snapshot);
             default -> List.of();
         };
     }
@@ -63,6 +65,7 @@ final class TownAdminCompletionEngine {
         List<String> topics = new ArrayList<>(List.of(
                 "application", "land", "member", "station", "system", "town"));
         topics.add("vote");
+        topics.addAll(List.of("money", "tax", "ledger", "expand"));
         if (dynamic.phaseZeroAllowed()) {
             topics.add("phase0");
         }
@@ -244,6 +247,42 @@ final class TownAdminCompletionEngine {
         NameMatch match = exactNamePrefix(args, 2, candidates);
         if (match != null && args.length == match.end() + 1) {
             return merge(phraseSuggestions, filter(List.of("repair"), current(args)));
+        }
+        return phraseSuggestions;
+    }
+
+    private List<String> phaseThree(String[] args, Snapshot snapshot) {
+        String root = args[0].toLowerCase(Locale.ROOT);
+        if (args.length == 2) {
+            return filter(switch (root) {
+                case "money" -> List.of("view", "adjust", "reconcile");
+                case "tax" -> List.of("set");
+                case "ledger" -> List.of("view");
+                case "expand" -> List.of("view", "preview");
+                default -> List.of();
+            }, args[1]);
+        }
+        if (root.equals("money") && args[1].equalsIgnoreCase("reconcile")) {
+            return List.of();
+        }
+        List<String> names = townNames(snapshot, town -> town.status() == TownStatus.ACTIVE);
+        NameMatch match = exactNamePrefix(args, 2, names);
+        List<String> phraseSuggestions = completePhrase(args, 2, names);
+        if (match == null || args.length <= match.end()) {
+            return phraseSuggestions;
+        }
+        int tail = args.length - match.end();
+        if (root.equals("expand") && args[1].equalsIgnoreCase("preview") && tail == 1) {
+            return merge(phraseSuggestions,
+                    filter(List.of("north", "east", "south", "west"), current(args)));
+        }
+        if ((root.equals("money") && args[1].equalsIgnoreCase("adjust")
+                || root.equals("tax")) && tail == 1) {
+            return merge(phraseSuggestions, hint(current(args), "<金额>"));
+        }
+        if ((root.equals("money") && args[1].equalsIgnoreCase("adjust")
+                || root.equals("tax")) && tail == 2) {
+            return hint(current(args), REASON_HINT);
         }
         return phraseSuggestions;
     }

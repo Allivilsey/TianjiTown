@@ -59,6 +59,18 @@ final class TownCommandParser {
         return new NamedAction(match.name(), action);
     }
 
+    static NamedAmountReason namedAmountReason(String[] args, int nameStart,
+                                               Collection<String> townNames) {
+        NameMatch match = requireNameMatch(args, nameStart, townNames);
+        if (match.end() >= args.length) {
+            throw new IllegalArgumentException("必须填写金额或税率");
+        }
+        String amount = args[match.end()].strip();
+        String reason = join(args, match.end() + 1, args.length, "必须填写原因");
+        rejectPlaceholder(reason, "<原因>");
+        return new NamedAmountReason(match.name(), amount, reason);
+    }
+
     static String exactName(String[] args, int nameStart, Collection<String> townNames) {
         NameMatch match = requireNameMatch(args, nameStart, townNames);
         if (match.end() != args.length) {
@@ -120,5 +132,8 @@ final class TownCommandParser {
     }
 
     record NamedAction(String townName, String action) {
+    }
+
+    record NamedAmountReason(String townName, String amount, String reason) {
     }
 }

@@ -10,6 +10,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -165,6 +166,8 @@ public final class GovernanceRepository {
         if (lifetime.isZero() || lifetime.isNegative()) {
             throw new IllegalArgumentException("镇长转让确认有效期必须大于 0");
         }
+        Instant expiresAt = shiftedInstant(Instant.now(), lifetime, true,
+                "镇长转让确认时间配置无效");
         return transaction(connection -> {
             expireTransfers(connection);
             requireRole(connection, townId, mayorId, MemberRole.MAYOR);
@@ -172,7 +175,6 @@ public final class GovernanceRepository {
                 throw new ConflictException("候选人必须是本镇其他成员");
             }
             UUID transferId = UUID.randomUUID();
-            Instant expiresAt = Instant.now().plus(lifetime);
             try (PreparedStatement statement = connection.prepareStatement("""
                     INSERT INTO mayor_transfer_requests
                         (transfer_id, town_id, requested_by, candidate_uuid, status, expires_at)
@@ -233,11 +235,16 @@ public final class GovernanceRepository {
                 || lifetime.isNegative() || lifetime.isZero()) {
             throw new IllegalArgumentException("投票时间配置无效");
         }
+        Instant now = Instant.now();
+        Instant activeAfter = shiftedInstant(now, activeWindow, false, "投票时间配置无效");
+        Instant joinedBefore = shiftedInstant(now, minimumMembership, false, "投票时间配置无效");
+        Instant endsAt = shiftedInstant(now, lifetime, true, "投票时间配置无效");
         return transaction(connection -> {
             requireActiveTown(connection, townId);
             if (!adminBypass && !memberExists(connection, townId, creatorId)) {
                 throw new ConflictException("只有本镇成员可以发起投票");
             }
+            requireNoOpenVote(connection, townId);
             UUID mayorId = mayorId(connection, townId);
             UUID subjectId;
             UUID candidateId;
@@ -255,7 +262,7 @@ public final class GovernanceRepository {
                 candidateId = targetId;
             }
             List<UUID> voters = eligibleVoters(connection, townId, subjectId,
-                    Instant.now().minus(activeWindow), Instant.now().minus(minimumMembership));
+                    activeAfter, joinedBefore);
             if (voters.isEmpty()) {
                 throw new ConflictException("没有满足活跃和入镇时长要求的有效选民");
             }
@@ -264,7 +271,6 @@ public final class GovernanceRepository {
             }
             UUID voteId = UUID.randomUUID();
             int requiredYes = GovernanceRules.requiredYes(type, voters.size());
-            Instant endsAt = Instant.now().plus(lifetime);
             try (PreparedStatement vote = connection.prepareStatement("""
                     INSERT INTO governance_votes
                         (vote_id, town_id, vote_type, subject_uuid, candidate_uuid, created_by,
@@ -564,6 +570,20 @@ public final class GovernanceRepository {
         return List.copyOf(voters);
     }
 
+    private static void requireNoOpenVote(Connection connection, UUID townId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT 1 FROM governance_votes
+                 WHERE town_id = ? AND status = 'OPEN' LIMIT 1
+                """)) {
+            statement.setBytes(1, uuid(townId));
+            try (ResultSet result = statement.executeQuery()) {
+                if (result.next()) {
+                    throw new ConflictException("该小镇已有进行中的治理投票");
+                }
+            }
+        }
+    }
+
     private Optional<TransferSnapshot> findPendingTransfer(Connection connection, UUID candidateId)
             throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
@@ -787,6 +807,17 @@ public final class GovernanceRepository {
     private static void requireReason(String reason) {
         if (reason == null || reason.isBlank() || reason.length() > 500) {
             throw new IllegalArgumentException("原因不能为空且不能超过 500 个字符");
+        }
+    }
+
+    private static Instant shiftedInstant(Instant base, Duration duration, boolean future,
+                                          String message) {
+        try {
+            Instant shifted = future ? base.plus(duration) : base.minus(duration);
+            shifted.toEpochMilli();
+            return shifted;
+        } catch (ArithmeticException | DateTimeException exception) {
+            throw new IllegalArgumentException(message, exception);
         }
     }
 

@@ -11,8 +11,11 @@ import com.bekvon.bukkit.residence.protection.ResidenceManager;
 import org.bukkit.Location;
 import org.bukkit.Server;
 import org.bukkit.World;
+import org.bukkit.plugin.Plugin;
 
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -32,12 +35,16 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     @Override
     public Collision findCollision(InitialTerritory territory) {
         requireMainThread();
-        Bounds bounds = bounds(territory);
-        if (bounds == null) {
-            return new Collision(true, "世界未加载");
+        try {
+            Bounds bounds = bounds(territory);
+            if (bounds == null) {
+                return new Collision(true, "世界未加载");
+            }
+            ClaimedResidence collision = manager().collidesWithResidence(bounds.area());
+            return collision == null ? Collision.none() : new Collision(true, collision.getName());
+        } catch (RuntimeException | LinkageError exception) {
+            return new Collision(true, dependencyError(exception));
         }
-        ClaimedResidence collision = manager().collidesWithResidence(bounds.area());
-        return collision == null ? Collision.none() : new Collision(true, collision.getName());
     }
 
     @Override
@@ -63,20 +70,20 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     public Result create(String residenceName, InitialTerritory territory, Collection<UUID> members) {
         requireMainThread();
         String name = registerManagedName(residenceName);
-        ResidenceManager manager = manager();
-        Bounds bounds = bounds(territory);
-        if (bounds == null) {
-            return Result.failure("目标世界未加载: " + territory.center().worldName());
-        }
-        ClaimedResidence existing = manager.getByName(name);
-        if (existing != null) {
-            return verifyAndApply(name, existing, bounds, members, true);
-        }
-        ClaimedResidence collision = manager.collidesWithResidence(bounds.area());
-        if (collision != null) {
-            return Result.failure("目标 3×3 区块与 Residence 冲突: " + collision.getName());
-        }
         try {
+            ResidenceManager manager = manager();
+            Bounds bounds = bounds(territory);
+            if (bounds == null) {
+                return Result.failure("目标世界未加载: " + territory.center().worldName());
+            }
+            ClaimedResidence existing = manager.getByName(name);
+            if (existing != null) {
+                return verifyAndApply(name, existing, bounds, members, true);
+            }
+            ClaimedResidence collision = manager.collidesWithResidence(bounds.area());
+            if (collision != null) {
+                return Result.failure("目标 3×3 区块与 Residence 冲突: " + collision.getName());
+            }
             if (!manager.addResidence(name, SYSTEM_OWNER_HINT, bounds.low(), bounds.high())) {
                 return Result.failure("Residence API 拒绝创建系统领地 " + name);
             }
@@ -85,8 +92,8 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                 return Result.failure("Residence 创建后无法按名称读取: " + name);
             }
             return verifyAndApply(name, created, bounds, members, true);
-        } catch (RuntimeException exception) {
-            return Result.failure(exception.getClass().getSimpleName() + ": " + exception.getMessage());
+        } catch (RuntimeException | LinkageError exception) {
+            return Result.failure(dependencyError(exception));
         }
     }
 
@@ -94,25 +101,25 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     public Result remove(String residenceName, InitialTerritory territory) {
         requireMainThread();
         String name = registerManagedName(residenceName);
-        ResidenceManager manager = manager();
-        ClaimedResidence existing = manager.getByName(name);
-        if (existing == null) {
-            return Result.ok("Residence 已不存在");
-        }
-        Bounds bounds = bounds(territory);
-        if (bounds == null) {
-            return Result.failure("目标世界未加载: " + territory.center().worldName());
-        }
-        if (!existing.isServerLand() || !matchesBounds(existing, bounds)) {
-            return Result.failure("拒绝移除同名但并非当前小镇投影的 Residence: " + name);
-        }
         try {
+            ResidenceManager manager = manager();
+            ClaimedResidence existing = manager.getByName(name);
+            if (existing == null) {
+                return Result.ok("Residence 已不存在");
+            }
+            Bounds bounds = bounds(territory);
+            if (bounds == null) {
+                return Result.failure("目标世界未加载: " + territory.center().worldName());
+            }
+            if (!existing.isServerLand() || !matchesMainBounds(existing, bounds)) {
+                return Result.failure("拒绝移除同名但并非当前小镇投影的 Residence: " + name);
+            }
             manager.removeResidence(name);
             return manager.getByName(name) == null
                     ? Result.ok("Residence 已移除")
                     : Result.failure("Residence 移除后仍可读取");
-        } catch (RuntimeException exception) {
-            return Result.failure(exception.getClass().getSimpleName() + ": " + exception.getMessage());
+        } catch (RuntimeException | LinkageError exception) {
+            return Result.failure(dependencyError(exception));
         }
     }
 
@@ -143,6 +150,177 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         return create(name, territory, members);
     }
 
+    @Override
+    public Inspection inspect(String residenceName, List<Area> areas, Collection<UUID> members) {
+        requireMainThread();
+        String name = registerManagedName(residenceName);
+        ClaimedResidence residence = manager().getByName(name);
+        if (residence == null) {
+            return Inspection.missing("缺少 Residence 投影 " + name);
+        }
+        Result result = verifyAndApply(name, residence, areas, members, false);
+        return result.success() ? Inspection.healthy(result.message())
+                : Inspection.invalid(result.message());
+    }
+
+    @Override
+    public Result addArea(String residenceName, Area area, Collection<UUID> members) {
+        requireMainThread();
+        String name = registerManagedName(residenceName);
+        ResidenceManager manager = null;
+        ClaimedResidence residence = null;
+        boolean areaAdded = false;
+        try {
+            manager = manager();
+            residence = manager.getByName(name);
+            if (residence == null) {
+                return Result.failure("缺少待扩张的 Residence 投影 " + name);
+            }
+            if (!residence.isServerLand()) {
+                return Result.failure("Residence 所有者不是受控服务端账户");
+            }
+            Bounds bounds = bounds(area.territory());
+            if (bounds == null) {
+                return Result.failure("目标世界未加载: " + area.territory().center().worldName());
+            }
+            CuboidArea existing = residence.getArea(area.name());
+            if (existing != null) {
+                return matchesBounds(existing, bounds)
+                        ? verifyPermissions(name, residence, members, true)
+                        : Result.failure("同名 Residence 区域边界不一致: " + area.name());
+            }
+            String collision = manager.checkAreaCollision(bounds.area(), residence);
+            if (collision != null) {
+                return Result.failure("目标 3×3 区块与 Residence 冲突: " + collision);
+            }
+            if (!residence.addArea(bounds.area(), area.name())) {
+                return Result.failure("Residence API 拒绝添加区域 " + area.name());
+            }
+            areaAdded = true;
+            manager.calculateChunks(residence);
+            Result permissions = verifyPermissions(name, residence, members, true);
+            if (!permissions.success()) {
+                residence.removeArea(area.name());
+                manager.calculateChunks(residence);
+            }
+            return permissions;
+        } catch (RuntimeException | LinkageError exception) {
+            String cleanup = "";
+            if (areaAdded && residence != null) {
+                try {
+                    residence.removeArea(area.name());
+                    if (manager != null) {
+                        manager.calculateChunks(residence);
+                    }
+                } catch (RuntimeException | LinkageError cleanupFailure) {
+                    cleanup = "；新增区域回滚失败: " + dependencyError(cleanupFailure);
+                }
+            }
+            return Result.failure(dependencyError(exception) + cleanup);
+        }
+    }
+
+    @Override
+    public Result removeArea(String residenceName, String areaName) {
+        requireMainThread();
+        String name = registerManagedName(residenceName);
+        try {
+            ResidenceManager manager = manager();
+            ClaimedResidence residence = manager.getByName(name);
+            if (residence == null || residence.getArea(areaName) == null) {
+                return Result.ok("Residence 扩张区域已不存在");
+            }
+            if (!residence.isServerLand()) {
+                return Result.failure("同名 Residence 不属于受控服务端账户，拒绝移除区域");
+            }
+            if (residence.getArea(areaName) == residence.getMainArea()) {
+                return Result.failure("拒绝移除 Residence 主区域");
+            }
+            residence.removeArea(areaName);
+            manager.calculateChunks(residence);
+            return residence.getArea(areaName) != null
+                    ? Result.failure("Residence 区域移除后仍可读取")
+                    : Result.ok("Residence 扩张区域已移除");
+        } catch (RuntimeException | LinkageError exception) {
+            return Result.failure(dependencyError(exception));
+        }
+    }
+
+    @Override
+    public Result reconcile(String residenceName, List<Area> areas, Collection<UUID> members,
+                            boolean repair) {
+        requireMainThread();
+        String name = registerManagedName(residenceName);
+        ClaimedResidence residence = manager().getByName(name);
+        if (residence == null) {
+            if (!repair) {
+                return Result.failure("缺少 Residence 投影 " + name);
+            }
+            Area main = areas.stream().filter(area -> area.name().equalsIgnoreCase("main"))
+                    .findFirst().orElseThrow(() -> new IllegalArgumentException(
+                            "多区域 Residence 缺少 main 区域"));
+            Result created = create(name, main.territory(), members);
+            if (!created.success()) {
+                return created;
+            }
+            for (Area area : areas) {
+                if (area == main) {
+                    continue;
+                }
+                Result added = addArea(name, area, members);
+                if (!added.success()) {
+                    return added;
+                }
+            }
+            residence = manager().getByName(name);
+        }
+        Result current = verifyAndApply(name, residence, areas, members, repair);
+        if (current.success() || !repair) {
+            return current;
+        }
+        for (Area area : areas) {
+            Bounds bounds = bounds(area.territory());
+            if (bounds == null) {
+                return Result.failure("目标世界未加载: " + area.territory().center().worldName());
+            }
+            CuboidArea actual = residence.getArea(area.name());
+            if (actual == null) {
+                Result added = addArea(name, area, members);
+                if (!added.success()) {
+                    return added;
+                }
+            } else if (!matchesBounds(actual, bounds)) {
+                return Result.failure("区域边界不一致，拒绝自动替换: " + area.name());
+            }
+        }
+        return verifyAndApply(name, residence, areas, members, true);
+    }
+
+    private Result verifyAndApply(String name, ClaimedResidence residence, List<Area> areas,
+                                  Collection<UUID> members, boolean applyPermissions) {
+        if (!residence.isServerLand()) {
+            return Result.failure("Residence 所有者不是受控服务端账户: " + residence.getOwner());
+        }
+        if (residence.getAreaCount() != areas.size()) {
+            return Result.failure("Residence 区域数量与数据库不一致");
+        }
+        Map<String, CuboidArea> actual = residence.getAreaMap();
+        for (Area area : areas) {
+            Bounds bounds = bounds(area.territory());
+            if (bounds == null) {
+                return Result.failure("目标世界未加载: " + area.territory().center().worldName());
+            }
+            CuboidArea cuboid = actual.get(area.name().toLowerCase(java.util.Locale.ROOT));
+            if (cuboid == null) {
+                cuboid = residence.getArea(area.name());
+            }
+            if (cuboid == null || !matchesBounds(cuboid, bounds)) {
+                return Result.failure("Residence 区域缺失或边界不一致: " + area.name());
+            }
+        }
+        return verifyPermissions(name, residence, members, applyPermissions);
+    }
+
     private Result verifyAndApply(String name, ClaimedResidence residence, Bounds bounds,
                                   Collection<UUID> members, boolean applyPermissions) {
         ResidenceManager manager = manager();
@@ -164,6 +342,11 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                 return Result.failure("Residence 边界不覆盖预期的 3×3 区块");
             }
         }
+        return verifyPermissions(name, residence, members, applyPermissions);
+    }
+
+    private Result verifyPermissions(String name, ClaimedResidence residence,
+                                     Collection<UUID> members, boolean applyPermissions) {
         java.util.Set<UUID> existingPlayers = java.util.Set.copyOf(
                 residence.getPermissions().getPlayerFlags().keySet());
         if (!applyPermissions && !existingPlayers.equals(java.util.Set.copyOf(members))) {
@@ -210,13 +393,40 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     }
 
     private ResidenceManager manager() {
-        return (ResidenceManager) ResidenceApi.getResidenceManager();
+        Plugin residence = server.getPluginManager().getPlugin("Residence");
+        if (residence == null || !residence.isEnabled()) {
+            throw new IllegalStateException("Residence 插件当前不可用；恢复后必须完整重启服务端");
+        }
+        try {
+            ResidenceManager manager = (ResidenceManager) ResidenceApi.getResidenceManager();
+            if (manager == null) {
+                throw new IllegalStateException("ResidenceManager 当前不可用");
+            }
+            return manager;
+        } catch (RuntimeException | LinkageError exception) {
+            throw new IllegalStateException("Residence API 类加载器不可用；必须完整重启服务端",
+                    exception);
+        }
+    }
+
+    private static String dependencyError(Throwable throwable) {
+        String message = throwable.getMessage();
+        return "Residence API 不可用: " + (message == null || message.isBlank()
+                ? throwable.getClass().getSimpleName() : message);
     }
 
     private static boolean matchesBounds(ClaimedResidence residence, Bounds bounds) {
         return residence.getAreaCount() == 1
-                && residence.getMainArea().getLowVector().equals(bounds.area().getLowVector())
-                && residence.getMainArea().getHighVector().equals(bounds.area().getHighVector());
+                && matchesBounds(residence.getMainArea(), bounds);
+    }
+
+    private static boolean matchesMainBounds(ClaimedResidence residence, Bounds bounds) {
+        return matchesBounds(residence.getMainArea(), bounds);
+    }
+
+    private static boolean matchesBounds(CuboidArea area, Bounds bounds) {
+        return area.getLowVector().equals(bounds.area().getLowVector())
+                && area.getHighVector().equals(bounds.area().getHighVector());
     }
 
     private void requireMainThread() {

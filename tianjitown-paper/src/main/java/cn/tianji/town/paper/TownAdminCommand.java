@@ -1,6 +1,10 @@
 package cn.tianji.town.paper;
 
 import cn.tianji.town.core.application.ApplicationText;
+import cn.tianji.town.core.economy.MoneyAmount;
+import cn.tianji.town.core.land.ExpansionDirection;
+import cn.tianji.town.core.land.ExpansionPricing;
+import cn.tianji.town.core.land.TerritoryRules;
 import cn.tianji.town.core.governance.VoteType;
 import cn.tianji.town.core.ports.LandProtectionService;
 import cn.tianji.town.core.town.MemberRole;
@@ -22,6 +26,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,19 +47,23 @@ final class TownAdminCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
-        if (!sender.hasPermission("tianjitown.admin")) {
-            sender.sendMessage("§c没有权限。");
-            return true;
-        }
         if (args.length == 0) {
+            if (!TownAdminPermissions.hasAny(sender::hasPermission)) {
+                sender.sendMessage("§c没有权限。");
+                return true;
+            }
             help(sender, null);
             return true;
         }
-        if (args[0].equalsIgnoreCase("help")) {
+        String root = args[0].toLowerCase(Locale.ROOT);
+        if (!TownAdminPermissions.canUseRoot(sender::hasPermission, root)) {
+            sender.sendMessage("§c没有权限。");
+            return true;
+        }
+        if (root.equals("help")) {
             help(sender, args.length >= 2 ? args[1] : null);
             return true;
         }
-        String root = args[0].toLowerCase(Locale.ROOT);
         try {
             if (root.equals("confirm")) {
                 return confirm(sender, args);
@@ -68,7 +77,8 @@ final class TownAdminCommand implements CommandExecutor {
             }
             if (root.equals("reload")) {
                 plugin.reloadConfig();
-                sender.sendMessage("§a配置已重新读取。SQLite 文件和超时参数需重启后生效。");
+                sender.sendMessage("§a配置已重新读取；阶段3税收/消费开关立即生效。"
+                        + "SQLite、清算账户和金额精度需重启后生效。");
                 return true;
             }
             if (root.equals("maintenance")) {
@@ -91,6 +101,10 @@ final class TownAdminCommand implements CommandExecutor {
                 case "mayor" -> mayor(sender, runtime, args);
                 case "vote" -> vote(sender, runtime, args);
                 case "land" -> land(sender, runtime, args);
+                case "money" -> money(sender, runtime, args);
+                case "tax" -> tax(sender, runtime, args);
+                case "ledger" -> ledger(sender, runtime, args);
+                case "expand" -> expand(sender, runtime, args);
                 default -> {
                     sender.sendMessage("§c未知子命令：" + args[0]
                             + "。使用 /townadmin help 查看帮助。");
@@ -487,6 +501,14 @@ final class TownAdminCommand implements CommandExecutor {
                     "vote 只支持 create-kick、create-mayor、settle 或 cancel");
         }
         requireLength(args, 4, "vote " + action + " <小镇全名> <玩家>");
+        PhaseTwoSettings settings;
+        try {
+            settings = PhaseTwoSettings.load(plugin.getConfig());
+        } catch (IllegalArgumentException exception) {
+            sender.sendMessage("§c治理配置无效: " + exception.getMessage());
+            plugin.getLogger().warning("拒绝创建治理投票: " + exception.getMessage());
+            return true;
+        }
         runtime.read(sender, () -> {
             List<TownSnapshot> towns = runtime.repository().listTowns(false).stream()
                     .filter(town -> town.status() == TownStatus.ACTIVE).toList();
@@ -498,15 +520,10 @@ final class TownAdminCommand implements CommandExecutor {
             return new VoteCreateRequest(town.id(), playerId(parsed.player()),
                     action.equals("create-kick") ? VoteType.KICK_MEMBER : VoteType.REPLACE_MAYOR);
         }, request -> {
-            Duration activeWindow = Duration.ofDays(plugin.getConfig().getLong(
-                    "phase2.voting.active-member-days", 30));
-            Duration minimumMembership = Duration.ofDays(plugin.getConfig().getLong(
-                    "phase2.voting.minimum-membership-days", 0));
-            Duration lifetime = Duration.ofHours(plugin.getConfig().getLong(
-                    "phase2.voting.duration-hours", 72));
             runtime.write(sender, () -> runtime.governance().createVote(request.townId(),
-                    request.type(), request.targetId(), actorId(sender), activeWindow,
-                    minimumMembership, lifetime, true), vote -> sender.sendMessage(
+                    request.type(), request.targetId(), actorId(sender),
+                    settings.activeMemberWindow(), settings.minimumMembership(),
+                    settings.voteDuration(), true), vote -> sender.sendMessage(
                     "§a投票已创建: " + vote.id() + "，有效选民=" + vote.eligibleVoters()
                             + "，通过门槛=" + vote.requiredYes()));
         });
@@ -592,6 +609,140 @@ final class TownAdminCommand implements CommandExecutor {
                         () -> rebuildLand(sender, runtime, request));
             });
         }
+        return true;
+    }
+
+    private boolean money(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+        requirePermission(sender, TownAdminPermissions.MONEY);
+        requireLength(args, 2, "money <view|adjust|reconcile> ...");
+        String action = args[1].toLowerCase(Locale.ROOT);
+        if (action.equals("reconcile")) {
+            runtime.reconcileSettlement();
+            sender.sendMessage("§a已提交清算账户对账；差额不足会立即锁定全部小镇消费。");
+            return true;
+        }
+        requireLength(args, 3, "money <view|adjust> <小镇全名> [金额 原因]");
+        if (action.equals("view")) {
+            String townName = TownCommandParser.townName(args, 2);
+            runtime.read(sender, () -> {
+                TownSnapshot town = requireTown(runtime, townName);
+                return runtime.finance().findFinanceByTown(town.id()).orElseThrow();
+            }, account -> sender.sendMessage("§6" + account.townName() + " 公共余额: §f"
+                    + runtime.money(account.balanceMinor()) + (account.locked()
+                    ? " §c[LOCKED] " + account.lockReason() : " §a[READY]")));
+            return true;
+        }
+        if (action.equals("adjust")) {
+            requireLength(args, 5, "money adjust <小镇全名> <带符号金额> <原因>");
+            runtime.read(sender, () -> {
+                List<TownSnapshot> towns = runtime.repository().listTowns(true);
+                TownCommandParser.NamedAmountReason parsed = TownCommandParser.namedAmountReason(
+                        args, 2, townNames(towns));
+                TownSnapshot town = towns.stream().filter(candidate -> sameName(
+                                candidate.profile().name(), parsed.townName())).findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("小镇不存在"));
+                long amount = MoneyAmount.from(new BigDecimal(parsed.amount()),
+                        runtime.settlement().scale()).minorUnits();
+                if (amount == 0) {
+                    throw new IllegalArgumentException("调整金额不能为 0");
+                }
+                return new MoneyAdjustment(town.id(), amount, parsed.reason());
+            }, request -> runtime.adjustFunds(sender, request.townId(), request.amountMinor(),
+                    request.reason()));
+            return true;
+        }
+        throw new IllegalArgumentException("money 只支持 view、adjust 或 reconcile");
+    }
+
+    private boolean tax(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+        requirePermission(sender, TownAdminPermissions.TAX);
+        requireLength(args, 5, "tax set <小镇全名> <百分比> <原因>");
+        if (!args[1].equalsIgnoreCase("set")) {
+            throw new IllegalArgumentException("tax 只支持 set");
+        }
+        runtime.read(sender, () -> {
+            List<TownSnapshot> towns = runtime.repository().listTowns(true);
+            TownCommandParser.NamedAmountReason parsed = TownCommandParser.namedAmountReason(
+                    args, 2, townNames(towns));
+            TownSnapshot town = towns.stream().filter(candidate -> sameName(
+                            candidate.profile().name(), parsed.townName())).findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("小镇不存在"));
+            BigDecimal percent = new BigDecimal(parsed.amount().replace("%", ""));
+            int bps = percent.movePointRight(2).intValueExact();
+            return new TaxAdjustment(town.id(), bps, parsed.reason());
+        }, request -> runtime.forceTaxRate(sender, request.townId(), request.basisPoints(),
+                request.reason()));
+        return true;
+    }
+
+    private boolean ledger(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+        requirePermission(sender, TownAdminPermissions.LEDGER);
+        requireLength(args, 3, "ledger view <小镇全名>");
+        if (!args[1].equalsIgnoreCase("view")) {
+            throw new IllegalArgumentException("ledger 只支持 view");
+        }
+        String townName = TownCommandParser.townName(args, 2);
+        runtime.read(sender, () -> {
+            TownSnapshot town = requireTown(runtime, townName);
+            return runtime.finance().ledger(town.id(), 0, 45, java.time.Instant.now());
+        }, entries -> {
+            sender.sendMessage("§6最近 180 天账本（最新 " + entries.size() + " 条）");
+            for (cn.tianji.town.storage.phase3.PhaseThreeRepository.LedgerEntry entry : entries) {
+                sender.sendMessage("§7" + entry.createdAt() + " §f" + entry.entryType()
+                        + " §e" + runtime.money(entry.amountMinor()) + " §8余额="
+                        + runtime.money(entry.balanceAfterMinor()) + " " + entry.note());
+            }
+        });
+        return true;
+    }
+
+    private boolean expand(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+        requirePermission(sender, TownAdminPermissions.EXPAND);
+        requireLength(args, 3, "expand <view|preview> <小镇全名> [方向]");
+        String action = args[1].toLowerCase(Locale.ROOT);
+        if (action.equals("preview") && !(sender instanceof Player)) {
+            sender.sendMessage("§c扩张预览需要玩家当前位置，只能由游戏内玩家执行。");
+            return true;
+        }
+        runtime.read(sender, () -> {
+            List<TownSnapshot> towns = runtime.repository().listTowns(true);
+            if (action.equals("view")) {
+                String name = TownCommandParser.exactName(args, 2, townNames(towns));
+                TownSnapshot town = towns.stream().filter(candidate -> sameName(
+                                candidate.profile().name(), name)).findFirst().orElseThrow();
+                return new AdminExpansion(town, runtime.finance().territoryUnits(town.id()), null);
+            }
+            if (action.equals("preview")) {
+                TownCommandParser.NamedAction parsed = TownCommandParser.namedAction(args, 2,
+                        townNames(towns), List.of("north", "east", "south", "west"));
+                if (parsed.action() == null) {
+                    throw new IllegalArgumentException("必须指定 north/east/south/west");
+                }
+                TownSnapshot town = towns.stream().filter(candidate -> sameName(
+                                candidate.profile().name(), parsed.townName())).findFirst().orElseThrow();
+                var units = runtime.finance().territoryUnits(town.id());
+                var candidate = TerritoryRules.next(units.stream().map(
+                                cn.tianji.town.storage.phase3.PhaseThreeRepository
+                                        .TerritoryUnitSnapshot::unit).toList(),
+                        ExpansionDirection.parse(parsed.action()));
+                return new AdminExpansion(town, units, candidate);
+            }
+            throw new IllegalArgumentException("expand 只支持 view 或 preview");
+        }, view -> {
+            sender.sendMessage("§6" + view.town().profile().name() + " 领地单元: "
+                    + view.units().size() + "/" + runtime.phaseThreeSettings().maximumUnits());
+            view.units().forEach(unit -> sender.sendMessage("§7- grid=" + unit.unit().gridX()
+                    + "," + unit.unit().gridZ() + " area=" + unit.residenceAreaName()
+                    + " projection=" + unit.projectionStatus()));
+            if (view.preview() != null) {
+                Player player = (Player) sender;
+                long price = ExpansionPricing.price(runtime.phaseThreeSettings().expansionBaseCost(),
+                        runtime.phaseThreeSettings().expansionGrowthFactor(), view.units().size(),
+                        runtime.settlement().scale()).minorUnits();
+                runtime.sitePolicy().teleportAndPreview(player, view.preview().territory());
+                player.sendMessage("§e预估价格: " + runtime.money(price));
+            }
+        });
         return true;
     }
 
@@ -687,6 +838,12 @@ final class TownAdminCommand implements CommandExecutor {
         }
     }
 
+    private static void requirePermission(CommandSender sender, String permission) {
+        if (!TownAdminPermissions.has(sender::hasPermission, permission)) {
+            throw new IllegalArgumentException("缺少权限 " + permission);
+        }
+    }
+
     private static boolean sameName(String first, String second) {
         return ApplicationText.normalizeNameKey(first)
                 .equals(ApplicationText.normalizeNameKey(second));
@@ -722,17 +879,36 @@ final class TownAdminCommand implements CommandExecutor {
         if (topic == null || topic.isBlank()) {
             sender.sendMessage("§6TianjiTown " + plugin.getPluginMeta().getVersion() + " 管理帮助");
             sender.sendMessage("§7用法: §f/townadmin help <分类>");
-            sender.sendMessage("§esystem §7状态、重载、维护与审计");
-            sender.sendMessage("§estation §7服务台与小镇手册");
-            sender.sendMessage("§eapplication §7申请审批");
-            sender.sendMessage("§etown §7小镇查看与删除");
-            sender.sendMessage("§emember §7成员与镇长管理");
-            sender.sendMessage("§evote §7治理投票代办与结算");
-            sender.sendMessage("§eland §7领地预览与对账");
-            if (sender.hasPermission("tianjitown.admin.phase0")) {
+            if (sender.hasPermission(TownAdminPermissions.ROOT)) {
+                sender.sendMessage("§esystem §7状态、重载、维护与审计");
+                sender.sendMessage("§estation §7服务台与小镇手册");
+                sender.sendMessage("§eapplication §7申请审批");
+                sender.sendMessage("§etown §7小镇查看与删除");
+                sender.sendMessage("§emember §7成员与镇长管理");
+                sender.sendMessage("§evote §7治理投票代办与结算");
+                sender.sendMessage("§eland §7领地预览与对账");
+            }
+            if (TownAdminPermissions.has(sender::hasPermission, TownAdminPermissions.MONEY)) {
+                sender.sendMessage("§emoney §7公共资金查询、调整与对账");
+            }
+            if (TownAdminPermissions.has(sender::hasPermission, TownAdminPermissions.TAX)) {
+                sender.sendMessage("§etax §7QuickShop 税率调整");
+            }
+            if (TownAdminPermissions.has(sender::hasPermission, TownAdminPermissions.LEDGER)) {
+                sender.sendMessage("§eledger §7公共资金账本查询");
+            }
+            if (TownAdminPermissions.has(sender::hasPermission, TownAdminPermissions.EXPAND)) {
+                sender.sendMessage("§eexpand §7领地扩张查询与预览");
+            }
+            if (TownAdminPermissions.has(sender::hasPermission,
+                    TownAdminPermissions.PHASE_ZERO)) {
                 sender.sendMessage("§ephase0 §7预发环境验证");
             }
             sender.sendMessage("§8Tab 补全中的 <原因> 是位置提示，请替换为实际内容。");
+            return;
+        }
+        if (!TownAdminPermissions.canViewHelpTopic(sender::hasPermission, topic)) {
+            sender.sendMessage("§c没有该帮助分类的权限。");
             return;
         }
         switch (topic.toLowerCase(Locale.ROOT)) {
@@ -743,6 +919,7 @@ final class TownAdminCommand implements CommandExecutor {
             case "member" -> memberHelp(sender);
             case "vote" -> voteHelp(sender);
             case "land" -> landHelp(sender);
+            case "money", "tax", "ledger", "expand" -> economyHelp(sender, topic);
             case "phase0" -> phaseZeroHelp(sender);
             default -> {
                 sender.sendMessage("§c未知帮助分类：" + topic);
@@ -757,6 +934,24 @@ final class TownAdminCommand implements CommandExecutor {
         sender.sendMessage("§e/townadmin reload §7重载可热更新的配置");
         sender.sendMessage("§e/townadmin maintenance <on|off|status> §7管理维护模式");
         sender.sendMessage("§e/townadmin audit [1~200] §7查看最近审计记录");
+    }
+
+    private static void economyHelp(CommandSender sender, String topic) {
+        sender.sendMessage("§6阶段 3 经济与扩张");
+        switch (topic.toLowerCase(Locale.ROOT)) {
+            case "money" -> {
+                sender.sendMessage("§e/townadmin money view <小镇全名>");
+                sender.sendMessage("§e/townadmin money adjust <小镇全名> <带符号金额> <原因>");
+                sender.sendMessage("§e/townadmin money reconcile");
+            }
+            case "tax" -> sender.sendMessage(
+                    "§e/townadmin tax set <小镇全名> <百分比> <原因>");
+            case "ledger" -> sender.sendMessage(
+                    "§e/townadmin ledger view <小镇全名>");
+            case "expand" -> sender.sendMessage(
+                    "§e/townadmin expand view|preview <小镇全名> [方向]");
+            default -> throw new IllegalArgumentException("未知经济帮助分类");
+        }
     }
 
     private static void townHelp(CommandSender sender) {
@@ -791,7 +986,8 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private static void phaseZeroHelp(CommandSender sender) {
-        if (!sender.hasPermission("tianjitown.admin.phase0")) {
+        if (!TownAdminPermissions.has(sender::hasPermission,
+                TownAdminPermissions.PHASE_ZERO)) {
             sender.sendMessage("§c没有第 0 阶段验证权限。");
             return;
         }
@@ -823,5 +1019,17 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private record VoteCreateRequest(UUID townId, UUID targetId, VoteType type) {
+    }
+
+    private record MoneyAdjustment(UUID townId, long amountMinor, String reason) {
+    }
+
+    private record TaxAdjustment(UUID townId, int basisPoints, String reason) {
+    }
+
+    private record AdminExpansion(TownSnapshot town,
+                                  List<cn.tianji.town.storage.phase3.PhaseThreeRepository
+                                          .TerritoryUnitSnapshot> units,
+                                  cn.tianji.town.core.land.TerritoryUnit preview) {
     }
 }

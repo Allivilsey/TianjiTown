@@ -3,6 +3,7 @@ package cn.tianji.town.paper;
 import cn.tianji.town.core.ports.RegionBoundaryService;
 import cn.tianji.town.integrations.residence.ResidenceCommandGuard;
 import cn.tianji.town.integrations.residence.ResidenceLandProtectionService;
+import cn.tianji.town.integrations.quickshop.QuickShopTaxAdapter;
 import cn.tianji.town.integrations.vault.VaultEconomyProbe;
 import cn.tianji.town.integrations.worldguard.WorldGuardRegionBoundaryService;
 import cn.tianji.town.storage.database.DatabaseConfig;
@@ -162,11 +163,32 @@ public final class TianjiTownPlugin extends JavaPlugin {
             candidate.close();
             return;
         }
-        databaseGate = candidate;
         Set<String> managedResidenceNames = ConcurrentHashMap.newKeySet();
-        PhaseOneRuntime runtime = new PhaseOneRuntime(this, candidate,
-                new ResidenceLandProtectionService(getServer(), managedResidenceNames),
-                regionBoundaryService());
+        PhaseOneRuntime runtime;
+        try {
+            runtime = new PhaseOneRuntime(this, candidate,
+                    new ResidenceLandProtectionService(getServer(), managedResidenceNames),
+                    regionBoundaryService());
+            cn.tianji.town.integrations.vault.VaultSettlementService.Result settlement =
+                    runtime.settlement().ensureAccount();
+            if (!settlement.success()) {
+                throw new IllegalStateException(settlement.message());
+            }
+        } catch (RuntimeException exception) {
+            candidate.close();
+            List<String> details = new ArrayList<>(previousDetails);
+            details.add("FAIL 阶段3配置/清算账户: " + exception.getMessage());
+            lock("阶段3运行时门禁未通过", details);
+            return;
+        }
+        databaseGate = candidate;
+        Plugin quickShop = getServer().getPluginManager().getPlugin("QuickShop-Hikari");
+        QuickShopTaxAdapter.Capability quickShopCapability = new QuickShopTaxAdapter(this,
+                java.util.Objects.requireNonNull(quickShop, "QuickShop-Hikari"),
+                runtime::taxEnabled, runtime::taxPolicy, runtime::acceptQuickShopTax,
+                runtime.settlement().accountName(), runtime.settlement().accountId(),
+                runtime.settlement().scale()).register();
+        runtime.setQuickShopTaxAvailable(quickShopCapability.available());
         TownUiController ui = new TownUiController(this, runtime);
         phaseOneRuntime = runtime;
         townUi = ui;
@@ -191,11 +213,16 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 20L * 60 * 60);
         getServer().getScheduler().runTaskTimer(this, runtime::settleDueVotes, 20L * 30,
                 20L * 60);
+        getServer().getScheduler().runTaskTimer(this, runtime::reconcileSettlement, 20L * 20,
+                20L * 60 * Math.max(1,
+                        getConfig().getLong("phase3.reconciliation-interval-minutes", 5)));
         List<String> details = new ArrayList<>(previousDetails);
         details.add("OK " + databaseDetail);
-        details.add("OK 阶段2成员治理、投票结算与 Residence 投影已启用");
+        details.add((quickShopCapability.available() ? "OK " : "WARN ")
+                + quickShopCapability.detail());
+        details.add("OK 阶段3公共账本、Vault 清算与多区域 Residence 扩张已启用");
         gateStatus.set(new GateStatus(GateStatus.State.READY, details));
-        getLogger().info("阶段2启动完成；玩家入口仅限服务台和小镇手册。");
+        getLogger().info("阶段3启动完成；玩家入口仅限服务台和小镇手册。");
     }
 
     private RegionBoundaryService regionBoundaryService() {

@@ -21,7 +21,8 @@ final class PhaseZeroCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
-        if (!sender.hasPermission("tianjitown.admin.phase0")) {
+        if (!TownAdminPermissions.has(sender::hasPermission,
+                TownAdminPermissions.PHASE_ZERO)) {
             sender.sendMessage("§c没有权限。");
             return true;
         }
@@ -54,7 +55,8 @@ final class PhaseZeroCommand implements CommandExecutor {
     }
 
     private SmokeRequest smokeRequest(CommandSender sender, String[] args) {
-        if (!sender.hasPermission("tianjitown.admin.phase0")) {
+        if (!TownAdminPermissions.has(sender::hasPermission,
+                TownAdminPermissions.PHASE_ZERO)) {
             sender.sendMessage("§c没有权限。");
             return null;
         }

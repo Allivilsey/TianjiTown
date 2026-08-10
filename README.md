@@ -1,6 +1,6 @@
 # TianjiTown
 
-天际服自用的单 Paper 服务器小镇系统。当前版本为第 2 阶段生产候选版 `1.1.0`，除申请、选址、审批和初始领地外，已经开放官员角色、成员治理、双方确认的镇长转让、规则版本确认及治理投票。税收、公共账本、付费扩张、Buff、资源采购和领地加成尚未开放，也不会出现在 UI 或命令帮助中。
+天际服自用的单 Paper 服务器小镇系统。当前版本为第 3 阶段生产候选版 `1.2.0`：在申请、领地和成员治理基础上，开放 QuickShop 动态小镇税、公共账本、成员捐款、清算对账和付费领地扩张。Buff、资源采购和领地加成尚未开放，也不会出现在 UI 或命令帮助中。
 
 ## 构建
 
@@ -10,7 +10,7 @@
 mvn -B clean verify
 ```
 
-唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.1.0.jar`。Paper API、Residence、Vault 与可选的 WorldGuard API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
+唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.2.0.jar`。Paper API、Residence、Vault 与可选的 WorldGuard API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
 
 ## 安装与 SQLite
 
@@ -31,11 +31,11 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 > 此 SQLite 版不会自动导入旧 MySQL 数据。已经在 MySQL 中运行的服务器应先保留完整备份，在隔离环境完成数据转换和验收后再切换；不要把旧 MySQL Flyway history 复制到 SQLite。
 
-详细升级和验收流程见 [`docs/phase-2/README.md`](docs/phase-2/README.md)，备份与恢复见 [`docs/phase-0/SQLITE_AND_BACKUP.md`](docs/phase-0/SQLITE_AND_BACKUP.md)。
+第 3 阶段的升级、验收与回滚流程见 [`docs/phase-3/README.md`](docs/phase-3/README.md)，备份与恢复见 [`docs/phase-0/SQLITE_AND_BACKUP.md`](docs/phase-0/SQLITE_AND_BACKUP.md)。
 
 ## 管理员帮助
 
-`/townadmin` 或 `/townadmin help` 显示精简分类。使用 `/townadmin help <分类>` 查看完整语法，可用分类为 `system`、`station`、`application`、`town`、`member`、`vote`、`land` 和 `phase0`。命令参数支持 Tab 自动补全；补全列表中的 `<原因>` 等尖括号内容只是当前位置的参数提示，必须替换为实际内容，不能原样提交。
+`/townadmin` 或 `/townadmin help` 显示精简分类。使用 `/townadmin help <分类>` 查看完整语法，可用分类为 `system`、`station`、`application`、`town`、`member`、`vote`、`land`、`money`、`tax`、`ledger`、`expand` 和 `phase0`。命令参数支持 Tab 自动补全；补全列表中的 `<原因>` 等尖括号内容只是当前位置的参数提示，必须替换为实际内容，不能原样提交。
 
 ### 系统与运维
 
@@ -100,6 +100,19 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 `preview` 只能在游戏内执行。`reconcile` 默认只检查，在目标后填写 `repair` 才修复；`rebuild` 会移除后重建投影，因此发出命令后还需点击聊天栏确认按钮。确认前若目标小镇发生变化，操作会中止并要求重新发起。
 
+### 公共资金、税率与扩张
+
+```text
+/townadmin money view <小镇全名>
+/townadmin money adjust <小镇全名> <带符号金额> <原因>
+/townadmin money reconcile
+/townadmin tax set <小镇全名> <百分比> <原因>
+/townadmin ledger view <小镇全名>
+/townadmin expand view|preview <小镇全名> [方向]
+```
+
+税率以基点保存，金额按 Vault 经济实现支持的精度处理。`money reconcile` 比较清算账户和内部总账；出现短款时会锁定新的公共资金消费，但账本查询、捐款和再次对账仍可使用。管理员调账必须填写原因。
+
 ### 第 0 阶段预发验证
 
 ```text
@@ -111,8 +124,8 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 ## 玩家入口
 
-插件不注册任何玩家命令。玩家通过讲台服务台、小镇手册、箱子 GUI 和可点击聊天申请表操作；镇长资料编辑使用书本 UI。入镇采用申请制：玩家同时最多申请 3 个小镇，申请 48 小时有效；被拒绝后 24 小时内不能再次申请同一小镇，主动退出后 24 小时内不能申请新镇。镇长可任命官员、移除成员或发起需候选人接受的镇长转让；所有成员可从成员详情发起治理投票。规则变更后，成员下次登录或打开主菜单时必须阅读并确认新版本。仅剩镇长一名成员时才允许解散小镇。
+插件不注册任何玩家命令。玩家通过讲台服务台、小镇手册、箱子 GUI 和可点击聊天申请表操作；镇长资料编辑使用书本 UI。入镇采用申请制：玩家同时最多申请 3 个小镇，申请 48 小时有效；被拒绝后 24 小时内不能再次申请同一小镇，主动退出后 24 小时内不能申请新镇。镇长可任命官员、移除成员、设置小镇税率或发起需候选人接受的镇长转让；所有成员可查看公共资金和最近 180 天流水、向小镇捐款并发起治理投票。规则或税率变更后，成员会在下次登录或打开主菜单时收到说明。仅剩镇长一名成员时才允许解散小镇。
 
-领地预览按钮会传送至领地中心传送点，并显示持续刷新的火焰粒子边界。
+领地预览按钮会传送至领地中心传送点，并显示持续刷新的火焰粒子边界。扩张以初始 3×3 区块为一个固定单元，只能向相邻方向扩张，最多占用原点周围的 3×3 单元网格；价格按配置中的指数规则向上取整并从公共资金扣除。
 
 管理命令使用小镇全名定位目标。申请人另行填写仅含 `1~12` 个英文字母的领地名称（建议三个字母），该名称转为小写后直接作为 Residence 名称，例如 `SKY` 生成 `sky`。

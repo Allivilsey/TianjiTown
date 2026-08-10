@@ -4,18 +4,35 @@ main: cn.tianji.town.paper.TianjiTownPlugin
 api-version: '26.2'
 load: POSTWORLD
 authors: [Tianji]
-description: 天际服小镇系统（阶段2生产版）
+description: 天际服小镇系统（阶段3生产版）
 softdepend: [Vault, Residence, QuickShop-Hikari, XConomy, WorldGuard]
 commands:
   townadmin:
     description: TianjiTown 管理命令
     usage: /townadmin help
-    permission: tianjitown.admin
 permissions:
   tianjitown.admin:
     description: TianjiTown 全部管理权限
     default: op
+    children:
+      tianjitown.admin.phase0: true
+      tianjitown.admin.money: true
+      tianjitown.admin.tax: true
+      tianjitown.admin.ledger: true
+      tianjitown.admin.expand: true
   tianjitown.admin.phase0:
     description: 执行第0阶段预发验证
+    default: op
+  tianjitown.admin.money:
+    description: 查询、调整和对账小镇公共资金
+    default: op
+  tianjitown.admin.tax:
+    description: 强制调整小镇 QuickShop 税率
+    default: op
+  tianjitown.admin.ledger:
+    description: 查询小镇最近 180 天账本
+    default: op
+  tianjitown.admin.expand:
+    description: 查询和代办小镇领地扩张
     default: op
 

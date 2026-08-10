@@ -2,6 +2,8 @@ package cn.tianji.town.paper;
 
 import cn.tianji.town.core.application.ApplicationStatus;
 import cn.tianji.town.core.application.ApplicationText;
+import cn.tianji.town.core.economy.MoneyAmount;
+import cn.tianji.town.core.land.ExpansionDirection;
 import cn.tianji.town.core.ports.LandProtectionService;
 import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.core.town.TownStatus;
@@ -13,6 +15,7 @@ import cn.tianji.town.storage.phase1.TownSnapshot;
 import cn.tianji.town.storage.phase2.MemberGovernanceSnapshot;
 import cn.tianji.town.storage.phase2.TransferSnapshot;
 import cn.tianji.town.storage.phase2.VoteSnapshot;
+import cn.tianji.town.storage.phase3.PhaseThreeRepository;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
@@ -53,6 +56,7 @@ import org.bukkit.persistence.PersistentDataType;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -343,6 +347,16 @@ final class TownUiController implements Listener {
                         .append(callbackButton(player, "[前往投票]", () -> openMain(player))));
             }
         });
+        runtime.read(player, () -> runtime.finance().findFinanceByPlayer(player.getUniqueId())
+                .orElse(null), finance -> {
+            if (runtime.taxEnabled() && finance != null && finance.hasUnreadTaxChange()) {
+                player.sendMessage(Component.text("小镇税率已更新为 "
+                                + PhaseOneRuntime.percent(finance.taxRateBps())
+                                + "，仅 QuickShop 实际收款会被征税。 ", NamedTextColor.YELLOW)
+                        .append(callbackButton(player, "[查看公共资金]",
+                                () -> openFinance(player, 0))));
+            }
+        });
     }
 
     void previewTownForAdmin(Player player, TownSnapshot town) {
@@ -553,6 +567,8 @@ final class TownUiController implements Listener {
             TownSnapshot town = dashboard.town();
             items.add(new MenuItem(10, button(Material.BELL, "§a" + town.profile().name(),
                     List.of("§7查看小镇资料与成员"), "TOWN", town.id().toString())));
+            items.add(new MenuItem(18, button(Material.EMERALD, "§6公共资金",
+                    List.of("§7余额、税率、捐款、账本与领地扩张"), "FINANCE", "0")));
             if (governance != null && governance.canReviewApplications()) {
                 int pending = dashboard.incomingJoinApplications().size();
                 items.add(new MenuItem(12, button(pending > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
@@ -607,6 +623,151 @@ final class TownUiController implements Listener {
         items.add(new MenuItem(31, button(Material.WRITTEN_BOOK, "§6领取小镇手册",
                 List.of("§7手册丢失后可在服务台重新领取"), "GIVE_HANDBOOK", null)));
         openMenu(player, 36, "小镇服务", items);
+    }
+
+    void openFinance(Player player, int page) {
+        runtime.read(player, () -> {
+            PhaseThreeRepository.TownFinance account = runtime.finance()
+                    .findFinanceByPlayer(player.getUniqueId())
+                    .orElseThrow(() -> new IllegalArgumentException("你不属于任何小镇"));
+            List<PhaseThreeRepository.LedgerEntry> ledger = runtime.finance().ledger(
+                    account.townId(), page, 27, Instant.now());
+            return new FinanceView(account, ledger, page);
+        }, view -> renderFinance(player, view));
+    }
+
+    private void renderFinance(Player player, FinanceView view) {
+        PhaseThreeRepository.TownFinance account = view.account();
+        List<String> summary = new ArrayList<>(List.of(
+                "§7小镇: " + account.townName(),
+                "§7公共余额: §f" + runtime.money(account.balanceMinor()),
+                "§7QuickShop 税率: §f" + PhaseOneRuntime.percent(account.taxRateBps()),
+                "§7领地单元: §f" + account.unitCount() + "/"
+                        + runtime.phaseThreeSettings().maximumUnits(),
+                "§8税收对象是交易的实际收款方：出售店为店主，收购店为交互玩家。",
+                "§8普通 Vault 变动和其他收入不会被征税。"));
+        if (account.locked()) {
+            summary.add("§c资金已因清算差异锁定: " + account.lockReason());
+        }
+        List<MenuItem> items = new ArrayList<>();
+        items.add(new MenuItem(4, button(account.locked() ? Material.REDSTONE_BLOCK
+                : Material.EMERALD_BLOCK, "§6公共资金", summary, null, null)));
+        if (runtime.consumptionEnabled()) {
+            addDonation(items, 9, "10.00");
+            addDonation(items, 10, "100.00");
+            addDonation(items, 11, "1000.00");
+        }
+        if (account.role().equals("MAYOR") && runtime.taxEnabled()) {
+            int[] rates = {0, 250, 500, 1000};
+            for (int index = 0; index < rates.length; index++) {
+                int rate = rates[index];
+                if (rate <= runtime.phaseThreeSettings().maximumTaxBps()) {
+                    items.add(new MenuItem(13 + index, button(Material.GOLD_NUGGET,
+                            "§e税率 " + PhaseOneRuntime.percent(rate),
+                            List.of(rate == account.taxRateBps() ? "§a当前税率" : "§7点击立即更新",
+                                    "§7仅作用于 QuickShop 实际收款"),
+                            rate == account.taxRateBps() ? null : "SET_TAX",
+                            account.townId() + ":" + rate)));
+                }
+            }
+        }
+        if (account.role().equals("MAYOR") && runtime.consumptionEnabled()) {
+            items.add(new MenuItem(17, button(Material.FILLED_MAP, "§b领地扩张",
+                    List.of("§7方向预览、指数价格和公共余额扣款"), "EXPANSION_MENU", null)));
+        }
+        int slot = 18;
+        for (PhaseThreeRepository.LedgerEntry entry : view.ledger()) {
+            boolean income = entry.amountMinor() > 0;
+            items.add(new MenuItem(slot++, button(income ? Material.LIME_DYE : Material.RED_DYE,
+                    (income ? "§a+" : "§c") + runtime.money(Math.abs(entry.amountMinor()))
+                            + " §7" + ledgerLabel(entry.entryType()),
+                    List.of("§7余额: " + runtime.money(entry.balanceAfterMinor()),
+                            "§7操作人: " + entry.actorName(),
+                            "§7时间: " + entry.createdAt(),
+                            "§8" + entry.note()), null, null)));
+        }
+        if (view.page() > 0) {
+            items.add(new MenuItem(45, button(Material.ARROW, "§e上一页", List.of(),
+                    "FINANCE", Integer.toString(view.page() - 1))));
+        }
+        if (view.ledger().size() == 27) {
+            items.add(new MenuItem(53, button(Material.ARROW, "§e下一页", List.of(),
+                    "FINANCE", Integer.toString(view.page() + 1))));
+        }
+        items.add(new MenuItem(49, button(Material.ARROW, "§7返回主菜单", List.of(),
+                "MAIN", null)));
+        openMenu(player, 54, "公共账本 · 最近 180 天", items);
+        if (account.hasUnreadTaxChange()) {
+            runtime.write(player, () -> {
+                runtime.finance().acknowledgeTaxRevision(player.getUniqueId(), account.taxRevision());
+                return null;
+            }, ignored -> {
+            });
+        }
+    }
+
+    private void addDonation(List<MenuItem> items, int slot, String decimal) {
+        long minor = MoneyAmount.from(new BigDecimal(decimal), runtime.settlement().scale())
+                .minorUnits();
+        items.add(new MenuItem(slot, button(Material.SUNFLOWER, "§a捐款 " + decimal,
+                List.of("§7从个人 Vault 余额转入小镇公共资金", "§7失败时自动补偿"),
+                "DONATE", Long.toString(minor))));
+    }
+
+    private void openExpansionMenu(Player player) {
+        runtime.read(player, () -> {
+            Map<ExpansionDirection, PhaseOneRuntime.ExpansionPreview> previews = new LinkedHashMap<>();
+            Map<ExpansionDirection, String> errors = new LinkedHashMap<>();
+            for (ExpansionDirection direction : ExpansionDirection.values()) {
+                try {
+                    previews.put(direction, runtime.expansionPreview(player.getUniqueId(), direction));
+                } catch (IllegalArgumentException exception) {
+                    errors.put(direction, exception.getMessage());
+                }
+            }
+            return new ExpansionMenu(previews, errors);
+        }, menu -> {
+            List<MenuItem> items = new ArrayList<>();
+            int[] slots = {10, 12, 14, 16};
+            int index = 0;
+            for (ExpansionDirection direction : ExpansionDirection.values()) {
+                PhaseOneRuntime.ExpansionPreview preview = menu.previews().get(direction);
+                List<String> lore = preview == null
+                        ? List.of("§c" + menu.errors().get(direction))
+                        : List.of("§7目标网格: " + preview.candidate().gridX() + ","
+                                + preview.candidate().gridZ(),
+                                "§7价格: " + runtime.money(preview.priceMinor()),
+                                "§7扩张后单元: " + preview.totalUnits(),
+                                "§a点击传送并预览边界，再进入确认页");
+                items.add(new MenuItem(slots[index++], button(preview == null
+                        ? Material.GRAY_DYE : Material.COMPASS,
+                        (preview == null ? "§7" : "§e") + "向" + direction.displayName() + "扩张",
+                        lore, preview == null ? null : "PREVIEW_EXPANSION", direction.name())));
+            }
+            items.add(new MenuItem(22, button(Material.ARROW, "§7返回公共资金", List.of(),
+                    "FINANCE", "0")));
+            openMenu(player, 27, "3×3 固定网格扩张", items);
+        });
+    }
+
+    private void previewExpansion(Player player, ExpansionDirection direction) {
+        runtime.read(player, () -> runtime.expansionPreview(player.getUniqueId(), direction), preview -> {
+            sitePolicy.teleportAndPreview(player, preview.candidate().territory());
+            openConfirmation(player, "确认向" + direction.displayName() + "扩张", "EXPAND",
+                    direction.name(), "将从公共资金扣除 " + runtime.money(preview.priceMinor())
+                            + "，Residence 失败会自动退款", "EXPANSION_MENU", null);
+        });
+    }
+
+    private static String ledgerLabel(String type) {
+        return switch (type) {
+            case "QUICKSHOP_TAX" -> "QuickShop 税收";
+            case "DONATION" -> "成员捐款";
+            case "EXPANSION" -> "领地扩张";
+            case "EXPANSION_REFUND" -> "扩张退款";
+            case "ADMIN_ADJUSTMENT" -> "管理员调整";
+            default -> type;
+        };
     }
 
     private void renderRulesConfirmation(Player player, MemberGovernanceSnapshot governance) {
@@ -1077,6 +1238,17 @@ final class TownUiController implements Listener {
                         "撤回会释放选址并进入冷却", "APPLICATION", target);
                 case "CANCEL" -> cancel(player, UUID.fromString(target));
                 case "TOWN" -> openTown(player, UUID.fromString(target));
+                case "FINANCE" -> openFinance(player, Integer.parseInt(target));
+                case "DONATE" -> runtime.donate(player, Long.parseLong(target));
+                case "SET_TAX" -> {
+                    String[] parts = target.split(":");
+                    runtime.changeTaxRate(player, UUID.fromString(parts[0]),
+                            Integer.parseInt(parts[1]));
+                }
+                case "EXPANSION_MENU" -> openExpansionMenu(player);
+                case "PREVIEW_EXPANSION" -> previewExpansion(player,
+                        ExpansionDirection.valueOf(target));
+                case "EXPAND" -> runtime.expand(player, ExpansionDirection.valueOf(target));
                 case "MEMBERS" -> {
                     String[] parts = target.split(":");
                     openMembers(player, UUID.fromString(parts[0]), Integer.parseInt(parts[1]));
@@ -1202,10 +1374,12 @@ final class TownUiController implements Listener {
         String[] parts = target.split(":");
         UUID townId = UUID.fromString(parts[0]);
         UUID candidateId = UUID.fromString(parts[1]);
-        Duration lifetime = Duration.ofHours(plugin.getConfig().getLong(
-                "phase2.governance.transfer-confirmation-hours", 24));
+        PhaseTwoSettings settings = phaseTwoSettings(mayor);
+        if (settings == null) {
+            return;
+        }
         runtime.write(mayor, () -> runtime.governance().requestMayorTransfer(townId,
-                candidateId, mayor.getUniqueId(), lifetime), transfer -> {
+                candidateId, mayor.getUniqueId(), settings.transferConfirmation()), transfer -> {
             mayor.sendMessage("§a镇长转让请求已发出，有效期至 " + transfer.expiresAt() + "。");
             Player candidate = Bukkit.getPlayer(candidateId);
             if (candidate != null) {
@@ -1255,18 +1429,27 @@ final class TownUiController implements Listener {
         UUID townId = UUID.fromString(parts[0]);
         VoteType type = VoteType.valueOf(parts[1]);
         UUID targetId = UUID.fromString(parts[2]);
-        Duration activeWindow = Duration.ofDays(plugin.getConfig().getLong(
-                "phase2.voting.active-member-days", 30));
-        Duration minimumMembership = Duration.ofDays(plugin.getConfig().getLong(
-                "phase2.voting.minimum-membership-days", 0));
-        Duration lifetime = Duration.ofHours(plugin.getConfig().getLong(
-                "phase2.voting.duration-hours", 72));
+        PhaseTwoSettings settings = phaseTwoSettings(player);
+        if (settings == null) {
+            return;
+        }
         runtime.write(player, () -> runtime.governance().createVote(townId, type, targetId,
-                player.getUniqueId(), activeWindow, minimumMembership, lifetime, false), vote -> {
+                player.getUniqueId(), settings.activeMemberWindow(), settings.minimumMembership(),
+                settings.voteDuration(), false), vote -> {
             player.sendMessage("§a治理投票已创建：有效选民 " + vote.eligibleVoters()
                     + " 人，通过需 " + vote.requiredYes() + " 票。");
             openVote(player, vote.id());
         });
+    }
+
+    private PhaseTwoSettings phaseTwoSettings(Player player) {
+        try {
+            return PhaseTwoSettings.load(plugin.getConfig());
+        } catch (IllegalArgumentException exception) {
+            player.sendMessage("§c治理配置无效，请联系管理员: " + exception.getMessage());
+            plugin.getLogger().warning("拒绝玩家治理操作: " + exception.getMessage());
+            return null;
+        }
     }
 
     private void castVote(Player player, String target) {
@@ -2020,6 +2203,14 @@ final class TownUiController implements Listener {
     private record MainView(PhaseOneRepository.PlayerDashboard dashboard,
                             MemberGovernanceSnapshot governance,
                             List<ApplicationSnapshot> reviewQueue) {
+    }
+
+    private record FinanceView(PhaseThreeRepository.TownFinance account,
+                               List<PhaseThreeRepository.LedgerEntry> ledger, int page) {
+    }
+
+    private record ExpansionMenu(Map<ExpansionDirection, PhaseOneRuntime.ExpansionPreview> previews,
+                                 Map<ExpansionDirection, String> errors) {
     }
 
     private record MemberPage(TownSnapshot.Page page, MemberGovernanceSnapshot governance) {
