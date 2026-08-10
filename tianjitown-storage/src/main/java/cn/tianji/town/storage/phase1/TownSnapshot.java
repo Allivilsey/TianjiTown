@@ -15,6 +15,7 @@ public record TownSnapshot(
         ApplicationText profile,
         TownStatus status,
         UUID mayorId,
+        long rulesRevision,
         long version,
         Instant createdAt,
         InitialTerritory territory,

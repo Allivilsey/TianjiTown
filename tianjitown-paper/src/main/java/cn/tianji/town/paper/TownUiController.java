@@ -5,10 +5,14 @@ import cn.tianji.town.core.application.ApplicationText;
 import cn.tianji.town.core.ports.LandProtectionService;
 import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.core.town.TownStatus;
+import cn.tianji.town.core.governance.VoteType;
 import cn.tianji.town.storage.phase1.ApplicationSnapshot;
 import cn.tianji.town.storage.phase1.JoinApplicationSnapshot;
 import cn.tianji.town.storage.phase1.PhaseOneRepository;
 import cn.tianji.town.storage.phase1.TownSnapshot;
+import cn.tianji.town.storage.phase2.MemberGovernanceSnapshot;
+import cn.tianji.town.storage.phase2.TransferSnapshot;
+import cn.tianji.town.storage.phase2.VoteSnapshot;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
@@ -37,6 +41,7 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerEditBookEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -297,11 +302,45 @@ final class TownUiController implements Listener {
             return;
         }
         UUID request = openMenu(player, 9, "小镇服务 · 正在读取", List.of());
-        runtime.read(player, () -> new MainView(runtime.repository().dashboard(player.getUniqueId()),
-                player.hasPermission("tianjitown.admin")
-                        ? runtime.repository().listReviewQueue(100) : List.of()), view -> {
+        runtime.read(player, () -> {
+            runtime.governance().recordActivity(player.getUniqueId());
+            return new MainView(runtime.repository().dashboard(player.getUniqueId()),
+                    runtime.governance().dashboard(player.getUniqueId()).orElse(null),
+                    player.hasPermission("tianjitown.admin")
+                            ? runtime.repository().listReviewQueue(100) : List.of());
+        }, view -> {
             if (isCurrent(player, request)) {
                 renderMain(player, view);
+            }
+        });
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        runtime.write(player, () -> {
+            runtime.governance().recordActivity(player.getUniqueId());
+            return runtime.governance().dashboard(player.getUniqueId()).orElse(null);
+        }, governance -> {
+            if (governance == null) {
+                return;
+            }
+            if (governance.requiresRulesConfirmation()) {
+                player.sendMessage(Component.text("小镇规则已有更新，请阅读并重新确认后继续使用小镇菜单。 ",
+                                NamedTextColor.YELLOW)
+                        .append(callbackButton(player, "[查看新规则]", () -> openMain(player))));
+            }
+            if (governance.pendingTransfer() != null) {
+                player.sendMessage(Component.text("镇长邀请你接任“" + governance.townName() + "”。 ",
+                                NamedTextColor.GOLD)
+                        .append(callbackButton(player, "[处理转让]", () -> openMain(player))));
+            }
+            long pendingVotes = governance.votes().stream()
+                    .filter(vote -> vote.viewerEligible() && !vote.viewerVoted()).count();
+            if (pendingVotes > 0) {
+                player.sendMessage(Component.text("你有 " + pendingVotes + " 个小镇治理投票待处理。 ",
+                                NamedTextColor.AQUA)
+                        .append(callbackButton(player, "[前往投票]", () -> openMain(player))));
             }
         });
     }
@@ -497,6 +536,11 @@ final class TownUiController implements Listener {
 
     private void renderMain(Player player, MainView view) {
         PhaseOneRepository.PlayerDashboard dashboard = view.dashboard();
+        MemberGovernanceSnapshot governance = view.governance();
+        if (governance != null && governance.requiresRulesConfirmation()) {
+            renderRulesConfirmation(player, governance);
+            return;
+        }
         List<MenuItem> items = new ArrayList<>();
         if (player.hasPermission("tianjitown.admin")) {
             boolean pending = !view.reviewQueue().isEmpty();
@@ -507,23 +551,38 @@ final class TownUiController implements Listener {
         }
         if (dashboard.town() != null) {
             TownSnapshot town = dashboard.town();
-            items.add(new MenuItem(11, button(Material.BELL, "§a" + town.profile().name(),
+            items.add(new MenuItem(10, button(Material.BELL, "§a" + town.profile().name(),
                     List.of("§7查看小镇资料与成员"), "TOWN", town.id().toString())));
-            if (town.mayorId().equals(player.getUniqueId())) {
+            if (governance != null && governance.canReviewApplications()) {
                 int pending = dashboard.incomingJoinApplications().size();
-                items.add(new MenuItem(13, button(pending > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
+                items.add(new MenuItem(12, button(pending > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
                         pending > 0 ? "§e入镇申请 · " + pending : "§7入镇申请 · 暂无待办",
                         List.of("§7查看并审批玩家的入镇申请"), "JOIN_APPLICATIONS",
                         town.id().toString())));
-                items.add(new MenuItem(15, button(Material.WRITABLE_BOOK, "§e修改简介和规则",
+            }
+            if (town.mayorId().equals(player.getUniqueId())) {
+                items.add(new MenuItem(14, button(Material.WRITABLE_BOOK, "§e修改简介和规则",
                         List.of("§7名称和简称需要管理员代办"), "EDIT_TOWN", town.id().toString())));
-                items.add(new MenuItem(17, button(Material.TNT, "§4解散小镇",
-                        List.of("§c将删除领地并释放小镇名称", "§c需要再次确认"),
+                items.add(new MenuItem(16, button(Material.GOLDEN_HELMET, "§6成员治理",
+                        List.of("§7设置官员、移除成员和发起镇长转让"),
+                        "MEMBERS", town.id() + ":0")));
+                items.add(new MenuItem(24, button(Material.TNT, "§4解散小镇",
+                        List.of("§c仅剩镇长一人时可执行", "§c需要再次确认"),
                         "CONFIRM_DISBAND", town.id() + ":" + town.version())));
             } else {
-                items.add(new MenuItem(15, button(Material.OAK_DOOR, "§c退出小镇",
+                items.add(new MenuItem(24, button(Material.OAK_DOOR, "§c退出小镇",
                         List.of("§7需要再次确认"), "CONFIRM_LEAVE", town.id().toString())));
             }
+            if (governance != null && governance.pendingTransfer() != null) {
+                items.add(new MenuItem(20, button(Material.NETHER_STAR, "§e镇长转让待确认",
+                        List.of("§7镇长邀请你接任本镇", "§7点击接受或拒绝"),
+                        "TRANSFER_REQUEST", governance.pendingTransfer().id().toString())));
+            }
+            int pendingVotes = governance == null ? 0 : (int) governance.votes().stream()
+                    .filter(vote -> vote.viewerEligible() && !vote.viewerVoted()).count();
+            items.add(new MenuItem(22, button(pendingVotes > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
+                    pendingVotes > 0 ? "§b治理投票 · 待处理 " + pendingVotes : "§e治理投票",
+                    List.of("§7查看、发起和参与成员治理投票"), "VOTES", town.id().toString())));
         } else if (dashboard.application() != null) {
             ApplicationSnapshot application = dashboard.application();
             items.add(new MenuItem(11, button(Material.MAP, "§e继续小镇申请",
@@ -545,9 +604,25 @@ final class TownUiController implements Listener {
                                 "§7同时最多申请 3 个小镇"), "MY_JOIN_APPLICATIONS", null)));
             }
         }
-        items.add(new MenuItem(22, button(Material.WRITTEN_BOOK, "§6领取小镇手册",
+        items.add(new MenuItem(31, button(Material.WRITTEN_BOOK, "§6领取小镇手册",
                 List.of("§7手册丢失后可在服务台重新领取"), "GIVE_HANDBOOK", null)));
-        openMenu(player, 27, "小镇服务", items);
+        openMenu(player, 36, "小镇服务", items);
+    }
+
+    private void renderRulesConfirmation(Player player, MemberGovernanceSnapshot governance) {
+        List<String> lore = new ArrayList<>();
+        lore.add("§7小镇: " + governance.townName());
+        lore.add("§7新规则版本: " + governance.townRulesRevision());
+        for (int index = 0; index < governance.rules().size(); index++) {
+            lore.add("§f" + (index + 1) + ". " + governance.rules().get(index));
+        }
+        lore.add("§c确认前不能继续使用其他小镇功能");
+        List<MenuItem> items = List.of(
+                new MenuItem(4, button(Material.WRITTEN_BOOK, "§6规则变更", lore, null, null)),
+                new MenuItem(13, button(Material.LIME_CONCRETE, "§a我已阅读并确认",
+                        List.of("§7记录本次确认的规则版本"), "ACK_RULES",
+                        governance.townId() + ":" + governance.townRulesRevision())));
+        openMenu(player, 27, "确认小镇规则更新", items);
     }
 
     private void openApplication(Player player, ApplicationSnapshot application) {
@@ -622,22 +697,32 @@ final class TownUiController implements Listener {
     }
 
     private void openMembers(Player player, UUID townId, int page) {
-        runtime.read(player, () -> runtime.repository().listMembers(townId, page, 45), result -> {
+        runtime.read(player, () -> new MemberPage(runtime.repository().listMembers(townId, page, 45),
+                runtime.governance().dashboard(player.getUniqueId()).orElse(null)), view -> {
             List<MenuItem> items = new ArrayList<>();
             int slot = 0;
-            for (TownSnapshot.Member member : result.members()) {
+            for (TownSnapshot.Member member : view.page().members()) {
                 String name = Objects.requireNonNullElse(Bukkit.getOfflinePlayer(member.playerId()).getName(),
                         member.playerId().toString());
+                String color = switch (member.role()) {
+                    case MAYOR -> "§6";
+                    case OFFICER -> "§a";
+                    case MEMBER -> "§f";
+                };
+                boolean sameTown = view.governance() != null
+                        && view.governance().townId().equals(townId);
                 items.add(new MenuItem(slot++, button(Material.PLAYER_HEAD,
-                        (member.role() == MemberRole.MAYOR ? "§6" : "§f") + name,
-                        List.of("§7身份: " + member.role(), "§7加入: " + member.joinedAt()),
-                        null, null)));
+                        color + name,
+                        List.of("§7身份: " + member.role(), "§7加入: " + member.joinedAt(),
+                                sameTown ? "§e点击查看治理操作" : "§7只读"),
+                        sameTown ? "MEMBER_DETAIL" : null,
+                        sameTown ? townId + ":" + member.playerId() : null)));
             }
             if (page > 0) {
                 items.add(new MenuItem(45, button(Material.ARROW, "§e上一页", List.of(),
                         "MEMBERS", townId + ":" + (page - 1))));
             }
-            if (result.hasNext()) {
+            if (view.page().hasNext()) {
                 items.add(new MenuItem(53, button(Material.ARROW, "§e下一页", List.of(),
                         "MEMBERS", townId + ":" + (page + 1))));
             }
@@ -645,6 +730,150 @@ final class TownUiController implements Listener {
                     "TOWN", townId.toString())));
             openMenu(player, 54, "小镇成员 · 第 " + (page + 1) + " 页", items);
         });
+    }
+
+    private void openMemberDetail(Player player, UUID townId, UUID targetId) {
+        runtime.read(player, () -> new MemberDetail(
+                runtime.governance().dashboard(player.getUniqueId())
+                        .orElseThrow(() -> new IllegalArgumentException("你不属于任何小镇")),
+                runtime.governance().memberRole(townId, targetId)), view -> {
+            if (!view.viewer().townId().equals(townId)) {
+                player.sendMessage("§c只能管理自己小镇的成员。");
+                return;
+            }
+            String name = Objects.requireNonNullElse(Bukkit.getOfflinePlayer(targetId).getName(),
+                    targetId.toString());
+            List<MenuItem> items = new ArrayList<>();
+            items.add(new MenuItem(4, button(Material.PLAYER_HEAD, "§6" + name,
+                    List.of("§7身份: " + view.targetRole(), "§7UUID: " + targetId), null, null)));
+            boolean targetIsMayor = view.targetRole() == MemberRole.MAYOR;
+            boolean viewerIsMayor = view.viewer().role() == MemberRole.MAYOR;
+            if (viewerIsMayor && !targetIsMayor) {
+                MemberRole nextRole = view.targetRole() == MemberRole.OFFICER
+                        ? MemberRole.MEMBER : MemberRole.OFFICER;
+                items.add(new MenuItem(10, button(Material.GOLDEN_HELMET,
+                        nextRole == MemberRole.OFFICER ? "§a任命为官员" : "§e降为普通成员",
+                        List.of("§7官员可审核入镇申请"), "CONFIRM_ROLE",
+                        townId + ":" + targetId + ":" + nextRole)));
+                items.add(new MenuItem(12, button(Material.RED_CONCRETE, "§c镇长移除成员",
+                        List.of("§c立即移出小镇并同步 Residence", "§7需要再次确认"),
+                        "CONFIRM_KICK_MEMBER", townId + ":" + targetId)));
+                items.add(new MenuItem(14, button(Material.NETHER_STAR, "§e发起镇长转让",
+                        List.of("§7候选成员必须在 24 小时内接受"), "CONFIRM_TRANSFER_MAYOR",
+                        townId + ":" + targetId)));
+            }
+            if (!targetIsMayor && !targetId.equals(player.getUniqueId())) {
+                items.add(new MenuItem(16, button(Material.PAPER, "§e发起投票移除",
+                        List.of("§7赞成票必须严格超过有效选民的 50%"),
+                        "CONFIRM_CREATE_VOTE", townId + ":KICK_MEMBER:" + targetId)));
+            }
+            if (!targetIsMayor) {
+                items.add(new MenuItem(22, button(Material.ENCHANTED_BOOK, "§e提名为新镇长",
+                        List.of("§7发起 2/3 强制更换镇长投票"),
+                        "CONFIRM_CREATE_VOTE", townId + ":REPLACE_MAYOR:" + targetId)));
+            }
+            items.add(new MenuItem(26, button(Material.ARROW, "§7返回成员列表", List.of(),
+                    "MEMBERS", townId + ":0")));
+            openMenu(player, 27, "成员治理 · " + name, items);
+        });
+    }
+
+    private void openTransferRequest(Player player, UUID transferId) {
+        runtime.read(player, () -> runtime.governance().dashboard(player.getUniqueId())
+                .orElseThrow(() -> new IllegalArgumentException("你不属于任何小镇")), governance -> {
+            TransferSnapshot transfer = governance.pendingTransfer();
+            if (transfer == null || !transfer.id().equals(transferId)) {
+                player.sendMessage("§c镇长转让请求已经失效。");
+                openMain(player);
+                return;
+            }
+            List<MenuItem> items = List.of(
+                    new MenuItem(4, button(Material.NETHER_STAR, "§6接任镇长邀请",
+                            List.of("§7小镇: " + governance.townName(),
+                                    "§7有效期至: " + transfer.expiresAt(),
+                                    "§c接受后原镇长降为普通成员"), null, null)),
+                    new MenuItem(11, button(Material.LIME_CONCRETE, "§a接受并接任",
+                            List.of("§7需要再次确认"), "CONFIRM_TRANSFER_DECISION",
+                            transfer.id() + ":true")),
+                    new MenuItem(15, button(Material.RED_CONCRETE, "§c拒绝",
+                            List.of("§7本次请求将立即关闭"), "CONFIRM_TRANSFER_DECISION",
+                            transfer.id() + ":false")),
+                    new MenuItem(22, button(Material.ARROW, "§7返回", List.of(), "MAIN", null)));
+            openMenu(player, 27, "镇长转让确认", items);
+        });
+    }
+
+    private void openVotes(Player player, UUID townId) {
+        runtime.read(player, () -> runtime.governance().listTownVotes(townId,
+                player.getUniqueId(), true), votes -> {
+            List<MenuItem> items = new ArrayList<>();
+            for (int index = 0; index < Math.min(votes.size(), 45); index++) {
+                VoteSnapshot vote = votes.get(index);
+                String target = vote.type() == VoteType.KICK_MEMBER
+                        ? displayName(vote.subjectId()) : displayName(vote.candidateId());
+                boolean pending = vote.viewerEligible() && !vote.viewerVoted();
+                items.add(new MenuItem(index, button(
+                        pending ? Material.ENCHANTED_BOOK : Material.PAPER,
+                        (pending ? "§b待投票 · " : "§e") + voteLabel(vote.type()) + " · " + target,
+                        List.of("§7赞成: " + vote.yesVotes() + "/" + vote.requiredYes(),
+                                "§7反对: " + vote.noVotes(), "§7到期: " + vote.endsAt()),
+                        "VOTE_DETAIL", vote.id().toString())));
+            }
+            if (votes.isEmpty()) {
+                items.add(new MenuItem(22, button(Material.PAPER, "§7暂无进行中的投票",
+                        List.of("§7从成员列表选择目标后可发起治理投票"), null, null)));
+            }
+            items.add(new MenuItem(48, button(Material.ARROW, "§7返回主菜单", List.of(),
+                    "MAIN", null)));
+            openMenu(player, 54, "小镇治理投票", items);
+        });
+    }
+
+    private void openVote(Player player, UUID voteId) {
+        runtime.read(player, () -> runtime.governance().dashboard(player.getUniqueId())
+                .orElseThrow(() -> new IllegalArgumentException("你不属于任何小镇")), governance -> {
+            VoteSnapshot vote = governance.votes().stream().filter(item -> item.id().equals(voteId))
+                    .findFirst().orElse(null);
+            if (vote == null) {
+                player.sendMessage("§e投票不存在或已经结束。");
+                openVotes(player, governance.townId());
+                return;
+            }
+            String target = vote.type() == VoteType.KICK_MEMBER
+                    ? displayName(vote.subjectId()) : displayName(vote.candidateId());
+            List<MenuItem> items = new ArrayList<>();
+            items.add(new MenuItem(4, button(Material.PAPER, "§6" + voteLabel(vote.type()),
+                    List.of("§7目标: " + target,
+                            "§7有效选民: " + vote.eligibleVoters(),
+                            "§7通过门槛: " + vote.requiredYes(),
+                            "§7当前赞成/反对: " + vote.yesVotes() + "/" + vote.noVotes(),
+                            "§7到期: " + vote.endsAt()), null, null)));
+            if (vote.viewerEligible() && !vote.viewerVoted()) {
+                items.add(new MenuItem(11, button(Material.LIME_CONCRETE, "§a赞成",
+                        List.of("§7每个 UUID 只能投一次"), "CAST_VOTE", vote.id() + ":true")));
+                items.add(new MenuItem(15, button(Material.RED_CONCRETE, "§c反对",
+                        List.of("§7每个 UUID 只能投一次"), "CAST_VOTE", vote.id() + ":false")));
+            } else {
+                items.add(new MenuItem(13, button(Material.GRAY_DYE,
+                        vote.viewerVoted() ? "§7你已经投票" : "§7你不在冻结选民快照中",
+                        List.of(), null, null)));
+            }
+            items.add(new MenuItem(22, button(Material.ARROW, "§7返回投票列表", List.of(),
+                    "VOTES", vote.townId().toString())));
+            openMenu(player, 27, "治理投票详情", items);
+        });
+    }
+
+    private static String voteLabel(VoteType type) {
+        return type == VoteType.KICK_MEMBER ? "投票移除成员" : "强制更换镇长";
+    }
+
+    private static String displayName(UUID playerId) {
+        if (playerId == null) {
+            return "未知";
+        }
+        return Objects.requireNonNullElse(Bukkit.getOfflinePlayer(playerId).getName(),
+                playerId.toString());
     }
 
     private void openJoinTowns(Player player) {
@@ -852,6 +1081,43 @@ final class TownUiController implements Listener {
                     String[] parts = target.split(":");
                     openMembers(player, UUID.fromString(parts[0]), Integer.parseInt(parts[1]));
                 }
+                case "MEMBER_DETAIL" -> {
+                    String[] parts = target.split(":");
+                    openMemberDetail(player, UUID.fromString(parts[0]), UUID.fromString(parts[1]));
+                }
+                case "CONFIRM_ROLE" -> {
+                    String[] parts = target.split(":");
+                    openConfirmation(player, "确认调整成员角色", "SET_ROLE", target,
+                            "目标角色将变更为 " + parts[2], "MEMBER_DETAIL",
+                            parts[0] + ":" + parts[1]);
+                }
+                case "SET_ROLE" -> changeMemberRole(player, target);
+                case "CONFIRM_KICK_MEMBER" -> openConfirmation(player, "确认移除成员",
+                        "KICK_MEMBER", target, "目标将立即离镇并失去 Residence 权限",
+                        "MEMBER_DETAIL", target);
+                case "KICK_MEMBER" -> kickMember(player, target);
+                case "CONFIRM_TRANSFER_MAYOR" -> openConfirmation(player, "确认发起镇长转让",
+                        "REQUEST_TRANSFER_MAYOR", target, "候选人接受后才会变更镇长",
+                        "MEMBER_DETAIL", target);
+                case "REQUEST_TRANSFER_MAYOR" -> requestMayorTransfer(player, target);
+                case "TRANSFER_REQUEST" -> openTransferRequest(player, UUID.fromString(target));
+                case "CONFIRM_TRANSFER_DECISION" -> {
+                    String[] parts = target.split(":");
+                    boolean accept = Boolean.parseBoolean(parts[1]);
+                    openConfirmation(player, accept ? "确认接任镇长" : "确认拒绝转让",
+                            "TRANSFER_DECISION", target,
+                            accept ? "你将立即成为新镇长" : "本次转让请求将关闭",
+                            "TRANSFER_REQUEST", parts[0]);
+                }
+                case "TRANSFER_DECISION" -> decideMayorTransfer(player, target);
+                case "ACK_RULES" -> acknowledgeRules(player, target);
+                case "VOTES" -> openVotes(player, UUID.fromString(target));
+                case "VOTE_DETAIL" -> openVote(player, UUID.fromString(target));
+                case "CONFIRM_CREATE_VOTE" -> openConfirmation(player, "确认发起治理投票",
+                        "CREATE_VOTE", target, "选民快照和通过门槛将在创建时冻结",
+                        "MEMBER_DETAIL", memberTarget(target));
+                case "CREATE_VOTE" -> createVote(player, target);
+                case "CAST_VOTE" -> castVote(player, target);
                 case "PREVIEW_TOWN" -> previewTown(player, UUID.fromString(target));
                 case "JOIN_TOWNS" -> openJoinTowns(player);
                 case "JOIN_TOWN" -> openJoinTown(player, UUID.fromString(target));
@@ -898,6 +1164,129 @@ final class TownUiController implements Listener {
         } catch (IllegalArgumentException exception) {
             player.sendMessage("§c菜单数据无效，请重新打开。");
         }
+    }
+
+    private void changeMemberRole(Player mayor, String target) {
+        String[] parts = target.split(":");
+        UUID townId = UUID.fromString(parts[0]);
+        UUID playerId = UUID.fromString(parts[1]);
+        MemberRole role = MemberRole.valueOf(parts[2]);
+        runtime.write(mayor, () -> runtime.governance().changeRoleByMayor(townId, playerId,
+                role, mayor.getUniqueId(), mayor.getName()), changed -> {
+            mayor.sendMessage("§a成员角色已调整为 " + changed + "，正在复核 Residence 权限。");
+            syncResidence(mayor, townId, true);
+            openMemberDetail(mayor, townId, playerId);
+        });
+    }
+
+    private void kickMember(Player mayor, String target) {
+        String[] parts = target.split(":");
+        UUID townId = UUID.fromString(parts[0]);
+        UUID playerId = UUID.fromString(parts[1]);
+        runtime.write(mayor, () -> {
+            runtime.governance().removeMemberByMayor(townId, playerId, mayor.getUniqueId(),
+                    mayor.getName());
+            return townId;
+        }, changedTown -> {
+            mayor.sendMessage("§a成员已移出小镇，正在同步 Residence 权限。");
+            Player removed = Bukkit.getPlayer(playerId);
+            if (removed != null) {
+                removed.sendMessage("§c你已被镇长移出小镇。");
+            }
+            syncResidence(mayor, changedTown, true);
+            openMembers(mayor, changedTown, 0);
+        });
+    }
+
+    private void requestMayorTransfer(Player mayor, String target) {
+        String[] parts = target.split(":");
+        UUID townId = UUID.fromString(parts[0]);
+        UUID candidateId = UUID.fromString(parts[1]);
+        Duration lifetime = Duration.ofHours(plugin.getConfig().getLong(
+                "phase2.governance.transfer-confirmation-hours", 24));
+        runtime.write(mayor, () -> runtime.governance().requestMayorTransfer(townId,
+                candidateId, mayor.getUniqueId(), lifetime), transfer -> {
+            mayor.sendMessage("§a镇长转让请求已发出，有效期至 " + transfer.expiresAt() + "。");
+            Player candidate = Bukkit.getPlayer(candidateId);
+            if (candidate != null) {
+                candidate.sendMessage(Component.text("你收到了一项镇长转让请求。 ",
+                                NamedTextColor.GOLD)
+                        .append(callbackButton(candidate, "[处理]",
+                                () -> openTransferRequest(candidate, transfer.id()))));
+            }
+            openMain(mayor);
+        });
+    }
+
+    private void decideMayorTransfer(Player candidate, String target) {
+        String[] parts = target.split(":");
+        UUID transferId = UUID.fromString(parts[0]);
+        boolean accept = Boolean.parseBoolean(parts[1]);
+        runtime.write(candidate, () -> runtime.governance().decideMayorTransfer(transferId,
+                candidate.getUniqueId(), accept), transfer -> {
+            candidate.sendMessage(accept ? "§a你已接任镇长。" : "§e你已拒绝本次镇长转让。");
+            if (accept) {
+                syncResidence(candidate, transfer.townId(), true);
+            }
+            Player oldMayor = Bukkit.getPlayer(transfer.requestedBy());
+            if (oldMayor != null) {
+                oldMayor.sendMessage(accept ? "§e镇长转让已被接受，你现在是普通成员。"
+                        : "§e候选成员拒绝了镇长转让。");
+            }
+            openMain(candidate);
+        });
+    }
+
+    private void acknowledgeRules(Player player, String target) {
+        String[] parts = target.split(":");
+        UUID townId = UUID.fromString(parts[0]);
+        long revision = Long.parseLong(parts[1]);
+        runtime.write(player, () -> {
+            runtime.governance().acknowledgeRules(townId, player.getUniqueId(), revision);
+            return revision;
+        }, confirmed -> {
+            player.sendMessage("§a已记录你对规则版本 " + confirmed + " 的确认。");
+            openMain(player);
+        });
+    }
+
+    private void createVote(Player player, String target) {
+        String[] parts = target.split(":");
+        UUID townId = UUID.fromString(parts[0]);
+        VoteType type = VoteType.valueOf(parts[1]);
+        UUID targetId = UUID.fromString(parts[2]);
+        Duration activeWindow = Duration.ofDays(plugin.getConfig().getLong(
+                "phase2.voting.active-member-days", 30));
+        Duration minimumMembership = Duration.ofDays(plugin.getConfig().getLong(
+                "phase2.voting.minimum-membership-days", 0));
+        Duration lifetime = Duration.ofHours(plugin.getConfig().getLong(
+                "phase2.voting.duration-hours", 72));
+        runtime.write(player, () -> runtime.governance().createVote(townId, type, targetId,
+                player.getUniqueId(), activeWindow, minimumMembership, lifetime, false), vote -> {
+            player.sendMessage("§a治理投票已创建：有效选民 " + vote.eligibleVoters()
+                    + " 人，通过需 " + vote.requiredYes() + " 票。");
+            openVote(player, vote.id());
+        });
+    }
+
+    private void castVote(Player player, String target) {
+        String[] parts = target.split(":");
+        UUID voteId = UUID.fromString(parts[0]);
+        boolean approve = Boolean.parseBoolean(parts[1]);
+        runtime.write(player, () -> runtime.governance().castVote(voteId,
+                player.getUniqueId(), approve), vote -> {
+            player.sendMessage("§a投票已记录。当前赞成/门槛：" + vote.yesVotes()
+                    + "/" + vote.requiredYes() + "，状态：" + vote.status());
+            if (vote.passed() && vote.type() == VoteType.KICK_MEMBER) {
+                syncResidence(player, vote.townId(), true);
+            }
+            openVotes(player, vote.townId());
+        });
+    }
+
+    private static String memberTarget(String voteTarget) {
+        String[] parts = voteTarget.split(":");
+        return parts[0] + ":" + parts[2];
     }
 
     private void loadApplication(Player player, UUID applicationId) {
@@ -1025,23 +1414,26 @@ final class TownUiController implements Listener {
     }
 
     private void notifyMayorJoinApplication(JoinApplicationSnapshot application) {
-        runtime.read(Bukkit.getConsoleSender(), () -> runtime.repository().findTown(application.townId())
-                .orElse(null), town -> {
-            if (town == null) {
-                return;
-            }
-            Player mayor = Bukkit.getPlayer(town.mayorId());
-            if (mayor == null) {
+        runtime.read(Bukkit.getConsoleSender(), () -> new ManagerNotification(
+                runtime.repository().findTown(application.townId()).orElse(null),
+                runtime.governance().listManagerIds(application.townId())), notification -> {
+            if (notification.town() == null) {
                 return;
             }
             String applicant = Objects.requireNonNullElse(
                     Bukkit.getOfflinePlayer(application.applicantId()).getName(),
                     application.applicantId().toString());
-            mayor.sendMessage(Component.text(applicant + " 申请加入“" + application.townName() + "” ",
-                            NamedTextColor.GOLD)
-                    .append(callbackButton(mayor, "[立即审核]",
-                            () -> openTownJoinApplication(mayor, application.id()))));
-            playSound(mayor, Sound.BLOCK_AMETHYST_BLOCK_CHIME);
+            for (UUID managerId : notification.managerIds()) {
+                Player manager = Bukkit.getPlayer(managerId);
+                if (manager == null) {
+                    continue;
+                }
+                manager.sendMessage(Component.text(applicant + " 申请加入“"
+                                + application.townName() + "” ", NamedTextColor.GOLD)
+                        .append(callbackButton(manager, "[立即审核]",
+                                () -> openTownJoinApplication(manager, application.id()))));
+                playSound(manager, Sound.BLOCK_AMETHYST_BLOCK_CHIME);
+            }
         });
     }
 
@@ -1626,7 +2018,17 @@ final class TownUiController implements Listener {
     }
 
     private record MainView(PhaseOneRepository.PlayerDashboard dashboard,
+                            MemberGovernanceSnapshot governance,
                             List<ApplicationSnapshot> reviewQueue) {
+    }
+
+    private record MemberPage(TownSnapshot.Page page, MemberGovernanceSnapshot governance) {
+    }
+
+    private record MemberDetail(MemberGovernanceSnapshot viewer, MemberRole targetRole) {
+    }
+
+    private record ManagerNotification(TownSnapshot town, List<UUID> managerIds) {
     }
 
     private record FormSession(UUID id, UUID targetId, long version, ApplicationText base) {

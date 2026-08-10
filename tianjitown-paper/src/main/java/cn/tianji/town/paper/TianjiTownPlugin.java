@@ -189,11 +189,13 @@ public final class TianjiTownPlugin extends JavaPlugin {
         getServer().getScheduler().runTaskTimer(this, runtime::checkRecovery, 20L * 30, 20L * 30);
         getServer().getScheduler().runTaskTimer(this, runtime::reconcileAll, 20L * 10,
                 20L * 60 * 60);
+        getServer().getScheduler().runTaskTimer(this, runtime::settleDueVotes, 20L * 30,
+                20L * 60);
         List<String> details = new ArrayList<>(previousDetails);
         details.add("OK " + databaseDetail);
-        details.add("OK 阶段1玩家 UI、审批事务与 Residence 投影已启用");
+        details.add("OK 阶段2成员治理、投票结算与 Residence 投影已启用");
         gateStatus.set(new GateStatus(GateStatus.State.READY, details));
-        getLogger().info("阶段1启动完成；玩家入口仅限服务台和小镇手册。");
+        getLogger().info("阶段2启动完成；玩家入口仅限服务台和小镇手册。");
     }
 
     private RegionBoundaryService regionBoundaryService() {

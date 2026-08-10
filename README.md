@@ -1,6 +1,6 @@
 # TianjiTown
 
-天际服自用的单 Paper 服务器小镇系统。当前版本为第 1 阶段生产候选版 `1.0.0`，提供申请、选址、审批、基本资料、初始 3×3 领地和最小成员体系。税收、公共账本、付费扩张、投票、Buff、资源采购和领地加成尚未开放，也不会出现在 UI 或命令帮助中。
+天际服自用的单 Paper 服务器小镇系统。当前版本为第 2 阶段生产候选版 `1.1.0`，除申请、选址、审批和初始领地外，已经开放官员角色、成员治理、双方确认的镇长转让、规则版本确认及治理投票。税收、公共账本、付费扩张、Buff、资源采购和领地加成尚未开放，也不会出现在 UI 或命令帮助中。
 
 ## 构建
 
@@ -10,7 +10,7 @@
 mvn -B clean verify
 ```
 
-唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.0.0.jar`。Paper API、Residence、Vault 与可选的 WorldGuard API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
+唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.1.0.jar`。Paper API、Residence、Vault 与可选的 WorldGuard API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
 
 ## 安装与 SQLite
 
@@ -31,11 +31,11 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 > 此 SQLite 版不会自动导入旧 MySQL 数据。已经在 MySQL 中运行的服务器应先保留完整备份，在隔离环境完成数据转换和验收后再切换；不要把旧 MySQL Flyway history 复制到 SQLite。
 
-详细发布和验收流程见 [`docs/phase-1/README.md`](docs/phase-1/README.md)，备份与恢复见 [`docs/phase-0/SQLITE_AND_BACKUP.md`](docs/phase-0/SQLITE_AND_BACKUP.md)。
+详细升级和验收流程见 [`docs/phase-2/README.md`](docs/phase-2/README.md)，备份与恢复见 [`docs/phase-0/SQLITE_AND_BACKUP.md`](docs/phase-0/SQLITE_AND_BACKUP.md)。
 
 ## 管理员帮助
 
-`/townadmin` 或 `/townadmin help` 显示精简分类。使用 `/townadmin help <分类>` 查看完整语法，可用分类为 `system`、`station`、`application`、`town`、`member`、`land` 和 `phase0`。命令参数支持 Tab 自动补全；补全列表中的 `<原因>` 等尖括号内容只是当前位置的参数提示，必须替换为实际内容，不能原样提交。
+`/townadmin` 或 `/townadmin help` 显示精简分类。使用 `/townadmin help <分类>` 查看完整语法，可用分类为 `system`、`station`、`application`、`town`、`member`、`vote`、`land` 和 `phase0`。命令参数支持 Tab 自动补全；补全列表中的 `<原因>` 等尖括号内容只是当前位置的参数提示，必须替换为实际内容，不能原样提交。
 
 ### 系统与运维
 
@@ -73,10 +73,22 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin town view <小镇全名>
 /townadmin town delete <小镇全名> <原因>
 /townadmin member add|remove <小镇全名> <玩家> <原因>
+/townadmin member role <小镇全名> <玩家> <OFFICER|MEMBER>
 /townadmin mayor transfer <小镇全名> <玩家> <原因>
 ```
 
 发出删除命令后，聊天栏会显示“确认执行”和“取消”按钮；确认仅限发起者使用，60 秒后失效。删除操作会先安全归档；只有 Residence 确认移除后才释放名称、领地名称和区块占位，审计记录会保留。
+
+### 治理投票
+
+```text
+/townadmin vote create-kick <小镇全名> <目标玩家>
+/townadmin vote create-mayor <小镇全名> <候选玩家>
+/townadmin vote settle <voteId>
+/townadmin vote cancel <voteId> <原因>
+```
+
+普通治理通过玩家 GUI 完成。投票创建时冻结活跃选民快照；踢人要求赞成票严格超过 50%，强制更换镇长要求达到 2/3。到期投票由后台任务幂等结算。
 
 ### 领地
 
@@ -99,7 +111,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 ## 玩家入口
 
-插件不注册任何玩家命令。玩家通过讲台服务台、小镇手册、箱子 GUI 和可点击聊天申请表操作；镇长资料编辑使用书本 UI。入镇采用申请制：玩家同时最多申请 3 个小镇，申请 48 小时有效；被拒绝后 24 小时内不能再次申请同一小镇，主动退出后 24 小时内不能申请新镇。镇长可在主界面审批入镇申请或通过二次确认解散小镇。
+插件不注册任何玩家命令。玩家通过讲台服务台、小镇手册、箱子 GUI 和可点击聊天申请表操作；镇长资料编辑使用书本 UI。入镇采用申请制：玩家同时最多申请 3 个小镇，申请 48 小时有效；被拒绝后 24 小时内不能再次申请同一小镇，主动退出后 24 小时内不能申请新镇。镇长可任命官员、移除成员或发起需候选人接受的镇长转让；所有成员可从成员详情发起治理投票。规则变更后，成员下次登录或打开主菜单时必须阅读并确认新版本。仅剩镇长一名成员时才允许解散小镇。
 
 领地预览按钮会传送至领地中心传送点，并显示持续刷新的火焰粒子边界。
 

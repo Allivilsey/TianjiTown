@@ -503,7 +503,7 @@ public final class PhaseOneRepository {
             List<JoinApplicationSnapshot> joinApplications = listJoinApplicationsForPlayer(
                     connection, playerId);
             List<JoinApplicationSnapshot> incomingApplications = town.isPresent()
-                    && town.get().mayorId().equals(playerId)
+                    && canReviewJoinApplications(connection, town.get().id(), playerId)
                     ? listJoinApplicationsForTown(connection, town.get().id()) : List.of();
             return new PlayerDashboard(town.orElse(null), application.orElse(null),
                     joinApplications, incomingApplications);
@@ -636,13 +636,15 @@ public final class PhaseOneRepository {
             Instant expiresAt = Instant.now().plus(lifetime);
             try (PreparedStatement statement = connection.prepareStatement("""
                     INSERT INTO town_join_applications
-                        (join_application_id, town_id, applicant_uuid, status, expires_at)
-                    VALUES (?, ?, ?, 'PENDING', ?)
+                        (join_application_id, town_id, applicant_uuid, status, expires_at,
+                         rules_revision)
+                    VALUES (?, ?, ?, 'PENDING', ?, ?)
                     """)) {
                 statement.setBytes(1, uuid(applicationId));
                 statement.setBytes(2, uuid(townId));
                 statement.setBytes(3, uuid(applicantId));
                 statement.setTimestamp(4, timestamp(expiresAt));
+                statement.setLong(5, town.rulesRevision());
                 statement.executeUpdate();
             }
             audit(connection, null, applicantId, applicantId.toString(),
@@ -664,7 +666,7 @@ public final class PhaseOneRepository {
         requireWorkerThread();
         return transaction(connection -> {
             expireJoinApplications(connection);
-            requireMayor(connection, townId, mayorId);
+            requireManager(connection, townId, mayorId);
             return listJoinApplicationsForTown(connection, townId);
         });
     }
@@ -674,7 +676,7 @@ public final class PhaseOneRepository {
         return transaction(connection -> {
             expireJoinApplications(connection);
             JoinApplicationSnapshot application = requireJoinApplication(connection, applicationId);
-            requireMayor(connection, application.townId(), mayorId);
+            requireManager(connection, application.townId(), mayorId);
             requirePendingJoinApplication(application);
             if (memberTownId(connection, application.applicantId()).isPresent()) {
                 throw new ConflictException("申请人已经属于一个小镇");
@@ -683,7 +685,9 @@ public final class PhaseOneRepository {
                 throw new ConflictException("申请人正在申请建立小镇，暂时不能批准入镇");
             }
             try (PreparedStatement member = connection.prepareStatement("""
-                    INSERT INTO town_members (town_id, player_uuid, role) VALUES (?, ?, 'MEMBER')
+                    INSERT INTO town_members (town_id, player_uuid, role, rules_revision)
+                    SELECT town_id, applicant_uuid, 'MEMBER', rules_revision
+                      FROM town_join_applications WHERE join_application_id = ?
                     """);
                  PreparedStatement approved = connection.prepareStatement("""
                          UPDATE town_join_applications
@@ -697,8 +701,7 @@ public final class PhaseOneRepository {
                             SET status = 'CANCELLED', decided_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
                           WHERE applicant_uuid = ? AND join_application_id <> ? AND status = 'PENDING'
                          """)) {
-                member.setBytes(1, uuid(application.townId()));
-                member.setBytes(2, uuid(application.applicantId()));
+                member.setBytes(1, uuid(applicationId));
                 member.executeUpdate();
                 approved.setBytes(1, uuid(mayorId));
                 approved.setBytes(2, uuid(applicationId));
@@ -920,7 +923,7 @@ public final class PhaseOneRepository {
             UUID townId = memberTownId(connection, playerId)
                     .orElseThrow(() -> new ConflictException("你不属于任何小镇"));
             try (PreparedStatement member = connection.prepareStatement("""
-                    DELETE FROM town_members WHERE town_id = ? AND player_uuid = ? AND role = 'MEMBER'
+                    DELETE FROM town_members WHERE town_id = ? AND player_uuid = ? AND role <> 'MAYOR'
                     """);
                  PreparedStatement departure = connection.prepareStatement("""
                          INSERT INTO town_member_departures (town_id, player_uuid, departure_type)
@@ -945,7 +948,7 @@ public final class PhaseOneRepository {
         requireReason(reason);
         transaction(connection -> {
             try (PreparedStatement member = connection.prepareStatement("""
-                    DELETE FROM town_members WHERE town_id = ? AND player_uuid = ? AND role = 'MEMBER'
+                    DELETE FROM town_members WHERE town_id = ? AND player_uuid = ? AND role <> 'MAYOR'
                     """);
                  PreparedStatement departure = connection.prepareStatement("""
                          INSERT INTO town_member_departures (town_id, player_uuid, departure_type)
@@ -1049,8 +1052,19 @@ public final class PhaseOneRepository {
 
     public TownSnapshot disbandTown(UUID townId, UUID mayorId, long expectedVersion) {
         requireWorkerThread();
-        return transaction(connection -> prepareTownDeletion(connection, townId, mayorId,
-                mayorId.toString(), "镇长通过小镇界面解散", true, expectedVersion));
+        return transaction(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT COUNT(*) FROM town_members WHERE town_id = ?")) {
+                statement.setBytes(1, uuid(townId));
+                try (ResultSet result = statement.executeQuery()) {
+                    if (!result.next() || result.getInt(1) != 1) {
+                        throw new ConflictException("仅剩镇长一名成员时才能解散，请先完成成员治理");
+                    }
+                }
+            }
+            return prepareTownDeletion(connection, townId, mayorId,
+                    mayorId.toString(), "镇长通过小镇界面解散", true, expectedVersion);
+        });
     }
 
     public void completeTownDeletion(UUID townId, UUID actorId, String actorName, String reason) {
@@ -1092,7 +1106,8 @@ public final class PhaseOneRepository {
         return transaction(connection -> {
             try (PreparedStatement town = connection.prepareStatement("""
                     UPDATE towns
-                       SET status = 'ARCHIVED', reuse_blocked = TRUE, version = version + 1
+                       SET status = 'ARCHIVED', reuse_blocked = TRUE, archived_at = ?,
+                           archive_reason = ?, version = version + 1
                      WHERE town_id = ? AND status = 'ACTIVE'
                     """);
                  PreparedStatement units = connection.prepareStatement("""
@@ -1113,7 +1128,10 @@ public final class PhaseOneRepository {
                                 decided_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
                           WHERE town_id = ? AND status = 'PENDING'
                          """)) {
-                town.setBytes(1, uuid(townId));
+                snapshotMembers(connection, townId);
+                town.setLong(1, Instant.now().toEpochMilli());
+                town.setString(2, detail);
+                town.setBytes(3, uuid(townId));
                 if (town.executeUpdate() != 1) {
                     return false;
                 }
@@ -1142,12 +1160,15 @@ public final class PhaseOneRepository {
             ensureTownNameAvailable(connection, profile, townId);
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE towns SET name = ?, normalized_name = ?, short_name = ?,
-                        normalized_short_name = ?, description = ?, rules_text = ?, version = version + 1
+                        normalized_short_name = ?, description = ?, rules_text = ?,
+                        rules_revision = rules_revision + CASE WHEN rules_text <> ? THEN 1 ELSE 0 END,
+                        version = version + 1
                      WHERE town_id = ? AND version = ? AND status <> 'ARCHIVED'
                     """)) {
                 setTownText(statement, 1, profile);
-                statement.setBytes(7, uuid(townId));
-                statement.setLong(8, expectedVersion);
+                statement.setString(7, String.join(RULE_SEPARATOR, profile.rules()));
+                statement.setBytes(8, uuid(townId));
+                statement.setLong(9, expectedVersion);
                 requireUpdated(statement, "小镇资料已被其他操作修改，请重新读取后再试");
             }
             audit(connection, null, actorId, actorName, "PROFILE_UPDATE", "TOWN", townId.toString(),
@@ -1195,7 +1216,7 @@ public final class PhaseOneRepository {
         return transaction(connection -> {
             expireJoinApplications(connection);
             JoinApplicationSnapshot application = requireJoinApplication(connection, applicationId);
-            requireMayor(connection, application.townId(), mayorId);
+            requireManager(connection, application.townId(), mayorId);
             requirePendingJoinApplication(application);
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE town_join_applications
@@ -1403,7 +1424,8 @@ public final class PhaseOneRepository {
         }
         try (PreparedStatement town = connection.prepareStatement("""
                 UPDATE towns
-                   SET status = 'ARCHIVED', reuse_blocked = TRUE, version = version + 1
+                   SET status = 'ARCHIVED', reuse_blocked = TRUE, archived_at = ?,
+                       archive_reason = ?, version = version + 1
                  WHERE town_id = ? AND status <> 'ARCHIVED'
                 """);
              PreparedStatement unit = connection.prepareStatement(
@@ -1421,7 +1443,10 @@ public final class PhaseOneRepository {
                       WHERE town_id = ? AND status = 'PENDING'
                      """)) {
             if (!alreadyPrepared) {
-                town.setBytes(1, uuid(townId));
+                snapshotMembers(connection, townId);
+                town.setLong(1, Instant.now().toEpochMilli());
+                town.setString(2, reason);
+                town.setBytes(3, uuid(townId));
                 requireUpdated(town, "小镇不存在或已经归档");
             }
             unit.setBytes(1, uuid(townId));
@@ -1697,7 +1722,8 @@ public final class PhaseOneRepository {
                         result.getInt("center_chunk_z")));
                 return Optional.of(new TownSnapshot(readUuid(result, "town_id"), readTownText(result),
                         TownStatus.valueOf(result.getString("status")),
-                        readUuid(result, "mayor_uuid"), result.getLong("version"),
+                        readUuid(result, "mayor_uuid"), result.getLong("rules_revision"),
+                        result.getLong("version"),
                         result.getTimestamp("created_at").toInstant(), territory,
                         result.getString("projection_status"), result.getString("projection_error")));
             }
@@ -1745,6 +1771,57 @@ public final class PhaseOneRepository {
                     throw new ConflictException("只有正常运行小镇的镇长可以执行该操作");
                 }
             }
+        }
+    }
+
+    private void requireManager(Connection connection, UUID townId, UUID playerId)
+            throws SQLException {
+        if (!canReviewJoinApplications(connection, townId, playerId)) {
+            throw new ConflictException("只有正常运行小镇的镇长或官员可以审核入镇申请");
+        }
+    }
+
+    private boolean canReviewJoinApplications(Connection connection, UUID townId, UUID playerId)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT 1 FROM town_members m JOIN towns t ON t.town_id = m.town_id
+                 WHERE m.town_id = ? AND m.player_uuid = ?
+                   AND m.role IN ('MAYOR', 'OFFICER') AND t.status = 'ACTIVE' LIMIT 1
+                """)) {
+            statement.setBytes(1, uuid(townId));
+            statement.setBytes(2, uuid(playerId));
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next();
+            }
+        }
+    }
+
+    private static void snapshotMembers(Connection connection, UUID townId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                INSERT OR IGNORE INTO town_archived_members
+                    (town_id, player_uuid, role, joined_at, last_active_at, rules_revision)
+                SELECT town_id, player_uuid, role, joined_at, last_active_at, rules_revision
+                  FROM town_members WHERE town_id = ?
+                """)) {
+            statement.setBytes(1, uuid(townId));
+            statement.executeUpdate();
+        }
+        try (PreparedStatement votes = connection.prepareStatement("""
+                UPDATE governance_votes SET status = 'CANCELLED', settled_at = ?,
+                       cancelled_reason = '小镇已归档'
+                 WHERE town_id = ? AND status = 'OPEN'
+                """);
+             PreparedStatement transfers = connection.prepareStatement("""
+                     UPDATE mayor_transfer_requests SET status = 'CANCELLED', decided_at = ?
+                      WHERE town_id = ? AND status = 'PENDING'
+                     """)) {
+            long now = Instant.now().toEpochMilli();
+            votes.setLong(1, now);
+            votes.setBytes(2, uuid(townId));
+            votes.executeUpdate();
+            transfers.setLong(1, now);
+            transfers.setBytes(2, uuid(townId));
+            transfers.executeUpdate();
         }
     }
 

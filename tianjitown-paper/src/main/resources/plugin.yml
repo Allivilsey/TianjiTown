@@ -4,7 +4,7 @@ main: cn.tianji.town.paper.TianjiTownPlugin
 api-version: '26.2'
 load: POSTWORLD
 authors: [Tianji]
-description: 天际服小镇系统（阶段1生产版）
+description: 天际服小镇系统（阶段2生产版）
 softdepend: [Vault, Residence, QuickShop-Hikari, XConomy, WorldGuard]
 commands:
   townadmin:

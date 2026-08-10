@@ -7,6 +7,8 @@ import cn.tianji.town.storage.database.DatabaseGate;
 import cn.tianji.town.storage.phase1.ApplicationSnapshot;
 import cn.tianji.town.storage.phase1.PhaseOneRepository;
 import cn.tianji.town.storage.phase1.TownSnapshot;
+import cn.tianji.town.storage.phase2.GovernanceRepository;
+import cn.tianji.town.storage.phase2.VoteSnapshot;
 import org.bukkit.command.CommandSender;
 
 import java.util.List;
@@ -19,6 +21,7 @@ final class PhaseOneRuntime {
     private final TianjiTownPlugin plugin;
     private final DatabaseGate database;
     private final PhaseOneRepository repository;
+    private final GovernanceRepository governance;
     private final LandProtectionService landProtection;
     private final SitePolicy sitePolicy;
     private final AtomicBoolean databaseAvailable = new AtomicBoolean(true);
@@ -33,10 +36,16 @@ final class PhaseOneRuntime {
         this.sitePolicy = new SitePolicy(plugin, landProtection, regionBoundaries);
         this.repository = new PhaseOneRepository(database.dataSource(),
                 plugin.getServer()::isPrimaryThread);
+        this.governance = new GovernanceRepository(database.dataSource(),
+                plugin.getServer()::isPrimaryThread);
     }
 
     PhaseOneRepository repository() {
         return repository;
+    }
+
+    GovernanceRepository governance() {
+        return governance;
     }
 
     LandProtectionService landProtection() {
@@ -56,9 +65,9 @@ final class PhaseOneRuntime {
             boolean healthy = database.ping();
             boolean previous = databaseAvailable.getAndSet(healthy);
             if (healthy && !previous) {
-                plugin.getLogger().info("SQLite 连接已恢复，阶段1写操作重新开放。");
+                plugin.getLogger().info("SQLite 连接已恢复，写操作重新开放。");
             } else if (!healthy && previous) {
-                plugin.getLogger().severe("SQLite 连接中断，阶段1写操作已锁定；Residence 保护保持不变。");
+                plugin.getLogger().severe("SQLite 连接中断，写操作已锁定；Residence 保护保持不变。");
             }
         });
     }
@@ -114,6 +123,37 @@ final class PhaseOneRuntime {
             } catch (RuntimeException exception) {
                 databaseAvailable.set(false);
                 plugin.getLogger().severe("Residence 对账读取 SQLite 失败: " + safeMessage(exception));
+            }
+        });
+    }
+
+    void settleDueVotes() {
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                List<VoteSnapshot> settled = governance.settleDueVotes();
+                List<TownMembers> changedMemberships = settled.stream()
+                        .filter(vote -> vote.passed()
+                                && vote.type() == cn.tianji.town.core.governance.VoteType.KICK_MEMBER)
+                        .map(VoteSnapshot::townId).distinct()
+                        .map(townId -> repository.findTown(townId)
+                                .map(town -> new TownMembers(town, repository.listMemberIds(townId)))
+                                .orElse(null))
+                        .filter(java.util.Objects::nonNull)
+                        .toList();
+                databaseAvailable.set(true);
+                if (!changedMemberships.isEmpty()) {
+                    plugin.getServer().getScheduler().runTask(plugin, () -> {
+                        for (TownMembers state : changedMemberships) {
+                            reconcile(org.bukkit.Bukkit.getConsoleSender(), state.town(),
+                                    state.members(), true);
+                        }
+                    });
+                }
+            } catch (RuntimeException exception) {
+                if (exception instanceof GovernanceRepository.StorageUnavailableException) {
+                    databaseAvailable.set(false);
+                }
+                plugin.getLogger().severe("治理投票定时结算失败: " + safeMessage(exception));
             }
         });
     }
@@ -260,7 +300,8 @@ final class PhaseOneRuntime {
     }
 
     private void handleFailure(CommandSender sender, RuntimeException exception) {
-        if (exception instanceof PhaseOneRepository.StorageUnavailableException) {
+        if (exception instanceof PhaseOneRepository.StorageUnavailableException
+                || exception instanceof GovernanceRepository.StorageUnavailableException) {
             databaseAvailable.set(false);
             plugin.getLogger().severe(exception.getMessage());
         }

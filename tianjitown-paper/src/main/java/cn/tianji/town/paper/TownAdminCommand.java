@@ -1,7 +1,9 @@
 package cn.tianji.town.paper;
 
 import cn.tianji.town.core.application.ApplicationText;
+import cn.tianji.town.core.governance.VoteType;
 import cn.tianji.town.core.ports.LandProtectionService;
+import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.core.town.TownStatus;
 import cn.tianji.town.integrations.residence.ResidenceSmokeTest;
 import cn.tianji.town.storage.phase1.ApplicationSnapshot;
@@ -20,6 +22,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -86,6 +89,7 @@ final class TownAdminCommand implements CommandExecutor {
                 case "town" -> town(sender, runtime, args);
                 case "member" -> member(sender, runtime, args);
                 case "mayor" -> mayor(sender, runtime, args);
+                case "vote" -> vote(sender, runtime, args);
                 case "land" -> land(sender, runtime, args);
                 default -> {
                     sender.sendMessage("§c未知子命令：" + args[0]
@@ -404,14 +408,31 @@ final class TownAdminCommand implements CommandExecutor {
 
     private boolean member(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
         requireLength(args, 5,
-                "member <add|remove> <小镇全名> <玩家> <原因>");
+                "member <add|remove|role> <小镇全名> <玩家> <原因|角色>");
         String action = args[1].toLowerCase(Locale.ROOT);
-        if (!action.equals("add") && !action.equals("remove")) {
-            throw new IllegalArgumentException("member 只支持 add 或 remove");
+        if (!action.equals("add") && !action.equals("remove") && !action.equals("role")) {
+            throw new IllegalArgumentException("member 只支持 add、remove 或 role");
         }
         runtime.read(sender, () -> memberRequest(runtime, args), request -> {
             UUID playerId = playerId(request.player());
-            if (action.equals("add")) {
+            if (action.equals("role")) {
+                MemberRole role;
+                try {
+                    role = MemberRole.valueOf(request.reason().toUpperCase(Locale.ROOT));
+                } catch (IllegalArgumentException exception) {
+                    sender.sendMessage("§c角色只支持 OFFICER 或 MEMBER；MAYOR 请使用镇长转移流程。");
+                    return;
+                }
+                runtime.write(sender, () -> {
+                    TownSnapshot town = requireTown(runtime, request.townId());
+                    runtime.governance().changeRoleByAdmin(town.id(), playerId, role,
+                            actorId(sender), sender.getName(), "管理员调整成员角色");
+                    return town;
+                }, town -> {
+                    sender.sendMessage("§a成员角色已调整为 " + role + "，正在复核 Residence 权限。");
+                    reconcileOne(sender, runtime, town.id(), true);
+                });
+            } else if (action.equals("add")) {
                 runtime.write(sender, () -> {
                     TownSnapshot town = requireTown(runtime, request.townId());
                     runtime.repository().addMember(town.id(), playerId, actorId(sender),
@@ -432,6 +453,62 @@ final class TownAdminCommand implements CommandExecutor {
                     reconcileOne(sender, runtime, town.id(), true);
                 });
             }
+        });
+        return true;
+    }
+
+    private boolean vote(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+        requireLength(args, 3,
+                "vote <create-kick|create-mayor|settle|cancel> <小镇全名|voteId> ...");
+        String action = args[1].toLowerCase(Locale.ROOT);
+        if (action.equals("settle")) {
+            UUID voteId = UUID.fromString(args[2]);
+            runtime.write(sender, () -> runtime.governance().settleVote(voteId,
+                    actorId(sender), sender.getName(), false), vote -> {
+                sender.sendMessage("§a投票状态: " + vote.status() + "，赞成/门槛: "
+                        + vote.yesVotes() + "/" + vote.requiredYes());
+                if (vote.passed() && vote.type() == VoteType.KICK_MEMBER) {
+                    reconcileOne(sender, runtime, vote.townId(), true);
+                }
+            });
+            return true;
+        }
+        if (action.equals("cancel")) {
+            requireLength(args, 4, "vote cancel <voteId> <原因>");
+            UUID voteId = UUID.fromString(args[2]);
+            String reason = String.join(" ", java.util.Arrays.copyOfRange(args, 3, args.length));
+            runtime.write(sender, () -> runtime.governance().cancelVote(voteId,
+                    actorId(sender), sender.getName(), reason), vote ->
+                    sender.sendMessage("§a投票已取消: " + vote.id()));
+            return true;
+        }
+        if (!action.equals("create-kick") && !action.equals("create-mayor")) {
+            throw new IllegalArgumentException(
+                    "vote 只支持 create-kick、create-mayor、settle 或 cancel");
+        }
+        requireLength(args, 4, "vote " + action + " <小镇全名> <玩家>");
+        runtime.read(sender, () -> {
+            List<TownSnapshot> towns = runtime.repository().listTowns(false).stream()
+                    .filter(town -> town.status() == TownStatus.ACTIVE).toList();
+            TownCommandParser.NamedPlayer parsed = TownCommandParser.namedPlayer(args, 2,
+                    townNames(towns));
+            TownSnapshot town = towns.stream()
+                    .filter(candidate -> sameName(candidate.profile().name(), parsed.townName()))
+                    .findFirst().orElseThrow(() -> new IllegalArgumentException("找不到可操作的小镇"));
+            return new VoteCreateRequest(town.id(), playerId(parsed.player()),
+                    action.equals("create-kick") ? VoteType.KICK_MEMBER : VoteType.REPLACE_MAYOR);
+        }, request -> {
+            Duration activeWindow = Duration.ofDays(plugin.getConfig().getLong(
+                    "phase2.voting.active-member-days", 30));
+            Duration minimumMembership = Duration.ofDays(plugin.getConfig().getLong(
+                    "phase2.voting.minimum-membership-days", 0));
+            Duration lifetime = Duration.ofHours(plugin.getConfig().getLong(
+                    "phase2.voting.duration-hours", 72));
+            runtime.write(sender, () -> runtime.governance().createVote(request.townId(),
+                    request.type(), request.targetId(), actorId(sender), activeWindow,
+                    minimumMembership, lifetime, true), vote -> sender.sendMessage(
+                    "§a投票已创建: " + vote.id() + "，有效选民=" + vote.eligibleVoters()
+                            + "，通过门槛=" + vote.requiredYes()));
         });
         return true;
     }
@@ -580,7 +657,7 @@ final class TownAdminCommand implements CommandExecutor {
     private PhaseOneRuntime requireRuntime(CommandSender sender) {
         PhaseOneRuntime runtime = plugin.phaseOneRuntime();
         if (runtime == null) {
-            sender.sendMessage("§c阶段1尚未就绪。请先使用 /townadmin status 查看启动门禁。");
+            sender.sendMessage("§c小镇系统尚未就绪。请先使用 /townadmin status 查看启动门禁。");
         }
         return runtime;
     }
@@ -650,6 +727,7 @@ final class TownAdminCommand implements CommandExecutor {
             sender.sendMessage("§eapplication §7申请审批");
             sender.sendMessage("§etown §7小镇查看与删除");
             sender.sendMessage("§emember §7成员与镇长管理");
+            sender.sendMessage("§evote §7治理投票代办与结算");
             sender.sendMessage("§eland §7领地预览与对账");
             if (sender.hasPermission("tianjitown.admin.phase0")) {
                 sender.sendMessage("§ephase0 §7预发环境验证");
@@ -663,6 +741,7 @@ final class TownAdminCommand implements CommandExecutor {
             case "application" -> applicationHelp(sender);
             case "town" -> townHelp(sender);
             case "member" -> memberHelp(sender);
+            case "vote" -> voteHelp(sender);
             case "land" -> landHelp(sender);
             case "phase0" -> phaseZeroHelp(sender);
             default -> {
@@ -690,9 +769,18 @@ final class TownAdminCommand implements CommandExecutor {
         sender.sendMessage("§6成员与镇长管理");
         sender.sendMessage("§e/townadmin member add|remove <小镇全名>"
                 + " <玩家> <原因>");
+        sender.sendMessage("§e/townadmin member role <小镇全名> <玩家> <OFFICER|MEMBER>");
         sender.sendMessage("§7普通玩家加入小镇使用申请制；管理员这里只保留直接添加和移除。");
         sender.sendMessage("§e/townadmin mayor transfer <小镇全名>"
                 + " <玩家> <原因>");
+    }
+
+    private static void voteHelp(CommandSender sender) {
+        sender.sendMessage("§6治理投票管理");
+        sender.sendMessage("§e/townadmin vote create-kick <小镇全名> <目标玩家>");
+        sender.sendMessage("§e/townadmin vote create-mayor <小镇全名> <候选玩家>");
+        sender.sendMessage("§e/townadmin vote settle <voteId>");
+        sender.sendMessage("§e/townadmin vote cancel <voteId> <原因>");
     }
 
     private static void landHelp(CommandSender sender) {
@@ -732,5 +820,8 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private record TownReference(UUID townId, String townName, long version) {
+    }
+
+    private record VoteCreateRequest(UUID townId, UUID targetId, VoteType type) {
     }
 }

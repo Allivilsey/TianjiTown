@@ -33,6 +33,16 @@ final class TownCommandParser {
         return new NamedPlayerReason(match.name(), player, reason);
     }
 
+    static NamedPlayer namedPlayer(String[] args, int nameStart, Collection<String> townNames) {
+        NameMatch match = requireNameMatch(args, nameStart, townNames);
+        if (match.end() + 1 != args.length) {
+            throw new IllegalArgumentException("小镇名称后必须且只能指定一个目标玩家");
+        }
+        String player = args[match.end()].strip();
+        rejectPlaceholder(player, "<玩家>");
+        return new NamedPlayer(match.name(), player);
+    }
+
     static NamedAction namedAction(String[] args, int nameStart, Collection<String> townNames,
                                    Collection<String> actions) {
         NameMatch match = requireNameMatch(args, nameStart, townNames);
@@ -104,6 +114,9 @@ final class TownCommandParser {
     }
 
     record NamedPlayerReason(String townName, String player, String reason) {
+    }
+
+    record NamedPlayer(String townName, String player) {
     }
 
     record NamedAction(String townName, String action) {

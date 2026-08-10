@@ -1,4 +1,4 @@
-schema-version: 1
+schema-version: 2
 
 database:
   # 相对路径以 plugins/TianjiTown 为基准，也可填写绝对路径。
@@ -50,4 +50,16 @@ phase1:
         max-chunk-x: 8
         min-chunk-z: -8
         max-chunk-z: 8
+
+phase2:
+  governance:
+    # 镇长发起转让后，候选成员必须在有效期内明确接受。
+    transfer-confirmation-hours: 24
+  voting:
+    # 最近这些天内登录过的成员属于活跃成员候选。
+    active-member-days: 30
+    # 入镇达到此天数后才可进入新投票的冻结选民快照；0 表示不额外限制。
+    minimum-membership-days: 0
+    # 投票到期后由每分钟执行一次的幂等任务结算。
+    duration-hours: 72
 

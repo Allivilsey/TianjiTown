@@ -22,7 +22,7 @@ final class TownAdminCompletionEngine {
     private static final String PLAYER_HINT = "<玩家>";
     private static final List<String> ROOTS = List.of(
             "help", "status", "reload", "audit", "station", "handbook", "application", "town",
-            "member", "mayor", "land", "maintenance");
+            "member", "mayor", "vote", "land", "maintenance");
 
     List<String> complete(String[] args, Snapshot snapshot, Dynamic dynamic) {
         Objects.requireNonNull(args, "args");
@@ -53,6 +53,7 @@ final class TownAdminCompletionEngine {
             case "town" -> town(args, snapshot);
             case "member" -> member(args, snapshot, dynamic);
             case "mayor" -> mayor(args, snapshot, dynamic);
+            case "vote" -> vote(args, snapshot, dynamic);
             case "land" -> land(args, snapshot, dynamic);
             default -> List.of();
         };
@@ -61,6 +62,7 @@ final class TownAdminCompletionEngine {
     private List<String> helpTopics(Dynamic dynamic) {
         List<String> topics = new ArrayList<>(List.of(
                 "application", "land", "member", "station", "system", "town"));
+        topics.add("vote");
         if (dynamic.phaseZeroAllowed()) {
             topics.add("phase0");
         }
@@ -129,9 +131,9 @@ final class TownAdminCompletionEngine {
 
     private List<String> member(String[] args, Snapshot snapshot, Dynamic dynamic) {
         if (args.length == 2) {
-            return filter(List.of("add", "remove"), args[1]);
+            return filter(List.of("add", "remove", "role"), args[1]);
         }
-        if (!Set.of("add", "remove").contains(args[1].toLowerCase(Locale.ROOT))) {
+        if (!Set.of("add", "remove", "role").contains(args[1].toLowerCase(Locale.ROOT))) {
             return List.of();
         }
         List<String> names = townNames(snapshot,
@@ -158,7 +160,43 @@ final class TownAdminCompletionEngine {
                     players.isEmpty() ? List.of(PLAYER_HINT) : players, current(args));
             return merge(phraseSuggestions, playerSuggestions);
         }
+        if (tailLength == 2 && args[1].equalsIgnoreCase("role")) {
+            return filter(List.of("MEMBER", "OFFICER"), current(args));
+        }
         return tailLength == 2 ? hint(current(args), REASON_HINT) : List.of();
+    }
+
+    private List<String> vote(String[] args, Snapshot snapshot, Dynamic dynamic) {
+        if (args.length == 2) {
+            return filter(List.of("create-kick", "create-mayor", "settle", "cancel"), args[1]);
+        }
+        String action = args[1].toLowerCase(Locale.ROOT);
+        if (action.equals("settle")) {
+            return args.length == 3 ? filter(List.of("<voteId>"), args[2]) : List.of();
+        }
+        if (action.equals("cancel")) {
+            return switch (args.length) {
+                case 3 -> filter(List.of("<voteId>"), args[2]);
+                case 4 -> hint(current(args), REASON_HINT);
+                default -> List.of();
+            };
+        }
+        if (!Set.of("create-kick", "create-mayor").contains(action)) {
+            return List.of();
+        }
+        List<String> names = townNames(snapshot, town -> town.status() == TownStatus.ACTIVE);
+        NameMatch match = exactNamePrefix(args, 2, names);
+        List<String> phraseSuggestions = completePhrase(args, 2, names);
+        if (match == null || args.length <= match.end()) {
+            return phraseSuggestions;
+        }
+        if (args.length - match.end() == 1) {
+            List<String> players = memberLabels(snapshot, dynamic,
+                    townIdByName(snapshot, match.name()));
+            return merge(phraseSuggestions, filter(
+                    players.isEmpty() ? List.of(PLAYER_HINT) : players, current(args)));
+        }
+        return List.of();
     }
 
     private List<String> mayor(String[] args, Snapshot snapshot, Dynamic dynamic) {

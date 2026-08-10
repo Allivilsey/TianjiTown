@@ -64,13 +64,21 @@ class TownAdminCompletionEngineTest {
     void completesTownMembersReasonHintsAndRepairAction() {
         assertEquals(List.of("create", "info", "list", "remove"), engine.complete(
                 new String[]{"station", ""}, snapshot, dynamic));
-        assertEquals(List.of("add", "remove"), engine.complete(
+        assertEquals(List.of("add", "remove", "role"), engine.complete(
                 new String[]{"member", ""}, snapshot, dynamic));
         assertEquals(List.of("MemberOne"), engine.complete(
                 new String[]{"member", "remove", "天际", "之城", ""},
                 snapshot, dynamic));
         assertEquals(List.of("<原因>"), engine.complete(
                 new String[]{"member", "remove", "天际", "之城", "MemberOne", ""},
+                snapshot, dynamic));
+        assertEquals(List.of("MEMBER", "OFFICER"), engine.complete(
+                new String[]{"member", "role", "天际", "之城", "MemberOne", ""},
+                snapshot, dynamic));
+        assertEquals(List.of("cancel", "create-kick", "create-mayor", "settle"),
+                engine.complete(new String[]{"vote", ""}, snapshot, dynamic));
+        assertEquals(List.of("MemberOne"), engine.complete(
+                new String[]{"vote", "create-kick", "天际", "之城", ""},
                 snapshot, dynamic));
         assertEquals(List.of("repair"), engine.complete(
                 new String[]{"land", "reconcile", "天际", "之城", ""}, snapshot, dynamic));
