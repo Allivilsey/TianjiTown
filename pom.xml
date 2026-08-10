@@ -28,6 +28,7 @@
         <!-- 使用可公开解析的 Residence API 构件编译；运行时只检查所需能力是否可用。 -->
         <residence.api.version>6.0.0.1</residence.api.version>
         <vault.api.version>1.7</vault.api.version>
+        <worldguard.version>7.0.18</worldguard.version>
         <hikari.version>5.1.0</hikari.version>
         <flyway.version>13.1.0</flyway.version>
         <sqlite.version>3.53.1.0</sqlite.version>
@@ -43,6 +44,10 @@
         <repository>
             <id>jitpack</id>
             <url>https://jitpack.io</url>
+        </repository>
+        <repository>
+            <id>enginehub</id>
+            <url>https://maven.enginehub.org/repo/</url>
         </repository>
     </repositories>
 
@@ -62,6 +67,11 @@
                 <groupId>com.github.MilkBowl</groupId>
                 <artifactId>VaultAPI</artifactId>
                 <version>${vault.api.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.sk89q.worldguard</groupId>
+                <artifactId>worldguard-bukkit</artifactId>
+                <version>${worldguard.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.zaxxer</groupId>

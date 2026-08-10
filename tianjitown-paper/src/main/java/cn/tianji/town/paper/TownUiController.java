@@ -2,9 +2,11 @@ package cn.tianji.town.paper;
 
 import cn.tianji.town.core.application.ApplicationStatus;
 import cn.tianji.town.core.application.ApplicationText;
+import cn.tianji.town.core.ports.LandProtectionService;
 import cn.tianji.town.core.town.MemberRole;
+import cn.tianji.town.core.town.TownStatus;
 import cn.tianji.town.storage.phase1.ApplicationSnapshot;
-import cn.tianji.town.storage.phase1.InvitationSnapshot;
+import cn.tianji.town.storage.phase1.JoinApplicationSnapshot;
 import cn.tianji.town.storage.phase1.PhaseOneRepository;
 import cn.tianji.town.storage.phase1.TownSnapshot;
 import io.papermc.paper.event.player.AsyncChatEvent;
@@ -151,10 +153,48 @@ final class TownUiController implements Listener {
             return;
         }
         for (StationRecord station : stations) {
-            sender.sendMessage("§e" + station.id() + " §7" + station.worldName() + " "
-                    + station.x() + "," + station.y() + "," + station.z() + " §8["
-                    + stationStatus(station) + "§8]");
+            String location = station.worldName() + " " + station.x() + "," + station.y()
+                    + "," + station.z();
+            if (sender instanceof Player player) {
+                player.sendMessage(Component.text(station.id() + " " + location + " ["
+                                + plainStationStatus(station) + "] ", NamedTextColor.YELLOW)
+                        .append(callbackButton(player, "[传送]",
+                                () -> teleportToStation(player, station))));
+            } else {
+                sender.sendMessage("§e" + station.id() + " §7" + location + " §8["
+                        + stationStatus(station) + "§8]");
+            }
         }
+    }
+
+    private void teleportToStation(Player player, StationRecord station) {
+        World world = Bukkit.getWorld(station.worldId());
+        if (world == null) {
+            world = Bukkit.getWorld(station.worldName());
+        }
+        if (world == null) {
+            player.sendMessage("§c服务台所在世界当前未加载。");
+            return;
+        }
+        Block block = world.getBlockAt(station.x(), station.y(), station.z());
+        if (!(block.getState() instanceof Lectern lectern)
+                || !station.id().equals(lectern.getPersistentDataContainer().get(
+                stationKey, PersistentDataType.STRING))) {
+            player.sendMessage("§c服务台方块已变化或登记不一致，无法传送。");
+            return;
+        }
+        org.bukkit.Location destination = block.getLocation().add(0.5, 1.0, 0.5);
+        destination.setYaw(player.getYaw());
+        destination.setPitch(player.getPitch());
+        if (player.teleport(destination)) {
+            player.sendMessage("§a已传送至小镇服务台。");
+        } else {
+            player.sendMessage("§c无法传送至小镇服务台。");
+        }
+    }
+
+    private String plainStationStatus(StationRecord station) {
+        return stationStatus(station).replace("§a", "");
     }
 
     private void registerStation(Block block, String stationId) {
@@ -283,18 +323,6 @@ final class TownUiController implements Listener {
         if (sender instanceof Player player && !applications.isEmpty()) {
             playSound(player, Sound.BLOCK_NOTE_BLOCK_PLING);
         }
-    }
-
-    void notifyInvitation(InvitationSnapshot invitation, UUID invitedPlayerId) {
-        Player invited = Bukkit.getPlayer(invitedPlayerId);
-        if (invited == null) {
-            return;
-        }
-        invited.sendMessage(Component.text("你收到了来自“" + invitation.townName() + "”的小镇邀请 ",
-                        NamedTextColor.GOLD)
-                .append(callbackButton(invited, "[查看邀请]",
-                        () -> openInvitation(invited, invitation.id()))));
-        playSound(invited, Sound.BLOCK_AMETHYST_BLOCK_CHIME);
     }
 
     void notifyApplicationDecision(ApplicationSnapshot application) {
@@ -482,10 +510,16 @@ final class TownUiController implements Listener {
             items.add(new MenuItem(11, button(Material.BELL, "§a" + town.profile().name(),
                     List.of("§7查看小镇资料与成员"), "TOWN", town.id().toString())));
             if (town.mayorId().equals(player.getUniqueId())) {
-                items.add(new MenuItem(13, button(Material.PLAYER_HEAD, "§e邀请成员",
-                        List.of("§7从当前在线玩家中选择"), "INVITE_MENU", town.id().toString())));
+                int pending = dashboard.incomingJoinApplications().size();
+                items.add(new MenuItem(13, button(pending > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
+                        pending > 0 ? "§e入镇申请 · " + pending : "§7入镇申请 · 暂无待办",
+                        List.of("§7查看并审批玩家的入镇申请"), "JOIN_APPLICATIONS",
+                        town.id().toString())));
                 items.add(new MenuItem(15, button(Material.WRITABLE_BOOK, "§e修改简介和规则",
                         List.of("§7名称和简称需要管理员代办"), "EDIT_TOWN", town.id().toString())));
+                items.add(new MenuItem(17, button(Material.TNT, "§4解散小镇",
+                        List.of("§c将删除领地并释放小镇名称", "§c需要再次确认"),
+                        "CONFIRM_DISBAND", town.id() + ":" + town.version())));
             } else {
                 items.add(new MenuItem(15, button(Material.OAK_DOOR, "§c退出小镇",
                         List.of("§7需要再次确认"), "CONFIRM_LEAVE", town.id().toString())));
@@ -498,14 +532,18 @@ final class TownUiController implements Listener {
                                     : "§c管理员意见: " + application.reviewMessage()),
                     "APPLICATION", application.id().toString())));
         } else {
-            items.add(new MenuItem(11, button(Material.WRITABLE_BOOK, "§a申请建立小镇",
-                    List.of("§7在聊天栏点击并填写各项申请资料"),
-                    "CREATE_APPLICATION", null)));
-        }
-        if (dashboard.town() == null && !dashboard.invitations().isEmpty()) {
-            items.add(new MenuItem(15, button(Material.CHEST, "§6查看邀请",
-                    List.of("§7待处理邀请: " + dashboard.invitations().size()),
-                    "INVITATIONS", null)));
+            if (dashboard.joinApplications().isEmpty()) {
+                items.add(new MenuItem(11, button(Material.WRITABLE_BOOK, "§a申请建立小镇",
+                        List.of("§7在聊天栏点击并填写各项申请资料"),
+                        "CREATE_APPLICATION", null)));
+            }
+            items.add(new MenuItem(13, button(Material.COMPASS, "§a申请加入小镇",
+                    List.of("§7浏览小镇并提交 48 小时有效申请"), "JOIN_TOWNS", null)));
+            if (!dashboard.joinApplications().isEmpty()) {
+                items.add(new MenuItem(15, button(Material.PAPER, "§e我的入镇申请",
+                        List.of("§7待处理: " + dashboard.joinApplications().size(),
+                                "§7同时最多申请 3 个小镇"), "MY_JOIN_APPLICATIONS", null)));
+            }
         }
         items.add(new MenuItem(22, button(Material.WRITTEN_BOOK, "§6领取小镇手册",
                 List.of("§7手册丢失后可在服务台重新领取"), "GIVE_HANDBOOK", null)));
@@ -540,7 +578,7 @@ final class TownUiController implements Listener {
                     application.id().toString())));
             if (application.territory() != null) {
                 items.add(new MenuItem(14, button(Material.ENDER_EYE, "§b预览已选领地",
-                        List.of("§7显示临时粒子边界"), "PREVIEW_SITE",
+                        List.of("§7传送至领地中心并显示火焰边界"), "PREVIEW_SITE",
                         application.id().toString())));
                 items.add(new MenuItem(16, button(Material.LIME_CONCRETE, "§a提交申请",
                         List.of("§7进入确认页面"), "CONFIRM_SUBMIT",
@@ -574,7 +612,8 @@ final class TownUiController implements Listener {
                 items.add(new MenuItem(14, button(Material.MAP, "§e初始领地",
                         List.of("§7固定 3×3 区块", "§7中心: "
                                 + town.territory().center().x() + ", "
-                                + town.territory().center().z()), "PREVIEW_TOWN",
+                                + town.territory().center().z(), "§a点击传送并显示火焰边界"),
+                        "PREVIEW_TOWN",
                         town.id().toString())));
             }
             items.add(new MenuItem(26, button(Material.ARROW, "§7返回", List.of(), "MAIN", null)));
@@ -608,59 +647,105 @@ final class TownUiController implements Listener {
         });
     }
 
-    private void openInvitations(Player player) {
-        runtime.read(player, () -> runtime.repository().listInvitations(player.getUniqueId()), invitations -> {
+    private void openJoinTowns(Player player) {
+        runtime.read(player, () -> runtime.repository().listTowns(false).stream()
+                .filter(town -> town.status() == TownStatus.ACTIVE)
+                .toList(), towns -> {
             List<MenuItem> items = new ArrayList<>();
-            for (int index = 0; index < Math.min(invitations.size(), 45); index++) {
-                InvitationSnapshot invitation = invitations.get(index);
-                items.add(new MenuItem(index, button(Material.PAPER, "§6" + invitation.townName(),
-                        List.of("§7到期: " + invitation.expiresAt(), "§7点击查看完整资料"),
-                        "INVITATION", invitation.id().toString())));
+            for (int index = 0; index < Math.min(towns.size(), 45); index++) {
+                TownSnapshot town = towns.get(index);
+                items.add(new MenuItem(index, button(Material.BELL, "§6" + town.profile().name(),
+                        List.of("§7简称: " + town.profile().shortName(),
+                                "§7简介: " + preview(town.profile().description(), 80),
+                                "§7点击查看规则并申请加入"),
+                        "JOIN_TOWN", town.id().toString())));
             }
             items.add(new MenuItem(48, button(Material.ARROW, "§7返回主菜单", List.of(),
                     "MAIN", null)));
-            openMenu(player, 54, "小镇邀请", items);
+            openMenu(player, 54, "申请加入小镇", items);
         });
     }
 
-    private void openInvitation(Player player, UUID invitationId) {
-        runtime.read(player, () -> runtime.repository().listInvitations(player.getUniqueId()).stream()
-                .filter(invitation -> invitation.id().equals(invitationId)).findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("邀请不存在或已过期")), invitation ->
-                runtime.read(player, () -> runtime.repository().findTown(invitation.townId())
-                        .orElseThrow(() -> new IllegalArgumentException("小镇不存在")), town -> {
-                    List<MenuItem> items = List.of(
-                            new MenuItem(4, button(Material.BELL, "§6" + town.profile().name(),
-                                    List.of("§7简称: " + town.profile().shortName(),
-                                            "§7简介: " + town.profile().description(),
-                                            "§7规则:", "§f" + String.join(" | ", town.profile().rules())),
-                                    null, null)),
-                            new MenuItem(11, button(Material.LIME_CONCRETE, "§a确认加入",
-                                    List.of("§7加入后将接受上述规则"), "ACCEPT_INVITATION",
-                                    invitation.id().toString())),
-                            new MenuItem(15, button(Material.RED_CONCRETE, "§c拒绝邀请",
-                                    List.of("§7拒绝后该邀请立即失效"), "DECLINE_INVITATION",
-                                    invitation.id().toString())),
-                            new MenuItem(22, button(Material.ARROW, "§7返回", List.of(),
-                                    "INVITATIONS", null)));
-                    openMenu(player, 27, "确认加入小镇", items);
-                }));
+    private void openJoinTown(Player player, UUID townId) {
+        runtime.read(player, () -> runtime.repository().findTown(townId)
+                .filter(town -> town.status() == TownStatus.ACTIVE)
+                .orElseThrow(() -> new IllegalArgumentException("小镇不存在或已停止运行")), town -> {
+            List<MenuItem> items = List.of(
+                    new MenuItem(4, button(Material.BELL, "§6" + town.profile().name(),
+                            List.of("§7简称: " + town.profile().shortName(),
+                                    "§7简介: " + town.profile().description(),
+                                    "§7规则:", "§f" + String.join(" | ", town.profile().rules())),
+                            null, null)),
+                    new MenuItem(13, button(Material.LIME_CONCRETE, "§a提交入镇申请",
+                            List.of("§7申请有效期 48 小时", "§7同时最多申请 3 个小镇"),
+                            "CONFIRM_APPLY_JOIN", town.id().toString())),
+                    new MenuItem(22, button(Material.ARROW, "§7返回小镇列表", List.of(),
+                            "JOIN_TOWNS", null)));
+            openMenu(player, 27, "申请加入 · " + town.profile().name(), items);
+        });
     }
 
-    private void openInviteMenu(Player mayor, UUID townId) {
-        List<MenuItem> items = new ArrayList<>();
-        int slot = 0;
-        for (Player candidate : Bukkit.getOnlinePlayers()) {
-            if (candidate.getUniqueId().equals(mayor.getUniqueId()) || slot >= 45) {
-                continue;
+    private void openMyJoinApplications(Player player) {
+        runtime.read(player, () -> runtime.repository().listJoinApplications(player.getUniqueId()),
+                applications -> {
+                    List<MenuItem> items = new ArrayList<>();
+                    for (int index = 0; index < Math.min(applications.size(), 45); index++) {
+                        JoinApplicationSnapshot application = applications.get(index);
+                        items.add(new MenuItem(index, button(Material.PAPER,
+                                "§e" + application.townName(),
+                                List.of("§7到期: " + application.expiresAt(),
+                                        "§7点击可撤回申请"),
+                                "CONFIRM_CANCEL_JOIN", application.id().toString())));
+                    }
+                    items.add(new MenuItem(48, button(Material.ARROW, "§7返回主菜单", List.of(),
+                            "MAIN", null)));
+                    openMenu(player, 54, "我的入镇申请 · " + applications.size(), items);
+                });
+    }
+
+    private void openTownJoinApplications(Player mayor, UUID townId) {
+        runtime.read(mayor, () -> runtime.repository().listTownJoinApplications(
+                townId, mayor.getUniqueId()), applications -> {
+            List<MenuItem> items = new ArrayList<>();
+            for (int index = 0; index < Math.min(applications.size(), 45); index++) {
+                JoinApplicationSnapshot application = applications.get(index);
+                String name = Objects.requireNonNullElse(
+                        Bukkit.getOfflinePlayer(application.applicantId()).getName(),
+                        application.applicantId().toString());
+                items.add(new MenuItem(index, button(Material.PLAYER_HEAD, "§e" + name,
+                        List.of("§7申请时间: " + application.createdAt(),
+                                "§7到期: " + application.expiresAt(), "§7点击审核"),
+                        "JOIN_APPLICATION", application.id().toString())));
             }
-            items.add(new MenuItem(slot++, button(Material.PLAYER_HEAD, "§f" + candidate.getName(),
-                    List.of("§7点击发送 7 天有效邀请"), "INVITE_PLAYER",
-                    townId + ":" + candidate.getUniqueId())));
-        }
-        items.add(new MenuItem(48, button(Material.ARROW, "§7返回主菜单", List.of(),
-                "MAIN", null)));
-        openMenu(mayor, 54, "邀请在线玩家", items);
+            items.add(new MenuItem(48, button(Material.ARROW, "§7返回主菜单", List.of(),
+                    "MAIN", null)));
+            openMenu(mayor, 54, "入镇申请 · 待处理 " + applications.size(), items);
+        });
+    }
+
+    private void openTownJoinApplication(Player mayor, UUID applicationId) {
+        runtime.read(mayor, () -> runtime.repository().dashboard(mayor.getUniqueId()), dashboard -> {
+            JoinApplicationSnapshot application = dashboard.incomingJoinApplications().stream()
+                    .filter(candidate -> candidate.id().equals(applicationId))
+                    .findFirst().orElseThrow(() -> new IllegalArgumentException("申请已过期或已处理"));
+            String name = Objects.requireNonNullElse(
+                    Bukkit.getOfflinePlayer(application.applicantId()).getName(),
+                    application.applicantId().toString());
+            List<MenuItem> items = List.of(
+                    new MenuItem(4, button(Material.PLAYER_HEAD, "§6" + name,
+                            List.of("§7玩家 UUID: " + application.applicantId(),
+                                    "§7申请时间: " + application.createdAt(),
+                                    "§7到期: " + application.expiresAt()), null, null)),
+                    new MenuItem(11, button(Material.LIME_CONCRETE, "§a批准加入",
+                            List.of("§7批准后立即成为小镇成员"), "CONFIRM_APPROVE_JOIN",
+                            application.id().toString())),
+                    new MenuItem(15, button(Material.RED_CONCRETE, "§c拒绝申请",
+                            List.of("§7拒绝后 24 小时内不能再次申请本镇"),
+                            "CONFIRM_REJECT_JOIN", application.id().toString())),
+                    new MenuItem(22, button(Material.ARROW, "§7返回申请列表", List.of(),
+                            "JOIN_APPLICATIONS", application.townId().toString())));
+            openMenu(mayor, 27, "审核入镇申请", items);
+        });
     }
 
     private void openAdminApplications(Player admin) {
@@ -727,7 +812,7 @@ final class TownUiController implements Listener {
             }
             if (application.territory() != null) {
                 items.add(new MenuItem(16, button(Material.ENDER_EYE, "§b预览选址",
-                        List.of("§7显示持续三维粒子边界"), "ADMIN_PREVIEW_SITE",
+                        List.of("§7传送至领地中心并显示火焰边界"), "ADMIN_PREVIEW_SITE",
                         application.id().toString())));
             }
             items.add(new MenuItem(22, button(Material.ARROW, "§7返回审核列表", List.of(),
@@ -768,16 +853,35 @@ final class TownUiController implements Listener {
                     openMembers(player, UUID.fromString(parts[0]), Integer.parseInt(parts[1]));
                 }
                 case "PREVIEW_TOWN" -> previewTown(player, UUID.fromString(target));
-                case "INVITATIONS" -> openInvitations(player);
-                case "INVITATION" -> openInvitation(player, UUID.fromString(target));
-                case "ACCEPT_INVITATION" -> acceptInvitation(player, UUID.fromString(target));
-                case "DECLINE_INVITATION" -> declineInvitation(player, UUID.fromString(target));
-                case "INVITE_MENU" -> openInviteMenu(player, UUID.fromString(target));
-                case "INVITE_PLAYER" -> invitePlayer(player, target);
+                case "JOIN_TOWNS" -> openJoinTowns(player);
+                case "JOIN_TOWN" -> openJoinTown(player, UUID.fromString(target));
+                case "CONFIRM_APPLY_JOIN" -> openConfirmation(player, "确认提交入镇申请",
+                        "APPLY_JOIN", target, "申请将在 48 小时后过期", "JOIN_TOWN", target);
+                case "APPLY_JOIN" -> applyJoin(player, UUID.fromString(target));
+                case "MY_JOIN_APPLICATIONS" -> openMyJoinApplications(player);
+                case "CONFIRM_CANCEL_JOIN" -> openConfirmation(player, "确认撤回入镇申请",
+                        "CANCEL_JOIN", target, "撤回后本次申请立即失效",
+                        "MY_JOIN_APPLICATIONS", null);
+                case "CANCEL_JOIN" -> cancelJoin(player, UUID.fromString(target));
+                case "JOIN_APPLICATIONS" -> openTownJoinApplications(player,
+                        UUID.fromString(target));
+                case "JOIN_APPLICATION" -> openTownJoinApplication(player,
+                        UUID.fromString(target));
+                case "CONFIRM_APPROVE_JOIN" -> openConfirmation(player, "确认批准入镇申请",
+                        "APPROVE_JOIN", target, "申请人将立即成为成员",
+                        "JOIN_APPLICATION", target);
+                case "APPROVE_JOIN" -> approveJoin(player, UUID.fromString(target));
+                case "CONFIRM_REJECT_JOIN" -> openConfirmation(player, "确认拒绝入镇申请",
+                        "REJECT_JOIN", target, "申请人 24 小时内不能再次申请本镇",
+                        "JOIN_APPLICATION", target);
+                case "REJECT_JOIN" -> rejectJoin(player, UUID.fromString(target));
                 case "EDIT_TOWN" -> loadTownForForm(player, UUID.fromString(target));
                 case "CONFIRM_LEAVE" -> openConfirmation(player, "确认退出小镇", "LEAVE", target,
-                        "退出后需要新邀请才能再次加入", "TOWN", target);
+                        "退出后 24 小时内不能申请加入新镇", "TOWN", target);
                 case "LEAVE" -> leave(player, UUID.fromString(target));
+                case "CONFIRM_DISBAND" -> openConfirmation(player, "确认解散小镇", "DISBAND",
+                        target, "将删除 Residence 领地并释放名称，此操作不可撤销", "MAIN", null);
+                case "DISBAND" -> disband(player, target);
                 case "ADMIN_APPLICATIONS" -> openAdminApplications(player);
                 case "ADMIN_APPLICATION" -> openAdminApplication(player, UUID.fromString(target));
                 case "CONFIRM_ADMIN_APPROVE" -> openConfirmation(player, "确认批准申请",
@@ -842,7 +946,7 @@ final class TownUiController implements Listener {
             if (application.territory() == null) {
                 player.sendMessage("§c该申请尚未选址。");
             } else {
-                sitePolicy.preview(player, application.territory());
+                sitePolicy.teleportAndPreview(player, application.territory());
             }
         });
     }
@@ -850,7 +954,7 @@ final class TownUiController implements Listener {
     private void previewTown(Player player, UUID townId) {
         runtime.read(player, () -> runtime.repository().findTown(townId)
                 .orElseThrow(() -> new IllegalArgumentException("小镇不存在")), town ->
-                sitePolicy.preview(player, town.territory()));
+                sitePolicy.teleportAndPreview(player, town.territory()));
     }
 
     private void submit(Player player, UUID applicationId) {
@@ -871,37 +975,87 @@ final class TownUiController implements Listener {
         });
     }
 
-    private void acceptInvitation(Player player, UUID invitationId) {
-        runtime.write(player, () -> runtime.repository().acceptInvitation(invitationId,
-                player.getUniqueId()), townId -> {
-            player.sendMessage("§a已加入小镇，正在同步领地权限。");
-            playSound(player, Sound.ENTITY_PLAYER_LEVELUP);
-            syncResidence(player, townId, true);
-            openMain(player);
-        });
+    private void applyJoin(Player player, UUID townId) {
+        Duration lifetime = Duration.ofHours(plugin.getConfig().getLong(
+                "phase1.membership.application-lifetime-hours", 48));
+        Duration rejectionCooldown = Duration.ofHours(plugin.getConfig().getLong(
+                "phase1.membership.rejection-cooldown-hours", 24));
+        Duration leaveCooldown = Duration.ofHours(plugin.getConfig().getLong(
+                "phase1.membership.leave-cooldown-hours", 24));
+        int maximumPending = plugin.getConfig().getInt(
+                "phase1.membership.maximum-pending-applications", 3);
+        runtime.write(player, () -> runtime.repository().applyToTown(townId,
+                player.getUniqueId(), lifetime, rejectionCooldown, leaveCooldown, maximumPending),
+                application -> {
+                    player.sendMessage("§a入镇申请已提交，有效期至 " + application.expiresAt() + "。");
+                    playSound(player, Sound.BLOCK_NOTE_BLOCK_PLING);
+                    notifyMayorJoinApplication(application);
+                    openMyJoinApplications(player);
+                });
     }
 
-    private void declineInvitation(Player player, UUID invitationId) {
-        runtime.write(player, () -> runtime.repository().declineInvitation(invitationId,
+    private void cancelJoin(Player player, UUID applicationId) {
+        runtime.write(player, () -> runtime.repository().cancelJoinApplication(applicationId,
                 player.getUniqueId()), ignored -> {
-            player.sendMessage("§e已拒绝该小镇邀请。");
+            player.sendMessage("§e入镇申请已撤回。");
             playSound(player, Sound.UI_BUTTON_CLICK);
-            openInvitations(player);
+            openMyJoinApplications(player);
         });
     }
 
-    private void invitePlayer(Player mayor, String target) {
-        String[] parts = target.split(":");
-        UUID townId = UUID.fromString(parts[0]);
-        UUID playerId = UUID.fromString(parts[1]);
-        runtime.write(mayor, () -> runtime.repository().invite(townId, mayor.getUniqueId(),
-                playerId, Duration.ofDays(7)), invitation -> {
-            mayor.sendMessage("§a已发送邀请给 "
-                    + Objects.requireNonNullElse(Bukkit.getOfflinePlayer(playerId).getName(), playerId.toString()));
-            playSound(mayor, Sound.UI_BUTTON_CLICK);
-            notifyInvitation(invitation, playerId);
-            openMain(mayor);
+    private void approveJoin(Player mayor, UUID applicationId) {
+        runtime.write(mayor, () -> runtime.repository().approveJoinApplication(applicationId,
+                mayor.getUniqueId()), application -> {
+            mayor.sendMessage("§a已批准入镇申请，正在同步 Residence 成员权限。");
+            playSound(mayor, Sound.ENTITY_PLAYER_LEVELUP);
+            notifyJoinDecision(application, true);
+            syncResidence(mayor, application.townId(), true);
+            openTownJoinApplications(mayor, application.townId());
         });
+    }
+
+    private void rejectJoin(Player mayor, UUID applicationId) {
+        runtime.write(mayor, () -> runtime.repository().rejectJoinApplication(applicationId,
+                mayor.getUniqueId()), application -> {
+            mayor.sendMessage("§e已拒绝该入镇申请。");
+            playSound(mayor, Sound.UI_BUTTON_CLICK);
+            notifyJoinDecision(application, false);
+            openTownJoinApplications(mayor, application.townId());
+        });
+    }
+
+    private void notifyMayorJoinApplication(JoinApplicationSnapshot application) {
+        runtime.read(Bukkit.getConsoleSender(), () -> runtime.repository().findTown(application.townId())
+                .orElse(null), town -> {
+            if (town == null) {
+                return;
+            }
+            Player mayor = Bukkit.getPlayer(town.mayorId());
+            if (mayor == null) {
+                return;
+            }
+            String applicant = Objects.requireNonNullElse(
+                    Bukkit.getOfflinePlayer(application.applicantId()).getName(),
+                    application.applicantId().toString());
+            mayor.sendMessage(Component.text(applicant + " 申请加入“" + application.townName() + "” ",
+                            NamedTextColor.GOLD)
+                    .append(callbackButton(mayor, "[立即审核]",
+                            () -> openTownJoinApplication(mayor, application.id()))));
+            playSound(mayor, Sound.BLOCK_AMETHYST_BLOCK_CHIME);
+        });
+    }
+
+    private void notifyJoinDecision(JoinApplicationSnapshot application, boolean approved) {
+        Player applicant = Bukkit.getPlayer(application.applicantId());
+        if (applicant == null) {
+            return;
+        }
+        applicant.sendMessage(Component.text(approved
+                        ? "你加入“" + application.townName() + "”的申请已获批准 "
+                        : "你加入“" + application.townName() + "”的申请已被拒绝，24 小时后可再次申请 ",
+                approved ? NamedTextColor.GREEN : NamedTextColor.RED)
+                .append(callbackButton(applicant, "[打开小镇系统]", () -> openMain(applicant))));
+        playSound(applicant, approved ? Sound.ENTITY_PLAYER_LEVELUP : Sound.ENTITY_VILLAGER_NO);
     }
 
     private void adminApprove(Player admin, UUID applicationId) {
@@ -986,8 +1140,7 @@ final class TownUiController implements Listener {
                 return;
             }
             admin.closeInventory();
-            sitePolicy.preview(admin, application.territory());
-            admin.sendMessage("§b正在显示持续三维领地边界。");
+            sitePolicy.teleportAndPreview(admin, application.territory());
         });
     }
 
@@ -1012,6 +1165,35 @@ final class TownUiController implements Listener {
             player.sendMessage("§e你已退出小镇。");
             syncResidence(player, townId, true);
             openMain(player);
+        });
+    }
+
+    private void disband(Player mayor, String target) {
+        String[] parts = target.split(":", 2);
+        UUID townId = UUID.fromString(parts[0]);
+        long expectedVersion = Long.parseLong(parts[1]);
+        runtime.write(mayor, () -> runtime.repository().disbandTown(townId,
+                mayor.getUniqueId(), expectedVersion), archived -> {
+            LandProtectionService.Result result = runtime.landProtection().remove(
+                    archived.residenceName(), archived.territory());
+            if (!result.success()) {
+                mayor.sendMessage("§c小镇已安全归档，但 Residence 移除失败："
+                        + result.message() + "。名称和区块仍保持锁定，请联系管理员处理。");
+                plugin.getLogger().warning("镇长解散小镇后 Residence 移除失败 "
+                        + archived.profile().name() + "/" + archived.residenceName()
+                        + ": " + result.message());
+                return;
+            }
+            runtime.write(mayor, () -> {
+                runtime.repository().completeTownDeletion(archived.id(), mayor.getUniqueId(),
+                        mayor.getName(), "镇长通过小镇界面解散");
+                return archived;
+            }, completed -> {
+                mayor.sendMessage("§a小镇“" + completed.profile().name()
+                        + "”已解散，领地、成员、名称和区块占位均已释放。");
+                playSound(mayor, Sound.ENTITY_WITHER_DEATH);
+                openMain(mayor);
+            });
         });
     }
 

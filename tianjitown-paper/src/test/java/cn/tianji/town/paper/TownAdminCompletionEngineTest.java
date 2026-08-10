@@ -64,6 +64,8 @@ class TownAdminCompletionEngineTest {
     void completesTownMembersReasonHintsAndRepairAction() {
         assertEquals(List.of("create", "info", "list", "remove"), engine.complete(
                 new String[]{"station", ""}, snapshot, dynamic));
+        assertEquals(List.of("add", "remove"), engine.complete(
+                new String[]{"member", ""}, snapshot, dynamic));
         assertEquals(List.of("MemberOne"), engine.complete(
                 new String[]{"member", "remove", "天际", "之城", ""},
                 snapshot, dynamic));

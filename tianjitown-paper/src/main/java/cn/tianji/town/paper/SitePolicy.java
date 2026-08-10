@@ -3,7 +3,8 @@ package cn.tianji.town.paper;
 import cn.tianji.town.core.land.ChunkPosition;
 import cn.tianji.town.core.land.InitialTerritory;
 import cn.tianji.town.core.ports.LandProtectionService;
-import org.bukkit.Color;
+import cn.tianji.town.core.ports.RegionBoundaryService;
+import org.bukkit.HeightMap;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
@@ -19,15 +20,16 @@ import java.util.Map;
 import java.util.UUID;
 
 final class SitePolicy {
-    private static final Particle.DustOptions BOUNDARY_PARTICLE =
-            new Particle.DustOptions(Color.fromRGB(32, 220, 255), 1.35f);
     private final TianjiTownPlugin plugin;
     private final LandProtectionService landProtection;
+    private final RegionBoundaryService regionBoundaries;
     private final Map<UUID, BukkitTask> previews = new HashMap<>();
 
-    SitePolicy(TianjiTownPlugin plugin, LandProtectionService landProtection) {
+    SitePolicy(TianjiTownPlugin plugin, LandProtectionService landProtection,
+               RegionBoundaryService regionBoundaries) {
         this.plugin = plugin;
         this.landProtection = landProtection;
+        this.regionBoundaries = regionBoundaries;
     }
 
     Validation validate(Player player) {
@@ -70,7 +72,39 @@ final class SitePolicy {
                 .anyMatch(area -> area.overlaps(territory))) {
             return Validation.failure("3×3 区块与出生点、活动区或管理黑名单重叠");
         }
+        int bufferChunks = Math.max(0,
+                plugin.getConfig().getInt("phase1.site.minimum-buffer-chunks", 1));
+        RegionBoundaryService.Collision region = regionBoundaries.findCollision(
+                territory, bufferChunks);
+        if (region.occupied()) {
+            return Validation.failure("3×3 区块或其缓冲范围与 WorldGuard 区域冲突: "
+                    + region.regionName());
+        }
         return Validation.success(territory);
+    }
+
+    void teleportAndPreview(Player player, InitialTerritory territory) {
+        World world = plugin.getServer().getWorld(territory.center().worldId());
+        if (world == null) {
+            world = plugin.getServer().getWorld(territory.center().worldName());
+        }
+        if (world == null) {
+            player.sendMessage("§c领地所在世界当前未加载。");
+            return;
+        }
+        int centerX = Math.addExact(Math.multiplyExact(territory.center().x(), 16), 8);
+        int centerZ = Math.addExact(Math.multiplyExact(territory.center().z(), 16), 8);
+        int surfaceY = world.getHighestBlockYAt(centerX, centerZ,
+                HeightMap.MOTION_BLOCKING_NO_LEAVES);
+        double targetY = Math.min(world.getMaxHeight() - 1, surfaceY + 1);
+        Location destination = new Location(world, centerX + 0.5, targetY, centerZ + 0.5,
+                player.getYaw(), player.getPitch());
+        if (!player.teleport(destination)) {
+            player.sendMessage("§c无法传送到领地传送点。");
+            return;
+        }
+        player.sendMessage("§a已传送至领地中心传送点。");
+        preview(player, territory);
     }
 
     void preview(Player player, InitialTerritory territory) {
@@ -136,8 +170,7 @@ final class SitePolicy {
     }
 
     private static void particle(Player player, double x, double y, double z) {
-        player.spawnParticle(Particle.DUST, x, y, z, 1, 0, 0, 0, 0,
-                BOUNDARY_PARTICLE);
+        player.spawnParticle(Particle.FLAME, x, y, z, 1, 0, 0, 0, 0);
     }
 
     private boolean insideWorldBorder(World world, InitialTerritory territory) {

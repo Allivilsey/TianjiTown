@@ -10,11 +10,11 @@
 mvn -B clean verify
 ```
 
-唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.0.0.jar`。Paper API、Residence 与 Vault API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
+唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.0.0.jar`。Paper API、Residence、Vault 与可选的 WorldGuard API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
 
 ## 安装与 SQLite
 
-1. 安装并启用 Residence、Vault、XConomy 和 QuickShop-Hikari，确保 Vault 已注册可用的 `Economy` 服务。插件不再校验固定的 Minecraft、Java 或依赖版本，但依赖未启用时仍会锁定写功能。
+1. 安装并启用 Residence、Vault、XConomy 和 QuickShop-Hikari，确保 Vault 已注册可用的 `Economy` 服务。推荐同时安装 WorldGuard；安装后选址会检查 3×3 领地及其区块缓冲范围是否接触 WorldGuard 区域。插件不再校验固定的 Minecraft、Java 或依赖版本，但必需依赖未启用时仍会锁定写功能。
 2. 将 JAR 放入 `plugins`，首次启动会自动创建 `plugins/TianjiTown/tianjitown.db` 并执行 Flyway 迁移。
 3. 如需更改位置，在 `config.yml` 中设置相对或绝对文件路径：
 
@@ -43,7 +43,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin status
 /townadmin reload
 /townadmin maintenance <on|off|status>
-/townadmin audit [1..200]
+/townadmin audit [1~200]
 ```
 
 `reload` 只重读可热更新的配置；SQLite 文件和超时参数需重启。维护模式会暂停服务台、手册、玩家 GUI 和表单提交，不会移除现有 Residence 保护。
@@ -56,7 +56,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin handbook [player]
 ```
 
-`station create`、`remove` 和 `info` 需由游戏内管理员看向讲台执行。`handbook` 不填玩家时会发给执行者，控制台必须指定在线玩家。
+`station create`、`remove` 和 `info` 需由游戏内管理员看向讲台执行。游戏内执行 `station list` 后可点击每条记录旁的“传送”。`handbook` 不填玩家时会发给执行者，控制台必须指定在线玩家。
 
 ### 申请审批
 
@@ -72,7 +72,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 ```text
 /townadmin town view <小镇全名>
 /townadmin town delete <小镇全名> <原因>
-/townadmin member invite|add|remove <小镇全名> <玩家> <原因>
+/townadmin member add|remove <小镇全名> <玩家> <原因>
 /townadmin mayor transfer <小镇全名> <玩家> <原因>
 ```
 
@@ -99,6 +99,8 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 ## 玩家入口
 
-插件不注册任何玩家命令。玩家通过讲台服务台、小镇手册、箱子 GUI 和可点击聊天申请表操作；镇长资料编辑使用书本 UI。
+插件不注册任何玩家命令。玩家通过讲台服务台、小镇手册、箱子 GUI 和可点击聊天申请表操作；镇长资料编辑使用书本 UI。入镇采用申请制：玩家同时最多申请 3 个小镇，申请 48 小时有效；被拒绝后 24 小时内不能再次申请同一小镇，主动退出后 24 小时内不能申请新镇。镇长可在主界面审批入镇申请或通过二次确认解散小镇。
 
-管理命令使用小镇全名定位目标。申请人另行填写仅含 `1..12` 个英文字母的领地名称（建议三个字母），该名称转为小写后直接作为 Residence 名称，例如 `SKY` 生成 `sky`。
+领地预览按钮会传送至领地中心传送点，并显示持续刷新的火焰粒子边界。
+
+管理命令使用小镇全名定位目标。申请人另行填写仅含 `1~12` 个英文字母的领地名称（建议三个字母），该名称转为小写后直接作为 Residence 名称，例如 `SKY` 生成 `sky`。

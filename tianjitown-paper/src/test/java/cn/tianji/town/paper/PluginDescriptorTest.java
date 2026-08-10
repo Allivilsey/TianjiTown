@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PluginDescriptorTest {
     @Test
-    void runtimeGatedPluginsAreSoftDependencies() throws IOException {
+    void runtimeIntegrationsAreSoftDependencies() throws IOException {
         String descriptor;
         try (InputStream stream = PluginDescriptorTest.class.getResourceAsStream("/plugin.yml")) {
             assertNotNull(stream, "plugin.yml 应进入测试类路径");
@@ -26,8 +26,9 @@ class PluginDescriptorTest {
                 .filter(line -> line.startsWith("softdepend:"))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("plugin.yml 缺少 softdepend"));
-        for (String plugin : List.of("Vault", "Residence", "QuickShop-Hikari", "XConomy")) {
-            assertTrue(softDependencies.contains(plugin), plugin + " 必须由运行时门禁检查");
+        for (String plugin : List.of("Vault", "Residence", "QuickShop-Hikari", "XConomy",
+                "WorldGuard")) {
+            assertTrue(softDependencies.contains(plugin), plugin + " 必须声明为软依赖");
         }
     }
 }

@@ -212,21 +212,20 @@ final class TownAdminCommand implements CommandExecutor {
                         .hoverEvent(HoverEvent.showText(Component.text(
                                 "取消本次操作", NamedTextColor.GREEN))));
         sender.sendMessage(message);
-        sender.sendMessage("§8按钮不可用时可输入: " + confirmCommand);
     }
 
     private boolean audit(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
         if (args.length > 2) {
-            throw new IllegalArgumentException("用法: /townadmin audit [1..200]");
+            throw new IllegalArgumentException("用法: /townadmin audit [1~200]");
         }
         int limit;
         try {
             limit = args.length == 2 ? Integer.parseInt(args[1]) : 20;
         } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException("audit 数量必须是 1..200 的整数");
+            throw new IllegalArgumentException("audit 数量必须是 1~200 的整数");
         }
         if (limit < 1 || limit > 200) {
-            throw new IllegalArgumentException("audit 数量必须在 1..200");
+            throw new IllegalArgumentException("audit 数量必须在 1~200");
         }
         runtime.read(sender, () -> runtime.repository().auditLog(limit), records -> {
             sender.sendMessage("§6最近审计记录:");
@@ -405,21 +404,14 @@ final class TownAdminCommand implements CommandExecutor {
 
     private boolean member(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
         requireLength(args, 5,
-                "member <invite|add|remove> <小镇全名> <玩家> <原因>");
+                "member <add|remove> <小镇全名> <玩家> <原因>");
         String action = args[1].toLowerCase(Locale.ROOT);
-        if (!action.equals("invite") && !action.equals("add") && !action.equals("remove")) {
-            throw new IllegalArgumentException("member 只支持 invite、add 或 remove");
+        if (!action.equals("add") && !action.equals("remove")) {
+            throw new IllegalArgumentException("member 只支持 add 或 remove");
         }
         runtime.read(sender, () -> memberRequest(runtime, args), request -> {
             UUID playerId = playerId(request.player());
-            if (action.equals("invite")) {
-                runtime.write(sender, () -> runtime.repository().adminInvite(request.townId(),
-                        playerId, actorId(sender), sender.getName(), java.time.Duration.ofDays(7),
-                        request.reason()), invitation -> {
-                    sender.sendMessage("§a管理员邀请已创建，到期时间: " + invitation.expiresAt());
-                    plugin.townUi().notifyInvitation(invitation, playerId);
-                });
-            } else if (action.equals("add")) {
+            if (action.equals("add")) {
                 runtime.write(sender, () -> {
                     TownSnapshot town = requireTown(runtime, request.townId());
                     runtime.repository().addMember(town.id(), playerId, actorId(sender),
@@ -685,7 +677,7 @@ final class TownAdminCommand implements CommandExecutor {
         sender.sendMessage("§e/townadmin status §7查看依赖、SQLite 和玩家入口状态");
         sender.sendMessage("§e/townadmin reload §7重载可热更新的配置");
         sender.sendMessage("§e/townadmin maintenance <on|off|status> §7管理维护模式");
-        sender.sendMessage("§e/townadmin audit [1..200] §7查看最近审计记录");
+        sender.sendMessage("§e/townadmin audit [1~200] §7查看最近审计记录");
     }
 
     private static void townHelp(CommandSender sender) {
@@ -696,8 +688,9 @@ final class TownAdminCommand implements CommandExecutor {
 
     private static void memberHelp(CommandSender sender) {
         sender.sendMessage("§6成员与镇长管理");
-        sender.sendMessage("§e/townadmin member invite|add|remove <小镇全名>"
+        sender.sendMessage("§e/townadmin member add|remove <小镇全名>"
                 + " <玩家> <原因>");
+        sender.sendMessage("§7普通玩家加入小镇使用申请制；管理员这里只保留直接添加和移除。");
         sender.sendMessage("§e/townadmin mayor transfer <小镇全名>"
                 + " <玩家> <原因>");
     }

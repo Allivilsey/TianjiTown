@@ -1,6 +1,7 @@
 package cn.tianji.town.paper;
 
 import cn.tianji.town.core.ports.LandProtectionService;
+import cn.tianji.town.core.ports.RegionBoundaryService;
 import cn.tianji.town.core.town.TownStatus;
 import cn.tianji.town.storage.database.DatabaseGate;
 import cn.tianji.town.storage.phase1.ApplicationSnapshot;
@@ -24,11 +25,12 @@ final class PhaseOneRuntime {
     private final ProvisionCoordinator provisions = new ProvisionCoordinator();
 
     PhaseOneRuntime(TianjiTownPlugin plugin, DatabaseGate database,
-                    LandProtectionService landProtection) {
+                    LandProtectionService landProtection,
+                    RegionBoundaryService regionBoundaries) {
         this.plugin = plugin;
         this.database = database;
         this.landProtection = landProtection;
-        this.sitePolicy = new SitePolicy(plugin, landProtection);
+        this.sitePolicy = new SitePolicy(plugin, landProtection, regionBoundaries);
         this.repository = new PhaseOneRepository(database.dataSource(),
                 plugin.getServer()::isPrimaryThread);
     }

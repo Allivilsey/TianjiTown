@@ -31,13 +31,13 @@ public record ApplicationText(String name, String shortName, String residenceNam
         validateName(name, "名称", 2, 24, errors);
         validateName(shortName, "简称", 1, 8, errors);
         if (residenceName.isEmpty() || residenceName.length() > 12) {
-            errors.add("领地名称长度必须为 1..12");
+            errors.add("领地名称长度必须为 1~12");
         } else if (!RESIDENCE_NAME.matcher(residenceName).matches()) {
             errors.add("领地名称只能包含英文字母，不允许空格、数字或特殊符号");
         }
         validateSafeText(description, "简介", 500, errors);
         if (rules.isEmpty() || rules.size() > 50) {
-            errors.add("规则数量必须为 1..50");
+            errors.add("规则数量必须为 1~50");
         }
         for (int index = 0; index < rules.size(); index++) {
             validateSafeText(rules.get(index), "规则 " + (index + 1), 300, errors);
@@ -71,7 +71,7 @@ public record ApplicationText(String name, String shortName, String residenceNam
     private static void validateName(String value, String label, int minimum, int maximum,
                                      List<String> errors) {
         if (value.length() < minimum || value.length() > maximum) {
-            errors.add(label + "长度必须为 " + minimum + ".." + maximum);
+            errors.add(label + "长度必须为 " + minimum + "~" + maximum);
         } else if (!SAFE_NAME.matcher(value).matches()) {
             errors.add(label + "只能包含文字、数字、空格、下划线、连字符和间隔点");
         }

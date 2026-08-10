@@ -129,9 +129,9 @@ final class TownAdminCompletionEngine {
 
     private List<String> member(String[] args, Snapshot snapshot, Dynamic dynamic) {
         if (args.length == 2) {
-            return filter(List.of("invite", "add", "remove"), args[1]);
+            return filter(List.of("add", "remove"), args[1]);
         }
-        if (!Set.of("invite", "add", "remove").contains(args[1].toLowerCase(Locale.ROOT))) {
+        if (!Set.of("add", "remove").contains(args[1].toLowerCase(Locale.ROOT))) {
             return List.of();
         }
         List<String> names = townNames(snapshot,

@@ -1,8 +1,10 @@
 package cn.tianji.town.paper;
 
+import cn.tianji.town.core.ports.RegionBoundaryService;
 import cn.tianji.town.integrations.residence.ResidenceCommandGuard;
 import cn.tianji.town.integrations.residence.ResidenceLandProtectionService;
 import cn.tianji.town.integrations.vault.VaultEconomyProbe;
+import cn.tianji.town.integrations.worldguard.WorldGuardRegionBoundaryService;
 import cn.tianji.town.storage.database.DatabaseConfig;
 import cn.tianji.town.storage.database.DatabaseGate;
 import org.bukkit.plugin.Plugin;
@@ -87,6 +89,11 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 details.add("OK " + name + " " + dependency.getPluginMeta().getVersion());
             }
         }
+        Plugin worldGuard = getServer().getPluginManager().getPlugin("WorldGuard");
+        details.add(worldGuard != null && worldGuard.isEnabled()
+                ? "OK WorldGuard " + worldGuard.getPluginMeta().getVersion()
+                + "（选址边界检测已启用）"
+                : "INFO WorldGuard 未安装（跳过外部区域边界检测）");
 
         boolean economyHealthy = false;
         if (getServer().getPluginManager().isPluginEnabled("Vault")) {
@@ -158,7 +165,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
         databaseGate = candidate;
         Set<String> managedResidenceNames = ConcurrentHashMap.newKeySet();
         PhaseOneRuntime runtime = new PhaseOneRuntime(this, candidate,
-                new ResidenceLandProtectionService(getServer(), managedResidenceNames));
+                new ResidenceLandProtectionService(getServer(), managedResidenceNames),
+                regionBoundaryService());
         TownUiController ui = new TownUiController(this, runtime);
         phaseOneRuntime = runtime;
         townUi = ui;
@@ -186,6 +194,19 @@ public final class TianjiTownPlugin extends JavaPlugin {
         details.add("OK 阶段1玩家 UI、审批事务与 Residence 投影已启用");
         gateStatus.set(new GateStatus(GateStatus.State.READY, details));
         getLogger().info("阶段1启动完成；玩家入口仅限服务台和小镇手册。");
+    }
+
+    private RegionBoundaryService regionBoundaryService() {
+        if (!getServer().getPluginManager().isPluginEnabled("WorldGuard")) {
+            return (territory, bufferChunks) -> RegionBoundaryService.Collision.none();
+        }
+        try {
+            return new WorldGuardRegionBoundaryService(getServer());
+        } catch (LinkageError error) {
+            getLogger().warning("WorldGuard API 无法加载，已停用外部区域边界检测: "
+                    + error.getMessage());
+            return (territory, bufferChunks) -> RegionBoundaryService.Collision.none();
+        }
     }
 
     private void lock(String reason, List<String> details) {

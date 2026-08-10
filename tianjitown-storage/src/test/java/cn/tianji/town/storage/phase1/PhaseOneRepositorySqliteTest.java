@@ -25,7 +25,7 @@ class PhaseOneRepositorySqliteTest {
     Path temporaryDirectory;
 
     @Test
-    void completesApplicationAndInvitationLifecycle() {
+    void completesApplicationAndJoinApplicationLifecycle() {
         DatabaseConfig config = new DatabaseConfig(
                 "jdbc:sqlite:" + temporaryDirectory.resolve("lifecycle.db"),
                 Duration.ofSeconds(5), Duration.ofSeconds(5));
@@ -54,11 +54,96 @@ class PhaseOneRepositorySqliteTest {
             ApplicationSnapshot active = repository.finishProvision(submitted.id(), true, "ok");
             assertEquals(ApplicationStatus.ACTIVE, active.status());
 
-            InvitationSnapshot invitation = repository.invite(
-                    provisioning.town().id(), applicantId, memberId, Duration.ofDays(1));
-            repository.acceptInvitation(invitation.id(), memberId);
+            JoinApplicationSnapshot joinApplication = repository.applyToTown(
+                    provisioning.town().id(), memberId, Duration.ofHours(48),
+                    Duration.ofHours(24), Duration.ofHours(24), 3);
+            repository.approveJoinApplication(joinApplication.id(), applicantId);
             assertEquals(2, repository.listMemberIds(provisioning.town().id()).size());
             assertTrue(repository.auditLog(20).size() >= 5);
         }
+    }
+
+    @Test
+    void enforcesJoinApplicationLimitsAndCooldowns() {
+        DatabaseConfig config = new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("join-rules.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5));
+        try (DatabaseGate gate = new DatabaseGate(config)) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            PhaseOneRepository repository = new PhaseOneRepository(gate.dataSource(), () -> false);
+            CreatedTown first = createTown(repository, 1, "甲镇", "甲", "AAA");
+            CreatedTown second = createTown(repository, 2, "乙镇", "乙", "BBB");
+            CreatedTown third = createTown(repository, 3, "丙镇", "丙", "CCC");
+            CreatedTown fourth = createTown(repository, 4, "丁镇", "丁", "DDD");
+            UUID playerId = UUID.randomUUID();
+
+            JoinApplicationSnapshot rejected = apply(repository, first.town().id(), playerId);
+            apply(repository, second.town().id(), playerId);
+            apply(repository, third.town().id(), playerId);
+            assertThrows(PhaseOneRepository.ConflictException.class,
+                    () -> apply(repository, fourth.town().id(), playerId));
+
+            repository.rejectJoinApplication(rejected.id(), first.mayorId());
+            assertThrows(PhaseOneRepository.ConflictException.class,
+                    () -> apply(repository, first.town().id(), playerId));
+
+            UUID leavingPlayer = UUID.randomUUID();
+            JoinApplicationSnapshot approved = apply(repository, first.town().id(), leavingPlayer);
+            repository.approveJoinApplication(approved.id(), first.mayorId());
+            repository.leaveTown(leavingPlayer);
+            assertThrows(PhaseOneRepository.ConflictException.class,
+                    () -> apply(repository, second.town().id(), leavingPlayer));
+        }
+    }
+
+    @Test
+    void activeTownWinsWhenADeletedNameIsReused() {
+        DatabaseConfig config = new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("name-reuse.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5));
+        try (DatabaseGate gate = new DatabaseGate(config)) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            PhaseOneRepository repository = new PhaseOneRepository(gate.dataSource(), () -> false);
+            CreatedTown deleted = createTown(repository, 1, "复用镇", "复", "OLD");
+            UUID adminId = UUID.randomUUID();
+            assertThrows(PhaseOneRepository.ConflictException.class,
+                    () -> repository.disbandTown(deleted.town().id(), adminId,
+                            deleted.town().version()));
+            repository.disbandTown(deleted.town().id(), deleted.mayorId(),
+                    deleted.town().version());
+            repository.completeTownDeletion(deleted.town().id(), adminId, "Admin", "测试删除");
+
+            CreatedTown active = createTown(repository, 2, "复用镇", "复", "OLD");
+            assertEquals(active.town().id(), repository.findTownByName("复用镇").orElseThrow().id());
+            assertEquals(active.town().id(), repository.listTowns(true).getFirst().id());
+        }
+    }
+
+    private static JoinApplicationSnapshot apply(PhaseOneRepository repository, UUID townId,
+                                                  UUID playerId) {
+        return repository.applyToTown(townId, playerId, Duration.ofHours(48),
+                Duration.ofHours(24), Duration.ofHours(24), 3);
+    }
+
+    private static CreatedTown createTown(PhaseOneRepository repository, int index, String name,
+                                          String shortName, String residenceName) {
+        UUID mayorId = UUID.randomUUID();
+        UUID reviewerId = UUID.randomUUID();
+        ApplicationText text = new ApplicationText(name, shortName, residenceName,
+                "测试简介", List.of("友善交流"));
+        ApplicationSnapshot draft = repository.createDraft(mayorId, text, Duration.ZERO);
+        InitialTerritory territory = new InitialTerritory(new ChunkPosition(
+                UUID.fromString("00000000-0000-0000-0000-000000000999"),
+                "world", index * 10, index * 10));
+        ApplicationSnapshot selected = repository.selectSite(draft.id(), mayorId, territory,
+                Instant.now().plus(Duration.ofHours(1)), 1);
+        ApplicationSnapshot submitted = repository.submit(selected.id(), mayorId);
+        PhaseOneRepository.Provisioning provisioning = repository.beginProvision(submitted.id(),
+                reviewerId, "Admin", "审核通过", "test:approve:" + submitted.id());
+        repository.finishProvision(submitted.id(), true, "ok");
+        return new CreatedTown(repository.findTown(provisioning.town().id()).orElseThrow(), mayorId);
+    }
+
+    private record CreatedTown(TownSnapshot town, UUID mayorId) {
     }
 }

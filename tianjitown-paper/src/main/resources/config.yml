@@ -21,11 +21,18 @@ phase1:
     cooldown-minutes: 5
     # 选址提交后的临时保留时间。
     reservation-minutes: 60
+  membership:
+    # 玩家同时最多拥有的待处理入镇申请数。
+    maximum-pending-applications: 3
+    # 入镇申请有效期，以及被拒绝和主动退出后的申请冷却。
+    application-lifetime-hours: 48
+    rejection-cooldown-hours: 24
+    leave-cooldown-hours: 24
   site:
     # 配置了服务区的世界会限制在服务区内；未配置服务区的已加载世界不受此项限制。
     require-service-area: true
     minimum-buffer-chunks: 1
-    # 三维领地预览会重复刷新，使边界在水平面和 Y 轴方向上持续可见。
+    # 三维领地预览会重复刷新火焰粒子，使边界在水平面和 Y 轴方向上持续可见。
     preview-duration-seconds: 15
     preview-interval-ticks: 20
     preview-vertical-range-blocks: 24

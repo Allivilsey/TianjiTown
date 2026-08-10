@@ -27,4 +27,10 @@ class ApplicationTextTest {
         assertTrue(text.validate().stream().anyMatch(error -> error.contains("格式")));
         assertTrue(text.validate().stream().anyMatch(error -> error.contains("领地名称")));
     }
+
+    @Test
+    void describesRuleCountWithNaturalRangeNotation() {
+        ApplicationText text = new ApplicationText("天际镇", "TJ", "SKY", "简介", List.of());
+        assertTrue(text.validate().contains("规则数量必须为 1~50"));
+    }
 }
