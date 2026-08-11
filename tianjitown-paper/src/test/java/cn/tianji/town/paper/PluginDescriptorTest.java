@@ -38,7 +38,8 @@ class PluginDescriptorTest {
                 .anyMatch(line -> line.startsWith("permission:")),
                 "townadmin 不能在命令根节点要求完整管理员权限");
         for (String permission : List.of("tianjitown.admin.money", "tianjitown.admin.tax",
-                "tianjitown.admin.ledger", "tianjitown.admin.expand")) {
+                "tianjitown.admin.ledger", "tianjitown.admin.expand",
+                "tianjitown.admin.buff", "tianjitown.admin.order")) {
             assertTrue(descriptor.contains(permission + ":"), permission + " 必须被声明");
         }
     }

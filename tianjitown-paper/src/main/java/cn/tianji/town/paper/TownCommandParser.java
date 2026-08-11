@@ -71,6 +71,45 @@ final class TownCommandParser {
         return new NamedAmountReason(match.name(), amount, reason);
     }
 
+    static NamedActionReason namedActionReason(String[] args, int nameStart,
+                                               Collection<String> townNames,
+                                               Collection<String> actions) {
+        NameMatch match = requireNameMatch(args, nameStart, townNames);
+        if (match.end() >= args.length) {
+            throw new IllegalArgumentException("必须指定操作目标");
+        }
+        String action = args[match.end()].strip();
+        if (actions.stream().noneMatch(action::equalsIgnoreCase)) {
+            throw new IllegalArgumentException("不支持的操作目标: " + action);
+        }
+        String reason = join(args, match.end() + 1, args.length, "必须填写原因");
+        rejectPlaceholder(reason, "<原因>");
+        return new NamedActionReason(match.name(), action, reason);
+    }
+
+    static NamedPlayerActionQuantityReason namedPlayerActionQuantityReason(
+            String[] args, int nameStart, Collection<String> townNames,
+            Collection<String> actions) {
+        NameMatch match = requireNameMatch(args, nameStart, townNames);
+        if (match.end() + 3 > args.length) {
+            throw new IllegalArgumentException("必须依次指定玩家、商品和数量");
+        }
+        String player = args[match.end()].strip();
+        String action = args[match.end() + 1].strip();
+        if (actions.stream().noneMatch(action::equalsIgnoreCase)) {
+            throw new IllegalArgumentException("不支持的商品: " + action);
+        }
+        int quantity;
+        try {
+            quantity = Integer.parseInt(args[match.end() + 2]);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("数量必须为整数", exception);
+        }
+        String reason = join(args, match.end() + 3, args.length, "必须填写原因");
+        rejectPlaceholder(reason, "<原因>");
+        return new NamedPlayerActionQuantityReason(match.name(), player, action, quantity, reason);
+    }
+
     static String exactName(String[] args, int nameStart, Collection<String> townNames) {
         NameMatch match = requireNameMatch(args, nameStart, townNames);
         if (match.end() != args.length) {
@@ -135,5 +174,12 @@ final class TownCommandParser {
     }
 
     record NamedAmountReason(String townName, String amount, String reason) {
+    }
+
+    record NamedActionReason(String townName, String action, String reason) {
+    }
+
+    record NamedPlayerActionQuantityReason(String townName, String player, String action,
+                                           int quantity, String reason) {
     }
 }

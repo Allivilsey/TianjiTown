@@ -12,13 +12,17 @@ final class TownAdminPermissions {
     static final String TAX = "tianjitown.admin.tax";
     static final String LEDGER = "tianjitown.admin.ledger";
     static final String EXPAND = "tianjitown.admin.expand";
+    static final String BUFF = "tianjitown.admin.buff";
+    static final String ORDER = "tianjitown.admin.order";
 
     private static final Map<String, String> SCOPED_ROOTS = Map.of(
             "phase0", PHASE_ZERO,
             "money", MONEY,
             "tax", TAX,
             "ledger", LEDGER,
-            "expand", EXPAND);
+            "expand", EXPAND,
+            "buff", BUFF,
+            "order", ORDER);
     private static final List<String> SCOPED_PERMISSIONS = List.copyOf(
             SCOPED_ROOTS.values());
 

@@ -4,7 +4,7 @@ main: cn.tianji.town.paper.TianjiTownPlugin
 api-version: '26.2'
 load: POSTWORLD
 authors: [Tianji]
-description: 天际服小镇系统（阶段3生产版）
+description: 天际服小镇系统（阶段4生产版）
 softdepend: [Vault, Residence, QuickShop-Hikari, XConomy, WorldGuard]
 commands:
   townadmin:
@@ -20,6 +20,8 @@ permissions:
       tianjitown.admin.tax: true
       tianjitown.admin.ledger: true
       tianjitown.admin.expand: true
+      tianjitown.admin.buff: true
+      tianjitown.admin.order: true
   tianjitown.admin.phase0:
     description: 执行第0阶段预发验证
     default: op
@@ -34,5 +36,11 @@ permissions:
     default: op
   tianjitown.admin.expand:
     description: 查询和代办小镇领地扩张
+    default: op
+  tianjitown.admin.buff:
+    description: 查询、代购和退款取消公共 Buff
+    default: op
+  tianjitown.admin.order:
+    description: 查询、代办和退款资源订单
     default: op
 

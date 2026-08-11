@@ -52,6 +52,10 @@ public final class TianjiTownPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        PhaseOneRuntime runtime = phaseOneRuntime;
+        if (runtime != null) {
+            runtime.phaseFour().clearAll();
+        }
         if (databaseGate != null) {
             databaseGate.close();
             databaseGate = null;
@@ -177,8 +181,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
         } catch (RuntimeException exception) {
             candidate.close();
             List<String> details = new ArrayList<>(previousDetails);
-            details.add("FAIL 阶段3配置/清算账户: " + exception.getMessage());
-            lock("阶段3运行时门禁未通过", details);
+            details.add("FAIL 阶段3/4配置或清算账户: " + exception.getMessage());
+            lock("阶段4运行时门禁未通过", details);
             return;
         }
         databaseGate = candidate;
@@ -197,6 +201,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
             completer.start(runtime);
         }
         getServer().getPluginManager().registerEvents(ui, this);
+        getServer().getPluginManager().registerEvents(runtime.phaseFour(), this);
         getServer().getPluginManager().registerEvents(
                 new ResidenceCommandGuard(managedResidenceNames::contains), this);
         getServer().getScheduler().runTaskAsynchronously(this, () -> {
@@ -216,13 +221,15 @@ public final class TianjiTownPlugin extends JavaPlugin {
         getServer().getScheduler().runTaskTimer(this, runtime::reconcileSettlement, 20L * 20,
                 20L * 60 * Math.max(1,
                         getConfig().getLong("phase3.reconciliation-interval-minutes", 5)));
+        getServer().getScheduler().runTaskTimer(this, runtime.phaseFour()::cleanupExpired,
+                20L * 30, 20L * 60);
         List<String> details = new ArrayList<>(previousDetails);
         details.add("OK " + databaseDetail);
         details.add((quickShopCapability.available() ? "OK " : "WARN ")
                 + quickShopCapability.detail());
-        details.add("OK 阶段3公共账本、Vault 清算与多区域 Residence 扩张已启用");
+        details.add("OK 阶段4公共 Buff、资源订单与可恢复领取已启用");
         gateStatus.set(new GateStatus(GateStatus.State.READY, details));
-        getLogger().info("阶段3启动完成；玩家入口仅限服务台和小镇手册。");
+        getLogger().info("阶段4启动完成；玩家入口仅限服务台和小镇手册。");
     }
 
     private RegionBoundaryService regionBoundaryService() {

@@ -647,11 +647,11 @@
 
 #### 功能 TODO
 
-- [ ] 实现配置驱动的 Potion Effect/Attribute Modifier Buff 商店、叠加倍率、期限和等级上限。
-- [ ] 实现 `active_buffs`、购买扣款、登录/重生/世界变更刷新和过期清理。
-- [ ] 实现资源商店、`resource_orders`、公共资金结算、个人待领取箱和断线恢复。
-- [ ] 实现 Buff/资源商店 GUI、二次确认、购买权限和 buff/order 管理命令。
-- [ ] 实现购买失败补偿、未领取订单检查和公共资金对账。
+- [x] 实现配置驱动的 Potion Effect/Attribute Modifier Buff 商店、叠加倍率、期限和等级上限。
+- [x] 实现 `active_buffs`、购买扣款、登录/重生/世界变更刷新和过期清理。
+- [x] 实现资源商店、`resource_orders`、公共资金结算、个人待领取箱和断线恢复。
+- [x] 实现 Buff/资源商店 GUI、二次确认、购买权限和 buff/order 管理命令。
+- [x] 实现购买失败补偿、未领取订单检查和公共资金对账。
 
 #### 生产升级门槛
 

@@ -1,4 +1,4 @@
-schema-version: 3
+schema-version: 4
 
 database:
   # 相对路径以 plugins/TianjiTown 为基准，也可填写绝对路径。
@@ -80,4 +80,57 @@ phase3:
     base-cost: '1000.00'
     growth-factor: '1.50'
     maximum-units: 9
+
+phase4:
+  buffs:
+    # 关闭商店只会阻止新购买；已购买 Buff 仍持续到期并正常清理。
+    shop-enabled: true
+    catalog:
+      speed:
+        display-name: '公共迅捷'
+        effect-kind: POTION
+        effect-key: 'minecraft:speed'
+        operation: AMPLIFIER
+        base-price: '500.00'
+        price-multiplier: '1.50'
+        duration-minutes: 60
+        maximum-level: 3
+        stacking: LEVEL_UP
+        amount-per-level: 1.0
+        # 空列表表示所有世界；世界名按不区分大小写匹配。
+        allowed-worlds: [world]
+        purchasing-roles: [MAYOR, OFFICER]
+      health:
+        display-name: '公共生命'
+        effect-kind: ATTRIBUTE
+        effect-key: 'minecraft:max_health'
+        operation: ADD_NUMBER
+        base-price: '1000.00'
+        price-multiplier: '2.00'
+        duration-minutes: 60
+        maximum-level: 2
+        stacking: LEVEL_UP
+        amount-per-level: 2.0
+        allowed-worlds: [world]
+        purchasing-roles: [MAYOR]
+  resources:
+    # 关闭商店不会阻止已经扣款的订单继续领取或退款。
+    shop-enabled: true
+    catalog:
+      iron:
+        display-name: '铁锭补给'
+        material: IRON_INGOT
+        unit-price: '5.00'
+        maximum-per-order: 64
+        daily-limit: 256
+        quantity-options: [16, 32, 64]
+        purchasing-roles: [MAYOR, OFFICER]
+      oak_log:
+        display-name: '橡木原木补给'
+        material: OAK_LOG
+        unit-price: '2.00'
+        maximum-per-order: 128
+        daily-limit: 512
+        quantity-options: [32, 64, 128]
+        purchasing-roles: [MAYOR, OFFICER]
 

@@ -1,6 +1,6 @@
 # TianjiTown
 
-天际服自用的单 Paper 服务器小镇系统。当前版本为第 3 阶段生产候选版 `1.2.0`：在申请、领地和成员治理基础上，开放 QuickShop 动态小镇税、公共账本、成员捐款、清算对账和付费领地扩张。Buff、资源采购和领地加成尚未开放，也不会出现在 UI 或命令帮助中。
+天际服自用的单 Paper 服务器小镇系统。当前版本为第 4 阶段生产候选版 `1.3.0`：在申请、治理、动态税、公共账本和付费领地扩张基础上，开放配置驱动的公共 Buff 与可恢复资源采购。领地加成尚未开放，也不会出现在 UI 或命令帮助中。
 
 ## 构建
 
@@ -10,7 +10,7 @@
 mvn -B clean verify
 ```
 
-唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.2.0.jar`。Paper API、Residence、Vault 与可选的 WorldGuard API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
+唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.3.0.jar`。Paper API、Residence、Vault 与可选的 WorldGuard API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
 
 ## 安装与 SQLite
 
@@ -31,11 +31,11 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 > 此 SQLite 版不会自动导入旧 MySQL 数据。已经在 MySQL 中运行的服务器应先保留完整备份，在隔离环境完成数据转换和验收后再切换；不要把旧 MySQL Flyway history 复制到 SQLite。
 
-第 3 阶段的升级、验收与回滚流程见 [`docs/phase-3/README.md`](docs/phase-3/README.md)，备份与恢复见 [`docs/phase-0/SQLITE_AND_BACKUP.md`](docs/phase-0/SQLITE_AND_BACKUP.md)。
+第 4 阶段的升级、验收与回滚流程见 [`docs/phase-4/README.md`](docs/phase-4/README.md)，备份与恢复见 [`docs/phase-0/SQLITE_AND_BACKUP.md`](docs/phase-0/SQLITE_AND_BACKUP.md)。
 
 ## 管理员帮助
 
-`/townadmin` 或 `/townadmin help` 显示精简分类。使用 `/townadmin help <分类>` 查看完整语法，可用分类为 `system`、`station`、`application`、`town`、`member`、`vote`、`land`、`money`、`tax`、`ledger`、`expand` 和 `phase0`。命令参数支持 Tab 自动补全；补全列表中的 `<原因>` 等尖括号内容只是当前位置的参数提示，必须替换为实际内容，不能原样提交。
+`/townadmin` 或 `/townadmin help` 显示精简分类。使用 `/townadmin help <分类>` 查看完整语法，可用分类为 `system`、`station`、`application`、`town`、`member`、`vote`、`land`、`money`、`tax`、`ledger`、`expand`、`buff`、`order` 和 `phase0`。命令参数支持 Tab 自动补全；补全列表中的 `<原因>` 等尖括号内容只是当前位置的参数提示，必须替换为实际内容，不能原样提交。
 
 ### 系统与运维
 
@@ -113,6 +113,19 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 税率以基点保存，金额按 Vault 经济实现支持的精度处理。`money reconcile` 比较清算账户和内部总账；出现短款时会锁定新的公共资金消费，但账本查询、捐款和再次对账仍可使用。管理员调账必须填写原因。
 
+### 公共 Buff 与资源订单
+
+```text
+/townadmin buff list <小镇全名>
+/townadmin buff grant <小镇全名> <buffKey> <原因>
+/townadmin buff refund <buffId> <原因>
+/townadmin order list [数量]
+/townadmin order create <小镇全名> <玩家> <resourceKey> <数量> <原因>
+/townadmin order refund <orderId> <原因>
+```
+
+Buff 和资源目录位于 `config.yml` 的 `phase4` 配置节。商品定义、价格、期限和角色权限在启动时校验，修改后需要重启；`shop-enabled` 开关可通过 `reload` 热更新。关闭商店只阻止新购买，已生效 Buff 会继续到期，已扣款订单仍可领取或退款。
+
 ### 第 0 阶段预发验证
 
 ```text
@@ -124,7 +137,9 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 ## 玩家入口
 
-插件不注册任何玩家命令。玩家通过讲台服务台、小镇手册、箱子 GUI 和可点击聊天申请表操作；镇长资料编辑使用书本 UI。入镇采用申请制：玩家同时最多申请 3 个小镇，申请 48 小时有效；被拒绝后 24 小时内不能再次申请同一小镇，主动退出后 24 小时内不能申请新镇。镇长可任命官员、移除成员、设置小镇税率或发起需候选人接受的镇长转让；所有成员可查看公共资金和最近 180 天流水、向小镇捐款并发起治理投票。规则或税率变更后，成员会在下次登录或打开主菜单时收到说明。仅剩镇长一名成员时才允许解散小镇。
+插件不注册任何玩家命令。玩家通过讲台服务台、小镇手册、箱子 GUI 和可点击聊天申请表操作；镇长资料编辑使用书本 UI。入镇采用申请制：玩家同时最多申请 3 个小镇，申请 48 小时有效；被拒绝后 24 小时内不能再次申请同一小镇，主动退出后 24 小时内不能申请新镇。镇长可任命官员、移除成员、设置小镇税率或发起需候选人接受的镇长转让；所有成员可查看公共资金和最近 180 天流水、公共 Buff 及个人资源订单，购买权由商品配置中的角色清单决定。规则或税率变更后，成员会在下次登录或打开主菜单时收到说明。仅剩镇长一名成员时才允许解散小镇。
+
+资源采购先在 SQLite 事务中创建订单、扣除公共资金并写入账本，再进入玩家的待领取箱。满背包不会改变订单；交付中的物品携带一次性领取标记，在数据库确认前不能移动、丢弃或使用，断线或重启后会继续确认，避免重复领取或资金丢失。Buff 在登录、重生、跨世界、成员关系变化和到期清理时重新计算，Attribute Modifier 使用稳定 namespaced key。
 
 领地预览按钮会传送至领地中心传送点，并显示持续刷新的火焰粒子边界。扩张以初始 3×3 区块为一个固定单元，只能向相邻方向扩张，最多占用原点周围的 3×3 单元网格；价格按配置中的指数规则向上取整并从公共资金扣除。
 

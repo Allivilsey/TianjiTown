@@ -99,6 +99,19 @@ class TownAdminCompletionEngineTest {
     }
 
     @Test
+    void completesPhaseFourManagementCommands() {
+        assertEquals(List.of("grant", "list", "refund"), engine.complete(
+                new String[]{"buff", ""}, snapshot, dynamic));
+        assertEquals(List.of("<buffKey>"), engine.complete(
+                new String[]{"buff", "grant", "天际", "之城", ""}, snapshot, dynamic));
+        assertEquals(List.of("MemberOne"), engine.complete(
+                new String[]{"order", "create", "天际", "之城", ""}, snapshot, dynamic));
+        assertEquals(List.of("<resourceKey>"), engine.complete(
+                new String[]{"order", "create", "天际", "之城", "MemberOne", ""},
+                snapshot, dynamic));
+    }
+
+    @Test
     void limitsPlayerOnlyActionsAndPhaseZeroRootsWhenUnavailable() {
         TownAdminCompletionEngine.Dynamic console = new TownAdminCompletionEngine.Dynamic(
                 List.of(), List.of("world"), null, null, false, false);

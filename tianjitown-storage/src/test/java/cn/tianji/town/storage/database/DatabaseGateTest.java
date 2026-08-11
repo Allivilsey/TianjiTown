@@ -91,7 +91,7 @@ class DatabaseGateTest {
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
             DatabaseGate.HealthResult health = gate.verifyAndMigrate();
             assertTrue(health.healthy(), health.detail());
-            assertTrue(health.detail().contains("schema=3.0"));
+            assertTrue(health.detail().contains("schema=4.0"));
             try (Connection connection = gate.dataSource().getConnection();
                  PreparedStatement statement = connection.prepareStatement("""
                          SELECT t.name, t.rules_revision, m.role
@@ -137,7 +137,7 @@ class DatabaseGateTest {
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
             DatabaseGate.HealthResult health = gate.verifyAndMigrate();
             assertTrue(health.healthy(), health.detail());
-            assertTrue(health.detail().contains("schema=3.0"));
+            assertTrue(health.detail().contains("schema=4.0"));
             try (Connection connection = gate.dataSource().getConnection();
                  PreparedStatement votes = connection.prepareStatement("""
                          SELECT status, cancelled_reason FROM governance_votes

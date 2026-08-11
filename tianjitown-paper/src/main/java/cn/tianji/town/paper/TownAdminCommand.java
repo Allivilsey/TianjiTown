@@ -2,6 +2,8 @@ package cn.tianji.town.paper;
 
 import cn.tianji.town.core.application.ApplicationText;
 import cn.tianji.town.core.economy.MoneyAmount;
+import cn.tianji.town.core.consumption.BuffDefinition;
+import cn.tianji.town.core.consumption.ResourceDefinition;
 import cn.tianji.town.core.land.ExpansionDirection;
 import cn.tianji.town.core.land.ExpansionPricing;
 import cn.tianji.town.core.land.TerritoryRules;
@@ -77,8 +79,8 @@ final class TownAdminCommand implements CommandExecutor {
             }
             if (root.equals("reload")) {
                 plugin.reloadConfig();
-                sender.sendMessage("§a配置已重新读取；阶段3税收/消费开关立即生效。"
-                        + "SQLite、清算账户和金额精度需重启后生效。");
+                sender.sendMessage("§a配置已重新读取；阶段3税收/消费及阶段4商店开关立即生效。"
+                        + "SQLite、清算账户、金额精度和商品定义需重启后生效。");
                 return true;
             }
             if (root.equals("maintenance")) {
@@ -105,6 +107,8 @@ final class TownAdminCommand implements CommandExecutor {
                 case "tax" -> tax(sender, runtime, args);
                 case "ledger" -> ledger(sender, runtime, args);
                 case "expand" -> expand(sender, runtime, args);
+                case "buff" -> buff(sender, runtime, args);
+                case "order" -> order(sender, runtime, args);
                 default -> {
                     sender.sendMessage("§c未知子命令：" + args[0]
                             + "。使用 /townadmin help 查看帮助。");
@@ -126,6 +130,12 @@ final class TownAdminCommand implements CommandExecutor {
         if (runtime != null) {
             sender.sendMessage("§7- SQLite 运行状态: "
                     + (runtime.databaseAvailable() ? "READY" : "WRITE_LOCKED"));
+            sender.sendMessage("§7- Buff 商店: "
+                    + (runtime.phaseFour().buffShopEnabled() ? "OPEN" : "PAUSED")
+                    + "，配置商品=" + runtime.phaseFour().settings().buffs().size());
+            sender.sendMessage("§7- 资源商店: "
+                    + (runtime.phaseFour().resourceShopEnabled() ? "OPEN" : "PAUSED")
+                    + "，配置商品=" + runtime.phaseFour().settings().resources().size());
         }
         sender.sendMessage("§7- 玩家入口: " + (maintenanceMode() ? "MAINTENANCE" : "OPEN"));
     }
@@ -454,6 +464,10 @@ final class TownAdminCommand implements CommandExecutor {
                     return town;
                 }, town -> {
                     sender.sendMessage("§a成员已添加，正在同步 Residence 权限。");
+                    Player added = Bukkit.getPlayer(playerId);
+                    if (added != null) {
+                        runtime.phaseFour().refreshPlayer(added);
+                    }
                     reconcileOne(sender, runtime, town.id(), true);
                 });
             } else {
@@ -464,6 +478,10 @@ final class TownAdminCommand implements CommandExecutor {
                     return town;
                 }, town -> {
                     sender.sendMessage("§a成员已移除，正在同步 Residence 权限。");
+                    Player removed = Bukkit.getPlayer(playerId);
+                    if (removed != null) {
+                        runtime.phaseFour().refreshPlayer(removed);
+                    }
                     reconcileOne(sender, runtime, town.id(), true);
                 });
             }
@@ -746,6 +764,148 @@ final class TownAdminCommand implements CommandExecutor {
         return true;
     }
 
+    private boolean buff(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+        requirePermission(sender, TownAdminPermissions.BUFF);
+        requireLength(args, 2, "buff <list|grant|refund> ...");
+        String action = args[1].toLowerCase(Locale.ROOT);
+        if (action.equals("list")) {
+            requireLength(args, 3, "buff list <小镇全名>");
+            String townName = TownCommandParser.townName(args, 2);
+            runtime.read(sender, () -> {
+                TownSnapshot town = requireTown(runtime, townName);
+                return runtime.phaseFour().repository().activeBuffsForTown(town.id(),
+                        java.time.Instant.now());
+            }, buffs -> {
+                sender.sendMessage("§6生效中的公共 Buff: " + buffs.size());
+                buffs.forEach(value -> sender.sendMessage("§7" + value.buffId() + " §d"
+                        + value.buffKey() + " §f等级=" + value.level() + " 层数="
+                        + value.stackCount() + " 到期=" + value.expiresAt()));
+            });
+            return true;
+        }
+        if (action.equals("grant")) {
+            if (!runtime.phaseFour().buffShopEnabled() || !runtime.consumptionEnabled()) {
+                throw new IllegalArgumentException("公共 Buff 新购买已由功能开关暂停");
+            }
+            requireLength(args, 5, "buff grant <小镇全名> <buffKey> <原因>");
+            runtime.read(sender, () -> {
+                List<TownSnapshot> towns = runtime.repository().listTowns(true);
+                TownCommandParser.NamedActionReason parsed = TownCommandParser.namedActionReason(
+                        args, 2, townNames(towns),
+                        runtime.phaseFour().settings().buffs().keySet());
+                TownSnapshot town = towns.stream().filter(candidate -> sameName(
+                                candidate.profile().name(), parsed.townName())).findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("小镇不存在"));
+                BuffDefinition definition = runtime.phaseFour().settings().requireBuff(
+                        parsed.action().toLowerCase(Locale.ROOT));
+                return new BuffGrantRequest(town.id(), town.profile().name(), definition,
+                        parsed.reason());
+            }, request -> requestConfirmation(sender, "为小镇“" + request.townName()
+                    + "”代购 Buff “" + request.definition().displayName() + "”并扣除公共资金",
+                    () -> runtime.write(sender, () -> runtime.phaseFour().repository()
+                                    .purchaseBuffForTown(request.townId(), actorId(sender),
+                                            sender.getName(), request.definition(),
+                                            runtime.settlement().scale(),
+                                            "admin-buff-purchase:" + UUID.randomUUID(),
+                                            java.time.Instant.now(), request.reason()),
+                            purchase -> {
+                                sender.sendMessage("§aBuff 代购完成，公共余额: "
+                                        + runtime.money(purchase.balanceAfterMinor()));
+                                runtime.phaseFour().refreshAllPlayers();
+                            })));
+            return true;
+        }
+        if (action.equals("refund")) {
+            requireLength(args, 4, "buff refund <buffId> <原因>");
+            UUID buffId = UUID.fromString(args[2]);
+            String reason = reasonTail(args, 3);
+            requestConfirmation(sender, "退款并取消公共 Buff " + buffId,
+                    () -> runtime.write(sender, () -> runtime.phaseFour().repository()
+                                    .refundActiveBuff(buffId, actorId(sender), sender.getName(),
+                                            reason),
+                            purchase -> {
+                                sender.sendMessage("§aBuff 已取消并退款，公共余额: "
+                                        + runtime.money(purchase.balanceAfterMinor()));
+                                runtime.phaseFour().refreshAllPlayers();
+                            }));
+            return true;
+        }
+        throw new IllegalArgumentException("buff 只支持 list、grant 或 refund");
+    }
+
+    private boolean order(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+        requirePermission(sender, TownAdminPermissions.ORDER);
+        requireLength(args, 2, "order <list|create|refund> ...");
+        String action = args[1].toLowerCase(Locale.ROOT);
+        if (action.equals("list")) {
+            int limit = args.length >= 3 ? Integer.parseInt(args[2]) : 50;
+            runtime.read(sender, () -> runtime.phaseFour().repository().openOrders(limit),
+                    orders -> {
+                        sender.sendMessage("§6未完成资源订单: " + orders.size());
+                        orders.forEach(order -> sender.sendMessage("§7" + order.orderId()
+                                + " §f" + order.resourceName() + " x" + order.quantity()
+                                + " buyer=" + order.buyerName() + " status=" + order.status()
+                                + (order.lastError() == null ? "" : " error="
+                                + order.lastError())));
+                    });
+            return true;
+        }
+        if (action.equals("create")) {
+            if (!runtime.phaseFour().resourceShopEnabled() || !runtime.consumptionEnabled()) {
+                throw new IllegalArgumentException("资源商店新采购已由功能开关暂停");
+            }
+            requireLength(args, 7,
+                    "order create <小镇全名> <玩家> <resourceKey> <数量> <原因>");
+            runtime.read(sender, () -> {
+                List<TownSnapshot> towns = runtime.repository().listTowns(true);
+                TownCommandParser.NamedPlayerActionQuantityReason parsed =
+                        TownCommandParser.namedPlayerActionQuantityReason(args, 2,
+                                townNames(towns),
+                                runtime.phaseFour().settings().resources().keySet());
+                TownSnapshot town = towns.stream().filter(candidate -> sameName(
+                                candidate.profile().name(), parsed.townName())).findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("小镇不存在"));
+                ResourceDefinition definition = runtime.phaseFour().settings().requireResource(
+                        parsed.action().toLowerCase(Locale.ROOT));
+                return new ResourceCreateRequest(town.id(), town.profile().name(),
+                        playerId(parsed.player()), parsed.player(), definition, parsed.quantity(),
+                        parsed.reason());
+            }, request -> requestConfirmation(sender, "为小镇“" + request.townName()
+                    + "”成员 " + request.buyerName() + " 代办采购 "
+                    + request.definition().displayName() + " x" + request.quantity(),
+                    () -> {
+                        PhaseFourRuntime.DayBounds day = runtime.phaseFour().dayBounds();
+                        runtime.write(sender, () -> runtime.phaseFour().repository()
+                                        .createOrderForTown(request.townId(), request.buyerId(),
+                                                request.buyerName(), actorId(sender),
+                                                sender.getName(), request.definition(),
+                                                request.quantity(), runtime.settlement().scale(),
+                                                day.start(), day.end(),
+                                                "admin-resource-purchase:" + UUID.randomUUID(),
+                                                request.reason()),
+                                order -> {
+                                    sender.sendMessage("§a资源订单已创建: " + order.orderId());
+                                    Player buyer = Bukkit.getPlayer(order.buyerId());
+                                    if (buyer != null) {
+                                        buyer.sendMessage("§e管理员已代办资源采购，请打开资源待领取箱。");
+                                    }
+                                });
+                    }));
+            return true;
+        }
+        if (action.equals("refund")) {
+            requireLength(args, 4, "order refund <orderId> <原因>");
+            UUID orderId = UUID.fromString(args[2]);
+            String reason = reasonTail(args, 3);
+            requestConfirmation(sender, "退款未领取资源订单 " + orderId,
+                    () -> runtime.write(sender, () -> runtime.phaseFour().repository()
+                                    .refundOrder(orderId, actorId(sender), sender.getName(), reason),
+                            order -> sender.sendMessage("§a订单已退款: " + order.orderId())));
+            return true;
+        }
+        throw new IllegalArgumentException("order 只支持 list、create 或 refund");
+    }
+
     private void rebuildLand(CommandSender sender, PhaseOneRuntime runtime,
                              LandRebuildRequest request) {
         runtime.read(sender, () -> {
@@ -838,6 +998,18 @@ final class TownAdminCommand implements CommandExecutor {
         }
     }
 
+    private static String reasonTail(String[] args, int start) {
+        if (start >= args.length) {
+            throw new IllegalArgumentException("必须填写原因");
+        }
+        String reason = String.join(" ", java.util.Arrays.copyOfRange(args, start, args.length))
+                .strip();
+        if (reason.isBlank() || reason.equalsIgnoreCase("<原因>")) {
+            throw new IllegalArgumentException("必须填写实际原因");
+        }
+        return reason;
+    }
+
     private static void requirePermission(CommandSender sender, String permission) {
         if (!TownAdminPermissions.has(sender::hasPermission, permission)) {
             throw new IllegalArgumentException("缺少权限 " + permission);
@@ -900,6 +1072,12 @@ final class TownAdminCommand implements CommandExecutor {
             if (TownAdminPermissions.has(sender::hasPermission, TownAdminPermissions.EXPAND)) {
                 sender.sendMessage("§eexpand §7领地扩张查询与预览");
             }
+            if (TownAdminPermissions.has(sender::hasPermission, TownAdminPermissions.BUFF)) {
+                sender.sendMessage("§ebuff §7公共 Buff 查询、代购与退款取消");
+            }
+            if (TownAdminPermissions.has(sender::hasPermission, TownAdminPermissions.ORDER)) {
+                sender.sendMessage("§eorder §7资源订单查询、代办与退款");
+            }
             if (TownAdminPermissions.has(sender::hasPermission,
                     TownAdminPermissions.PHASE_ZERO)) {
                 sender.sendMessage("§ephase0 §7预发环境验证");
@@ -920,6 +1098,7 @@ final class TownAdminCommand implements CommandExecutor {
             case "vote" -> voteHelp(sender);
             case "land" -> landHelp(sender);
             case "money", "tax", "ledger", "expand" -> economyHelp(sender, topic);
+            case "buff", "order" -> phaseFourHelp(sender, topic);
             case "phase0" -> phaseZeroHelp(sender);
             default -> {
                 sender.sendMessage("§c未知帮助分类：" + topic);
@@ -951,6 +1130,20 @@ final class TownAdminCommand implements CommandExecutor {
             case "expand" -> sender.sendMessage(
                     "§e/townadmin expand view|preview <小镇全名> [方向]");
             default -> throw new IllegalArgumentException("未知经济帮助分类");
+        }
+    }
+
+    private static void phaseFourHelp(CommandSender sender, String topic) {
+        sender.sendMessage("§6阶段 4 公共消费管理");
+        if (topic.equalsIgnoreCase("buff")) {
+            sender.sendMessage("§e/townadmin buff list <小镇全名>");
+            sender.sendMessage("§e/townadmin buff grant <小镇全名> <buffKey> <原因>");
+            sender.sendMessage("§e/townadmin buff refund <buffId> <原因>");
+        } else {
+            sender.sendMessage("§e/townadmin order list [数量]");
+            sender.sendMessage("§e/townadmin order create <小镇全名> <玩家>"
+                    + " <resourceKey> <数量> <原因>");
+            sender.sendMessage("§e/townadmin order refund <orderId> <原因>");
         }
     }
 
@@ -1031,5 +1224,14 @@ final class TownAdminCommand implements CommandExecutor {
                                   List<cn.tianji.town.storage.phase3.PhaseThreeRepository
                                           .TerritoryUnitSnapshot> units,
                                   cn.tianji.town.core.land.TerritoryUnit preview) {
+    }
+
+    private record BuffGrantRequest(UUID townId, String townName,
+                                    BuffDefinition definition, String reason) {
+    }
+
+    private record ResourceCreateRequest(UUID townId, String townName, UUID buyerId,
+                                         String buyerName, ResourceDefinition definition,
+                                         int quantity, String reason) {
     }
 }

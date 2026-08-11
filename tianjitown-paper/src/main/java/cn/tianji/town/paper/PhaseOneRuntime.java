@@ -16,6 +16,7 @@ import cn.tianji.town.storage.phase1.TownSnapshot;
 import cn.tianji.town.storage.phase2.GovernanceRepository;
 import cn.tianji.town.storage.phase2.VoteSnapshot;
 import cn.tianji.town.storage.phase3.PhaseThreeRepository;
+import cn.tianji.town.storage.phase4.PhaseFourRepository;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -39,6 +40,7 @@ final class PhaseOneRuntime {
     private final SitePolicy sitePolicy;
     private final PhaseThreeSettings phaseThreeSettings;
     private final VaultSettlementService settlement;
+    private final PhaseFourRuntime phaseFour;
     private final Map<UUID, QuickShopTaxAdapter.TaxPolicy> taxPolicies = new ConcurrentHashMap<>();
     private final RetryingWorkQueue<QuickShopTaxAdapter.SuccessfulTax> pendingTaxes;
     private final AtomicBoolean databaseAvailable = new AtomicBoolean(true);
@@ -61,6 +63,10 @@ final class PhaseOneRuntime {
         this.phaseThreeSettings = PhaseThreeSettings.load(plugin.getConfig());
         this.settlement = new VaultSettlementService(plugin.getServer(),
                 phaseThreeSettings.settlementAccount(), phaseThreeSettings.fallbackScale());
+        this.phaseFour = new PhaseFourRuntime(plugin, this,
+                new PhaseFourRepository(database.dataSource(),
+                        plugin.getServer()::isPrimaryThread),
+                PhaseFourSettings.load(plugin.getConfig()));
         this.pendingTaxes = new RetryingWorkQueue<>(new RetryingWorkQueue.Scheduler() {
             @Override
             public void executeAsync(Runnable task) {
@@ -92,6 +98,10 @@ final class PhaseOneRuntime {
 
     VaultSettlementService settlement() {
         return settlement;
+    }
+
+    PhaseFourRuntime phaseFour() {
+        return phaseFour;
     }
 
     QuickShopTaxAdapter.TaxPolicy taxPolicy(UUID receiverId) {
@@ -159,6 +169,18 @@ final class PhaseOneRuntime {
                 }
                 List<PhaseThreeRepository.ExpansionOperation> expansions =
                         finance.pendingExpansions();
+                List<cn.tianji.town.storage.phase4.PhaseFourRepository.ResourceOrder> orders =
+                        phaseFour.repository().openOrders(1_000);
+                if (!orders.isEmpty()) {
+                    long claiming = orders.stream().filter(order -> order.status()
+                            .equals("CLAIMING")).count();
+                    long refunds = orders.stream().filter(order -> order.status()
+                            .equals("REFUND_REQUIRED")).count();
+                    plugin.getLogger().warning("启动检查发现 " + orders.size()
+                            + " 个未完成资源订单，其中领取确认中 " + claiming
+                            + " 个、待退款 " + refunds + " 个；玩家登录会恢复领取标记。"
+                            + "可使用 /townadmin order list 检查。");
+                }
                 if (!expansions.isEmpty()) {
                     plugin.getServer().getScheduler().runTask(plugin,
                             () -> recoverExpansions(expansions));
@@ -239,6 +261,7 @@ final class PhaseOneRuntime {
                             reconcile(org.bukkit.Bukkit.getConsoleSender(), state.town(),
                                     state.members(), true);
                         }
+                        phaseFour.refreshAllPlayers();
                     });
                 }
             } catch (RuntimeException exception) {
@@ -779,7 +802,8 @@ final class PhaseOneRuntime {
     private void handleFailure(CommandSender sender, RuntimeException exception) {
         if (exception instanceof PhaseOneRepository.StorageUnavailableException
                 || exception instanceof GovernanceRepository.StorageUnavailableException
-                || exception instanceof PhaseThreeRepository.StorageUnavailableException) {
+                || exception instanceof PhaseThreeRepository.StorageUnavailableException
+                || exception instanceof PhaseFourRepository.StorageUnavailableException) {
             databaseAvailable.set(false);
             plugin.getLogger().severe(exception.getMessage());
         }
