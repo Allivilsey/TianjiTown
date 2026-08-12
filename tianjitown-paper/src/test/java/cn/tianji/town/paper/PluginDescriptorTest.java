@@ -44,6 +44,21 @@ class PluginDescriptorTest {
         }
     }
 
+    @Test
+    void testCommandUsesDedicatedPermissionWithoutCommandLevelInterception() throws IOException {
+        String descriptor = descriptor();
+        String commandSection = descriptor.substring(descriptor.indexOf("commands:"),
+                descriptor.indexOf("permissions:"));
+
+        assertTrue(commandSection.contains("testcommand:"));
+        assertFalse(commandSection.lines().map(String::strip)
+                .anyMatch(line -> line.startsWith("permission:")),
+                "测试命令必须由执行器返回稳定的权限失败结果");
+        assertTrue(descriptor.contains("tianjitown.testcommand:"));
+        assertTrue(descriptor.substring(descriptor.indexOf("tianjitown.testcommand:"))
+                .contains("default: false"));
+    }
+
     private static String descriptor() throws IOException {
         try (InputStream stream = PluginDescriptorTest.class.getResourceAsStream("/plugin.yml")) {
             assertNotNull(stream, "plugin.yml 应进入测试类路径");

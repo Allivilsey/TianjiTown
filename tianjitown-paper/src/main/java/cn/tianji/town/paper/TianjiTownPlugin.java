@@ -30,6 +30,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
             new GateStatus(GateStatus.State.CHECKING, List.of("尚未开始")));
     private volatile DatabaseGate databaseGate;
     private volatile PhaseOneRuntime phaseOneRuntime;
+    private volatile TownActions townActions;
     private volatile TownUiController townUi;
     private volatile TownAdminTabCompleter townAdminTabCompleter;
 
@@ -42,6 +43,11 @@ public final class TianjiTownPlugin extends JavaPlugin {
         townAdminTabCompleter = completer;
         adminCommand.setExecutor(new TownAdminCommand(this));
         adminCommand.setTabCompleter(completer);
+        org.bukkit.command.PluginCommand testCommand = java.util.Objects.requireNonNull(
+                getCommand("testcommand"), "plugin.yml 缺少 testcommand");
+        TestCommand testExecutor = new TestCommand(this);
+        testCommand.setExecutor(testExecutor);
+        testCommand.setTabCompleter(testExecutor);
 
         List<String> synchronousChecks = new ArrayList<>();
         if (!prepareConfigSchema(synchronousChecks)) {
@@ -70,6 +76,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
             databaseGate = null;
         }
         phaseOneRuntime = null;
+        townActions = null;
         townUi = null;
         townAdminTabCompleter = null;
     }
@@ -84,6 +91,10 @@ public final class TianjiTownPlugin extends JavaPlugin {
 
     TownUiController townUi() {
         return townUi;
+    }
+
+    TownActions townActions() {
+        return townActions;
     }
 
     private boolean checkDependencies(List<String> details) {
@@ -276,8 +287,10 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 new GlobalMarketPlusIncomeTaxAdapter(this, globalMarketPlus,
                         runtime::taxEnabled,
                         runtime::acceptGlobalMarketPlusIncomeTax).register();
-        TownUiController ui = new TownUiController(this, runtime);
+        TownActions actions = new TownActions(this, runtime);
+        TownUiController ui = new TownUiController(this, runtime, actions);
         phaseOneRuntime = runtime;
+        townActions = actions;
         townUi = ui;
         TownAdminTabCompleter completer = townAdminTabCompleter;
         if (completer != null) {

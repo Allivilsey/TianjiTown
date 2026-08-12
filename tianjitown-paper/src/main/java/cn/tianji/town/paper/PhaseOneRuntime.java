@@ -402,6 +402,15 @@ final class PhaseOneRuntime {
     }
 
     void reconcile(CommandSender sender, TownSnapshot town, List<UUID> members, boolean repair) {
+        reconcileAction(sender, town, members, repair, result -> sender.sendMessage(
+                        (result.success() ? "§a" : "§c") + town.profile().name() + ": "
+                                + result.message()),
+                exception -> handleFailure(sender, exception));
+    }
+
+    void reconcileAction(CommandSender sender, TownSnapshot town, List<UUID> members,
+                         boolean repair, Consumer<LandProtectionService.Result> success,
+                         Consumer<RuntimeException> failure) {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 List<LandProtectionService.Area> areas = finance.territoryUnits(town.id()).stream()
@@ -418,12 +427,11 @@ final class PhaseOneRuntime {
                         result = LandProtectionService.Result.failure(
                                 "Residence API 不可用: " + safeMessage(exception));
                     }
-                    sender.sendMessage((result.success() ? "§a" : "§c")
-                            + town.profile().name() + ": " + result.message());
                     recordLandAudit(actorId(sender), sender.getName(), town.id(), repair, result);
+                    success.accept(result);
                 });
             } catch (RuntimeException exception) {
-                handleFailure(sender, exception);
+                reportActionFailure(exception, failure);
             }
         });
     }
@@ -566,9 +574,11 @@ final class PhaseOneRuntime {
         });
     }
 
-    void donate(Player player, long amountMinor) {
+    void donateAction(Player player, long amountMinor,
+                      Consumer<PhaseThreeRepository.LedgerMutation> success,
+                      Consumer<RuntimeException> failure) {
         if (!consumptionEnabled()) {
-            player.sendMessage("§c阶段 3 新消费入口已由功能开关暂停。");
+            failure.accept(new IllegalStateException("阶段 3 新消费入口已由功能开关暂停"));
             return;
         }
         executeExternalOperation(player, () -> {
@@ -578,15 +588,8 @@ final class PhaseOneRuntime {
             String key = "donation:" + UUID.randomUUID();
             return finance.prepareOperation(account.townId(), "DONATION", amountMinor,
                     player.getUniqueId(), player.getName(), key, "成员捐款");
-        }, operation -> settlement.transferFromPlayer(player, operation.amountMinor()),
-                mutation -> {
-                    player.sendMessage("§a捐款成功，当前小镇公共余额: §f"
-                            + money(mutation.balanceAfterMinor()));
-                    TownUiController ui = plugin.townUi();
-                    if (ui != null) {
-                        ui.openFinance(player, 0);
-                    }
-                });
+        }, operation -> settlement.transferFromPlayer(player, operation.amountMinor()), success,
+                failure);
     }
 
     void adjustFunds(CommandSender sender, UUID townId, long amountMinor, String reason) {
@@ -663,16 +666,19 @@ final class PhaseOneRuntime {
                 snapshots.size() + 1);
     }
 
-    void expand(Player mayor, ExpansionDirection direction) {
+    void expandAction(Player mayor, ExpansionDirection direction,
+                      Consumer<PhaseThreeRepository.ExpansionOperation> success,
+                      Consumer<RuntimeException> failure) {
         if (!consumptionEnabled()) {
-            mayor.sendMessage("§c阶段 3 新消费入口已由功能开关暂停。");
+            failure.accept(new IllegalStateException("阶段 3 新消费入口已由功能开关暂停"));
             return;
         }
-        read(mayor, () -> expansionPreview(mayor.getUniqueId(), direction), preview -> {
+        readAction(mayor, () -> expansionPreview(mayor.getUniqueId(), direction), preview -> {
             SitePolicy.Validation validation = sitePolicy.validateExpansion(
                     preview.candidate().territory(), preview.residenceName());
             if (!validation.valid()) {
-                mayor.sendMessage("§c扩张环境复核失败: " + validation.error());
+                failure.accept(new IllegalArgumentException(
+                        "扩张环境复核失败: " + validation.error()));
                 return;
             }
             plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -683,12 +689,22 @@ final class PhaseOneRuntime {
                                     preview.priceMinor(), mayor.getUniqueId(), mayor.getName(),
                                     "expansion:" + UUID.randomUUID()));
                     plugin.getServer().getScheduler().runTask(plugin,
-                            () -> projectExpansion(mayor, operation));
+                            () -> projectExpansion(mayor, operation, success, failure));
                 } catch (RuntimeException exception) {
-                    handleFailure(mayor, exception);
+                    reportActionFailure(exception, failure);
                 }
             });
-        });
+        }, failure);
+    }
+
+    <T> void writeAction(CommandSender sender, Supplier<T> operation, Consumer<T> success,
+                         Consumer<RuntimeException> failure) {
+        executeAction(sender, true, operation, success, failure);
+    }
+
+    <T> void readAction(CommandSender sender, Supplier<T> operation, Consumer<T> success,
+                        Consumer<RuntimeException> failure) {
+        executeAction(sender, false, operation, success, failure);
     }
 
     String money(long minorUnits) {
@@ -701,21 +717,25 @@ final class PhaseOneRuntime {
     }
 
     private void projectExpansion(CommandSender sender,
-                                  PhaseThreeRepository.ExpansionOperation operation) {
+                                  PhaseThreeRepository.ExpansionOperation operation,
+                                  Consumer<PhaseThreeRepository.ExpansionOperation> success,
+                                  Consumer<RuntimeException> failure) {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 List<UUID> loaded = repository.listMemberIds(operation.townId());
                 plugin.getServer().getScheduler().runTask(plugin,
-                        () -> addExpansionArea(sender, operation, loaded));
+                        () -> addExpansionArea(sender, operation, loaded, success, failure));
             } catch (RuntimeException exception) {
-                handleFailure(sender, exception);
+                reportActionFailure(exception, failure);
             }
         });
     }
 
     private void addExpansionArea(CommandSender sender,
                                   PhaseThreeRepository.ExpansionOperation operation,
-                                  List<UUID> members) {
+                                  List<UUID> members,
+                                  Consumer<PhaseThreeRepository.ExpansionOperation> success,
+                                  Consumer<RuntimeException> failure) {
         LandProtectionService.Result attempted;
         try {
             attempted = landProtection.addArea(operation.residenceName(),
@@ -733,12 +753,16 @@ final class PhaseOneRuntime {
                 } else {
                     finance.refundExpansion(operation.expansionId(), result.message());
                 }
-                plugin.getServer().getScheduler().runTask(plugin, () -> sender.sendMessage(
-                        result.success() ? "§a领地扩张完成，公共资金已扣款。"
-                                : "§cResidence 扩张失败，公共资金已自动退款: "
-                                + result.message()));
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    if (result.success()) {
+                        success.accept(operation);
+                    } else {
+                        failure.accept(new IllegalStateException(
+                                "Residence 扩张失败，公共资金已自动退款: " + result.message()));
+                    }
+                });
             } catch (RuntimeException exception) {
-                handleFailure(sender, exception);
+                reportActionFailure(exception, failure);
             }
         });
     }
@@ -750,7 +774,12 @@ final class PhaseOneRuntime {
                     List<UUID> members = repository.listMemberIds(expansion.townId());
                     plugin.getServer().getScheduler().runTask(plugin,
                             () -> addExpansionArea(org.bukkit.Bukkit.getConsoleSender(),
-                                    expansion, members));
+                                    expansion, members,
+                                    ignored -> plugin.getLogger().info(
+                                            "已恢复领地扩张 " + expansion.expansionId()),
+                                    exception -> plugin.getLogger().severe(
+                                            "恢复领地扩张失败 " + expansion.expansionId()
+                                                    + ": " + safeMessage(exception))));
                 } catch (RuntimeException exception) {
                     plugin.getLogger().severe("恢复领地扩张失败 " + expansion.expansionId()
                             + ": " + safeMessage(exception));
@@ -764,17 +793,29 @@ final class PhaseOneRuntime {
                                           java.util.function.Function<PhaseThreeRepository.EconomyOperation,
                                                   VaultSettlementService.Result> external,
                                           Consumer<PhaseThreeRepository.LedgerMutation> success) {
+        executeExternalOperation(sender, prepare, external, success,
+                exception -> handleFailure(sender, exception));
+    }
+
+    private void executeExternalOperation(CommandSender sender,
+                                          Supplier<PhaseThreeRepository.EconomyOperation> prepare,
+                                          java.util.function.Function<PhaseThreeRepository.EconomyOperation,
+                                                  VaultSettlementService.Result> external,
+                                          Consumer<PhaseThreeRepository.LedgerMutation> success,
+                                          Consumer<RuntimeException> failure) {
         if (!databaseAvailable.get()) {
-            sender.sendMessage("§cSQLite 当前不可用，资金操作已锁定。");
+            failure.accept(new PhaseThreeRepository.StorageUnavailableException(
+                    "SQLite 当前不可用，资金操作已锁定", null));
             return;
         }
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 PhaseThreeRepository.EconomyOperation operation = prepare.get();
                 plugin.getServer().getScheduler().runTask(plugin,
-                        () -> preflightExternalOperation(sender, operation, external, success));
+                        () -> preflightExternalOperation(sender, operation, external, success,
+                                failure));
             } catch (RuntimeException exception) {
-                handleFailure(sender, exception);
+                reportActionFailure(exception, failure);
             }
         });
     }
@@ -784,7 +825,8 @@ final class PhaseOneRuntime {
                                             java.util.function.Function<
                                                     PhaseThreeRepository.EconomyOperation,
                                                     VaultSettlementService.Result> external,
-                                            Consumer<PhaseThreeRepository.LedgerMutation> success) {
+                                            Consumer<PhaseThreeRepository.LedgerMutation> success,
+                                            Consumer<RuntimeException> failure) {
         VaultSettlementService.Result availability;
         try {
             availability = settlement.checkAvailability();
@@ -793,16 +835,17 @@ final class PhaseOneRuntime {
                     "Vault 清算账户预检异常: " + safeMessage(exception), false, false);
         }
         if (!availability.success()) {
-            finishFailedExternalOperation(sender, operation, availability);
+            finishFailedExternalOperation(sender, operation, availability, failure);
             return;
         }
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 finance.markOperationExternalApplied(operation.operationId());
                 plugin.getServer().getScheduler().runTask(plugin,
-                        () -> applyExternalOperation(sender, operation, external, success));
+                        () -> applyExternalOperation(sender, operation, external, success,
+                                failure));
             } catch (RuntimeException exception) {
-                handleFailure(sender, exception);
+                reportActionFailure(exception, failure);
             }
         });
     }
@@ -812,7 +855,8 @@ final class PhaseOneRuntime {
                                         java.util.function.Function<
                                                 PhaseThreeRepository.EconomyOperation,
                                                 VaultSettlementService.Result> external,
-                                        Consumer<PhaseThreeRepository.LedgerMutation> success) {
+                                        Consumer<PhaseThreeRepository.LedgerMutation> success,
+                                        Consumer<RuntimeException> failure) {
         VaultSettlementService.Result result;
         try {
             result = external.apply(operation);
@@ -822,7 +866,7 @@ final class PhaseOneRuntime {
                     false, true);
         }
         if (!result.success()) {
-            finishFailedExternalOperation(sender, operation, result);
+            finishFailedExternalOperation(sender, operation, result, failure);
             return;
         }
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -831,14 +875,15 @@ final class PhaseOneRuntime {
                         finance.completeOperation(operation.operationId());
                 plugin.getServer().getScheduler().runTask(plugin, () -> success.accept(mutation));
             } catch (RuntimeException exception) {
-                handleFailure(sender, exception);
+                reportActionFailure(exception, failure);
             }
         });
     }
 
     private void finishFailedExternalOperation(CommandSender sender,
                                                PhaseThreeRepository.EconomyOperation operation,
-                                               VaultSettlementService.Result result) {
+                                               VaultSettlementService.Result result,
+                                               Consumer<RuntimeException> failure) {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 if (result.compensationRequired()) {
@@ -849,18 +894,16 @@ final class PhaseOneRuntime {
                 } else {
                     finance.cancelOperation(operation.operationId(), result.message());
                 }
-                plugin.getServer().getScheduler().runTask(plugin,
-                        () -> sender.sendMessage("§c资金操作失败"
-                                + (result.compensated() ? "，已自动退回玩家资金: " : ": ")
-                                + result.message() + (result.compensationRequired()
-                                ? "；该镇消费已锁定，需人工补偿。" : "")));
+                plugin.getServer().getScheduler().runTask(plugin, () -> failure.accept(
+                        new IllegalStateException(result.message()
+                                + (result.compensationRequired() ? "；该镇消费已锁定，需人工补偿" : ""))));
             } catch (RuntimeException exception) {
-                handleFailure(sender, exception);
+                reportActionFailure(exception, failure);
             }
         });
     }
 
-    private void refreshTaxPolicies() {
+    void refreshTaxPolicies() {
         Map<UUID, QuickShopTaxAdapter.TaxPolicy> loaded = new java.util.HashMap<>();
         for (PhaseThreeRepository.MemberTaxPolicy policy : finance.loadMemberTaxPolicies()) {
             loaded.put(policy.playerId(), new QuickShopTaxAdapter.TaxPolicy(policy.townId(),
@@ -900,7 +943,42 @@ final class PhaseOneRuntime {
         });
     }
 
+    private <T> void executeAction(CommandSender sender, boolean write, Supplier<T> operation,
+                                   Consumer<T> success, Consumer<RuntimeException> failure) {
+        if (write && !databaseAvailable.get()) {
+            failure.accept(new PhaseOneRepository.StorageUnavailableException(
+                    "SQLite 当前不可用，写操作已锁定", null));
+            return;
+        }
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                T result = operation.get();
+                databaseAvailable.set(true);
+                plugin.getServer().getScheduler().runTask(plugin, () -> success.accept(result));
+            } catch (RuntimeException exception) {
+                markStorageFailure(exception);
+                plugin.getServer().getScheduler().runTask(plugin, () -> failure.accept(exception));
+            }
+        });
+    }
+
     private void handleFailure(CommandSender sender, RuntimeException exception) {
+        markStorageFailure(exception);
+        plugin.getServer().getScheduler().runTask(plugin,
+                () -> sender.sendMessage("§c操作失败: " + safeMessage(exception)));
+    }
+
+    private void reportActionFailure(RuntimeException exception,
+                                     Consumer<RuntimeException> failure) {
+        markStorageFailure(exception);
+        if (plugin.getServer().isPrimaryThread()) {
+            failure.accept(exception);
+        } else {
+            plugin.getServer().getScheduler().runTask(plugin, () -> failure.accept(exception));
+        }
+    }
+
+    private void markStorageFailure(RuntimeException exception) {
         if (exception instanceof PhaseOneRepository.StorageUnavailableException
                 || exception instanceof GovernanceRepository.StorageUnavailableException
                 || exception instanceof PhaseThreeRepository.StorageUnavailableException
@@ -909,8 +987,6 @@ final class PhaseOneRuntime {
             databaseAvailable.set(false);
             plugin.getLogger().severe(exception.getMessage());
         }
-        plugin.getServer().getScheduler().runTask(plugin,
-                () -> sender.sendMessage("§c操作失败: " + safeMessage(exception)));
     }
 
     private static String safeMessage(Throwable throwable) {

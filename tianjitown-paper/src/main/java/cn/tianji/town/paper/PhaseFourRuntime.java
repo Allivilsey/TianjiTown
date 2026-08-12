@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 final class PhaseFourRuntime implements Listener {
     private final TianjiTownPlugin plugin;
@@ -74,17 +75,23 @@ final class PhaseFourRuntime implements Listener {
                 settings.buffShopEnabled());
     }
 
-    void buyBuff(Player player, String key) {
+    void buyBuffAction(Player player, String key,
+                       Consumer<PhaseFourRepository.BuffPurchase> success,
+                       Consumer<RuntimeException> failure) {
         if (!buffShopEnabled() || !host.consumptionEnabled()) {
-            player.sendMessage("§c公共 Buff 商店当前暂停新购买。");
+            failure.accept(new IllegalStateException("公共 Buff 商店当前暂停新购买"));
             return;
         }
-        BuffDefinition definition = settings.requireBuff(key);
-        host.write(player, () -> repository.purchaseBuff(player.getUniqueId(), player.getName(),
-                definition, host.settlement().scale(), "buff-purchase:" + UUID.randomUUID(),
-                Instant.now()), purchase -> {
-            verifyBuffPurchase(player, definition, purchase);
-        });
+        try {
+            BuffDefinition definition = settings.requireBuff(key);
+            host.writeAction(player, () -> repository.purchaseBuff(player.getUniqueId(),
+                            player.getName(), definition, host.settlement().scale(),
+                            "buff-purchase:" + UUID.randomUUID(), Instant.now()),
+                    purchase -> verifyBuffPurchase(player, purchase, success, failure),
+                    failure);
+        } catch (RuntimeException exception) {
+            failure.accept(exception);
+        }
     }
 
     void cleanupExpired() {
@@ -209,32 +216,28 @@ final class PhaseFourRuntime implements Listener {
         }
     }
 
-    private void verifyBuffPurchase(Player player, BuffDefinition definition,
-                                    PhaseFourRepository.BuffPurchase purchase) {
-        host.read(player, () -> repository.activeBuffsForPlayer(player.getUniqueId(), Instant.now()),
-                buffs -> {
+    private void verifyBuffPurchase(Player player, PhaseFourRepository.BuffPurchase purchase,
+                                    Consumer<PhaseFourRepository.BuffPurchase> success,
+                                    Consumer<RuntimeException> failure) {
+        host.readAction(player,
+                () -> repository.activeBuffsForPlayer(player.getUniqueId(), Instant.now()), buffs -> {
             try {
                 applyBuffs(player, buffs);
-                player.sendMessage("§a已购买 " + definition.displayName() + "，等级 "
-                        + purchase.buff().level() + "，到期时间 "
-                        + purchase.buff().expiresAt() + "；公共余额 "
-                        + host.money(purchase.balanceAfterMinor()));
                 refreshAllPlayers();
-                TownUiController ui = plugin.townUi();
-                if (ui != null) {
-                    ui.openBuffShop(player);
-                }
+                success.accept(purchase);
             } catch (RuntimeException exception) {
                 clearManagedEffects(player);
-                host.write(player, () -> repository.refundActiveBuff(purchase.buff().buffId(),
-                        null, "SYSTEM", "Buff 应用失败自动补偿: " + safeMessage(exception)),
+                host.writeAction(player,
+                        () -> repository.refundActiveBuff(purchase.buff().buffId(), null,
+                                "SYSTEM", "Buff 应用失败自动补偿: " + safeMessage(exception)),
                         refunded -> {
-                    player.sendMessage("§cBuff 应用失败，已自动取消并退回公共资金。原因: "
-                            + safeMessage(exception));
                     refreshAllPlayers();
-                });
+                    failure.accept(new IllegalStateException(
+                            "Buff 应用失败，已自动取消并退回公共资金: "
+                                    + safeMessage(exception), exception));
+                }, failure);
             }
-        });
+        }, failure);
     }
 
     private void deliverReservedOrder(Player player, PhaseFourRepository.ResourceOrder order,

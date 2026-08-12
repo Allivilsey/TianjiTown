@@ -5,7 +5,6 @@ import cn.tianji.town.core.application.ApplicationText;
 import cn.tianji.town.core.economy.MoneyAmount;
 import cn.tianji.town.core.consumption.BuffDefinition;
 import cn.tianji.town.core.land.ExpansionDirection;
-import cn.tianji.town.core.ports.LandProtectionService;
 import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.core.town.TownStatus;
 import cn.tianji.town.core.governance.VoteType;
@@ -68,11 +67,13 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 final class TownUiController implements Listener {
     private static final int MENU_TIMEOUT_TICKS = 20 * 60;
     private final TianjiTownPlugin plugin;
     private final PhaseOneRuntime runtime;
+    private final TownActions actions;
     private final SitePolicy sitePolicy;
     private final NamespacedKey stationKey;
     private final NamespacedKey handbookKey;
@@ -86,9 +87,10 @@ final class TownUiController implements Listener {
     private final Map<UUID, ReviewReasonSession> reviewReasonInputs = new ConcurrentHashMap<>();
     private final Set<UUID> donationInputs = ConcurrentHashMap.newKeySet();
 
-    TownUiController(TianjiTownPlugin plugin, PhaseOneRuntime runtime) {
+    TownUiController(TianjiTownPlugin plugin, PhaseOneRuntime runtime, TownActions actions) {
         this.plugin = plugin;
         this.runtime = runtime;
+        this.actions = actions;
         this.sitePolicy = runtime.sitePolicy();
         this.stationKey = new NamespacedKey(plugin, "service_station");
         this.handbookKey = new NamespacedKey(plugin, "handbook");
@@ -551,13 +553,12 @@ final class TownUiController implements Listener {
             return;
         }
         formSessions.remove(player.getUniqueId());
-        runtime.write(player, () -> runtime.repository().updateTownProfile(form.targetId(),
-                parsed, form.version(), player.getUniqueId(), player.getName(),
-                "管理组通过书本界面修改简介和规则"), town -> {
+        actions.updateTownProfile(player, form.targetId(), parsed, form.version(), outcome ->
+                handleOutcome(player, outcome, town -> {
             removeFormBook(player, form.id());
             player.sendMessage("§a小镇简介和规则已保存。");
             openTown(player, town.id());
-        });
+        }));
     }
 
     private void renderMain(Player player, MainView view) {
@@ -720,11 +721,9 @@ final class TownUiController implements Listener {
                 "MAIN", null)));
         openMenu(player, 54, "公共账本 · 完整流水", items);
         if (account.hasUnreadTaxChange()) {
-            runtime.write(player, () -> {
-                runtime.finance().acknowledgeTaxRevision(player.getUniqueId(), account.taxRevision());
-                return null;
-            }, ignored -> {
-            });
+            actions.acknowledgeTaxRevision(player, account.taxRevision(), outcome ->
+                    handleOutcome(player, outcome, ignored -> {
+                    }));
         }
     }
 
@@ -1332,17 +1331,36 @@ final class TownUiController implements Listener {
                             "BUY_BUFF", target, "将按当前叠加层数从公共资金扣款；"
                                     + "效果到期后自动移除", "BUFF_SHOP", null);
                 }
-                case "BUY_BUFF" -> runtime.phaseFour().buyBuff(player, target);
+                case "BUY_BUFF" -> actions.buyBuff(player, target, outcome ->
+                        handleOutcome(player, outcome, purchase -> {
+                            BuffDefinition definition = runtime.phaseFour().settings()
+                                    .requireBuff(target);
+                            player.sendMessage("§a已购买 " + definition.displayName() + "，等级 "
+                                    + purchase.buff().level() + "，到期时间 "
+                                    + purchase.buff().expiresAt() + "；公共余额 "
+                                    + runtime.money(purchase.balanceAfterMinor()));
+                            openBuffShop(player);
+                        }));
                 case "DONATION_INPUT" -> startDonationInput(player);
                 case "SET_TAX" -> {
                     String[] parts = target.split(":");
-                    runtime.changeTaxRate(player, UUID.fromString(parts[0]),
-                            Integer.parseInt(parts[1]));
+                    actions.changeTaxRate(player, UUID.fromString(parts[0]),
+                            Integer.parseInt(parts[1]), outcome -> handleOutcome(player, outcome,
+                                    change -> {
+                                        player.sendMessage("§a小镇税率已更新为 "
+                                                + PhaseOneRuntime.percent(change.basisPoints())
+                                                + "。");
+                                        openFinance(player, 0);
+                                    }));
                 }
                 case "EXPANSION_MENU" -> openExpansionMenu(player);
                 case "PREVIEW_EXPANSION" -> previewExpansion(player,
                         ExpansionDirection.valueOf(target));
-                case "EXPAND" -> runtime.expand(player, ExpansionDirection.valueOf(target));
+                case "EXPAND" -> actions.expandTown(player, ExpansionDirection.valueOf(target),
+                        outcome -> handleOutcome(player, outcome, operation -> {
+                            player.sendMessage("§a领地扩张完成，公共资金已扣款。");
+                            openExpansionMenu(player);
+                        }));
                 case "MEMBERS" -> {
                     String[] parts = target.split(":");
                     openMembers(player, UUID.fromString(parts[0]), Integer.parseInt(parts[1]));
@@ -1437,44 +1455,34 @@ final class TownUiController implements Listener {
         UUID townId = UUID.fromString(parts[0]);
         UUID playerId = UUID.fromString(parts[1]);
         MemberRole role = MemberRole.valueOf(parts[2]);
-        runtime.write(mayor, () -> runtime.governance().changeRoleByMayor(townId, playerId,
-                role, mayor.getUniqueId(), mayor.getName()), changed -> {
+        actions.changeMemberRole(mayor, townId, playerId, role, outcome ->
+                handleOutcome(mayor, outcome, changed -> {
             mayor.sendMessage("§a成员角色已调整为 " + changed + "，正在复核 Residence 权限。");
-            syncResidence(mayor, townId, true);
             openMemberDetail(mayor, townId, playerId);
-        });
+        }));
     }
 
     private void kickMember(Player mayor, String target) {
         String[] parts = target.split(":");
         UUID townId = UUID.fromString(parts[0]);
         UUID playerId = UUID.fromString(parts[1]);
-        runtime.write(mayor, () -> {
-            runtime.governance().removeMemberByMayor(townId, playerId, mayor.getUniqueId(),
-                    mayor.getName());
-            return townId;
-        }, changedTown -> {
+        actions.kickMember(mayor, townId, playerId, outcome ->
+                handleOutcome(mayor, outcome, changedTown -> {
             mayor.sendMessage("§a成员已移出小镇，正在同步 Residence 权限。");
             Player removed = Bukkit.getPlayer(playerId);
             if (removed != null) {
                 removed.sendMessage("§c你已被小镇管理组移出小镇。");
-                runtime.phaseFour().refreshPlayer(removed);
             }
-            syncResidence(mayor, changedTown, true);
             openMembers(mayor, changedTown, 0);
-        });
+        }));
     }
 
     private void requestMayorTransfer(Player mayor, String target) {
         String[] parts = target.split(":");
         UUID townId = UUID.fromString(parts[0]);
         UUID candidateId = UUID.fromString(parts[1]);
-        PhaseTwoSettings settings = phaseTwoSettings(mayor);
-        if (settings == null) {
-            return;
-        }
-        runtime.write(mayor, () -> runtime.governance().requestMayorTransfer(townId,
-                candidateId, mayor.getUniqueId(), settings.transferConfirmation()), transfer -> {
+        actions.requestMayorTransfer(mayor, townId, candidateId, outcome ->
+                handleOutcome(mayor, outcome, transfer -> {
             mayor.sendMessage("§a镇长转让请求已发出，有效期至 " + transfer.expiresAt() + "。");
             Player candidate = Bukkit.getPlayer(candidateId);
             if (candidate != null) {
@@ -1484,39 +1492,34 @@ final class TownUiController implements Listener {
                                 () -> openTransferRequest(candidate, transfer.id()))));
             }
             openMain(mayor);
-        });
+        }));
     }
 
     private void decideMayorTransfer(Player candidate, String target) {
         String[] parts = target.split(":");
         UUID transferId = UUID.fromString(parts[0]);
         boolean accept = Boolean.parseBoolean(parts[1]);
-        runtime.write(candidate, () -> runtime.governance().decideMayorTransfer(transferId,
-                candidate.getUniqueId(), accept), transfer -> {
+        actions.decideMayorTransfer(candidate, transferId, accept, outcome ->
+                handleOutcome(candidate, outcome, transfer -> {
             candidate.sendMessage(accept ? "§a你已接任镇长。" : "§e你已拒绝本次镇长转让。");
-            if (accept) {
-                syncResidence(candidate, transfer.townId(), true);
-            }
             Player oldMayor = Bukkit.getPlayer(transfer.requestedBy());
             if (oldMayor != null) {
                 oldMayor.sendMessage(accept ? "§e镇长转让已被接受，你现在是普通成员。"
                         : "§e候选成员拒绝了镇长转让。");
             }
             openMain(candidate);
-        });
+        }));
     }
 
     private void acknowledgeRules(Player player, String target) {
         String[] parts = target.split(":");
         UUID townId = UUID.fromString(parts[0]);
         long revision = Long.parseLong(parts[1]);
-        runtime.write(player, () -> {
-            runtime.governance().acknowledgeRules(townId, player.getUniqueId(), revision);
-            return revision;
-        }, confirmed -> {
+        actions.acknowledgeRules(player, townId, revision, outcome ->
+                handleOutcome(player, outcome, confirmed -> {
             player.sendMessage("§a已记录你对规则版本 " + confirmed + " 的确认。");
             openMain(player);
-        });
+        }));
     }
 
     private void createVote(Player player, String target) {
@@ -1524,42 +1527,24 @@ final class TownUiController implements Listener {
         UUID townId = UUID.fromString(parts[0]);
         VoteType type = VoteType.valueOf(parts[1]);
         UUID targetId = UUID.fromString(parts[2]);
-        PhaseTwoSettings settings = phaseTwoSettings(player);
-        if (settings == null) {
-            return;
-        }
-        runtime.write(player, () -> runtime.governance().createVote(townId, type, targetId,
-                player.getUniqueId(), settings.activeMemberWindow(), settings.minimumMembership(),
-                settings.voteDuration(), false), vote -> {
+        actions.createVote(player, townId, type, targetId, outcome ->
+                handleOutcome(player, outcome, vote -> {
             player.sendMessage("§a治理投票已创建：有效选民 " + vote.eligibleVoters()
                     + " 人，通过需 " + vote.requiredYes() + " 票。");
             openVote(player, vote.id());
-        });
-    }
-
-    private PhaseTwoSettings phaseTwoSettings(Player player) {
-        try {
-            return PhaseTwoSettings.load(plugin.getConfig());
-        } catch (IllegalArgumentException exception) {
-            player.sendMessage("§c治理配置无效，请联系管理员: " + exception.getMessage());
-            plugin.getLogger().warning("拒绝玩家治理操作: " + exception.getMessage());
-            return null;
-        }
+        }));
     }
 
     private void castVote(Player player, String target) {
         String[] parts = target.split(":");
         UUID voteId = UUID.fromString(parts[0]);
         boolean approve = Boolean.parseBoolean(parts[1]);
-        runtime.write(player, () -> runtime.governance().castVote(voteId,
-                player.getUniqueId(), approve), vote -> {
+        actions.castVote(player, voteId, approve, outcome ->
+                handleOutcome(player, outcome, vote -> {
             player.sendMessage("§a投票已记录。当前赞成/门槛：" + vote.yesVotes()
                     + "/" + vote.requiredYes() + "，状态：" + vote.status());
-            if (vote.passed() && vote.type() == VoteType.KICK_MEMBER) {
-                syncResidence(player, vote.townId(), true);
-            }
             openVotes(player, vote.townId());
-        });
+        }));
     }
 
     private static String memberTarget(String voteTarget) {
@@ -1588,19 +1573,11 @@ final class TownUiController implements Listener {
     }
 
     private void selectSite(Player player, UUID applicationId) {
-        SitePolicy.Validation validation = sitePolicy.validate(player);
-        if (!validation.valid()) {
-            player.sendMessage("§c选址失败: " + validation.error());
-            return;
-        }
-        long minutes = plugin.getConfig().getLong("phase1.application.reservation-minutes", 60);
-        int buffer = plugin.getConfig().getInt("phase1.site.minimum-buffer-chunks", 1);
-        runtime.write(player, () -> runtime.repository().selectSite(applicationId,
-                player.getUniqueId(), validation.territory(), Instant.now().plusSeconds(minutes * 60),
-                buffer), application -> {
+        actions.selectApplicationSite(player, applicationId, outcome ->
+                handleOutcome(player, outcome, application -> {
             sitePolicy.preview(player, application.territory());
             openApplication(player, application);
-        });
+        }));
     }
 
     private void previewApplication(Player player, UUID applicationId) {
@@ -1621,70 +1598,60 @@ final class TownUiController implements Listener {
     }
 
     private void submit(Player player, UUID applicationId) {
-        runtime.write(player, () -> runtime.repository().submit(applicationId, player.getUniqueId()),
-                application -> {
+        actions.submitApplication(player, applicationId, outcome ->
+                handleOutcome(player, outcome, application -> {
                     player.sendMessage("§a申请已提交，等待管理员审核。");
                     playSound(player, Sound.BLOCK_NOTE_BLOCK_PLING);
                     notifyApplicationSubmitted(application);
                     openApplication(player, application);
-                });
+                }));
     }
 
     private void cancel(Player player, UUID applicationId) {
-        runtime.write(player, () -> runtime.repository().cancel(applicationId, player.getUniqueId(),
-                "玩家通过 GUI 撤回"), application -> {
+        actions.cancelApplication(player, applicationId, outcome ->
+                handleOutcome(player, outcome, application -> {
             player.sendMessage("§e申请已撤回，选址预留已释放。");
             openMain(player);
-        });
+        }));
     }
 
     private void applyJoin(Player player, UUID townId) {
-        Duration lifetime = Duration.ofHours(plugin.getConfig().getLong(
-                "phase1.membership.application-lifetime-hours", 48));
-        Duration rejectionCooldown = Duration.ofHours(plugin.getConfig().getLong(
-                "phase1.membership.rejection-cooldown-hours", 24));
-        Duration leaveCooldown = Duration.ofHours(plugin.getConfig().getLong(
-                "phase1.membership.leave-cooldown-hours", 24));
-        int maximumPending = plugin.getConfig().getInt(
-                "phase1.membership.maximum-pending-applications", 3);
-        runtime.write(player, () -> runtime.repository().applyToTown(townId,
-                player.getUniqueId(), lifetime, rejectionCooldown, leaveCooldown, maximumPending),
-                application -> {
+        actions.applyToTown(player, townId, outcome ->
+                handleOutcome(player, outcome, application -> {
                     player.sendMessage("§a入镇申请已提交，有效期至 " + application.expiresAt() + "。");
                     playSound(player, Sound.BLOCK_NOTE_BLOCK_PLING);
                     notifyMayorJoinApplication(application);
                     openMyJoinApplications(player);
-                });
+                }));
     }
 
     private void cancelJoin(Player player, UUID applicationId) {
-        runtime.write(player, () -> runtime.repository().cancelJoinApplication(applicationId,
-                player.getUniqueId()), ignored -> {
+        actions.cancelJoinApplication(player, applicationId, outcome ->
+                handleOutcome(player, outcome, ignored -> {
             player.sendMessage("§e入镇申请已撤回。");
             playSound(player, Sound.UI_BUTTON_CLICK);
             openMyJoinApplications(player);
-        });
+        }));
     }
 
     private void approveJoin(Player mayor, UUID applicationId) {
-        runtime.write(mayor, () -> runtime.repository().approveJoinApplication(applicationId,
-                mayor.getUniqueId()), application -> {
+        actions.approveJoinApplication(mayor, applicationId, outcome ->
+                handleOutcome(mayor, outcome, application -> {
             mayor.sendMessage("§a已批准入镇申请，正在同步 Residence 成员权限。");
             playSound(mayor, Sound.ENTITY_PLAYER_LEVELUP);
             notifyJoinDecision(application, true);
-            syncResidence(mayor, application.townId(), true);
             openTownJoinApplications(mayor, application.townId());
-        });
+        }));
     }
 
     private void rejectJoin(Player mayor, UUID applicationId) {
-        runtime.write(mayor, () -> runtime.repository().rejectJoinApplication(applicationId,
-                mayor.getUniqueId()), application -> {
+        actions.rejectJoinApplication(mayor, applicationId, outcome ->
+                handleOutcome(mayor, outcome, application -> {
             mayor.sendMessage("§e已拒绝该入镇申请。");
             playSound(mayor, Sound.UI_BUTTON_CLICK);
             notifyJoinDecision(application, false);
             openTownJoinApplications(mayor, application.townId());
-        });
+        }));
     }
 
     private void notifyMayorJoinApplication(JoinApplicationSnapshot application) {
@@ -1782,16 +1749,13 @@ final class TownUiController implements Listener {
 
     private void adminDecision(Player admin, UUID applicationId, boolean requestChanges,
                                String reason) {
-        runtime.write(admin, () -> requestChanges
-                        ? runtime.repository().requestChanges(applicationId, admin.getUniqueId(),
-                        admin.getName(), reason)
-                        : runtime.repository().reject(applicationId, admin.getUniqueId(),
-                        admin.getName(), reason), application -> {
+        actions.reviewApplication(admin, applicationId, requestChanges, reason, outcome ->
+                handleOutcome(admin, outcome, application -> {
             admin.sendMessage(requestChanges ? "§a已要求申请人补充资料。" : "§a申请已拒绝。");
             playSound(admin, Sound.UI_BUTTON_CLICK);
             notifyApplicationDecision(application);
             openAdminApplications(admin);
-        });
+        }));
     }
 
     private void adminPreviewSite(Player admin, UUID applicationId) {
@@ -1824,52 +1788,23 @@ final class TownUiController implements Listener {
     }
 
     private void leave(Player player, UUID townId) {
-        runtime.write(player, () -> {
-            runtime.repository().leaveTown(player.getUniqueId());
-            return townId;
-        }, result -> {
+        actions.leaveTown(player, townId, outcome -> handleOutcome(player, outcome, result -> {
             player.sendMessage("§e你已退出小镇。");
-            runtime.phaseFour().refreshPlayer(player);
-            syncResidence(player, townId, true);
             openMain(player);
-        });
+        }));
     }
 
     private void disband(Player mayor, String target) {
         String[] parts = target.split(":", 2);
         UUID townId = UUID.fromString(parts[0]);
         long expectedVersion = Long.parseLong(parts[1]);
-        runtime.write(mayor, () -> runtime.repository().disbandTown(townId,
-                mayor.getUniqueId(), expectedVersion), archived -> {
-            LandProtectionService.Result result = runtime.landProtection().remove(
-                    archived.residenceName(), archived.territory());
-            if (!result.success()) {
-                mayor.sendMessage("§c小镇已安全归档，但 Residence 移除失败："
-                        + result.message() + "。名称和区块仍保持锁定，请联系管理员处理。");
-                plugin.getLogger().warning("镇长解散小镇后 Residence 移除失败 "
-                        + archived.profile().name() + "/" + archived.residenceName()
-                        + ": " + result.message());
-                return;
-            }
-            runtime.write(mayor, () -> {
-                runtime.repository().completeTownDeletion(archived.id(), mayor.getUniqueId(),
-                        mayor.getName(), "镇长通过小镇界面解散");
-                return archived;
-            }, completed -> {
+        actions.disbandTown(mayor, townId, expectedVersion, outcome ->
+                handleOutcome(mayor, outcome, completed -> {
                 mayor.sendMessage("§a小镇“" + completed.profile().name()
                         + "”已解散，领地、成员、名称和区块占位均已释放。");
-                runtime.phaseFour().refreshAllPlayers();
                 playSound(mayor, Sound.ENTITY_WITHER_DEATH);
                 openMain(mayor);
-            });
-        });
-    }
-
-    private void syncResidence(Player sender, UUID townId, boolean repair) {
-        runtime.read(sender, () -> new TownMembers(runtime.repository().findTown(townId)
-                        .orElseThrow(() -> new IllegalArgumentException("小镇不存在")),
-                        runtime.repository().listMemberIds(townId)), state ->
-                runtime.reconcile(sender, state.town(), state.members(), repair));
+            }));
     }
 
     private void startApplicationForm(Player player, UUID targetId, long version,
@@ -1985,7 +1920,12 @@ final class TownUiController implements Listener {
             if (!amount.positive()) {
                 throw new IllegalArgumentException("捐款金额必须大于 0");
             }
-            runtime.donate(player, amount.minorUnits());
+            actions.donate(player, amount.minorUnits(), outcome ->
+                    handleOutcome(player, outcome, mutation -> {
+                        player.sendMessage("§a捐款成功，当前小镇公共余额: §f"
+                                + runtime.money(mutation.balanceAfterMinor()));
+                        openFinance(player, 0);
+                    }));
         } catch (ArithmeticException | NumberFormatException exception) {
             donationInputs.add(player.getUniqueId());
             player.sendMessage("§c金额格式无效，请输入正数且最多保留 "
@@ -2050,19 +1990,17 @@ final class TownUiController implements Listener {
         applicationForms.remove(player.getUniqueId(), form);
         chatInputs.remove(player.getUniqueId());
         if (form.targetId() == null) {
-            Duration cooldown = Duration.ofMinutes(plugin.getConfig()
-                    .getLong("phase1.application.cooldown-minutes", 5));
-            runtime.write(player, () -> runtime.repository().createDraft(player.getUniqueId(),
-                    form.text(), cooldown), application -> {
+            actions.createApplication(player, form.text(), outcome ->
+                    handleOutcome(player, outcome, application -> {
                 player.sendMessage("§a申请草稿已保存，请继续选择领地并确认提交。");
                 openApplication(player, application);
-            });
+            }));
         } else {
-            runtime.write(player, () -> runtime.repository().updateApplicationText(form.targetId(),
-                    player.getUniqueId(), form.text(), form.version()), application -> {
+            actions.updateApplication(player, form.targetId(), form.text(), form.version(), outcome ->
+                    handleOutcome(player, outcome, application -> {
                 player.sendMessage("§a申请资料已保存。");
                 openApplication(player, application);
-            });
+            }));
         }
     }
 
@@ -2116,6 +2054,17 @@ final class TownUiController implements Listener {
 
     private static String preview(String value, int maximum) {
         return value.length() <= maximum ? value : value.substring(0, maximum - 1) + "…";
+    }
+
+    private static <T> void handleOutcome(Player player, TownActionOutcome<T> outcome,
+                                          Consumer<T> success) {
+        if (outcome.result().success()) {
+            success.accept(outcome.value());
+            return;
+        }
+        String detail = outcome.result().data().get("detail");
+        player.sendMessage("§c操作失败 [" + outcome.result().reason() + "]"
+                + (detail == null ? "" : ": " + detail));
     }
 
     private void issueTownForm(Player player, UUID targetId, long version,
@@ -2419,9 +2368,6 @@ final class TownUiController implements Listener {
         String suggestion() {
             return suggestion;
         }
-    }
-
-    private record TownMembers(TownSnapshot town, List<UUID> members) {
     }
 
     private static final class MenuHolder implements InventoryHolder {
