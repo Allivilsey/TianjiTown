@@ -1,6 +1,6 @@
 # TianjiTown
 
-天际服自用的单 Paper 服务器小镇系统。当前版本为第 4 阶段生产候选版 `1.3.0`：在申请、治理、动态税、公共账本和付费领地扩张基础上，开放配置驱动的公共 Buff 与可恢复资源采购。领地加成尚未开放，也不会出现在 UI 或命令帮助中。
+天际服自用的单 Paper 服务器小镇系统。当前版本为计划功能完整版 `1.4.0`：申请、治理、动态税、公共账本、付费领地扩张、公共 Buff、资源采购、领地建筑返还、信标增强和统一运维诊断均已开放。
 
 ## 构建
 
@@ -10,7 +10,7 @@
 mvn -B clean verify
 ```
 
-唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.3.0.jar`。Paper API、Residence、Vault 与可选的 WorldGuard API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
+唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.4.0.jar`。Paper API、Residence、Vault 与可选的 WorldGuard API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
 
 ## 安装与 SQLite
 
@@ -31,7 +31,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 > 此 SQLite 版不会自动导入旧 MySQL 数据。已经在 MySQL 中运行的服务器应先保留完整备份，在隔离环境完成数据转换和验收后再切换；不要把旧 MySQL Flyway history 复制到 SQLite。
 
-第 4 阶段的升级、验收与回滚流程见 [`docs/phase-4/README.md`](docs/phase-4/README.md)，备份与恢复见 [`docs/phase-0/SQLITE_AND_BACKUP.md`](docs/phase-0/SQLITE_AND_BACKUP.md)。
+第 5 阶段的升级、验收与回滚流程见 [`docs/phase-5/README.md`](docs/phase-5/README.md)，日常运维见 [`docs/phase-5/OPERATIONS.md`](docs/phase-5/OPERATIONS.md)。
 
 ## 管理员帮助
 
@@ -44,9 +44,11 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin reload
 /townadmin maintenance <on|off|status>
 /townadmin audit [1~200]
+/townadmin diagnose [1~180天]
+/townadmin backup
 ```
 
-`reload` 只重读可热更新的配置；SQLite 文件和超时参数需重启。维护模式会暂停服务台、手册、玩家 GUI 和表单提交，不会移除现有 Residence 保护。
+`reload` 只重读可热更新的配置；SQLite 文件和超时参数需重启。维护模式会暂停服务台、手册、玩家 GUI 和表单提交，不会移除现有 Residence 保护。`diagnose` 生成 SQLite、Residence、Vault 与 QuickShop 历史统一报告；`backup` 创建 SQLite 在线一致性备份、配置快照与 SHA-256。
 
 ### 服务台与手册
 
@@ -126,6 +128,10 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 Buff 和资源目录位于 `config.yml` 的 `phase4` 配置节。商品定义、价格、期限和角色权限在启动时校验，修改后需要重启；`shop-enabled` 开关可通过 `reload` 热更新。关闭商店只阻止新购买，已生效 Buff 会继续到期，已扣款订单仍可领取或退款。
 
+### 领地加成
+
+建筑返还与信标增强位于 `config.yml` 的 `phase5` 配置节。建筑返还仅处理生存模式成员在自己小镇有效 Residence 内放置的白名单单方块；多方块、容器、特殊方块、带物品数据的物品和非玩家放置均被排除，每日额度由 SQLite 原子计数。信标增强只接管小镇有效 Residence 内、允许世界中的有效信标，并在失效、移除、区块卸载、领地变化或插件停用时恢复原范围、清理附加效果。
+
 ### 第 0 阶段预发验证
 
 ```text
@@ -142,5 +148,7 @@ Buff 和资源目录位于 `config.yml` 的 `phase4` 配置节。商品定义、
 资源采购先在 SQLite 事务中创建订单、扣除公共资金并写入账本，再进入玩家的待领取箱。满背包不会改变订单；交付中的物品携带一次性领取标记，在数据库确认前不能移动、丢弃或使用，断线或重启后会继续确认，避免重复领取或资金丢失。Buff 在登录、重生、跨世界、成员关系变化和到期清理时重新计算，Attribute Modifier 使用稳定 namespaced key。
 
 领地预览按钮会传送至领地中心传送点，并显示持续刷新的火焰粒子边界。扩张以初始 3×3 区块为一个固定单元，只能向相邻方向扩张，最多占用原点周围的 3×3 单元网格；价格按配置中的指数规则向上取整并从公共资金扣除。
+
+成员在自己小镇领地内放置配置白名单中的普通建筑方块时，可能收到一个同种方块返还，操作栏会显示当日用量。有效小镇信标会按配置扩大范围，并在安全上限内增强效果等级；玩家无需额外操作。
 
 管理命令使用小镇全名定位目标。申请人另行填写仅含 `1~12` 个英文字母的领地名称（建议三个字母），该名称转为小写后直接作为 Residence 名称，例如 `SKY` 生成 `sky`。

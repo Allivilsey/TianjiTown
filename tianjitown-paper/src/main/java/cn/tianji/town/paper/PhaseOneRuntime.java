@@ -17,6 +17,7 @@ import cn.tianji.town.storage.phase2.GovernanceRepository;
 import cn.tianji.town.storage.phase2.VoteSnapshot;
 import cn.tianji.town.storage.phase3.PhaseThreeRepository;
 import cn.tianji.town.storage.phase4.PhaseFourRepository;
+import cn.tianji.town.storage.phase5.PhaseFiveRepository;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -41,6 +42,7 @@ final class PhaseOneRuntime {
     private final PhaseThreeSettings phaseThreeSettings;
     private final VaultSettlementService settlement;
     private final PhaseFourRuntime phaseFour;
+    private final PhaseFiveRuntime phaseFive;
     private final Map<UUID, QuickShopTaxAdapter.TaxPolicy> taxPolicies = new ConcurrentHashMap<>();
     private final RetryingWorkQueue<QuickShopTaxAdapter.SuccessfulTax> pendingTaxes;
     private final AtomicBoolean databaseAvailable = new AtomicBoolean(true);
@@ -67,6 +69,12 @@ final class PhaseOneRuntime {
                 new PhaseFourRepository(database.dataSource(),
                         plugin.getServer()::isPrimaryThread),
                 PhaseFourSettings.load(plugin.getConfig()));
+        this.phaseFive = new PhaseFiveRuntime(plugin, this,
+                new PhaseFiveRepository(database.dataSource(),
+                        plugin.getServer()::isPrimaryThread),
+                PhaseFiveSettings.load(plugin.getConfig()), java.util.Objects.requireNonNull(
+                plugin.getServer().getPluginManager().getPlugin("QuickShop-Hikari"),
+                "QuickShop-Hikari"));
         this.pendingTaxes = new RetryingWorkQueue<>(new RetryingWorkQueue.Scheduler() {
             @Override
             public void executeAsync(Runnable task) {
@@ -102,6 +110,14 @@ final class PhaseOneRuntime {
 
     PhaseFourRuntime phaseFour() {
         return phaseFour;
+    }
+
+    PhaseFiveRuntime phaseFive() {
+        return phaseFive;
+    }
+
+    DatabaseGate database() {
+        return database;
     }
 
     QuickShopTaxAdapter.TaxPolicy taxPolicy(UUID receiverId) {
@@ -803,7 +819,8 @@ final class PhaseOneRuntime {
         if (exception instanceof PhaseOneRepository.StorageUnavailableException
                 || exception instanceof GovernanceRepository.StorageUnavailableException
                 || exception instanceof PhaseThreeRepository.StorageUnavailableException
-                || exception instanceof PhaseFourRepository.StorageUnavailableException) {
+                || exception instanceof PhaseFourRepository.StorageUnavailableException
+                || exception instanceof PhaseFiveRepository.StorageUnavailableException) {
             databaseAvailable.set(false);
             plugin.getLogger().severe(exception.getMessage());
         }

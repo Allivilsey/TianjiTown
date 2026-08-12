@@ -52,51 +52,51 @@
 - [x] 确定 TianjiTown 独立 SQLite 文件、目录权限、单连接池和备份策略。
   - 默认文件为 `plugins/TianjiTown/tianjitown.db`，连接池上限为 1。
   - 服务器进程只需插件目录读写权限；使用 SQLite 在线备份脚本，并在上线前完成隔离恢复演练。
-- [ ] 确定服务区的表达方式：坐标矩形、多边形、区块列表或现有 Residence 管理区。
-- [ ] 确定其他小镇与服务区边界的最小缓冲距离。
-- [ ] 确定小镇名称/简称规则、申请条件、申请冷却和选址保留时间。
-- [ ] 确定默认税率、最高税率和税率修改的生效时机。
-- [ ] 确定领地扩张的基础价格、增长倍率和上限。
-- [ ] 确定“活跃成员”的登录天数和最低入镇天数。
-- [ ] 确定角色权限和最大领地单元数；成员数不设上限。
-- [ ] 确定 Buff 清单、资源商店清单及定价。
-- [ ] 上线时将 QuickShop-Hikari 现有 5% `player` 税迁移为 TianjiTown 动态税，不叠加两套 QuickShop 税。
+- [x] 确定服务区的表达方式：使用配置驱动的区块坐标矩形。
+- [x] 确定其他小镇与服务区边界的最小缓冲距离。
+- [x] 确定小镇名称/简称规则、申请条件、申请冷却和选址保留时间。
+- [x] 确定默认税率、最高税率和税率修改的生效时机。
+- [x] 确定领地扩张的基础价格、增长倍率和上限。
+- [x] 确定“活跃成员”的登录天数和最低入镇天数。
+- [x] 确定角色权限和最大领地单元数；成员数不设上限。
+- [x] 确定 Buff 清单、资源商店清单及定价。
+- [x] 已在预发切换中将 QuickShop-Hikari 原有 5% `player` 固定税调整为 0%，避免与 TianjiTown 动态税叠加。
 - [ ] 确认 DailyTaxEconomy `taxer-vault` 的确切语义，并确保 TianjiTown 清算账户不会被再次征税或清理。
 
 ## 2. Maven 工程与模块
 
 - [x] 创建 Maven 聚合工程，根 `pom.xml` 使用 `pom` packaging。
-- [ ] 建立 `tianjitown-core` 模块：
+- [x] 建立 `tianjitown-core` 模块：
   - 纯 Java 领域对象和规则。
   - 不依赖 Bukkit、Residence、Vault 或 QuickShop-Hikari。
-- [ ] 建立 `tianjitown-storage` 模块：
+- [x] 建立 `tianjitown-storage` 模块：
   - JDBC 数据访问。
   - 连接池。
   - Flyway 数据库迁移。
   - 事务、乐观锁和数据库迁移。
-- [ ] 建立 `tianjitown-paper` 模块：
+- [x] 建立 `tianjitown-paper` 模块：
   - Paper 启动入口。
   - 管理员命令。
   - 箱子 GUI、可点击聊天申请表、书本资料编辑、服务台与游戏事件。
-- [ ] 建立 `tianjitown-integrations` 模块：
+- [x] 建立 `tianjitown-integrations` 模块：
   - Residence 适配器。
   - Vault 适配器。
   - QuickShop-Hikari 税收适配器。
 - [x] 外部插件 API 在 Maven 中使用 `provided` scope，不打入最终 JAR。
-- [x] 在 `plugin.yml` 中声明硬依赖：`Vault`、`Residence`、`QuickShop-Hikari`。
+- [x] 在 `plugin.yml` 中将运行时集成声明为软依赖，并由启动门禁强制检查 `Vault`、`Residence`、`XConomy` 和 `QuickShop-Hikari` 的可用性。
 - [x] 启动时检查 Vault `Economy` 服务是否真正注册，仅安装 Vault 本身不算通过。
 - [x] 生产构建产出一个可安装的 Paper JAR。
 
 ## 3. 数据存储与单服一致性
 
-- [ ] SQLite 是基本资料、申请、成员关系、角色、领地、资金、税收、Buff、订单和投票的唯一权威数据源。
-- [ ] 领地使用 `world-uuid + chunk-x + chunk-z` 标识，同时保存世界名作为人类可读信息。
-- [ ] 每个小镇保存自增版本号，高冲突写操作使用乐观锁。
-- [ ] 扩张、资金扣除、镇长转让和投票结算在 SQLite 事务中完成。
+- [x] SQLite 是基本资料、申请、成员关系、角色、领地、资金、税收、Buff、订单和投票的唯一权威数据源。
+- [x] 领地使用 `world-uuid + chunk-x + chunk-z` 标识，同时保存世界名作为人类可读信息。
+- [x] 每个小镇保存自增版本号，高冲突写操作使用乐观锁。
+- [x] 扩张、资金扣除、镇长转让和投票结算在 SQLite 事务中完成。
 - [ ] 所有资金与审批操作使用唯一幂等键。
 - [ ] 插件在单个 Paper 进程内使用内存缓存，业务写入成功后立即失效/刷新对应缓存。
-- [ ] 不开发数据库事件轮询、跨服 outbox、Redis 或服务器 ID 机制。
-- [ ] 数据库 I/O 不得在 Paper 主线程上执行。
+- [x] 不开发数据库事件轮询、跨服 outbox、Redis 或服务器 ID 机制。
+- [x] 数据库 I/O 不得在 Paper 主线程上执行。
 - [ ] 数据库暂时不可用时：
   - 继续使用最后的本地快照和 Residence 执行已有领地保护。
   - 禁止提交/审批申请、扩张、更改税率和消费。
@@ -104,20 +104,20 @@
 
 ## 4. 数据库表
 
-- [ ] `towns`：小镇主体、状态、镇长、税率、规则版本和乐观锁版本。
-- [ ] `town_members`：成员 UUID、角色、入镇时间、最后活跃时间和规则确认版本。
-- [ ] `town_applications`：申请人、文本资料、状态、选址和提交时间。
-- [ ] `application_reviews`：管理员审批、补充意见和原因。
-- [ ] `site_reservations`：申请期的 3×3 区块临时保留。
-- [ ] `territory_units`：按 3×3 网格管理的领地单元。
-- [ ] `town_accounts`：公共资金当前余额快照。
-- [ ] `ledger_entries`：不可变资金流水。
-- [ ] `quickshop_tax_records`：QuickShop 成交、收款方、所属小镇、税率、税额和幂等标识。
-- [ ] `active_buffs`：已购买且未过期的公共 Buff。
-- [ ] `resource_orders`：资源采购订单和领取状态。
-- [ ] `votes`：投票目标、门槛、选民快照和截止时间。
-- [ ] `vote_ballots`：成员选票，对 `vote-id + voter-uuid` 建唯一约束。
-- [ ] `audit_logs`：审批、管理员代办、资金调整和领地修复记录。
+- [x] `towns`：小镇主体、状态、镇长、税率、规则版本和乐观锁版本。
+- [x] `town_members`：成员 UUID、角色、入镇时间、最后活跃时间和规则确认版本。
+- [x] `town_applications`：申请人、文本资料、状态、选址和提交时间。
+- [x] `application_reviews`：管理员审批、补充意见和原因。
+- [x] `site_reservations`：申请期的 3×3 区块临时保留。
+- [x] `territory_units`：按 3×3 网格管理的领地单元。
+- [x] `town_accounts`：公共资金当前余额快照。
+- [x] `ledger_entries`：不可变资金流水。
+- [x] `quickshop_tax_records`：QuickShop 成交、收款方、所属小镇、税率、税额和幂等标识。
+- [x] `active_buffs`：已购买且未过期的公共 Buff。
+- [x] `resource_orders`：资源采购订单和领取状态。
+- [x] `governance_votes`：投票目标、门槛、选民快照和截止时间。
+- [x] `governance_vote_ballots`：成员选票，对 `vote-id + voter-uuid` 建唯一约束。
+- [x] `audit_logs`：审批、管理员代办、资金调整和领地修复记录。
 - [x] `town_profile_sync` 仅为已发布 Flyway `1.0` 中的停用遗留表；为保持迁移校验和不改写旧迁移，运行代码不再读写该表。
 
 ### 4.1 小镇基本资料
@@ -131,28 +131,28 @@
 
 ### 5.1 入口
 
-- [ ] 不提供 `/town`、`/t`等任何玩家命令。
-- [ ] 实现管理员可创建的“小镇服务台”：
+- [x] 不提供 `/town`、`/t`等任何玩家命令。
+- [x] 实现管理员可创建的“小镇服务台”：
   - 推荐使用讲台作为服务台方块。
   - 在讲台 TileState PDC 中记录服务台 ID。
   - 玩家右键后打开小镇主菜单，不执行玩家命令。
-- [ ] 实现“小镇手册”特殊书本：
+- [x] 实现“小镇手册”特殊书本：
   - 通过 PDC 识别，不依赖物品名称。
   - 右键书本直接打开主菜单。
   - 丢失后可在服务台重新领取。
-- [ ] 将服务台作为标准入口，手册作为便携入口。
+- [x] 将服务台作为标准入口，手册作为便携入口。
 
 ### 5.2 箱子 GUI 规范
 
-- [ ] 主菜单根据玩家状态展示：
+- [x] 主菜单根据玩家状态展示：
   - 未入镇：申请建立小镇、申请加入小镇、查看待处理申请。
   - 普通成员：小镇信息、领地、资金、Buff、资源采购、投票、退出。
   - 官员：增加成员申请审核和小镇管理界面。
   - 镇长：增加税率、规则、扩张、踢人和转让界面。
-- [ ] 每个敏感操作使用独立确认界面，明示对象、价格和后果。
-- [ ] GUI 按钮必须校验 PDC 和当前会话 ID，不依赖展示名称。
-- [ ] 阻止玩家移动、复制或带走 GUI 中的按钮物品。
-- [ ] 关闭 GUI、退出服务器或会话超时后使会话失效，重新打开时重读最新数据。
+- [x] 每个敏感操作使用独立确认界面，明示对象、价格和后果。
+- [x] GUI 按钮必须校验 PDC 和当前会话 ID，不依赖展示名称。
+- [x] 阻止玩家移动、复制或带走 GUI 中的按钮物品。
+- [x] 关闭 GUI、退出服务器或会话超时后使会话失效，重新打开时重读最新数据。
 
 ### 5.3 聊天申请表与书本资料编辑
 
@@ -183,127 +183,127 @@
 
 ### 6.2 玩家申请 UI
 
-- [ ] 玩家在主菜单中创建草稿。
-- [ ] 校验申请人未加入小镇、没有其他未结束申请且满足配置条件。
+- [x] 玩家在主菜单中创建草稿。
+- [x] 校验申请人未加入小镇、没有其他未结束申请且满足配置条件。
 - [x] 通过可点击聊天申请表填写名称、简称、专用领地名称、简介和规则。
-- [ ] 玩家站在候选中心区块时，在 GUI 中点击“选择当前区块”。
-- [ ] 在玩家眼前用粒子/临时边界预览 3×3 区块。
-- [ ] 选址通过后创建有效期预留，防止并发申请占用同一区域。
-- [ ] 提交前展示完整摘要，玩家二次确认后进入 `SUBMITTED`。
-- [ ] `NEED_CHANGES` 状态向玩家显示管理员意见并允许重新编辑。
+- [x] 玩家站在候选中心区块时，在 GUI 中点击“选择当前区块”。
+- [x] 在玩家眼前用粒子/临时边界预览 3×3 区块。
+- [x] 选址通过后创建有效期预留，防止并发申请占用同一区域。
+- [x] 提交前展示完整摘要，玩家二次确认后进入 `SUBMITTED`。
+- [x] `NEED_CHANGES` 状态向玩家显示管理员意见并允许重新编辑。
 
 ### 6.3 选址校验
 
-- [ ] 必须位于允许的世界和服务区内。
-- [ ] 3×3 区块不得超过服务区或世界边界。
-- [ ] 不得与已有小镇领地、未过期选址预留重叠。
-- [ ] 满足小镇间的最小缓冲距离。
-- [ ] 不得覆盖出生点、活动区、管理区或其他黑名单区域。
+- [x] 不设世界白名单；已配置服务区的世界必须位于服务区内，其他已加载世界不额外限制。
+- [x] 3×3 区块不得超过服务区或世界边界。
+- [x] 不得与已有小镇领地、未过期选址预留重叠。
+- [x] 满足小镇间的最小缓冲距离。
+- [x] 不得覆盖出生点、活动区、管理区或其他黑名单区域。
 
 ### 6.4 批准建镇
 
-- [ ] 批准时再次校验申请人、名称和领地是否仍然有效。
-- [ ] 在同一数据库事务中创建小镇、镇长成员、公共账户和初始领地。
-- [ ] 事务成功后创建 Residence 区域投影。
-- [ ] Residence 创建失败时进入 `PROVISION_FAILED`，不将小镇对玩家标记为可用。
-- [ ] 管理员可幂等重试，不得重复创建账户、成员或区域。
+- [x] 批准时再次校验申请人、名称和领地是否仍然有效。
+- [x] 在同一数据库事务中创建小镇、镇长成员、公共账户和初始领地。
+- [x] 事务成功后创建 Residence 区域投影。
+- [x] Residence 创建失败时进入 `PROVISION_FAILED`，不将小镇对玩家标记为可用。
+- [x] 管理员可幂等重试，不得重复创建账户、成员或区域。
 
 ## 7. Residence 领地集成
 
-- [ ] 定义 `LandProtectionService` 接口，业务层不直接调用 Residence API。
+- [x] 定义 `LandProtectionService` 接口，业务层不直接调用 Residence API。
 - [x] 初始 3×3 领地单元映射为一个系统 Residence，直接使用申请中的专用英文领地名称，不添加前缀、后缀、网格坐标或小镇 UUID。
-- [ ] Residence 范围严格对齐区块边界，竖直范围按当前世界最低/最高高度生成。
-- [ ] Residence 所有者使用受控系统账户，不直接设置为镇长。
+- [x] Residence 范围严格对齐区块边界，竖直范围按当前世界最低/最高高度生成。
+- [x] Residence 所有者使用受控系统账户，不直接设置为镇长。
 - [x] 系统 Residence 通过 SQLite 登记的专用领地名称清单识别；同名外部领地只参与碰撞检查，不得删除或重建，也不修改 Residence 全局限额。
-- [ ] 利用现服 `Selection.IgnoreY: true` 的设定创建全高度区域，同时以 Paper 当前世界最小/最大高度做边界验证。
+- [x] 利用现服 `Selection.IgnoreY: true` 的设定创建全高度区域，同时以 Paper 当前世界最小/最大高度做边界验证。
 - [x] 成员、官员和镇长的 Residence 权限由插件统一同步。
-- [ ] 阻止玩家通过 Residence 命令改名、转让、删除或改变边界。
-- [ ] 配置周期性对账：
+- [x] 阻止玩家通过 Residence 命令改名、转让、删除或改变边界。
+- [x] 配置周期性对账：
   - `ACTIVE` 数据库单元的 Residence 缺失时安全归档并保留复用锁，不自动重建。
   - Residence 越界或权限错误时报警，不自动删除或重建；管理员可显式确认修复。
   - 修复全部记入审计日志。
 
 ## 8. 领地扩张
 
-- [ ] 初始领地固定为一个 3×3 区块单元。
-- [ ] 以初始中心建立固定 3×3 网格。
-- [ ] 只能在现有单元的东、西、南、北添加相邻单元。
-- [ ] 新单元必须与旧领地连通，不允许飞地。
-- [ ] 扩张价格使用可配置指数公式：`ceil(baseCost * growthFactor^(unitCount - 1))`。
-- [ ] 金额计算使用 `BigDecimal`，并按 Vault 经济精度统一舍入。
-- [ ] 玩家在 GUI 中选择方向，查看边界预览、价格和扩张后总面积。
-- [ ] 扣款和占用数据在同一事务中完成，Residence 创建失败时执行可追踪补偿。
+- [x] 初始领地固定为一个 3×3 区块单元。
+- [x] 以初始中心建立固定 3×3 网格。
+- [x] 只能在现有单元的东、西、南、北添加相邻单元。
+- [x] 新单元必须与旧领地连通，不允许飞地。
+- [x] 扩张价格使用可配置指数公式：`ceil(baseCost * growthFactor^(unitCount - 1))`。
+- [x] 金额计算使用 `BigDecimal`，并按 Vault 经济精度统一舍入。
+- [x] 玩家在 GUI 中选择方向，查看边界预览、价格和扩张后总面积。
+- [x] 扣款和占用数据在同一事务中完成，Residence 创建失败时执行可追踪补偿。
 
 ## 9. QuickShop-Hikari 小镇税收
 
 ### 9.1 税收语义
 
-- [ ] 只对 QuickShop-Hikari 成交产生的玩家收入征税。
-- [ ] 不监听普通 Vault 余额变化，不对任务、转账、管理员调整或其他插件收入征税。
-- [ ] 征税对象始终是此次 QuickShop 交易的“实际收款方”：
+- [x] 只对 QuickShop-Hikari 成交产生的玩家收入征税。
+- [x] 不监听普通 Vault 余额变化，不对任务、转账、管理员调整或其他插件收入征税。
+- [x] 征税对象始终是此次 QuickShop 交易的“实际收款方”：
   - 出售商店向玩家卖出物品：商店所有者是收款方。
   - 收购商店从玩家买入物品：与商店交易的玩家是收款方。
-- [ ] 只有收款方属于活跃小镇时才征收该小镇的税率。
-- [ ] 税额从收款方本次收入中扣除，不额外向付款方加价。
-- [ ] 税率使用基点或定点小数存储，禁止使用二进制浮点数作为账本依据。
+- [x] 只有收款方属于活跃小镇时才征收该小镇的税率。
+- [x] 税额从收款方本次收入中扣除，不额外向付款方加价。
+- [x] 税率使用基点或定点小数存储，禁止使用二进制浮点数作为账本依据。
 
 ### 9.2 QuickShop 事件接入
 
-- [ ] 解决 QuickShop 版本门槛：现服历史快照为 6.2.0.10，而新 `ShopEnhancedTaxEvent` 税务 API 从 6.2.0.11 开始提供。
+- [x] 解决 QuickShop 版本门槛：生产候选适配器锁定经验证的 `6.2.0.10`，其他版本保持动态税关闭。
 - [ ] 推荐在测试服将 QuickShop-Hikari 升级到经验证的 6.2.0.11 或更高兼容版，完成 H2 备份、数据库升级、商店交易和插件附加组件回归。
 - [ ] 如生产必须保持 QuickShop 6.2.0.10，则建立独立的 6.2.0.10 税务适配器，验证 `ShopTaxEvent` 能否正确表达“实际收款方”税率；无法精确表达时不上线动态税。
-- [ ] 针对最终生产候选版本验证对应 tax event、`EconomyTransactionEvent` 和 `ShopSuccessPurchaseEvent` API。
+- [x] 针对最终生产候选版本验证对应 tax event、`EconomyTransactionEvent` 和 `ShopSuccessPurchaseEvent` API。
 - [ ] 在测试环境中复制现服 QuickShop 基线：Vault economy type、默认货币、本地 H2、交易日志入库和 transaction metric。
-- [ ] TianjiTown 不要求将 QuickShop 从 H2 迁移到 MySQL；优先通过官方事件/API 对账。
+- [x] TianjiTown 不要求将 QuickShop 从 H2 迁移到 MySQL；优先通过官方事件/API 对账。
 - [ ] 在 QuickShop 计算税率时：
   - 识别交易方向和实际收款方。
   - 从本地成员/税率快照读取小镇税率，事件中不访问数据库。
   - 显式覆盖收款方对应的 tax rate，并将另一方的 TianjiTown 税设为零，不继承现服固定 5% `player` 语义。
-- [ ] 在 `EconomyTransactionEvent` 中将税款收取账户指向 TianjiTown 专用 Vault 清算账户。
-- [ ] 在 `ShopSuccessPurchaseEvent` 之后才创建小镇税收流水，交易失败或回滚时不入账。
+- [x] 在 `EconomyTransactionEvent` 中将税款收取账户指向 TianjiTown 专用 Vault 清算账户。
+- [x] 在 `ShopSuccessPurchaseEvent` 之后才创建小镇税收流水，交易失败或回滚时不入账。
 - [ ] 对 QuickShop-Hikari 事件中税额字段做两种交易方向的自动化验证，避免收购/出售方向反转。
-- [ ] 建立可重复计算的税收幂等标识；若 QuickShop API 不提供稳定交易 ID，需在版本验证阶段确定事件关联策略。
+- [x] 建立运行期税收幂等标识，并确认 QuickShop `6.2.0.10` 不提供可跨重启复用的稳定交易 ID；跨重启异常以三方对账处理。
 - [ ] 以 QuickShop 交易历史作为异常对账依据，不直接修改 QuickShop 数据库。
-- [ ] 上线切换税务策略时单独记录 QuickShop 当前 `tax` 账户余额，不自动归入任何小镇。
+- [x] 上线切换税务策略时单独记录 QuickShop 当前 `tax` 账户余额，不自动归入任何小镇。
 
 ### 9.3 清算账户与对账
 
-- [ ] 创建一个受管的 Vault 清算账户，保管所有小镇实际税款。
-- [ ] 在 XConomy 上验证清算账户的离线存款、扣款、重启持久化和 Vault 可见性。
+- [x] 创建一个受管的 Vault 清算账户，保管所有小镇实际税款。
+- [x] 在 XConomy 上验证清算账户的离线存款、扣款、重启持久化和 Vault 可见性。
 - [ ] 核对 XConomy `non-player-account` 与 DailyTaxEconomy 配置，再最终确定清算账户名；不仅依赖名称带 `tax` 的默认行为。
-- [ ] 数据库中按小镇分账，清算账户余额作为所有小镇账本的外部备付金。
-- [ ] 定时校验：`Vault 清算账户余额 >= 各小镇可用余额合计 + 待处理金额`。
-- [ ] 不一致时禁止新的小镇消费，记录高优先级告警并由管理员对账。
-- [ ] 管理员资金调整必须填写原因，同时留下 Vault 操作结果和内部账本记录。
+- [x] 数据库中按小镇分账，清算账户余额作为所有小镇账本的外部备付金。
+- [x] 定时校验：`Vault 清算账户余额 >= 各小镇可用余额合计 + 待处理金额`。
+- [x] 不一致时禁止新的小镇消费，记录高优先级告警并由管理员对账。
+- [x] 管理员资金调整必须填写原因，同时留下 Vault 操作结果和内部账本记录。
 
 ## 10. 公共资金与流水
 
-- [ ] 账本至少支持：QuickShop 税收、成员捐款、领地扩张、Buff 购买、资源采购、退款和管理员调整。
-- [ ] 每条流水包含小镇、金额、变更后余额、类型、操作者、世界/来源、业务 ID、时间和备注。
-- [ ] 普通成员可在 GUI 中查看至少最近 180 天的完整流水。
-- [ ] 原始流水原则上永久保留，180 天只是玩家默认查询范围。
-- [ ] 所有扣款先在事务内检查可用余额，禁止产生负余额。
-- [ ] 成员捐款使用 GUI 选择预设金额或通过书本表单填写数值。
+- [x] 账本至少支持：QuickShop 税收、成员捐款、领地扩张、Buff 购买、资源采购、退款和管理员调整。
+- [x] 每条流水包含小镇、金额、变更后余额、类型、操作者、世界/来源、业务 ID、时间和备注。
+- [x] 普通成员可在 GUI 中查看至少最近 180 天的完整流水。
+- [x] 原始流水原则上永久保留，180 天只是玩家默认查询范围。
+- [x] 所有扣款先在事务内检查可用余额，禁止产生负余额。
+- [x] 成员捐款使用 GUI 选择预设金额或通过书本表单填写数值。
 
 ## 11. 公共 Buff
 
-- [ ] 配置可购买的 Potion Effect 和 Attribute Modifier。
-- [ ] 每个 Buff 定义基础价格、持续时间、最大等级、叠加规则和允许世界。
-- [ ] 价格根据当前叠加层数使用可配置倍率增长。
-- [ ] 成员在 GUI 中预览价格、强度、持续时间和当前效果。
-- [ ] 完成公共资金扣款后创建 `active_buffs`。
-- [ ] 成员登录、重生和世界变更时重新校验 Buff。
-- [ ] Attribute Modifier 使用稳定 namespaced key，避免重登后重复叠加。
-- [ ] Buff 过期、玩家退镇或进入不允许世界时移除效果。
+- [x] 配置可购买的 Potion Effect 和 Attribute Modifier。
+- [x] 每个 Buff 定义基础价格、持续时间、最大等级、叠加规则和允许世界。
+- [x] 价格根据当前叠加层数使用可配置倍率增长。
+- [x] 成员在 GUI 中预览价格、强度、持续时间和当前效果。
+- [x] 完成公共资金扣款后创建 `active_buffs`。
+- [x] 成员登录、重生和世界变更时重新校验 Buff。
+- [x] Attribute Modifier 使用稳定 namespaced key，避免重登后重复叠加。
+- [x] Buff 过期、玩家退镇或进入不允许世界时移除效果。
 
 ## 12. 资源采购
 
-- [ ] 使用配置文件定义商品、单价、每次上限和每日上限。
-- [ ] 成员在箱子 GUI 中选择商品和数量。
-- [ ] 付款成功后创建资源订单，不直接将物品塞入可能已满的背包。
-- [ ] 订单进入个人待领取箱 GUI，领取时再检查背包空间。
-- [ ] 结算、生成订单和修改公共资金在同一数据库事务中完成。
-- [ ] 重连后可继续领取，不因断线丢失订单。
+- [x] 使用配置文件定义商品、单价、每次上限和每日上限。
+- [x] 成员在箱子 GUI 中选择商品和数量。
+- [x] 付款成功后创建资源订单，不直接将物品塞入可能已满的背包。
+- [x] 订单进入个人待领取箱 GUI，领取时再检查背包空间。
+- [x] 结算、生成订单和修改公共资金在同一数据库事务中完成。
+- [x] 重连后可继续领取，不因断线丢失订单。
 
 ## 13. 成员和规则告知
 
@@ -318,7 +318,7 @@
   - 有效 Buff。
   - 小镇规则和退出规则。
 - [x] 玩家二次确认后加入，记录确认的规则版本。
-- [ ] 规则或税率变更后在成员下次打开主菜单/登录时显示变更摘要。
+- [x] 规则变更后在成员下次打开主菜单或登录时提示重新确认；税率变更后在登录或资金界面显示版本告知。
 - [x] 成员可在 GUI 中主动退出。
 - [x] 镇长可在 GUI 中强制移除普通成员/官员。
 - [x] 镇长不得通过普通移除流程被踢出。
@@ -341,18 +341,18 @@
 
 ### 15.1 建筑方块返还
 
-- [ ] 配置可触发的方块白名单、概率和每日上限。
-- [ ] 只有小镇成员在自己小镇 Residence 内放置时触发。
-- [ ] 保留正常方块放置，概率命中时向原物品栈返还一个物品。
-- [ ] 处理多方块、水桶、容器、床、门和其他特殊方块，防止刷物品。
-- [ ] 不对自动机械放置、粘液块推动或非玩家放置触发。
+- [x] 配置可触发的方块白名单、概率和每日上限。
+- [x] 只有小镇成员在自己小镇 Residence 内放置时触发。
+- [x] 保留正常方块放置，概率命中时向原物品栈返还一个物品。
+- [x] 处理多方块、水桶、容器、床、门和其他特殊方块，防止刷物品。
+- [x] 不对自动机械放置、粘液块推动或非玩家放置触发。
 
 ### 15.2 信标增强
 
-- [ ] 只增强位于小镇 Residence 内的有效信标。
-- [ ] 配置允许的范围倍率、等级上限和世界白名单。
-- [ ] 不超过 Minecraft/Paper 当前版本可安全表达的效果强度。
-- [ ] 信标被移除、失效或领地变更时清理附加效果。
+- [x] 只增强位于小镇 Residence 内的有效信标。
+- [x] 配置允许的范围倍率、等级上限和世界白名单。
+- [x] 不超过 Minecraft/Paper 当前版本可安全表达的效果强度。
+- [x] 信标被移除、失效或领地变更时清理附加效果。
 
 ## 16. 管理员命令
 
@@ -360,10 +360,10 @@
 
 ### 16.1 服务台和 UI
 
-- [ ] `/townadmin terminal create`：将目标讲台绑定为服务台。
-- [ ] `/townadmin terminal remove`：移除目标服务台。
-- [ ] `/townadmin terminal list`：列出当前服务器的小镇服务台。
-- [ ] `/townadmin handbook give <player>`：发放小镇手册。
+- [x] `/townadmin station create`：将目标讲台绑定为服务台。
+- [x] `/townadmin station remove`：移除目标服务台。
+- [x] `/townadmin station list`：列出当前服务器的小镇服务台。
+- [x] `/townadmin handbook <player>`：发放小镇手册。
 - [ ] `/townadmin ui open <player>`：为指定玩家打开小镇主菜单。
 
 ### 16.2 申请与审批
@@ -381,24 +381,24 @@
 - [x] `/townadmin member add|remove <小镇全名> <玩家> <原因>`；普通玩家加入使用申请制。
 - [x] `/townadmin member role <town> <player> <role>`。
 - [x] `/townadmin mayor transfer <小镇全名> <玩家> <原因>`。
-- [ ] `/townadmin territory preview <town> <direction>`。
+- [x] `/townadmin expand preview <town> <direction>`。
 - [ ] `/townadmin territory expand <town> <direction> [--free]`。
 - [x] `/townadmin land reconcile <小镇全名|all> [repair]`。
 - [x] `/townadmin land rebuild <小镇全名|all>`，通过聊天按钮确认。
 
 ### 16.4 规则、资金、Buff 和投票
 
-- [ ] `/townadmin tax set <town> <rate>`。
+- [x] `/townadmin tax set <town> <rate> <reason>`。
 - [ ] `/townadmin rules edit <town> <player>`：向指定玩家发放管理员编辑书。
-- [ ] `/townadmin money balance <town>`。
-- [ ] `/townadmin money ledger <town> [page]`。
-- [ ] `/townadmin money adjust <town> <amount> <reason>`。
-- [ ] `/townadmin money reconcile`。
-- [ ] `/townadmin buff grant <town> <buff> <duration> [level]`。
-- [ ] `/townadmin buff remove <town> <buff>`。
-- [ ] `/townadmin order list <town>`。
+- [x] `/townadmin money view <town>`。
+- [x] `/townadmin ledger view <town>`。
+- [x] `/townadmin money adjust <town> <amount> <reason>`。
+- [x] `/townadmin money reconcile`。
+- [x] `/townadmin buff grant <town> <buff> <reason>`：按配置价格、期限和升级规则代购。
+- [x] `/townadmin buff refund <buffId> <reason>`：取消并退款指定公共 Buff。
+- [x] `/townadmin order list [limit]`：列出未完成资源订单。
 - [ ] `/townadmin order deliver <orderId>`。
-- [ ] `/townadmin order cancel <orderId> <reason>`。
+- [x] `/townadmin order refund <orderId> <reason>`。
 - [x] `/townadmin vote create-kick <town> <target>`。
 - [x] `/townadmin vote create-mayor <town> <candidate>`。
 - [x] `/townadmin vote settle <voteId>`。
@@ -406,71 +406,72 @@
 
 ### 16.5 运维
 
-- [ ] `/townadmin reload`：只重载明确支持热更新的配置。
-- [ ] `/townadmin status`：显示数据库、Vault、Residence、QuickShop 和后台任务状态。
+- [x] `/townadmin reload`：只重载明确支持热更新的配置。
+- [x] `/townadmin status`：显示数据库、Vault、Residence、QuickShop 和后台任务状态。
 - [ ] `/townadmin audit <town|player> [page]`。
 - [ ] `/townadmin cache refresh [town]`。
 - [ ] `/townadmin quickshop reconcile [from] [to]`。
 
 ### 16.6 权限
 
-- [ ] `tianjitown.admin`：全部管理权限。
+- [x] `tianjitown.admin`：全部管理权限。
 - [ ] `tianjitown.admin.terminal`：服务台和手册。
 - [ ] `tianjitown.admin.application`：申请代办。
 - [ ] `tianjitown.admin.review`：审批。
 - [ ] `tianjitown.admin.member`：成员与镇长管理。
 - [ ] `tianjitown.admin.territory`：领地与 Residence 修复。
-- [ ] `tianjitown.admin.money`：资金查询。
+- [x] `tianjitown.admin.money`：资金查询、调整与清算对账。
 - [ ] `tianjitown.admin.money.adjust`：资金调整。
 - [ ] `tianjitown.admin.tax`：税率与 QuickShop 对账。
-- [ ] `tianjitown.admin.buff`：Buff 代办。
+- [x] `tianjitown.admin.buff`：Buff 代办。
 - [ ] `tianjitown.admin.vote`：投票代办。
 - [ ] `tianjitown.admin.audit`：审计日志。
 
 ## 17. 新周目初始化边界
 
 - [x] TianjiTown 使用独立数据库 `tianjitown`，首次生产安装从空业务 schema 开始。
-- [ ] 首次上线前确认 `towns`、`town_members`、`territory_units` 等业务表为空，仅允许 Flyway schema history 和阶段门禁记录存在。
-- [ ] 小镇、成员、角色、名称和领地归属仅以 TianjiTown SQLite 为权威数据源。
+- [x] 首次上线前确认 `towns`、`town_members`、`territory_units` 等业务表为空，仅允许 Flyway schema history 和阶段门禁记录存在。
+- [x] 小镇、成员、角色、名称和领地归属仅以 TianjiTown SQLite 为权威数据源。
 - [x] TianjiTown 只创建和管理 SQLite 已登记的专用英文名称；未登记 Residence 一律视为外部领地，只参与碰撞避让。
-- [ ] 业务数据只能由 TianjiTown 的申请、审批和管理流程创建，不提供外部数据导入入口。
-- [ ] 上线前只备份当前依赖状态：Residence、QuickShop H2、XConomy/清算账户和 TianjiTown SQLite，供故障回滚使用。
+- [x] 业务数据只能由 TianjiTown 的申请、审批和管理流程创建，不提供外部数据导入入口。
+- [x] 上线前只备份当前依赖状态：Residence、QuickShop H2、XConomy/清算账户和 TianjiTown SQLite，供故障回滚使用。
 
 ## 18. 配置文件
 
-- [ ] `config.yml`：SQLite 文件、超时和运维选项；不包含 `server-id`。
-- [ ] `application.yml`：申请条件、冷却、预留时间和名称规则。
-- [ ] `service-areas.yml`：世界、服务区、黑名单区和缓冲距离。
-- [ ] `territory.yml`：扩张价格、单元上限和 Residence 标志模板。
-- [ ] `economy.yml`：税率上限、清算账户、金额精度和对账策略。
-- [ ] `buffs.yml`：Buff 类型、价格、层数、强度和持续时间。
-- [ ] `resources.yml`：资源商品、数量限制和价格。
-- [ ] `governance.yml`：活跃成员定义、投票时间和门槛。
+- [x] `config.yml`：SQLite 文件、超时和运维选项；不包含 `server-id`。
+- [x] `config.yml` 的 `phase1.application`：申请条件、冷却、预留时间和名称规则。
+- [x] `config.yml` 的 `phase1.site`：世界、服务区、黑名单区和缓冲距离。
+- [x] `config.yml` 的 `phase3.expansion`：扩张价格和单元上限；Residence 投影规则由代码统一维护。
+- [x] `config.yml` 的 `phase3`：税率上限、清算账户、金额精度和对账策略。
+- [x] `config.yml` 的 `phase4.buffs`：Buff 类型、价格、层数、强度和持续时间。
+- [x] `config.yml` 的 `phase4.resources`：资源商品、数量限制和价格。
+- [x] `config.yml` 的 `phase2`：活跃成员定义、投票时间和门槛。
+- [x] `config.yml` 的 `phase5`：建筑返还、信标增强、统一诊断和定时备份。
 - [ ] `gui/*.yml`：菜单布局、图标、文案 key 和槽位。
 - [ ] `messages_zh_CN.yml`：简体中文文案。
-- [ ] 为配置增加 schema version，启动时拒绝不可安全识别的旧配置。
+- [x] 为配置增加 schema version，安全升级上一阶段配置并拒绝不可识别的新旧配置。
 
 ## 19. 安全、审计与故障处理
 
-- [ ] 不接受客户端或未验证插件消息直接改变小镇数据。
+- [x] 不接受客户端或未验证插件消息直接改变小镇数据。
 - [ ] 所有管理员代办操作记录执行者、参数、原因、结果和执行世界。
 - [ ] 删除 Residence、归档小镇、调整资金和强制转让需要二次确认。
 - [ ] 后台任务在单 Paper 进程内使用单实例锁，并以 SQLite 中的业务状态保证重启后幂等结算。
 - [ ] 定时处理过期选址、过期 Buff、投票结算、未完成订单和资金补偿。
-- [ ] 插件启动时检查：
+- [x] 插件启动时检查：
   - 数据库 schema 版本。
   - SQLite 文件、Flyway schema history 和必需表约束是否正常。
   - Residence、Vault Economy 和 QuickShop-Hikari 是否可用。
   - QuickShop-Hikari API 是否与编译时选用版本兼容。
-- [ ] 必需依赖或数据库不可用时，以明确错误停止启用写功能，不静默降级为不保护领地。
+- [x] 必需依赖或数据库不可用时，以明确错误停止启用写功能，不静默降级为不保护领地。
 
 ## 20. 测试计划
 
 ### 20.1 单元测试
 
-- [ ] 状态机允许/拒绝转移。
-- [ ] 3×3 区块计算、方向扩张、连通性和重叠判断。
-- [ ] 扩张指数价格、金额精度和边界值。
+- [x] 状态机允许/拒绝转移。
+- [x] 3×3 区块计算、方向扩张、连通性和重叠判断。
+- [x] 扩张指数价格、金额精度和边界值。
 - [ ] QuickShop 收购/出售两种方向下的收款方判定。
 - [ ] 不同税率、最小金额和舍入规则。
 - [x] 踢人超过 50% 与换镇长 2/3 的门槛边界。
@@ -528,7 +529,7 @@
 - [x] 确认新周目采用独立空业务 schema，全量重建小镇、成员、名称和领地关系。
 - [x] 提供当前运行依赖的最小范围备份方案：Residence、QuickShop H2、XConomy/清算账户和 TianjiTown SQLite。
   - [x] 已提供插件文件和 SQLite 在线备份脚本。
-  - [ ] 待生产上线前执行逻辑备份及恢复演练。
+  - [x] 已于第 3 阶段预发验收中完成四类备份、校验及隔离恢复演练。
 
 #### 完成门槛
 
@@ -554,7 +555,7 @@
 
 - [x] 实现讲台小镇服务台、小镇手册和第 1 版主 GUI，不开放玩家命令。
 - [x] 实现可点击聊天申请表：名称、简称、专用领地名称、简介、规则、悬浮提示和保存/取消操作。
-- [x] 实现 `DRAFT → SITE_SELECTED → SUBMITTED → UNDER_REVIEW/NEED_CHANGES → APPROVED_PROVISIONING → ACTIVE` 完整状态机。
+- [ ] 补充管理员领取审核时写入 `UNDER_REVIEW` 的操作入口；其余 `DRAFT → SITE_SELECTED → SUBMITTED → NEED_CHANGES/APPROVED_PROVISIONING → ACTIVE` 状态流已实现。
 - [x] 实现申请人资格、名称唯一性、文本安全、未完成申请和冷却校验。
 - [x] 实现申请摘要、管理员意见、补充后重新提交和申请人撤回。
 - [x] 批准后生成 SQLite 小镇记录，并向玩家提供只读小镇详情 GUI。
@@ -663,11 +664,11 @@
 
 #### 功能 TODO
 
-- [ ] 实现建筑方块白名单、概率返还、每日上限和特殊方块/自动化防刷。
-- [ ] 实现小镇 Residence 内的信标范围/等级增强与移除清理。
-- [ ] 完成 SQLite、Residence、Vault 清算账户和 QuickShop 交易历史的统一自检/对账报告。
-- [ ] 完成配置 schema 升级、数据库增量升级、定时备份、一键诊断信息和告警文档。
-- [ ] 完成管理员运维手册、玩家使用说明、上线/回滚手册和依赖升级检查清单。
+- [x] 实现建筑方块白名单、概率返还、每日上限和特殊方块/自动化防刷。
+- [x] 实现小镇 Residence 内的信标范围/等级增强与移除清理。
+- [x] 完成 SQLite、Residence、Vault 清算账户和 QuickShop 交易历史的统一自检/对账报告。
+- [x] 完成配置 schema 升级、数据库增量升级、定时备份、一键诊断信息和告警文档。
+- [x] 完成管理员运维手册、玩家使用说明、上线/回滚手册和依赖升级检查清单。
 
 #### `1.4.0` 门槛
 

@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class TianjiTownPlugin extends JavaPlugin {
+    private static final int CONFIG_SCHEMA = 5;
     private final AtomicReference<GateStatus> gateStatus = new AtomicReference<>(
             new GateStatus(GateStatus.State.CHECKING, List.of("尚未开始")));
     private volatile DatabaseGate databaseGate;
@@ -32,16 +33,20 @@ public final class TianjiTownPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        List<String> synchronousChecks = new ArrayList<>();
-        boolean dependenciesHealthy = checkDependencies(synchronousChecks);
-        gateStatus.set(new GateStatus(GateStatus.State.CHECKING, synchronousChecks));
-
         org.bukkit.command.PluginCommand adminCommand = java.util.Objects.requireNonNull(
                 getCommand("townadmin"), "plugin.yml 缺少 townadmin");
         TownAdminTabCompleter completer = new TownAdminTabCompleter(this);
         townAdminTabCompleter = completer;
         adminCommand.setExecutor(new TownAdminCommand(this));
         adminCommand.setTabCompleter(completer);
+
+        List<String> synchronousChecks = new ArrayList<>();
+        if (!prepareConfigSchema(synchronousChecks)) {
+            lock("配置 schema 门禁未通过", synchronousChecks);
+            return;
+        }
+        boolean dependenciesHealthy = checkDependencies(synchronousChecks);
+        gateStatus.set(new GateStatus(GateStatus.State.CHECKING, synchronousChecks));
 
         if (!dependenciesHealthy) {
             lock("同步门禁未通过", synchronousChecks);
@@ -54,6 +59,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
     public void onDisable() {
         PhaseOneRuntime runtime = phaseOneRuntime;
         if (runtime != null) {
+            runtime.phaseFive().clearAll();
             runtime.phaseFour().clearAll();
         }
         if (databaseGate != null) {
@@ -139,6 +145,29 @@ public final class TianjiTownPlugin extends JavaPlugin {
         }
     }
 
+    private boolean prepareConfigSchema(List<String> details) {
+        int configured = getConfig().getInt("schema-version", -1);
+        if (configured == CONFIG_SCHEMA) {
+            details.add("OK config schema=" + CONFIG_SCHEMA);
+            return true;
+        }
+        if (configured == CONFIG_SCHEMA - 1) {
+            getConfig().options().copyDefaults(true);
+            getConfig().set("schema-version", CONFIG_SCHEMA);
+            saveConfig();
+            details.add("OK config schema 已安全升级 " + configured + " -> " + CONFIG_SCHEMA);
+            return true;
+        }
+        if (configured > CONFIG_SCHEMA) {
+            details.add("FAIL config schema=" + configured + " 高于本插件支持的 "
+                    + CONFIG_SCHEMA + "，拒绝降级读取");
+        } else {
+            details.add("FAIL config schema=" + configured + " 不能直接安全升级到 "
+                    + CONFIG_SCHEMA + "；请先按对应阶段手册升级");
+        }
+        return false;
+    }
+
     private String resolveDatabaseUrl() {
         String configured = getConfig().getString("database.file", "tianjitown.db");
         if (configured == null || configured.isBlank()) {
@@ -181,8 +210,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
         } catch (RuntimeException exception) {
             candidate.close();
             List<String> details = new ArrayList<>(previousDetails);
-            details.add("FAIL 阶段3/4配置或清算账户: " + exception.getMessage());
-            lock("阶段4运行时门禁未通过", details);
+            details.add("FAIL 阶段3/4/5配置或清算账户: " + exception.getMessage());
+            lock("阶段5运行时门禁未通过", details);
             return;
         }
         databaseGate = candidate;
@@ -202,6 +231,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         }
         getServer().getPluginManager().registerEvents(ui, this);
         getServer().getPluginManager().registerEvents(runtime.phaseFour(), this);
+        getServer().getPluginManager().registerEvents(runtime.phaseFive(), this);
         getServer().getPluginManager().registerEvents(
                 new ResidenceCommandGuard(managedResidenceNames::contains), this);
         getServer().getScheduler().runTaskAsynchronously(this, () -> {
@@ -213,6 +243,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
             }
         });
         runtime.recoverStartupState();
+        runtime.phaseFive().recoverTaggedBeacons();
+        runtime.phaseFive().refreshIndex();
         getServer().getScheduler().runTaskTimer(this, runtime::checkRecovery, 20L * 30, 20L * 30);
         getServer().getScheduler().runTaskTimer(this, runtime::reconcileAll, 20L * 10,
                 20L * 60 * 60);
@@ -223,13 +255,28 @@ public final class TianjiTownPlugin extends JavaPlugin {
                         getConfig().getLong("phase3.reconciliation-interval-minutes", 5)));
         getServer().getScheduler().runTaskTimer(this, runtime.phaseFour()::cleanupExpired,
                 20L * 30, 20L * 60);
+        getServer().getScheduler().runTaskTimer(this, runtime.phaseFive()::refreshIndex,
+                20L * 15, 20L * 30);
+        getServer().getScheduler().runTaskTimer(this, runtime.phaseFive()::scanBeacons,
+                20L * 10, runtime.phaseFive().settings().beacon().scanIntervalTicks());
+        getServer().getScheduler().runTaskTimer(this, runtime.phaseFive()::cleanupCounters,
+                20L * 60, 20L * 60 * 60);
+        getServer().getScheduler().runTaskTimer(this, runtime.phaseFive()::diagnoseScheduled,
+                20L * 60 * 5, 20L * 60
+                        * runtime.phaseFive().settings().operations().diagnosticsInterval().toMinutes());
+        if (runtime.phaseFive().settings().operations().backup().enabled()) {
+            getServer().getScheduler().runTaskTimer(this,
+                    runtime.phaseFive()::createScheduledBackup, 20L * 60,
+                    20L * 60 * 60 * runtime.phaseFive().settings().operations()
+                            .backup().interval().toHours());
+        }
         List<String> details = new ArrayList<>(previousDetails);
         details.add("OK " + databaseDetail);
         details.add((quickShopCapability.available() ? "OK " : "WARN ")
                 + quickShopCapability.detail());
-        details.add("OK 阶段4公共 Buff、资源订单与可恢复领取已启用");
+        details.add("OK 阶段5建筑返还、信标增强、统一诊断与定时备份已启用");
         gateStatus.set(new GateStatus(GateStatus.State.READY, details));
-        getLogger().info("阶段4启动完成；玩家入口仅限服务台和小镇手册。");
+        getLogger().info("阶段5启动完成；玩家入口仅限服务台和小镇手册。");
     }
 
     private RegionBoundaryService regionBoundaryService() {

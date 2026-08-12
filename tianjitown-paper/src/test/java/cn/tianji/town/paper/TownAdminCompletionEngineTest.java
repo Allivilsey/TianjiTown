@@ -42,6 +42,8 @@ class TownAdminCompletionEngineTest {
         assertFalse(engine.complete(new String[]{""}, snapshot, dynamic).contains("data"));
         assertEquals(List.of("application"), engine.complete(
                 new String[]{"help", "app"}, snapshot, dynamic));
+        assertEquals(List.of("1", "14", "180", "30", "7", "90"), engine.complete(
+                new String[]{"diagnose", ""}, snapshot, dynamic));
     }
 
     @Test

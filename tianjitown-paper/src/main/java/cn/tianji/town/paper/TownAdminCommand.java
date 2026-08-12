@@ -79,7 +79,7 @@ final class TownAdminCommand implements CommandExecutor {
             }
             if (root.equals("reload")) {
                 plugin.reloadConfig();
-                sender.sendMessage("§a配置已重新读取；阶段3税收/消费及阶段4商店开关立即生效。"
+                sender.sendMessage("§a配置已重新读取；阶段3税收/消费、阶段4商店和阶段5加成开关立即生效。"
                         + "SQLite、清算账户、金额精度和商品定义需重启后生效。");
                 return true;
             }
@@ -109,6 +109,8 @@ final class TownAdminCommand implements CommandExecutor {
                 case "expand" -> expand(sender, runtime, args);
                 case "buff" -> buff(sender, runtime, args);
                 case "order" -> order(sender, runtime, args);
+                case "diagnose" -> diagnose(sender, runtime, args);
+                case "backup" -> backup(sender, runtime, args);
                 default -> {
                     sender.sendMessage("§c未知子命令：" + args[0]
                             + "。使用 /townadmin help 查看帮助。");
@@ -136,8 +138,39 @@ final class TownAdminCommand implements CommandExecutor {
             sender.sendMessage("§7- 资源商店: "
                     + (runtime.phaseFour().resourceShopEnabled() ? "OPEN" : "PAUSED")
                     + "，配置商品=" + runtime.phaseFour().settings().resources().size());
+            sender.sendMessage("§7- 建筑返还: "
+                    + (runtime.phaseFive().buildingRefundEnabled() ? "ENABLED" : "PAUSED")
+                    + "，白名单=" + runtime.phaseFive().settings().buildingRefund()
+                    .materials().size() + "，日上限=" + runtime.phaseFive().settings()
+                    .buildingRefund().dailyLimit());
+            sender.sendMessage("§7- 信标增强: "
+                    + (runtime.phaseFive().beaconEnabled() ? "ENABLED" : "PAUSED"));
+            PhaseFiveRuntime.DiagnosticResult diagnostic = runtime.phaseFive().lastDiagnostic();
+            sender.sendMessage("§7- 最近统一诊断: " + diagnostic.detail()
+                    + (diagnostic.report() == null ? "" : "，报告=" + diagnostic.report()));
+            PhaseFiveBackupService.Result backup = runtime.phaseFive().lastBackup();
+            sender.sendMessage("§7- 最近在线备份: " + backup.detail()
+                    + (backup.databaseFile() == null ? "" : "，文件=" + backup.databaseFile()));
         }
         sender.sendMessage("§7- 玩家入口: " + (maintenanceMode() ? "MAINTENANCE" : "OPEN"));
+    }
+
+    private boolean diagnose(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+        if (args.length > 2) {
+            throw new IllegalArgumentException("用法: /townadmin diagnose [1~180天]");
+        }
+        int days = args.length == 2 ? Integer.parseInt(args[1])
+                : runtime.phaseFive().settings().operations().quickShopDiagnosticDays();
+        runtime.phaseFive().diagnose(sender, days);
+        return true;
+    }
+
+    private boolean backup(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+        if (args.length != 1) {
+            throw new IllegalArgumentException("用法: /townadmin backup");
+        }
+        runtime.phaseFive().createBackup(sender);
+        return true;
     }
 
     private boolean maintenance(CommandSender sender, String[] args) {
@@ -1079,6 +1112,10 @@ final class TownAdminCommand implements CommandExecutor {
                 sender.sendMessage("§eorder §7资源订单查询、代办与退款");
             }
             if (TownAdminPermissions.has(sender::hasPermission,
+                    TownAdminPermissions.OPERATIONS)) {
+                sender.sendMessage("§esystem §7统一诊断、在线备份、状态与维护");
+            }
+            if (TownAdminPermissions.has(sender::hasPermission,
                     TownAdminPermissions.PHASE_ZERO)) {
                 sender.sendMessage("§ephase0 §7预发环境验证");
             }
@@ -1113,6 +1150,8 @@ final class TownAdminCommand implements CommandExecutor {
         sender.sendMessage("§e/townadmin reload §7重载可热更新的配置");
         sender.sendMessage("§e/townadmin maintenance <on|off|status> §7管理维护模式");
         sender.sendMessage("§e/townadmin audit [1~200] §7查看最近审计记录");
+        sender.sendMessage("§e/townadmin diagnose [1~180天] §7生成统一对账诊断报告");
+        sender.sendMessage("§e/townadmin backup §7立即创建 SQLite 在线备份与配置快照");
     }
 
     private static void economyHelp(CommandSender sender, String topic) {

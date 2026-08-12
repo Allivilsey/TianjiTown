@@ -151,6 +151,25 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     }
 
     @Override
+    public boolean contains(String residenceName, UUID worldId,
+                            int blockX, int blockY, int blockZ) {
+        requireMainThread();
+        String name = registerManagedName(residenceName);
+        World world = server.getWorld(worldId);
+        if (world == null) {
+            return false;
+        }
+        try {
+            ClaimedResidence residence = manager().getByName(name);
+            return residence != null && residence.isServerLand()
+                    && residence.containsLoc(new Location(world, blockX + 0.5D,
+                    blockY + 0.5D, blockZ + 0.5D));
+        } catch (RuntimeException | LinkageError exception) {
+            return false;
+        }
+    }
+
+    @Override
     public Inspection inspect(String residenceName, List<Area> areas, Collection<UUID> members) {
         requireMainThread();
         String name = registerManagedName(residenceName);

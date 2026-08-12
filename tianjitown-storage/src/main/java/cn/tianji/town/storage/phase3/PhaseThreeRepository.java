@@ -377,6 +377,37 @@ public final class PhaseThreeRepository {
         });
     }
 
+    public Reconciliation inspectSettlement(long externalBalanceMinor) {
+        requireWorkerThread();
+        if (externalBalanceMinor < 0) {
+            throw new IllegalArgumentException("结算账户余额不能小于 0");
+        }
+        return query(connection -> settlementSnapshot(connection, externalBalanceMinor));
+    }
+
+    private static Reconciliation settlementSnapshot(Connection connection,
+                                                      long externalBalanceMinor)
+            throws SQLException {
+        long internal;
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT COALESCE(SUM(balance_minor), 0) AS total FROM town_accounts");
+             ResultSet row = statement.executeQuery()) {
+            row.next();
+            internal = row.getLong("total");
+        }
+        long pending;
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT COALESCE(SUM(amount_minor), 0) AS total
+                  FROM economy_operations WHERE status = 'EXTERNAL_APPLIED'
+                """); ResultSet row = statement.executeQuery()) {
+            row.next();
+            pending = row.getLong("total");
+        }
+        long required = Math.max(0, Math.addExact(internal, pending));
+        return new Reconciliation(externalBalanceMinor, internal, pending, required,
+                externalBalanceMinor >= required);
+    }
+
     public List<LedgerEntry> ledger(UUID townId, int page, int pageSize, Instant now) {
         requireWorkerThread();
         if (page < 0 || pageSize < 1 || pageSize > 45) {

@@ -23,7 +23,7 @@ final class TownAdminCompletionEngine {
     private static final List<String> ROOTS = List.of(
             "help", "status", "reload", "audit", "station", "handbook", "application", "town",
             "member", "mayor", "vote", "land", "money", "tax", "ledger", "expand",
-            "buff", "order", "maintenance");
+            "buff", "order", "maintenance", "diagnose", "backup");
 
     List<String> complete(String[] args, Snapshot snapshot, Dynamic dynamic) {
         Objects.requireNonNull(args, "args");
@@ -41,6 +41,8 @@ final class TownAdminCompletionEngine {
                     ? filter(helpTopics(dynamic), args[1]) : List.of();
             case "audit" -> args.length == 2
                     ? filter(List.of("10", "20", "50", "100", "200"), args[1]) : List.of();
+            case "diagnose" -> args.length == 2
+                    ? filter(List.of("1", "7", "14", "30", "90", "180"), args[1]) : List.of();
             case "phase0" -> phaseZero(args, dynamic);
             case "station" -> args.length == 2
                     ? filter(dynamic.playerSender()

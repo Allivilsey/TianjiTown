@@ -19,6 +19,11 @@ public interface LandProtectionService {
     Result reconcile(String residenceName, InitialTerritory territory,
                      Collection<UUID> members, boolean repair);
 
+    default boolean contains(String residenceName, UUID worldId,
+                             int blockX, int blockY, int blockZ) {
+        return false;
+    }
+
     default Inspection inspect(String residenceName, List<Area> areas,
                                Collection<UUID> members) {
         if (areas.size() != 1) {

@@ -1,4 +1,4 @@
-schema-version: 4
+schema-version: 5
 
 database:
   # 相对路径以 plugins/TianjiTown 为基准，也可填写绝对路径。
@@ -133,4 +133,32 @@ phase4:
         daily-limit: 512
         quantity-options: [32, 64, 128]
         purchasing-roles: [MAYOR, OFFICER]
+
+phase5:
+  building-refund:
+    # 只处理玩家在自己小镇有效 Residence 内的单方块放置；特殊方块和带物品数据的方块不会触发。
+    enabled: true
+    chance: 0.10
+    daily-limit: 64
+    counter-retention-days: 30
+    materials: [STONE, COBBLESTONE, BRICKS, GLASS, OAK_PLANKS]
+  beacon:
+    # 已被其他插件设置自定义范围的信标不会被接管。
+    enabled: true
+    range-multiplier: 1.50
+    maximum-range: 128.0
+    maximum-tier: 4
+    effect-level-bonus: 1
+    maximum-effect-level: 2
+    scan-interval-ticks: 100
+    allowed-worlds: [world]
+  operations:
+    quickshop-diagnostic-days: 7
+    diagnostics-interval-minutes: 60
+    backup:
+      # 在线备份只覆盖 TianjiTown SQLite 与 config.yml；依赖插件需按阶段5手册统一备份。
+      enabled: true
+      interval-hours: 6
+      retention-count: 14
+      directory: backups
 

@@ -91,7 +91,7 @@ class DatabaseGateTest {
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
             DatabaseGate.HealthResult health = gate.verifyAndMigrate();
             assertTrue(health.healthy(), health.detail());
-            assertTrue(health.detail().contains("schema=4.0"));
+            assertTrue(health.detail().contains("schema=5.0"));
             try (Connection connection = gate.dataSource().getConnection();
                  PreparedStatement statement = connection.prepareStatement("""
                          SELECT t.name, t.rules_revision, m.role
@@ -137,7 +137,7 @@ class DatabaseGateTest {
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
             DatabaseGate.HealthResult health = gate.verifyAndMigrate();
             assertTrue(health.healthy(), health.detail());
-            assertTrue(health.detail().contains("schema=4.0"));
+            assertTrue(health.detail().contains("schema=5.0"));
             try (Connection connection = gate.dataSource().getConnection();
                  PreparedStatement votes = connection.prepareStatement("""
                          SELECT status, cancelled_reason FROM governance_votes
@@ -157,6 +157,25 @@ class DatabaseGateTest {
                         () -> insertVote(connection, UUID.randomUUID(), townId, mayorId,
                                 "KICK_MEMBER", 3_000L));
             }
+        }
+    }
+
+    @Test
+    void createsConsistentOnlineBackupWithoutOverwriting() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("online-source.db");
+        Path backup = temporaryDirectory.resolve("backup").resolve("town.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            gate.onlineBackup(backup);
+            assertTrue(java.nio.file.Files.isRegularFile(backup));
+            assertThrows(IllegalArgumentException.class, () -> gate.onlineBackup(backup));
+        }
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + backup);
+             Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("PRAGMA quick_check")) {
+            assertTrue(result.next());
+            assertEquals("ok", result.getString(1));
         }
     }
 
