@@ -3,6 +3,7 @@ package cn.tianji.town.storage.phase5;
 import cn.tianji.town.core.land.ChunkPosition;
 import cn.tianji.town.core.land.InitialTerritory;
 import cn.tianji.town.core.ports.LandProtectionService;
+import cn.tianji.town.core.town.MemberRole;
 
 import javax.sql.DataSource;
 import java.nio.ByteBuffer;
@@ -36,13 +37,16 @@ public final class PhaseFiveRepository {
         requireWorkerThread();
         return query(connection -> {
             Map<UUID, UUID> memberships = new HashMap<>();
+            Map<UUID, MemberRole> roles = new HashMap<>();
             try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT m.player_uuid, m.town_id
+                    SELECT m.player_uuid, m.town_id, m.role
                       FROM town_members m JOIN towns t ON t.town_id = m.town_id
                      WHERE t.status = 'ACTIVE'
                     """); ResultSet rows = statement.executeQuery()) {
                 while (rows.next()) {
                     memberships.put(readUuid(rows, "player_uuid"), readUuid(rows, "town_id"));
+                    roles.put(readUuid(rows, "player_uuid"),
+                            MemberRole.valueOf(rows.getString("role")));
                 }
             }
             Map<ChunkKey, UUID> territories = new HashMap<>();
@@ -61,57 +65,57 @@ public final class PhaseFiveRepository {
                     residences.putIfAbsent(townId, rows.getString("residence_name"));
                 }
             }
-            return new BonusIndex(memberships, territories, residences);
+            return new BonusIndex(memberships, roles, territories, residences);
         });
     }
 
     public RefundReservation reserveBuildingRefund(UUID townId, UUID playerId, UUID worldId,
-                                                    int chunkX, int chunkZ, LocalDate day,
-                                                    String materialKey, int dailyLimit) {
+                                                    int chunkX, int chunkZ, LocalDate weekStart,
+                                                    String materialKey, int weeklyLimit) {
         requireWorkerThread();
         Objects.requireNonNull(townId, "townId");
         Objects.requireNonNull(playerId, "playerId");
         Objects.requireNonNull(worldId, "worldId");
-        Objects.requireNonNull(day, "day");
+        Objects.requireNonNull(weekStart, "weekStart");
         Objects.requireNonNull(materialKey, "materialKey");
-        if (dailyLimit < 1) {
-            throw new IllegalArgumentException("每日返还上限必须大于 0");
+        if (weeklyLimit < 1) {
+            throw new IllegalArgumentException("每周返还上限必须大于 0");
         }
         return transaction(connection -> {
             if (!ownsActiveTerritory(connection, townId, playerId, worldId, chunkX, chunkZ)) {
                 return RefundReservation.denied("成员或领地状态已变化");
             }
             try (PreparedStatement statement = connection.prepareStatement("""
-                    INSERT INTO building_refund_daily
-                        (town_id, player_uuid, day_key, refund_count, last_material_key)
+                    INSERT INTO building_refund_weekly
+                        (town_id, player_uuid, week_start, refund_count, last_material_key)
                     VALUES (?, ?, ?, 1, ?)
-                    ON CONFLICT (town_id, player_uuid, day_key) DO UPDATE SET
-                        refund_count = building_refund_daily.refund_count + 1,
+                    ON CONFLICT (town_id, player_uuid, week_start) DO UPDATE SET
+                        refund_count = building_refund_weekly.refund_count + 1,
                         last_material_key = excluded.last_material_key
-                    WHERE building_refund_daily.refund_count < ?
+                    WHERE building_refund_weekly.refund_count < ?
                     RETURNING refund_count
                     """)) {
                 statement.setBytes(1, uuid(townId));
                 statement.setBytes(2, uuid(playerId));
-                statement.setString(3, day.toString());
+                statement.setString(3, weekStart.toString());
                 statement.setString(4, materialKey);
-                statement.setInt(5, dailyLimit);
+                statement.setInt(5, weeklyLimit);
                 try (ResultSet row = statement.executeQuery()) {
                     return row.next()
-                            ? RefundReservation.granted(row.getInt("refund_count"), dailyLimit)
-                            : RefundReservation.denied("今日建筑返还已达到上限 " + dailyLimit);
+                            ? RefundReservation.granted(row.getInt("refund_count"), weeklyLimit)
+                            : RefundReservation.denied("本周建筑返还已达到上限 " + weeklyLimit);
                 }
             }
         });
     }
 
-    public int cleanupRefundCounters(LocalDate oldestRetainedDay) {
+    public int cleanupRefundCounters(LocalDate oldestRetainedWeek) {
         requireWorkerThread();
-        Objects.requireNonNull(oldestRetainedDay, "oldestRetainedDay");
+        Objects.requireNonNull(oldestRetainedWeek, "oldestRetainedWeek");
         return transaction(connection -> {
             try (PreparedStatement statement = connection.prepareStatement(
-                    "DELETE FROM building_refund_daily WHERE day_key < ?")) {
-                statement.setString(1, oldestRetainedDay.toString());
+                    "DELETE FROM building_refund_weekly WHERE week_start < ?")) {
+                statement.setString(1, oldestRetainedWeek.toString());
                 return statement.executeUpdate();
             }
         });
@@ -134,8 +138,10 @@ public final class PhaseFiveRepository {
             counts.put("territoryUnits", scalar(connection,
                     "SELECT COUNT(*) FROM territory_units WHERE reuse_blocked = 1"));
             counts.put("failedProjections", scalar(connection, """
-                    SELECT COUNT(*) FROM territory_units
-                     WHERE reuse_blocked = 1 AND projection_status <> 'ACTIVE'
+                    SELECT COUNT(*) FROM territory_units u
+                      JOIN towns t ON t.town_id = u.town_id
+                     WHERE t.status = 'ACTIVE' AND u.reuse_blocked = 1
+                       AND u.projection_status <> 'ACTIVE'
                     """));
             counts.put("lockedAccounts", scalar(connection,
                     "SELECT COUNT(*) FROM town_accounts WHERE locked = 1"));
@@ -340,10 +346,11 @@ public final class PhaseFiveRepository {
     public record ChunkKey(UUID worldId, int chunkX, int chunkZ) {
     }
 
-    public record BonusIndex(Map<UUID, UUID> memberships, Map<ChunkKey, UUID> territories,
-                             Map<UUID, String> residenceNames) {
+    public record BonusIndex(Map<UUID, UUID> memberships, Map<UUID, MemberRole> roles,
+                             Map<ChunkKey, UUID> territories, Map<UUID, String> residenceNames) {
         public BonusIndex {
             memberships = Map.copyOf(memberships);
+            roles = Map.copyOf(roles);
             territories = Map.copyOf(territories);
             residenceNames = Map.copyOf(residenceNames);
         }

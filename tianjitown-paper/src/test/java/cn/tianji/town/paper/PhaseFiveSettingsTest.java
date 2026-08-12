@@ -12,23 +12,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PhaseFiveSettingsTest {
     @Test
     void loadsSafeRefundBeaconAndOperationsSettings() throws Exception {
-        PhaseFiveSettings settings = PhaseFiveSettings.load(configuration("STONE", "0.25"));
+        PhaseFiveSettings settings = PhaseFiveSettings.load(configuration("REDSTONE_CATEGORY, CHEST",
+                "0.25"));
 
         assertEquals(0.25D, settings.buildingRefund().chance());
-        assertEquals(32, settings.buildingRefund().dailyLimit());
-        assertTrue(settings.buildingRefund().materials().contains(Material.STONE));
-        assertEquals(1.5D, settings.beacon().rangeMultiplier());
-        assertEquals(2, settings.beacon().maximumEffectLevel());
+        assertEquals(3_000, settings.buildingRefund().weeklyLimit());
+        assertTrue(settings.buildingRefund().blacklist().contains(Material.REDSTONE_BLOCK));
+        assertTrue(settings.buildingRefund().blacklist().contains(Material.CHEST));
         assertTrue(settings.beacon().allowsWorld("WORLD"));
         assertEquals(14, settings.operations().backup().retentionCount());
     }
 
     @Test
-    void rejectsSpecialBlocksAndInvalidChance() throws Exception {
+    void rejectsInvalidBlacklistAndChance() throws Exception {
         assertThrows(IllegalArgumentException.class,
-                () -> PhaseFiveSettings.load(configuration("CHEST", "0.25")));
+                () -> PhaseFiveSettings.load(configuration("NOT_A_MATERIAL", "0.25")));
         assertThrows(IllegalArgumentException.class,
                 () -> PhaseFiveSettings.load(configuration("STONE", "1.5")));
+        assertTrue(PhaseFiveSettings.isRedstoneCategory(Material.OAK_BUTTON));
         assertFalse(PhaseFiveSettings.isSafeSingleBlock(Material.OAK_DOOR));
         assertFalse(PhaseFiveSettings.isSafeSingleBlock(Material.SHULKER_BOX));
     }
@@ -41,16 +42,12 @@ class PhaseFiveSettingsTest {
                   building-refund:
                     enabled: true
                     chance: %s
-                    daily-limit: 32
-                    counter-retention-days: 30
-                    materials: [%s]
+                    weekly-limit: 3000
+                    counter-retention-weeks: 12
+                    reset-zone: Asia/Shanghai
+                    blacklist: [%s]
                   beacon:
                     enabled: true
-                    range-multiplier: 1.5
-                    maximum-range: 128
-                    maximum-tier: 4
-                    effect-level-bonus: 1
-                    maximum-effect-level: 2
                     scan-interval-ticks: 100
                     allowed-worlds: [world]
                   operations:

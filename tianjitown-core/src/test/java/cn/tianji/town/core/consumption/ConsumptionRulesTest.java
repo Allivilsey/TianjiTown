@@ -17,7 +17,7 @@ class ConsumptionRulesTest {
                 BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
                 new BigDecimal("100.00"), new BigDecimal("1.50"), Duration.ofHours(1),
                 3, BuffStackingRule.LEVEL_UP, 1, Set.of("world"),
-                Set.of(MemberRole.MAYOR, MemberRole.OFFICER));
+                Set.of(MemberRole.MAYOR, MemberRole.DEPUTY_MAYOR));
 
         assertEquals(10_000, BuffPricing.price(definition, 0, 2).minorUnits());
         assertEquals(15_000, BuffPricing.price(definition, 1, 2).minorUnits());

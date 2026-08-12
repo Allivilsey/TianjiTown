@@ -2,6 +2,10 @@ package cn.tianji.town.core.town;
 
 public enum MemberRole {
     MAYOR,
-    OFFICER,
-    MEMBER
+    DEPUTY_MAYOR,
+    MEMBER;
+
+    public boolean isLeader() {
+        return this == MAYOR || this == DEPUTY_MAYOR;
+    }
 }

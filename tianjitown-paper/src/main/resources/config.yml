@@ -1,4 +1,4 @@
-schema-version: 5
+schema-version: 6
 
 database:
   # 相对路径以 plugins/TianjiTown 为基准，也可填写绝对路径。
@@ -99,7 +99,7 @@ phase4:
         amount-per-level: 1.0
         # 空列表表示所有世界；世界名按不区分大小写匹配。
         allowed-worlds: [world]
-        purchasing-roles: [MAYOR, OFFICER]
+        purchasing-roles: [MAYOR, DEPUTY_MAYOR]
       health:
         display-name: '公共生命'
         effect-kind: ATTRIBUTE
@@ -112,44 +112,45 @@ phase4:
         stacking: LEVEL_UP
         amount-per-level: 2.0
         allowed-worlds: [world]
-        purchasing-roles: [MAYOR]
-  resources:
-    # 关闭商店不会阻止已经扣款的订单继续领取或退款。
-    shop-enabled: true
-    catalog:
-      iron:
-        display-name: '铁锭补给'
-        material: IRON_INGOT
-        unit-price: '5.00'
-        maximum-per-order: 64
-        daily-limit: 256
-        quantity-options: [16, 32, 64]
-        purchasing-roles: [MAYOR, OFFICER]
-      oak_log:
-        display-name: '橡木原木补给'
-        material: OAK_LOG
-        unit-price: '2.00'
-        maximum-per-order: 128
-        daily-limit: 512
-        quantity-options: [32, 64, 128]
-        purchasing-roles: [MAYOR, OFFICER]
+        purchasing-roles: [MAYOR, DEPUTY_MAYOR]
 
 phase5:
   building-refund:
-    # 只处理玩家在自己小镇有效 Residence 内的单方块放置；特殊方块和带物品数据的方块不会触发。
+    # 只处理玩家在自己小镇有效 Residence 内的安全单方块放置；每周一零点重新计数。
     enabled: true
     chance: 0.10
-    daily-limit: 64
-    counter-retention-days: 30
-    materials: [STONE, COBBLESTONE, BRICKS, GLASS, OAK_PLANKS]
+    weekly-limit: 3000
+    counter-retention-weeks: 12
+    reset-zone: Asia/Shanghai
+    # REDSTONE_CATEGORY 会展开为全部红石类方块；其余是默认难以获取方块。
+    blacklist:
+      - REDSTONE_CATEGORY
+      - ANCIENT_DEBRIS
+      - NETHERITE_BLOCK
+      - DIAMOND_ORE
+      - DEEPSLATE_DIAMOND_ORE
+      - DIAMOND_BLOCK
+      - EMERALD_ORE
+      - DEEPSLATE_EMERALD_ORE
+      - EMERALD_BLOCK
+      - GOLD_ORE
+      - DEEPSLATE_GOLD_ORE
+      - NETHER_GOLD_ORE
+      - GOLD_BLOCK
+      - RAW_GOLD_BLOCK
+      - BEACON
+      - DRAGON_EGG
+      - SPAWNER
+      - TRIAL_SPAWNER
+      - VAULT
+      - BUDDING_AMETHYST
+      - REINFORCED_DEEPSLATE
+      - END_PORTAL_FRAME
+      - CRYING_OBSIDIAN
+      - ENCHANTING_TABLE
   beacon:
-    # 已被其他插件设置自定义范围的信标不会被接管。
+    # 有效信标的原版效果覆盖其小镇领地；只有镇长与副镇长可编辑信标。
     enabled: true
-    range-multiplier: 1.50
-    maximum-range: 128.0
-    maximum-tier: 4
-    effect-level-bonus: 1
-    maximum-effect-level: 2
     scan-interval-ticks: 100
     allowed-worlds: [world]
   operations:

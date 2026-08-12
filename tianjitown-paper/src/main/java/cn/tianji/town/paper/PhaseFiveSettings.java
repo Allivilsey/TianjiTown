@@ -5,6 +5,9 @@ import org.bukkit.configuration.ConfigurationSection;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.DateTimeException;
+import java.time.ZoneId;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -22,59 +25,48 @@ record PhaseFiveSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
     private static BuildingRefund loadBuildingRefund(ConfigurationSection config) {
         String root = "phase5.building-refund";
         double chance = config.getDouble(root + ".chance", 0.1D);
-        int dailyLimit = config.getInt(root + ".daily-limit", 64);
-        int retentionDays = config.getInt(root + ".counter-retention-days", 30);
+        int weeklyLimit = config.getInt(root + ".weekly-limit", 3_000);
+        int retentionWeeks = config.getInt(root + ".counter-retention-weeks", 12);
         if (!Double.isFinite(chance) || chance <= 0 || chance > 1) {
             throw new IllegalArgumentException(root + ".chance 必须在 (0, 1] 范围内");
         }
-        if (dailyLimit < 1 || dailyLimit > 10_000) {
-            throw new IllegalArgumentException(root + ".daily-limit 必须在 1~10000 范围内");
+        if (weeklyLimit < 1 || weeklyLimit > 100_000) {
+            throw new IllegalArgumentException(root + ".weekly-limit 必须在 1~100000 范围内");
         }
-        if (retentionDays < 2 || retentionDays > 366) {
+        if (retentionWeeks < 2 || retentionWeeks > 260) {
             throw new IllegalArgumentException(root
-                    + ".counter-retention-days 必须在 2~366 范围内");
+                    + ".counter-retention-weeks 必须在 2~260 范围内");
         }
-        List<String> configured = config.getStringList(root + ".materials");
+        ZoneId resetZone;
+        try {
+            resetZone = ZoneId.of(config.getString(root + ".reset-zone", "Asia/Shanghai"));
+        } catch (DateTimeException exception) {
+            throw new IllegalArgumentException(root + ".reset-zone 不是有效时区", exception);
+        }
+        List<String> configured = config.getStringList(root + ".blacklist");
         if (configured.isEmpty()) {
-            throw new IllegalArgumentException(root + ".materials 至少需要一个方块");
+            throw new IllegalArgumentException(root + ".blacklist 至少需要一个方块或分组");
         }
-        Set<Material> materials = new LinkedHashSet<>();
+        Set<Material> blacklist = new LinkedHashSet<>();
         for (String value : configured) {
+            if (value.equalsIgnoreCase("REDSTONE_CATEGORY")) {
+                Arrays.stream(Material.values()).filter(PhaseFiveSettings::isRedstoneCategory)
+                        .forEach(blacklist::add);
+                continue;
+            }
             Material material = Material.matchMaterial(value);
             if (material == null) {
-                throw new IllegalArgumentException("建筑返还材料无效: " + value);
+                throw new IllegalArgumentException("建筑返还黑名单材料无效: " + value);
             }
-            if (!isSafeSingleBlock(material)) {
-                throw new IllegalArgumentException("建筑返还拒绝特殊/多方块/容器材料: "
-                        + material);
-            }
-            materials.add(material);
+            blacklist.add(material);
         }
         return new BuildingRefund(config.getBoolean(root + ".enabled", true), chance,
-                dailyLimit, retentionDays, materials);
+                weeklyLimit, retentionWeeks, resetZone, blacklist);
     }
 
     private static BeaconEnhancement loadBeacon(ConfigurationSection config) {
         String root = "phase5.beacon";
-        double multiplier = config.getDouble(root + ".range-multiplier", 1.5D);
-        double maximumRange = config.getDouble(root + ".maximum-range", 128D);
-        int maximumTier = config.getInt(root + ".maximum-tier", 4);
-        int levelBonus = config.getInt(root + ".effect-level-bonus", 1);
-        int maximumEffectLevel = config.getInt(root + ".maximum-effect-level", 2);
         long scanTicks = config.getLong(root + ".scan-interval-ticks", 100L);
-        if (!Double.isFinite(multiplier) || multiplier < 1 || multiplier > 8) {
-            throw new IllegalArgumentException(root + ".range-multiplier 必须在 1~8 范围内");
-        }
-        if (!Double.isFinite(maximumRange) || maximumRange < 10 || maximumRange > 512) {
-            throw new IllegalArgumentException(root + ".maximum-range 必须在 10~512 范围内");
-        }
-        if (maximumTier < 1 || maximumTier > 4) {
-            throw new IllegalArgumentException(root + ".maximum-tier 必须在 1~4 范围内");
-        }
-        if (levelBonus < 0 || levelBonus > 4 || maximumEffectLevel < 1
-                || maximumEffectLevel > 5) {
-            throw new IllegalArgumentException("信标效果等级配置超出安全范围");
-        }
         if (scanTicks < 20 || scanTicks > 20L * 60) {
             throw new IllegalArgumentException(root
                     + ".scan-interval-ticks 必须在 20~1200 范围内");
@@ -85,8 +77,8 @@ record PhaseFiveSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
         if (worlds.isEmpty()) {
             throw new IllegalArgumentException(root + ".allowed-worlds 至少需要一个世界");
         }
-        return new BeaconEnhancement(config.getBoolean(root + ".enabled", true), multiplier,
-                maximumRange, maximumTier, levelBonus, maximumEffectLevel, scanTicks, worlds);
+        return new BeaconEnhancement(config.getBoolean(root + ".enabled", true), scanTicks,
+                worlds);
     }
 
     private static Operations loadOperations(ConfigurationSection config) {
@@ -131,16 +123,31 @@ record PhaseFiveSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
         }).noneMatch(name::contains);
     }
 
-    record BuildingRefund(boolean enabled, double chance, int dailyLimit, int retentionDays,
-                          Set<Material> materials) {
+    static boolean isRedstoneCategory(Material material) {
+        String name = material.name();
+        if (name.contains("REDSTONE") || name.endsWith("_BUTTON")
+                || name.endsWith("_PRESSURE_PLATE") || name.endsWith("_DOOR")
+                || name.endsWith("_TRAPDOOR") || name.endsWith("_FENCE_GATE")
+                || name.endsWith("RAIL")) {
+            return true;
+        }
+        return Set.of("REPEATER", "COMPARATOR", "TARGET", "LEVER", "LIGHTNING_ROD",
+                "DAYLIGHT_DETECTOR", "SCULK_SENSOR", "CALIBRATED_SCULK_SENSOR", "TRIPWIRE",
+                "TRIPWIRE_HOOK", "TRAPPED_CHEST", "TNT", "NOTE_BLOCK", "LECTERN",
+                "CHISELED_BOOKSHELF", "OBSERVER", "PISTON", "STICKY_PISTON", "MOVING_PISTON",
+                "SLIME_BLOCK", "HONEY_BLOCK", "DISPENSER", "DROPPER", "HOPPER", "CRAFTER")
+                .contains(name);
+    }
+
+    record BuildingRefund(boolean enabled, double chance, int weeklyLimit, int retentionWeeks,
+                          ZoneId resetZone, Set<Material> blacklist) {
         BuildingRefund {
-            materials = Set.copyOf(materials);
+            Objects.requireNonNull(resetZone, "resetZone");
+            blacklist = Set.copyOf(blacklist);
         }
     }
 
-    record BeaconEnhancement(boolean enabled, double rangeMultiplier, double maximumRange,
-                             int maximumTier, int effectLevelBonus, int maximumEffectLevel,
-                             long scanIntervalTicks, Set<String> allowedWorlds) {
+    record BeaconEnhancement(boolean enabled, long scanIntervalTicks, Set<String> allowedWorlds) {
         BeaconEnhancement {
             allowedWorlds = Set.copyOf(allowedWorlds);
         }

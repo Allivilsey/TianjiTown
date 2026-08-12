@@ -13,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PhaseFourSettingsTest {
     @Test
-    void loadsConfiguredBuffAndResourceCatalogs() throws Exception {
-        YamlConfiguration config = configuration("IRON_INGOT", "1.5");
+    void loadsConfiguredBuffCatalog() throws Exception {
+        YamlConfiguration config = configuration("1.5", "MAYOR");
 
         PhaseFourSettings settings = PhaseFourSettings.load(config);
 
@@ -23,20 +23,17 @@ class PhaseFourSettingsTest {
                 settings.requireBuff("speed").stackingRule());
         assertEquals(Set.of(MemberRole.MAYOR),
                 settings.requireBuff("speed").purchasingRoles());
-        assertEquals("minecraft:iron_ingot",
-                settings.requireResource("iron").materialKey());
-        assertEquals(64, settings.requireResource("iron").maximumPerOrder());
     }
 
     @Test
     void rejectsInvalidCatalogValues() throws Exception {
         assertThrows(IllegalArgumentException.class,
-                () -> PhaseFourSettings.load(configuration("NOT_AN_ITEM", "1.5")));
+                () -> PhaseFourSettings.load(configuration("1.5", "OFFICER")));
         assertThrows(IllegalArgumentException.class,
-                () -> PhaseFourSettings.load(configuration("IRON_INGOT", "0.5")));
+                () -> PhaseFourSettings.load(configuration("0.5", "MAYOR")));
     }
 
-    private static YamlConfiguration configuration(String material, String multiplier)
+    private static YamlConfiguration configuration(String multiplier, String role)
             throws Exception {
         YamlConfiguration config = new YamlConfiguration();
         config.loadFromString("""
@@ -56,19 +53,8 @@ class PhaseFourSettingsTest {
                         stacking: LEVEL_UP
                         amount-per-level: 1.0
                         allowed-worlds: [world]
-                        purchasing-roles: [MAYOR]
-                  resources:
-                    shop-enabled: true
-                    catalog:
-                      iron:
-                        display-name: 铁锭
-                        material: %s
-                        unit-price: '5.00'
-                        maximum-per-order: 64
-                        daily-limit: 128
-                        quantity-options: [16, 32, 64]
-                        purchasing-roles: [MAYOR, OFFICER]
-                """.formatted(multiplier, material));
+                        purchasing-roles: [%s]
+                """.formatted(multiplier, role));
         return config;
     }
 }

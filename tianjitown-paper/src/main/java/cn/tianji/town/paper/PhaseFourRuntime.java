@@ -1,11 +1,7 @@
 package cn.tianji.town.paper;
 
 import cn.tianji.town.core.consumption.BuffDefinition;
-import cn.tianji.town.core.consumption.ResourceDefinition;
 import cn.tianji.town.storage.phase4.PhaseFourRepository;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.event.ClickEvent;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
@@ -34,8 +30,6 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -80,11 +74,6 @@ final class PhaseFourRuntime implements Listener {
                 settings.buffShopEnabled());
     }
 
-    boolean resourceShopEnabled() {
-        return plugin.getConfig().getBoolean("phase4.resources.shop-enabled",
-                settings.resourceShopEnabled());
-    }
-
     void buyBuff(Player player, String key) {
         if (!buffShopEnabled() || !host.consumptionEnabled()) {
             player.sendMessage("§c公共 Buff 商店当前暂停新购买。");
@@ -95,54 +84,6 @@ final class PhaseFourRuntime implements Listener {
                 definition, host.settlement().scale(), "buff-purchase:" + UUID.randomUUID(),
                 Instant.now()), purchase -> {
             verifyBuffPurchase(player, definition, purchase);
-        });
-    }
-
-    void buyResource(Player player, String key, int quantity) {
-        if (!resourceShopEnabled() || !host.consumptionEnabled()) {
-            player.sendMessage("§c资源商店当前暂停新采购；已有订单仍可领取。");
-            return;
-        }
-        ResourceDefinition definition = settings.requireResource(key);
-        DayBounds day = dayBounds();
-        host.write(player, () -> repository.createOrder(player.getUniqueId(), player.getName(),
-                definition, quantity, host.settlement().scale(), day.start(), day.end(),
-                "resource-purchase:" + UUID.randomUUID()), order -> {
-            player.sendMessage("§a采购订单已创建并扣除公共资金：" + order.resourceName()
-                    + " x" + order.quantity() + "。请在待领取箱领取。");
-            claim(player, order.orderId());
-        });
-    }
-
-    void claim(Player player, UUID orderId) {
-        host.write(player, () -> repository.reserveClaim(orderId, player.getUniqueId(),
-                Instant.now()), order -> {
-            if (order.status().equals("CLAIMED")) {
-                clearTaggedItems(player, order.orderId(), order.claimToken());
-                player.sendMessage("§e该订单已经领取完成。");
-                return;
-            }
-            int tagged = taggedAmount(player, order.orderId(), order.claimToken());
-            if (tagged > 0) {
-                if (tagged != order.quantity()) {
-                    player.sendMessage("§c订单临时物品数量异常，已停止领取并保留标记，"
-                            + "请联系管理员检查。order=" + order.orderId());
-                    return;
-                }
-                completeMarkedClaim(player, order);
-                return;
-            }
-            Material material = Material.matchMaterial(order.materialKey());
-            if (material == null || !material.isItem()) {
-                markRefundRequired(player, order, "订单材料已不受当前服务端支持");
-                return;
-            }
-            if (!hasCapacity(player, material, order.quantity())) {
-                releaseClaim(player, order, "背包空间不足");
-                player.sendMessage("§c背包空间不足，订单保持待领取状态，请清理背包后重试。");
-                return;
-            }
-            deliverReservedOrder(player, order, material);
         });
     }
 
@@ -188,21 +129,6 @@ final class PhaseFourRuntime implements Listener {
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             recoverTaggedClaims(player);
             refreshPlayer(player);
-            host.read(player, () -> repository.pendingOrderCount(player.getUniqueId()), count -> {
-                if (count > 0) {
-                    player.sendMessage(Component.text("你有 " + count + " 个资源订单待领取。 ",
-                                    NamedTextColor.YELLOW)
-                            .append(Component.text("[打开待领取箱]", NamedTextColor.AQUA)
-                                    .clickEvent(ClickEvent.callback(audience -> {
-                                        TownUiController ui = plugin.townUi();
-                                        if (ui != null && audience instanceof Player clicked
-                                                && clicked.getUniqueId().equals(player.getUniqueId())) {
-                                            plugin.getServer().getScheduler().runTask(plugin,
-                                                    () -> ui.openResourceShop(clicked, 0));
-                                        }
-                                    }))));
-                }
-            });
         });
     }
 
@@ -328,10 +254,6 @@ final class PhaseFourRuntime implements Listener {
             clearTaggedItems(player, completed.orderId(), completed.claimToken());
             player.sendMessage("§a已领取 " + completed.resourceName() + " x"
                     + completed.quantity() + "。");
-            TownUiController ui = plugin.townUi();
-            if (ui != null) {
-                ui.openResourceShop(player, 0);
-            }
         });
     }
 
@@ -496,13 +418,6 @@ final class PhaseFourRuntime implements Listener {
                 }
             }
         }
-        for (ResourceDefinition definition : settings.resources().values()) {
-            Material material = Material.matchMaterial(definition.materialKey());
-            if (material == null || !material.isItem()) {
-                throw new IllegalArgumentException("资源材料不是有效物品: "
-                        + definition.materialKey());
-            }
-        }
     }
 
     private PotionEffectType requirePotion(String key) {
@@ -615,16 +530,6 @@ final class PhaseFourRuntime implements Listener {
         String message = throwable.getMessage();
         return message == null || message.isBlank()
                 ? throwable.getClass().getSimpleName() : message;
-    }
-
-    DayBounds dayBounds() {
-        ZoneId zone = ZoneId.systemDefault();
-        LocalDate today = LocalDate.now(zone);
-        return new DayBounds(today.atStartOfDay(zone).toInstant(),
-                today.plusDays(1).atStartOfDay(zone).toInstant());
-    }
-
-    record DayBounds(Instant start, Instant end) {
     }
 
     private record ClaimMarker(UUID orderId, UUID claimToken) {

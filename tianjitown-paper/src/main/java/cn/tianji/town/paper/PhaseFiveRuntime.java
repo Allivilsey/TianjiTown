@@ -1,11 +1,13 @@
 package cn.tianji.town.paper;
 
 import cn.tianji.town.core.ports.LandProtectionService;
+import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.integrations.quickshop.QuickShopHistoryProbe;
 import cn.tianji.town.storage.phase3.PhaseThreeRepository;
 import cn.tianji.town.storage.phase5.PhaseFiveRepository;
 import org.bukkit.Chunk;
 import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -13,14 +15,16 @@ import org.bukkit.block.Beacon;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.Event;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockMultiPlaceEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.inventory.ItemStack;
@@ -33,14 +37,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -64,7 +68,7 @@ final class PhaseFiveRuntime implements Listener {
     private final NamespacedKey beaconManagedKey;
     private final NamespacedKey beaconOriginalRangeKey;
     private final AtomicReference<PhaseFiveRepository.BonusIndex> index = new AtomicReference<>(
-            new PhaseFiveRepository.BonusIndex(Map.of(), Map.of(), Map.of()));
+            new PhaseFiveRepository.BonusIndex(Map.of(), Map.of(), Map.of(), Map.of()));
     private final Map<BeaconKey, Double> modifiedBeacons = new HashMap<>();
     private final Map<PlayerEffectKey, ManagedEffect> managedEffects = new HashMap<>();
     private final AtomicBoolean indexRefreshRunning = new AtomicBoolean();
@@ -127,10 +131,11 @@ final class PhaseFiveRuntime implements Listener {
     void cleanupCounters() {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                repository.cleanupRefundCounters(LocalDate.now(ZoneId.systemDefault())
-                        .minusDays(settings.buildingRefund().retentionDays()));
+                repository.cleanupRefundCounters(LocalDate.now(settings.buildingRefund().resetZone())
+                        .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                        .minusWeeks(settings.buildingRefund().retentionWeeks()));
             } catch (RuntimeException exception) {
-                plugin.getLogger().warning("清理建筑返还日计数失败: " + safeMessage(exception));
+                plugin.getLogger().warning("清理建筑返还周计数失败: " + safeMessage(exception));
             }
         });
     }
@@ -218,7 +223,7 @@ final class PhaseFiveRuntime implements Listener {
         }
         PhaseFiveSettings.BeaconEnhancement config = settings.beacon();
         PhaseFiveRepository.BonusIndex snapshot = index.get();
-        Set<BeaconKey> seen = new HashSet<>();
+        Map<UUID, List<PotionEffect>> effectsByTown = new HashMap<>();
         Map<PlayerEffectKey, Integer> desiredEffects = new HashMap<>();
         for (World world : plugin.getServer().getWorlds()) {
             if (!config.allowsWorld(world.getName())) {
@@ -237,12 +242,31 @@ final class PhaseFiveRuntime implements Listener {
                 for (BlockState state : chunk.getTileEntities(
                         block -> block.getType() == Material.BEACON, false)) {
                     if (state instanceof Beacon beacon) {
-                        enhanceBeacon(beacon, residenceName, config, seen, desiredEffects);
+                        collectTownBeaconEffects(beacon, townId, residenceName, effectsByTown);
                     }
                 }
             }
         }
-        restoreUnseenBeacons(seen);
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            World world = player.getWorld();
+            if (!config.allowsWorld(world.getName())) {
+                continue;
+            }
+            UUID townId = snapshot.territories().get(new PhaseFiveRepository.ChunkKey(
+                    world.getUID(), player.getChunk().getX(), player.getChunk().getZ()));
+            String residenceName = townId == null ? null : snapshot.residenceNames().get(townId);
+            List<PotionEffect> effects = townId == null ? null : effectsByTown.get(townId);
+            Location location = player.getLocation();
+            if (residenceName == null || effects == null || !host.landProtection().contains(
+                    residenceName, world.getUID(), location.getBlockX(), location.getBlockY(),
+                    location.getBlockZ())) {
+                continue;
+            }
+            for (PotionEffect effect : effects) {
+                desiredEffects.merge(new PlayerEffectKey(player.getUniqueId(), effect.getType()),
+                        effect.getAmplifier(), Math::max);
+            }
+        }
         applyManagedEffects(desiredEffects, config);
     }
 
@@ -266,8 +290,9 @@ final class PhaseFiveRuntime implements Listener {
         }
         Material material = event.getBlockPlaced().getType();
         ItemStack source = event.getItemInHand();
-        if (!settings.buildingRefund().materials().contains(material)
-                || source.getType() != material || source.hasItemMeta()) {
+        if (settings.buildingRefund().blacklist().contains(material)
+                || !PhaseFiveSettings.isSafeSingleBlock(material) || source.getType() != material
+                || source.hasItemMeta()) {
             return;
         }
         Player player = event.getPlayer();
@@ -285,14 +310,15 @@ final class PhaseFiveRuntime implements Listener {
         if (ThreadLocalRandom.current().nextDouble() >= settings.buildingRefund().chance()) {
             return;
         }
-        LocalDate day = LocalDate.now(ZoneId.systemDefault());
+        LocalDate weekStart = LocalDate.now(settings.buildingRefund().resetZone())
+                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         UUID worldId = block.getWorld().getUID();
         int chunkX = block.getChunk().getX();
         int chunkZ = block.getChunk().getZ();
         String materialKey = material.getKey().toString();
         host.write(player, () -> repository.reserveBuildingRefund(townId, player.getUniqueId(),
-                worldId, chunkX, chunkZ, day, materialKey,
-                settings.buildingRefund().dailyLimit()), result -> {
+                worldId, chunkX, chunkZ, weekStart, materialKey,
+                settings.buildingRefund().weeklyLimit()), result -> {
             if (!result.granted() || !player.isOnline()) {
                 return;
             }
@@ -301,9 +327,37 @@ final class PhaseFiveRuntime implements Listener {
             overflow.values().forEach(item -> player.getWorld().dropItemNaturally(
                     player.getLocation(), item));
             player.sendActionBar(net.kyori.adventure.text.Component.text(
-                    "建筑返还 +1（今日 " + result.used() + "/" + result.limit() + "）",
+                    "建筑返还 +1（本周 " + result.used() + "/" + result.limit() + "）",
                     net.kyori.adventure.text.format.NamedTextColor.GREEN));
         });
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBeaconInteract(PlayerInteractEvent event) {
+        Block block = event.getClickedBlock();
+        if (!beaconEnabled() || event.getAction() != Action.RIGHT_CLICK_BLOCK || block == null
+                || block.getType() != Material.BEACON) {
+            return;
+        }
+        PhaseFiveRepository.BonusIndex snapshot = index.get();
+        UUID townId = snapshot.territories().get(new PhaseFiveRepository.ChunkKey(
+                block.getWorld().getUID(), block.getChunk().getX(), block.getChunk().getZ()));
+        String residenceName = townId == null ? null : snapshot.residenceNames().get(townId);
+        if (residenceName == null || !host.landProtection().contains(residenceName,
+                block.getWorld().getUID(), block.getX(), block.getY(), block.getZ())) {
+            return;
+        }
+        Player player = event.getPlayer();
+        UUID membership = snapshot.memberships().get(player.getUniqueId());
+        MemberRole role = snapshot.roles().get(player.getUniqueId());
+        if (townId.equals(membership) && role != null && role.isLeader()) {
+            return;
+        }
+        event.setUseInteractedBlock(Event.Result.DENY);
+        event.setCancelled(true);
+        player.sendActionBar(net.kyori.adventure.text.Component.text(
+                "只有本镇镇长或副镇长可以编辑信标效果",
+                net.kyori.adventure.text.format.NamedTextColor.RED));
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -360,67 +414,20 @@ final class PhaseFiveRuntime implements Listener {
         }
     }
 
-    private void enhanceBeacon(Beacon beacon, String residenceName,
-                               PhaseFiveSettings.BeaconEnhancement config,
-                               Set<BeaconKey> seen,
-                               Map<PlayerEffectKey, Integer> desiredEffects) {
+    private void collectTownBeaconEffects(Beacon beacon, UUID townId, String residenceName,
+                                          Map<UUID, List<PotionEffect>> effectsByTown) {
         Block block = beacon.getBlock();
-        int tier = beacon.getTier();
-        if (tier < 1 || !host.landProtection().contains(residenceName,
+        if (beacon.getTier() < 1 || !host.landProtection().contains(residenceName,
                 block.getWorld().getUID(), block.getX(), block.getY(), block.getZ())) {
             return;
         }
-        BeaconKey key = BeaconKey.of(block);
-        double vanillaRange = 10D + tier * 10D;
-        boolean tagged = beacon.getPersistentDataContainer().has(beaconManagedKey,
-                PersistentDataType.BYTE);
-        Double storedOriginal = beacon.getPersistentDataContainer().get(beaconOriginalRangeKey,
-                PersistentDataType.DOUBLE);
-        if (!modifiedBeacons.containsKey(key) && !tagged
-                && Math.abs(beacon.getEffectRange() - vanillaRange) > 0.01D) {
-            // 不覆盖其他插件已经设置的自定义范围。
-            return;
-        }
-        // 当前范围已经确认是原版默认值，因此用哨兵值恢复为动态默认范围。
-        double original = storedOriginal == null ? -1D : storedOriginal;
-        modifiedBeacons.putIfAbsent(key, original);
-        beacon.getPersistentDataContainer().set(beaconManagedKey, PersistentDataType.BYTE,
-                (byte) 1);
-        beacon.getPersistentDataContainer().set(beaconOriginalRangeKey,
-                PersistentDataType.DOUBLE, original);
-        double cappedVanillaRange = 10D + Math.min(tier, config.maximumTier()) * 10D;
-        double enhancedRange = Math.min(config.maximumRange(),
-                cappedVanillaRange * config.rangeMultiplier());
-        boolean rangeChanged = Math.abs(beacon.getEffectRange() - enhancedRange) > 0.01D;
-        if (rangeChanged) {
-            beacon.setEffectRange(enhancedRange);
-        }
-        if (rangeChanged || !tagged) {
-            beacon.update(true, false);
-        }
-        seen.add(key);
-        if (config.effectLevelBonus() <= 0) {
-            return;
-        }
-        List<PotionEffect> effects = new ArrayList<>();
         if (beacon.getPrimaryEffect() != null) {
-            effects.add(beacon.getPrimaryEffect());
+            effectsByTown.computeIfAbsent(townId, ignored -> new ArrayList<>())
+                    .add(beacon.getPrimaryEffect());
         }
         if (beacon.getSecondaryEffect() != null) {
-            effects.add(beacon.getSecondaryEffect());
-        }
-        for (LivingEntity entity : beacon.getEntitiesInRange()) {
-            if (!(entity instanceof Player player)) {
-                continue;
-            }
-            for (PotionEffect effect : effects) {
-                int amplifier = Math.min(config.maximumEffectLevel() - 1,
-                        effect.getAmplifier() + config.effectLevelBonus());
-                if (amplifier > effect.getAmplifier()) {
-                    desiredEffects.merge(new PlayerEffectKey(player.getUniqueId(),
-                            effect.getType()), amplifier, Math::max);
-                }
-            }
+            effectsByTown.computeIfAbsent(townId, ignored -> new ArrayList<>())
+                    .add(beacon.getSecondaryEffect());
         }
     }
 
@@ -572,6 +579,7 @@ final class PhaseFiveRuntime implements Listener {
             healthy &= historyMatches;
             lines.add("QuickShop reconciliation=" + (historyMatches ? "MATCH" : "DIFFERENCE"));
         } else {
+            healthy = false;
             lines.add("QuickShop reconciliation=INCOMPLETE（历史不可用或超过 1000 条上限）");
         }
         String detail = healthy ? "统一诊断通过" : "统一诊断发现异常，请查看报告";

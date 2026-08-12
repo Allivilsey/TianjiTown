@@ -2,9 +2,7 @@ package cn.tianji.town.paper;
 
 import cn.tianji.town.core.consumption.BuffDefinition;
 import cn.tianji.town.core.consumption.BuffStackingRule;
-import cn.tianji.town.core.consumption.ResourceDefinition;
 import cn.tianji.town.core.town.MemberRole;
-import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 
 import java.math.BigDecimal;
@@ -16,12 +14,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-record PhaseFourSettings(boolean buffShopEnabled, boolean resourceShopEnabled,
-                         Map<String, BuffDefinition> buffs,
-                         Map<String, ResourceDefinition> resources) {
+record PhaseFourSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs) {
     PhaseFourSettings {
         buffs = Map.copyOf(buffs);
-        resources = Map.copyOf(resources);
     }
 
     BuffDefinition requireBuff(String key) {
@@ -32,34 +27,17 @@ record PhaseFourSettings(boolean buffShopEnabled, boolean resourceShopEnabled,
         return definition;
     }
 
-    ResourceDefinition requireResource(String key) {
-        ResourceDefinition definition = resources.get(key);
-        if (definition == null) {
-            throw new IllegalArgumentException("未知资源商品: " + key);
-        }
-        return definition;
-    }
-
     static PhaseFourSettings load(ConfigurationSection config) {
         Objects.requireNonNull(config, "config");
         Map<String, BuffDefinition> buffs = loadBuffs(config.getConfigurationSection(
                 "phase4.buffs.catalog"));
-        Map<String, ResourceDefinition> resources = loadResources(config.getConfigurationSection(
-                "phase4.resources.catalog"));
         if (buffs.isEmpty()) {
             throw new IllegalArgumentException("phase4.buffs.catalog 至少需要一个 Buff");
         }
         if (buffs.size() > 36) {
             throw new IllegalArgumentException("phase4.buffs.catalog 最多支持 36 个 Buff");
         }
-        if (resources.isEmpty()) {
-            throw new IllegalArgumentException("phase4.resources.catalog 至少需要一个商品");
-        }
-        if (resources.size() > 9) {
-            throw new IllegalArgumentException("phase4.resources.catalog 最多支持 9 个商品");
-        }
-        return new PhaseFourSettings(config.getBoolean("phase4.buffs.shop-enabled", true),
-                config.getBoolean("phase4.resources.shop-enabled", true), buffs, resources);
+        return new PhaseFourSettings(config.getBoolean("phase4.buffs.shop-enabled", true), buffs);
     }
 
     private static Map<String, BuffDefinition> loadBuffs(ConfigurationSection catalog) {
@@ -87,32 +65,6 @@ record PhaseFourSettings(boolean buffShopEnabled, boolean resourceShopEnabled,
             if (result.putIfAbsent(key, definition) != null) {
                 throw new IllegalArgumentException("重复 Buff key: " + key);
             }
-        }
-        return result;
-    }
-
-    private static Map<String, ResourceDefinition> loadResources(ConfigurationSection catalog) {
-        if (catalog == null) {
-            return Map.of();
-        }
-        Map<String, ResourceDefinition> result = new LinkedHashMap<>();
-        for (String key : catalog.getKeys(false)) {
-            ConfigurationSection section = requireSection(catalog, key);
-            String materialKey = text(section, "material");
-            Material material = Material.matchMaterial(materialKey);
-            if (material == null) {
-                throw new IllegalArgumentException("资源 " + key + " 的 material 不是有效物品: "
-                        + materialKey);
-            }
-            ResourceDefinition definition = new ResourceDefinition(key,
-                    text(section, "display-name"), material.getKey().toString(),
-                    decimal(section, "unit-price"), section.getInt("maximum-per-order"),
-                    section.getInt("daily-limit"), section.getIntegerList("quantity-options"),
-                    roles(section, "purchasing-roles"));
-            if (definition.quantityOptions().size() > 6) {
-                throw new IllegalArgumentException("资源 " + key + " 最多支持 6 个数量选项");
-            }
-            result.put(key, definition);
         }
         return result;
     }

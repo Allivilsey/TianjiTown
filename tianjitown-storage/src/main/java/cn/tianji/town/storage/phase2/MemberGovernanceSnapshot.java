@@ -25,6 +25,6 @@ public record MemberGovernanceSnapshot(
     }
 
     public boolean canReviewApplications() {
-        return role == MemberRole.MAYOR || role == MemberRole.OFFICER;
+        return role.isLeader();
     }
 }

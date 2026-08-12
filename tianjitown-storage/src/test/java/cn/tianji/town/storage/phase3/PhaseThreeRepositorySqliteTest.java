@@ -46,7 +46,13 @@ class PhaseThreeRepositorySqliteTest {
                     10_000, 500, 500, "world");
             assertEquals(500, repository.recordQuickShopTax(tax).balanceAfterMinor());
             assertEquals(500, repository.recordQuickShopTax(tax).balanceAfterMinor());
-            assertEquals(1, repository.ledger(townId, 0, 45, Instant.now()).size());
+            try (Connection connection = gate.dataSource().getConnection();
+                 PreparedStatement statement = connection.prepareStatement(
+                         "UPDATE ledger_entries SET created_at = 0 WHERE business_key = ?")) {
+                statement.setString(1, tax.businessKey());
+                statement.executeUpdate();
+            }
+            assertEquals(1, repository.ledger(townId, 0, 45).size());
 
             PhaseThreeRepository.EconomyOperation donation = repository.prepareOperation(townId,
                     "DONATION", 1_000, mayorId, "Mayor", "donation:test:1", "测试捐款");
@@ -99,7 +105,7 @@ class PhaseThreeRepositorySqliteTest {
             repository.refundExpansion(prepared.expansionId(), "Residence 测试失败");
             assertEquals(1_500, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
             assertEquals(1, repository.territoryUnits(townId).size());
-            assertEquals(4, repository.ledger(townId, 0, 45, Instant.now()).size());
+            assertEquals(4, repository.ledger(townId, 0, 45).size());
 
             PhaseThreeRepository.TaxChange changed = repository.changeTaxRate(townId, mayorId,
                     750, "Mayor", "测试税率");
@@ -119,6 +125,13 @@ class PhaseThreeRepositorySqliteTest {
             assertTrue(repository.findFinanceByTown(townId).orElseThrow().locked());
             assertTrue(repository.findFinanceByTown(townId).orElseThrow().lockReason()
                     .startsWith("ECONOMY_COMPENSATION:"));
+
+            PhaseThreeRepository.ExternalIncomeTax jobsTax =
+                    new PhaseThreeRepository.ExternalIncomeTax(townId, "jobs:test:1", "JOBS",
+                            mayorId, "Mayor", 2_000, 750, 150);
+            assertEquals(1_650, repository.recordExternalIncomeTax(jobsTax).balanceAfterMinor());
+            assertEquals(1_650, repository.recordExternalIncomeTax(jobsTax).balanceAfterMinor());
+            assertEquals("JOBS_TAX", repository.ledger(townId, 0, 45).getFirst().entryType());
         }
     }
 

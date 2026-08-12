@@ -2,6 +2,7 @@ package cn.tianji.town.storage.phase5;
 
 import cn.tianji.town.storage.database.DatabaseConfig;
 import cn.tianji.town.storage.database.DatabaseGate;
+import cn.tianji.town.core.town.MemberRole;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -23,7 +24,7 @@ class PhaseFiveRepositorySqliteTest {
     Path temporaryDirectory;
 
     @Test
-    void reservesDailyRefundAtomicallyAndRevalidatesTerritory() throws Exception {
+    void reservesWeeklyRefundAtomicallyAndRevalidatesTerritory() throws Exception {
         String url = "jdbc:sqlite:" + temporaryDirectory.resolve("phase5.db");
         try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
@@ -32,14 +33,16 @@ class PhaseFiveRepositorySqliteTest {
             UUID playerId = UUID.randomUUID();
             UUID worldId = UUID.randomUUID();
             insertTownAndTerritory(gate, townId, playerId, worldId);
+            insertArchivedFailedProjection(gate, UUID.randomUUID(), worldId);
             PhaseFiveRepository repository = new PhaseFiveRepository(gate.dataSource(),
                     () -> false);
 
             PhaseFiveRepository.BonusIndex index = repository.loadBonusIndex();
             assertEquals(townId, index.memberships().get(playerId));
+            assertEquals(MemberRole.MAYOR, index.roles().get(playerId));
             assertEquals(townId, index.territories().get(
                     new PhaseFiveRepository.ChunkKey(worldId, 10, 20)));
-            LocalDate day = LocalDate.of(2026, 8, 12);
+            LocalDate day = LocalDate.of(2026, 8, 10);
             assertTrue(repository.reserveBuildingRefund(townId, playerId, worldId, 10, 20,
                     day, "minecraft:stone", 2).granted());
             assertEquals(2, repository.reserveBuildingRefund(townId, playerId, worldId, 10, 20,
@@ -54,7 +57,51 @@ class PhaseFiveRepositorySqliteTest {
             assertEquals("ok", diagnostic.quickCheck());
             assertEquals(0, diagnostic.foreignKeyViolations());
             assertEquals(1, diagnostic.counts().get("activeTowns"));
-            assertEquals(1, repository.cleanupRefundCounters(day.plusDays(1)));
+            assertEquals(0, diagnostic.counts().get("failedProjections"));
+            failTownProjection(gate, townId);
+            assertEquals(1, repository.diagnose(Instant.EPOCH).counts()
+                    .get("failedProjections"));
+            assertEquals(1, repository.cleanupRefundCounters(day.plusWeeks(1)));
+        }
+    }
+
+    private static void failTownProjection(DatabaseGate gate, UUID townId) throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     UPDATE territory_units
+                        SET projection_status = 'FAILED', projection_error = '当前投影失败'
+                      WHERE town_id = ?
+                     """)) {
+            statement.setBytes(1, uuid(townId));
+            assertEquals(1, statement.executeUpdate());
+        }
+    }
+
+    private static void insertArchivedFailedProjection(DatabaseGate gate, UUID townId,
+                                                       UUID worldId) throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             PreparedStatement town = connection.prepareStatement("""
+                     INSERT INTO towns
+                         (town_id, name, normalized_name, short_name, normalized_short_name,
+                          description, rules_text, status, mayor_uuid)
+                     VALUES (?, '归档投影镇', '归档投影镇', '旧', '旧', '测试', '规则',
+                             'ARCHIVED', ?)
+                     """);
+             PreparedStatement unit = connection.prepareStatement("""
+                     INSERT INTO territory_units
+                         (unit_id, town_id, world_uuid, world_name, grid_x, grid_z,
+                          center_chunk_x, center_chunk_z, residence_name,
+                          residence_area_name, projection_status, projection_error)
+                     VALUES (?, ?, ?, 'world', 1, 0, 19, 20, 'archived', 'main',
+                             'FAILED', '历史投影已归档')
+                     """)) {
+            town.setBytes(1, uuid(townId));
+            town.setBytes(2, uuid(UUID.randomUUID()));
+            town.executeUpdate();
+            unit.setBytes(1, uuid(UUID.randomUUID()));
+            unit.setBytes(2, uuid(townId));
+            unit.setBytes(3, uuid(worldId));
+            unit.executeUpdate();
         }
     }
 

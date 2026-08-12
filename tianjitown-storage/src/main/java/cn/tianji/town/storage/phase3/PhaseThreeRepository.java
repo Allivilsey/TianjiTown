@@ -12,12 +12,12 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
@@ -116,7 +116,7 @@ public final class PhaseThreeRepository {
         requireReason(reason);
         return transaction(connection -> {
             TownTax current = requireTownTax(connection, townId);
-            requireRole(connection, townId, mayorId, "MAYOR");
+            requireLeader(connection, townId, mayorId);
             if (current.basisPoints() == basisPoints) {
                 return new TaxChange(townId, basisPoints, current.revision());
             }
@@ -214,6 +214,45 @@ public final class PhaseThreeRepository {
             return postLedger(connection, tax.townId(), "QUICKSHOP_TAX", tax.taxMinor(),
                     tax.receiverId(), tax.receiverId().toString(), tax.businessKey(),
                     tax.shopType() + " 商店税，shop=" + tax.shopId(), false);
+        });
+    }
+
+    public LedgerMutation recordExternalIncomeTax(ExternalIncomeTax tax) {
+        requireWorkerThread();
+        Objects.requireNonNull(tax, "tax");
+        if (tax.grossMinor() <= 0 || tax.taxMinor() <= 0) {
+            throw new IllegalArgumentException("外部收入与税额必须大于 0");
+        }
+        if (!Set.of("JOBS", "GLOBALMARKETPLUS").contains(tax.source())) {
+            throw new IllegalArgumentException("不支持的外部收入来源: " + tax.source());
+        }
+        requireTaxRate(tax.taxRateBps());
+        return transaction(connection -> {
+            Optional<LedgerMutation> existing = findLedgerByBusinessKey(connection,
+                    tax.businessKey());
+            if (existing.isPresent()) {
+                return existing.get();
+            }
+            UUID taxId = UUID.randomUUID();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    INSERT INTO external_income_tax_records
+                        (tax_id, town_id, business_key, source, receiver_uuid,
+                         gross_minor, tax_rate_bps, tax_minor)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """)) {
+                statement.setBytes(1, uuid(taxId));
+                statement.setBytes(2, uuid(tax.townId()));
+                statement.setString(3, tax.businessKey());
+                statement.setString(4, tax.source());
+                statement.setBytes(5, uuid(tax.receiverId()));
+                statement.setLong(6, tax.grossMinor());
+                statement.setInt(7, tax.taxRateBps());
+                statement.setLong(8, tax.taxMinor());
+                statement.executeUpdate();
+            }
+            return postLedger(connection, tax.townId(), tax.source() + "_TAX",
+                    tax.taxMinor(), tax.receiverId(), tax.receiverName(), tax.businessKey(),
+                    tax.source() + " 收入税", false);
         });
     }
 
@@ -408,23 +447,21 @@ public final class PhaseThreeRepository {
                 externalBalanceMinor >= required);
     }
 
-    public List<LedgerEntry> ledger(UUID townId, int page, int pageSize, Instant now) {
+    public List<LedgerEntry> ledger(UUID townId, int page, int pageSize) {
         requireWorkerThread();
         if (page < 0 || pageSize < 1 || pageSize > 45) {
             throw new IllegalArgumentException("账本分页参数无效");
         }
-        Instant cutoff = Objects.requireNonNull(now, "now").minus(Duration.ofDays(180));
         return query(connection -> {
             List<LedgerEntry> result = new ArrayList<>();
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT * FROM ledger_entries
-                     WHERE town_id = ? AND created_at >= ?
+                     WHERE town_id = ?
                      ORDER BY created_at DESC, entry_id LIMIT ? OFFSET ?
                     """)) {
                 statement.setBytes(1, uuid(townId));
-                statement.setLong(2, cutoff.toEpochMilli());
-                statement.setInt(3, pageSize);
-                statement.setInt(4, Math.multiplyExact(page, pageSize));
+                statement.setInt(2, pageSize);
+                statement.setInt(3, Math.multiplyExact(page, pageSize));
                 try (ResultSet rows = statement.executeQuery()) {
                     while (rows.next()) {
                         result.add(readLedger(rows));
@@ -833,17 +870,18 @@ public final class PhaseThreeRepository {
         }
     }
 
-    private static void requireRole(Connection connection, UUID townId, UUID playerId, String role)
+    private static void requireLeader(Connection connection, UUID townId, UUID playerId)
             throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT 1 FROM town_members WHERE town_id = ? AND player_uuid = ? AND role = ?
+                SELECT 1 FROM town_members
+                 WHERE town_id = ? AND player_uuid = ?
+                   AND role IN ('MAYOR', 'DEPUTY_MAYOR')
                 """)) {
             statement.setBytes(1, uuid(townId));
             statement.setBytes(2, uuid(playerId));
-            statement.setString(3, role);
             try (ResultSet row = statement.executeQuery()) {
                 if (!row.next()) {
-                    throw new ConflictException("只有镇长可以修改税率");
+                    throw new ConflictException("只有镇长或副镇长可以修改税率");
                 }
             }
         }
@@ -1013,6 +1051,11 @@ public final class PhaseThreeRepository {
                 throw new IllegalArgumentException("商店类型必须为 SELLING 或 BUYING");
             }
         }
+    }
+
+    public record ExternalIncomeTax(UUID townId, String businessKey, String source,
+                                    UUID receiverId, String receiverName, long grossMinor,
+                                    int taxRateBps, long taxMinor) {
     }
 
     public record LedgerMutation(UUID entryId, UUID townId, long amountMinor,

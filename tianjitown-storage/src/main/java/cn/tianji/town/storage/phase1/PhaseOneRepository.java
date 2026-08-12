@@ -712,7 +712,7 @@ public final class PhaseOneRepository {
             }
             audit(connection, null, mayorId, mayorId.toString(),
                     "MEMBER_APPLICATION_APPROVE", "TOWN", application.townId().toString(),
-                    "镇长批准入镇申请", application.applicantId().toString());
+                    "管理组批准入镇申请", application.applicantId().toString());
             return requireJoinApplication(connection, applicationId);
         });
     }
@@ -720,7 +720,7 @@ public final class PhaseOneRepository {
     public JoinApplicationSnapshot rejectJoinApplication(UUID applicationId, UUID mayorId) {
         requireWorkerThread();
         return decideJoinApplication(applicationId, mayorId, "REJECTED",
-                "MEMBER_APPLICATION_REJECT", "镇长拒绝入镇申请");
+                "MEMBER_APPLICATION_REJECT", "管理组拒绝入镇申请");
     }
 
     public JoinApplicationSnapshot cancelJoinApplication(UUID applicationId, UUID applicantId) {
@@ -750,7 +750,7 @@ public final class PhaseOneRepository {
     public InvitationSnapshot invite(UUID townId, UUID mayorId, UUID playerId, Duration lifetime) {
         requireWorkerThread();
         return transaction(connection -> {
-            requireMayor(connection, townId, mayorId);
+            requireManager(connection, townId, mayorId);
             if (memberTownId(connection, playerId).isPresent()) {
                 throw new ConflictException("目标玩家已经属于一个小镇");
             }
@@ -773,7 +773,7 @@ public final class PhaseOneRepository {
                 statement.executeUpdate();
             }
             audit(connection, null, mayorId, mayorId.toString(), "MEMBER_INVITE", "TOWN",
-                    townId.toString(), "镇长邀请成员", playerId.toString());
+                    townId.toString(), "管理组邀请成员", playerId.toString());
             return new InvitationSnapshot(invitationId, townId,
                     requireTown(connection, townId).profile().name(), mayorId, expiresAt);
         });
@@ -1409,7 +1409,7 @@ public final class PhaseOneRepository {
                                               long expectedVersion) throws SQLException {
         TownSnapshot current = requireTown(connection, townId);
         if (mayorOnly) {
-            requireMayor(connection, townId, actorId);
+            requireManager(connection, townId, actorId);
             if (current.version() != expectedVersion) {
                 throw new ConflictException("小镇状态已经变化，请重新打开界面确认");
             }
@@ -1758,26 +1758,10 @@ public final class PhaseOneRepository {
         }
     }
 
-    private void requireMayor(Connection connection, UUID townId, UUID playerId) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT 1 FROM town_members m JOIN towns t ON t.town_id = m.town_id
-                 WHERE m.town_id = ? AND m.player_uuid = ? AND m.role = 'MAYOR'
-                   AND t.status = 'ACTIVE' LIMIT 1
-                """)) {
-            statement.setBytes(1, uuid(townId));
-            statement.setBytes(2, uuid(playerId));
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) {
-                    throw new ConflictException("只有正常运行小镇的镇长可以执行该操作");
-                }
-            }
-        }
-    }
-
     private void requireManager(Connection connection, UUID townId, UUID playerId)
             throws SQLException {
         if (!canReviewJoinApplications(connection, townId, playerId)) {
-            throw new ConflictException("只有正常运行小镇的镇长或官员可以审核入镇申请");
+            throw new ConflictException("只有正常运行小镇的镇长或副镇长可以执行该操作");
         }
     }
 
@@ -1786,7 +1770,7 @@ public final class PhaseOneRepository {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT 1 FROM town_members m JOIN towns t ON t.town_id = m.town_id
                  WHERE m.town_id = ? AND m.player_uuid = ?
-                   AND m.role IN ('MAYOR', 'OFFICER') AND t.status = 'ACTIVE' LIMIT 1
+                   AND m.role IN ('MAYOR', 'DEPUTY_MAYOR') AND t.status = 'ACTIVE' LIMIT 1
                 """)) {
             statement.setBytes(1, uuid(townId));
             statement.setBytes(2, uuid(playerId));

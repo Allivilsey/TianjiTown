@@ -91,7 +91,7 @@ class DatabaseGateTest {
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
             DatabaseGate.HealthResult health = gate.verifyAndMigrate();
             assertTrue(health.healthy(), health.detail());
-            assertTrue(health.detail().contains("schema=5.0"));
+            assertTrue(health.detail().contains("schema=6.0"));
             try (Connection connection = gate.dataSource().getConnection();
                  PreparedStatement statement = connection.prepareStatement("""
                          SELECT t.name, t.rules_revision, m.role
@@ -137,7 +137,7 @@ class DatabaseGateTest {
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
             DatabaseGate.HealthResult health = gate.verifyAndMigrate();
             assertTrue(health.healthy(), health.detail());
-            assertTrue(health.detail().contains("schema=5.0"));
+            assertTrue(health.detail().contains("schema=6.0"));
             try (Connection connection = gate.dataSource().getConnection();
                  PreparedStatement votes = connection.prepareStatement("""
                          SELECT status, cancelled_reason FROM governance_votes
@@ -156,6 +156,73 @@ class DatabaseGateTest {
                 assertThrows(SQLException.class,
                         () -> insertVote(connection, UUID.randomUUID(), townId, mayorId,
                                 "KICK_MEMBER", 3_000L));
+            }
+        }
+    }
+
+    @Test
+    void upgradesOfficerRolesAndDailyRefundsToPhaseSix() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("phase6-upgrade.db");
+        Flyway.configure().dataSource(url, null, null).locations("classpath:db/migration")
+                .target("5.0").load().migrate();
+        UUID townId = UUID.randomUUID();
+        UUID mayorId = UUID.randomUUID();
+        try (Connection connection = DriverManager.getConnection(url)) {
+            try (PreparedStatement town = connection.prepareStatement("""
+                    INSERT INTO towns
+                        (town_id, name, normalized_name, short_name, normalized_short_name,
+                         description, rules_text, status, mayor_uuid)
+                    VALUES (?, '六期镇', '六期镇', '六', '六', '升级测试', '规则', 'ACTIVE', ?)
+                    """)) {
+                town.setBytes(1, uuid(townId));
+                town.setBytes(2, uuid(mayorId));
+                town.executeUpdate();
+            }
+            insertMember(connection, townId, mayorId, "MAYOR", 0L);
+            for (int index = 0; index < 4; index++) {
+                insertMember(connection, townId, UUID.randomUUID(), "OFFICER", index + 1L);
+            }
+            try (PreparedStatement refund = connection.prepareStatement("""
+                    INSERT INTO building_refund_daily
+                        (town_id, player_uuid, day_key, refund_count, last_material_key)
+                    VALUES (?, ?, ?, ?, 'minecraft:stone')
+                    """)) {
+                for (String day : java.util.List.of("2026-08-10", "2026-08-12")) {
+                    refund.setBytes(1, uuid(townId));
+                    refund.setBytes(2, uuid(mayorId));
+                    refund.setString(3, day);
+                    refund.setInt(4, 7);
+                    refund.addBatch();
+                }
+                refund.executeBatch();
+            }
+        }
+
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            DatabaseGate.HealthResult health = gate.verifyAndMigrate();
+            assertTrue(health.healthy(), health.detail());
+            try (Connection connection = gate.dataSource().getConnection();
+                 Statement statement = connection.createStatement()) {
+                try (ResultSet roles = statement.executeQuery("""
+                        SELECT role, COUNT(*) AS total FROM town_members
+                         GROUP BY role ORDER BY role
+                        """)) {
+                    assertTrue(roles.next());
+                    assertEquals("DEPUTY_MAYOR", roles.getString("role"));
+                    assertEquals(3, roles.getInt("total"));
+                    assertTrue(roles.next());
+                    assertEquals("MAYOR", roles.getString("role"));
+                    assertTrue(roles.next());
+                    assertEquals("MEMBER", roles.getString("role"));
+                }
+                try (ResultSet refund = statement.executeQuery("""
+                        SELECT week_start, refund_count FROM building_refund_weekly
+                        """)) {
+                    assertTrue(refund.next());
+                    assertEquals("2026-08-10", refund.getString("week_start"));
+                    assertEquals(14, refund.getInt("refund_count"));
+                }
             }
         }
     }
@@ -195,6 +262,20 @@ class DatabaseGateTest {
             vote.setBytes(6, uuid(actorId));
             vote.setLong(7, createdAt);
             vote.executeUpdate();
+        }
+    }
+
+    private static void insertMember(Connection connection, UUID townId, UUID playerId,
+                                     String role, long joinedAt) throws SQLException {
+        try (PreparedStatement member = connection.prepareStatement("""
+                INSERT INTO town_members (town_id, player_uuid, role, joined_at)
+                VALUES (?, ?, ?, ?)
+                """)) {
+            member.setBytes(1, uuid(townId));
+            member.setBytes(2, uuid(playerId));
+            member.setString(3, role);
+            member.setLong(4, joinedAt);
+            member.executeUpdate();
         }
     }
 

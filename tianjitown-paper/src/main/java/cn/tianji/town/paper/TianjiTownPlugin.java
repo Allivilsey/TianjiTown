@@ -1,6 +1,8 @@
 package cn.tianji.town.paper;
 
 import cn.tianji.town.core.ports.RegionBoundaryService;
+import cn.tianji.town.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
+import cn.tianji.town.integrations.jobs.JobsIncomeTaxAdapter;
 import cn.tianji.town.integrations.residence.ResidenceCommandGuard;
 import cn.tianji.town.integrations.residence.ResidenceLandProtectionService;
 import cn.tianji.town.integrations.quickshop.QuickShopTaxAdapter;
@@ -8,6 +10,7 @@ import cn.tianji.town.integrations.vault.VaultEconomyProbe;
 import cn.tianji.town.integrations.worldguard.WorldGuardRegionBoundaryService;
 import cn.tianji.town.storage.database.DatabaseConfig;
 import cn.tianji.town.storage.database.DatabaseGate;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -22,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class TianjiTownPlugin extends JavaPlugin {
-    private static final int CONFIG_SCHEMA = 5;
+    private static final int CONFIG_SCHEMA = 6;
     private final AtomicReference<GateStatus> gateStatus = new AtomicReference<>(
             new GateStatus(GateStatus.State.CHECKING, List.of("尚未开始")));
     private volatile DatabaseGate databaseGate;
@@ -87,7 +90,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
         boolean healthy = true;
         details.add("INFO Minecraft " + getServer().getMinecraftVersion()
                 + " / Java " + Runtime.version().feature());
-        for (String name : List.of("Residence", "Vault", "XConomy", "QuickShop-Hikari")) {
+        for (String name : List.of("Residence", "Vault", "XConomy", "QuickShop-Hikari",
+                "Jobs", "GlobalMarketPlus")) {
             Plugin dependency = getServer().getPluginManager().getPlugin(name);
             if (dependency == null) {
                 details.add("FAIL " + name + " 未安装");
@@ -152,7 +156,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
             return true;
         }
         if (configured == CONFIG_SCHEMA - 1) {
-            getConfig().options().copyDefaults(true);
+            upgradeConfigFromFive();
             getConfig().set("schema-version", CONFIG_SCHEMA);
             saveConfig();
             details.add("OK config schema 已安全升级 " + configured + " -> " + CONFIG_SCHEMA);
@@ -166,6 +170,45 @@ public final class TianjiTownPlugin extends JavaPlugin {
                     + CONFIG_SCHEMA + "；请先按对应阶段手册升级");
         }
         return false;
+    }
+
+    private void upgradeConfigFromFive() {
+        getConfig().options().copyDefaults(true);
+
+        // 清理第六版已移除或已更名的功能配置，避免旧字段继续误导服主。
+        for (String path : List.of(
+                "phase4.resources",
+                "phase5.building-refund.daily-limit",
+                "phase5.building-refund.counter-retention-days",
+                "phase5.building-refund.materials",
+                "phase5.beacon.range-multiplier",
+                "phase5.beacon.maximum-range",
+                "phase5.beacon.maximum-tier",
+                "phase5.beacon.effect-level-bonus",
+                "phase5.beacon.maximum-effect-level")) {
+            getConfig().set(path, null);
+        }
+
+        ConfigurationSection catalog = getConfig().getConfigurationSection(
+                "phase4.buffs.catalog");
+        if (catalog == null) {
+            return;
+        }
+        for (String key : catalog.getKeys(false)) {
+            String path = "phase4.buffs.catalog." + key + ".purchasing-roles";
+            List<String> roles = getConfig().getStringList(path);
+            List<String> migrated = new ArrayList<>();
+            for (String role : roles) {
+                String mapped = role.equals("OFFICER") ? "DEPUTY_MAYOR" : role;
+                if (!migrated.contains(mapped)) {
+                    migrated.add(mapped);
+                }
+            }
+            if (migrated.contains("MAYOR") && !migrated.contains("DEPUTY_MAYOR")) {
+                migrated.add("DEPUTY_MAYOR");
+            }
+            getConfig().set(path, migrated);
+        }
     }
 
     private String resolveDatabaseUrl() {
@@ -218,10 +261,21 @@ public final class TianjiTownPlugin extends JavaPlugin {
         Plugin quickShop = getServer().getPluginManager().getPlugin("QuickShop-Hikari");
         QuickShopTaxAdapter.Capability quickShopCapability = new QuickShopTaxAdapter(this,
                 java.util.Objects.requireNonNull(quickShop, "QuickShop-Hikari"),
-                runtime::taxEnabled, runtime::taxPolicy, runtime::acceptQuickShopTax,
+                runtime::quickShopTaxEnabled, runtime::taxPolicy, runtime::acceptQuickShopTax,
                 runtime.settlement().accountName(), runtime.settlement().accountId(),
                 runtime.settlement().scale()).register();
         runtime.setQuickShopTaxAvailable(quickShopCapability.available());
+        Plugin jobs = java.util.Objects.requireNonNull(
+                getServer().getPluginManager().getPlugin("Jobs"), "Jobs");
+        JobsIncomeTaxAdapter.Capability jobsCapability = new JobsIncomeTaxAdapter(this, jobs,
+                runtime::taxEnabled, runtime::acceptJobsIncomeTax).register();
+        Plugin globalMarketPlus = java.util.Objects.requireNonNull(
+                getServer().getPluginManager().getPlugin("GlobalMarketPlus"),
+                "GlobalMarketPlus");
+        GlobalMarketPlusIncomeTaxAdapter.Capability globalMarketCapability =
+                new GlobalMarketPlusIncomeTaxAdapter(this, globalMarketPlus,
+                        runtime::taxEnabled,
+                        runtime::acceptGlobalMarketPlusIncomeTax).register();
         TownUiController ui = new TownUiController(this, runtime);
         phaseOneRuntime = runtime;
         townUi = ui;
@@ -274,6 +328,10 @@ public final class TianjiTownPlugin extends JavaPlugin {
         details.add("OK " + databaseDetail);
         details.add((quickShopCapability.available() ? "OK " : "WARN ")
                 + quickShopCapability.detail());
+        details.add((jobsCapability.available() ? "OK " : "WARN ")
+                + jobsCapability.detail());
+        details.add((globalMarketCapability.available() ? "OK " : "WARN ")
+                + globalMarketCapability.detail());
         details.add("OK 阶段5建筑返还、信标增强、统一诊断与定时备份已启用");
         gateStatus.set(new GateStatus(GateStatus.State.READY, details));
         getLogger().info("阶段5启动完成；玩家入口仅限服务台和小镇手册。");

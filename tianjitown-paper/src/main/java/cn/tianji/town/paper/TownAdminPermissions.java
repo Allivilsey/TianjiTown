@@ -13,7 +13,6 @@ final class TownAdminPermissions {
     static final String LEDGER = "tianjitown.admin.ledger";
     static final String EXPAND = "tianjitown.admin.expand";
     static final String BUFF = "tianjitown.admin.buff";
-    static final String ORDER = "tianjitown.admin.order";
     static final String OPERATIONS = "tianjitown.admin.operations";
 
     private static final Map<String, String> SCOPED_ROOTS = Map.ofEntries(
@@ -23,7 +22,6 @@ final class TownAdminPermissions {
             Map.entry("ledger", LEDGER),
             Map.entry("expand", EXPAND),
             Map.entry("buff", BUFF),
-            Map.entry("order", ORDER),
             Map.entry("status", OPERATIONS),
             Map.entry("diagnose", OPERATIONS),
             Map.entry("backup", OPERATIONS),

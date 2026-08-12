@@ -133,6 +133,11 @@ public final class GovernanceRepository {
             if (requireMayor) {
                 requireRole(connection, townId, actorId, MemberRole.MAYOR);
             }
+            MemberRole currentRole = memberRole(connection, townId, targetId);
+            if (role == MemberRole.DEPUTY_MAYOR && currentRole != MemberRole.DEPUTY_MAYOR
+                    && deputyMayorCount(connection, townId) >= 3) {
+                throw new ConflictException("每个小镇最多任命 3 名副镇长");
+            }
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE town_members SET role = ?
                      WHERE town_id = ? AND player_uuid = ? AND role <> 'MAYOR'
@@ -151,11 +156,22 @@ public final class GovernanceRepository {
     public void removeMemberByMayor(UUID townId, UUID targetId, UUID mayorId, String mayorName) {
         requireWorkerThread();
         transaction(connection -> {
-            requireRole(connection, townId, mayorId, MemberRole.MAYOR);
+            MemberRole actorRole = memberRole(connection, townId, mayorId);
+            if (!actorRole.isLeader()) {
+                throw new ConflictException("只有本镇镇长或副镇长可以移除成员");
+            }
+            MemberRole targetRole = memberRole(connection, townId, targetId);
+            if (targetRole == MemberRole.MAYOR) {
+                throw new ConflictException("镇长不能通过成员移除流程离镇");
+            }
+            if (actorRole == MemberRole.DEPUTY_MAYOR
+                    && targetRole == MemberRole.DEPUTY_MAYOR) {
+                throw new ConflictException("只有镇长可以免除或移除副镇长");
+            }
             removeNonMayor(connection, townId, targetId, "REMOVED");
-            cancelSubjectVotes(connection, townId, targetId, "目标成员已被镇长移除");
+            cancelSubjectVotes(connection, townId, targetId, "目标成员已被管理组移除");
             audit(connection, mayorId, mayorName, "MEMBER_MAYOR_REMOVE", townId,
-                    "镇长通过治理界面移除成员", targetId.toString());
+                    "镇长或副镇长通过治理界面移除成员", targetId.toString());
             return null;
         });
     }
@@ -429,7 +445,8 @@ public final class GovernanceRepository {
             List<UUID> managers = new ArrayList<>();
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT player_uuid FROM town_members
-                     WHERE town_id = ? AND role IN ('MAYOR', 'OFFICER') ORDER BY role, joined_at
+                     WHERE town_id = ? AND role IN ('MAYOR', 'DEPUTY_MAYOR')
+                     ORDER BY CASE role WHEN 'MAYOR' THEN 0 ELSE 1 END, joined_at
                     """)) {
                 statement.setBytes(1, uuid(townId));
                 try (ResultSet result = statement.executeQuery()) {
@@ -762,6 +779,19 @@ public final class GovernanceRepository {
                     throw new ConflictException("目标成员已不属于该小镇");
                 }
                 return MemberRole.valueOf(result.getString("role"));
+            }
+        }
+    }
+
+    private static int deputyMayorCount(Connection connection, UUID townId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT COUNT(*) FROM town_members
+                 WHERE town_id = ? AND role = 'DEPUTY_MAYOR'
+                """)) {
+            statement.setBytes(1, uuid(townId));
+            try (ResultSet result = statement.executeQuery()) {
+                result.next();
+                return result.getInt(1);
             }
         }
     }

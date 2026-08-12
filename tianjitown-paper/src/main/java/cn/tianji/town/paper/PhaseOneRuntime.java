@@ -2,6 +2,8 @@ package cn.tianji.town.paper;
 
 import cn.tianji.town.core.ports.LandProtectionService;
 import cn.tianji.town.core.ports.RegionBoundaryService;
+import cn.tianji.town.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
+import cn.tianji.town.integrations.jobs.JobsIncomeTaxAdapter;
 import cn.tianji.town.core.land.ExpansionDirection;
 import cn.tianji.town.core.land.ExpansionPricing;
 import cn.tianji.town.core.land.TerritoryRules;
@@ -22,6 +24,8 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.time.Instant;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +49,7 @@ final class PhaseOneRuntime {
     private final PhaseFiveRuntime phaseFive;
     private final Map<UUID, QuickShopTaxAdapter.TaxPolicy> taxPolicies = new ConcurrentHashMap<>();
     private final RetryingWorkQueue<QuickShopTaxAdapter.SuccessfulTax> pendingTaxes;
+    private final RetryingWorkQueue<PhaseThreeRepository.ExternalIncomeTax> pendingIncomeTaxes;
     private final AtomicBoolean databaseAvailable = new AtomicBoolean(true);
     private final AtomicBoolean quickShopTaxAvailable = new AtomicBoolean(false);
     private final ProvisionCoordinator provisions = new ProvisionCoordinator();
@@ -86,6 +91,18 @@ final class PhaseOneRuntime {
                 plugin.getServer().getScheduler().runTaskLater(plugin, task, delayTicks);
             }
         }, 20L * 5, 20L * 30, this::recordQuickShopTax, this::handleQuickShopTaxFailure);
+        this.pendingIncomeTaxes = new RetryingWorkQueue<>(new RetryingWorkQueue.Scheduler() {
+            @Override
+            public void executeAsync(Runnable task) {
+                plugin.getServer().getScheduler().runTaskAsynchronously(plugin, task);
+            }
+
+            @Override
+            public void schedule(Runnable task, long delayTicks) {
+                plugin.getServer().getScheduler().runTaskLater(plugin, task, delayTicks);
+            }
+        }, 20L * 5, 20L * 30, this::recordExternalIncomeTax,
+                this::handleExternalIncomeTaxFailure);
     }
 
     PhaseOneRepository repository() {
@@ -125,8 +142,12 @@ final class PhaseOneRuntime {
     }
 
     boolean taxEnabled() {
-        return quickShopTaxAvailable.get() && plugin.getConfig().getBoolean(
-                "phase3.tax.enabled", phaseThreeSettings.taxEnabled());
+        return plugin.getConfig().getBoolean("phase3.tax.enabled",
+                phaseThreeSettings.taxEnabled());
+    }
+
+    boolean quickShopTaxEnabled() {
+        return taxEnabled() && quickShopTaxAvailable.get();
     }
 
     void setQuickShopTaxAvailable(boolean available) {
@@ -185,18 +206,6 @@ final class PhaseOneRuntime {
                 }
                 List<PhaseThreeRepository.ExpansionOperation> expansions =
                         finance.pendingExpansions();
-                List<cn.tianji.town.storage.phase4.PhaseFourRepository.ResourceOrder> orders =
-                        phaseFour.repository().openOrders(1_000);
-                if (!orders.isEmpty()) {
-                    long claiming = orders.stream().filter(order -> order.status()
-                            .equals("CLAIMING")).count();
-                    long refunds = orders.stream().filter(order -> order.status()
-                            .equals("REFUND_REQUIRED")).count();
-                    plugin.getLogger().warning("启动检查发现 " + orders.size()
-                            + " 个未完成资源订单，其中领取确认中 " + claiming
-                            + " 个、待退款 " + refunds + " 个；玩家登录会恢复领取标记。"
-                            + "可使用 /townadmin order list 检查。");
-                }
                 if (!expansions.isEmpty()) {
                     plugin.getServer().getScheduler().runTask(plugin,
                             () -> recoverExpansions(expansions));
@@ -439,6 +448,7 @@ final class PhaseOneRuntime {
 
     void flushPendingTaxes() {
         pendingTaxes.flush();
+        pendingIncomeTaxes.flush();
     }
 
     private void recordQuickShopTax(QuickShopTaxAdapter.SuccessfulTax tax) {
@@ -457,6 +467,81 @@ final class PhaseOneRuntime {
         plugin.getLogger().severe("QuickShop 税款 " + tax.businessKey()
                 + " 已进入清算账户但账本暂未写入，将自动重试: "
                 + safeMessage(exception));
+    }
+
+    JobsIncomeTaxAdapter.TaxResult acceptJobsIncomeTax(
+            JobsIncomeTaxAdapter.Earning earning) {
+        PhaseThreeRepository.ExternalIncomeTax tax = externalIncomeTax("JOBS",
+                earning.player(), earning.player().getName(), earning.grossAmount(),
+                "jobs:" + UUID.randomUUID());
+        if (tax == null) {
+            return JobsIncomeTaxAdapter.TaxResult.unchanged(earning.grossAmount());
+        }
+        VaultSettlementService.Result transferred = settlement.adjustSettlement(tax.taxMinor());
+        if (!transferred.success()) {
+            plugin.getLogger().severe("Jobs 收入税转入清算账户失败，已保留玩家原始收入: "
+                    + transferred.message());
+            return JobsIncomeTaxAdapter.TaxResult.unchanged(earning.grossAmount());
+        }
+        pendingIncomeTaxes.submit(tax);
+        double net = BigDecimal.valueOf(tax.grossMinor() - tax.taxMinor(),
+                settlement.scale()).doubleValue();
+        return JobsIncomeTaxAdapter.TaxResult.taxed(net);
+    }
+
+    void acceptGlobalMarketPlusIncomeTax(GlobalMarketPlusIncomeTaxAdapter.Earning earning) {
+        PhaseThreeRepository.ExternalIncomeTax tax = externalIncomeTax("GLOBALMARKETPLUS",
+                earning.player(), earning.receiverName(), earning.grossAmount(),
+                earning.businessKey());
+        if (tax == null) {
+            return;
+        }
+        VaultSettlementService.Result transferred = settlement.transferFromPlayer(
+                earning.player(), tax.taxMinor());
+        if (!transferred.success()) {
+            plugin.getLogger().severe("GlobalMarketPlus 收入税扣取失败，未写入小镇账本: "
+                    + transferred.message());
+            return;
+        }
+        pendingIncomeTaxes.submit(tax);
+    }
+
+    private PhaseThreeRepository.ExternalIncomeTax externalIncomeTax(
+            String source, org.bukkit.OfflinePlayer receiver, String receiverName, double gross,
+            String businessKey) {
+        if (!taxEnabled() || !Double.isFinite(gross) || gross <= 0) {
+            return null;
+        }
+        QuickShopTaxAdapter.TaxPolicy policy = taxPolicies.get(receiver.getUniqueId());
+        if (policy == null || policy.basisPoints() <= 0) {
+            return null;
+        }
+        long grossMinor = BigDecimal.valueOf(gross).movePointRight(settlement.scale())
+                .setScale(0, RoundingMode.HALF_UP).longValueExact();
+        long taxMinor = BigDecimal.valueOf(grossMinor)
+                .multiply(BigDecimal.valueOf(policy.basisPoints()))
+                .movePointLeft(4).setScale(0, RoundingMode.HALF_UP).longValueExact();
+        if (grossMinor <= 0 || taxMinor <= 0 || taxMinor >= grossMinor) {
+            return null;
+        }
+        String safeName = receiverName == null || receiverName.isBlank()
+                ? receiver.getUniqueId().toString() : receiverName;
+        return new PhaseThreeRepository.ExternalIncomeTax(policy.townId(), businessKey, source,
+                receiver.getUniqueId(), safeName, grossMinor, policy.basisPoints(), taxMinor);
+    }
+
+    private void recordExternalIncomeTax(PhaseThreeRepository.ExternalIncomeTax tax) {
+        finance.recordExternalIncomeTax(tax);
+        databaseAvailable.set(true);
+    }
+
+    private void handleExternalIncomeTaxFailure(PhaseThreeRepository.ExternalIncomeTax tax,
+                                                RuntimeException exception) {
+        if (exception instanceof PhaseThreeRepository.StorageUnavailableException) {
+            databaseAvailable.set(false);
+        }
+        plugin.getLogger().severe(tax.source() + " 税款 " + tax.businessKey()
+                + " 已进入清算账户但账本暂未写入，将自动重试: " + safeMessage(exception));
     }
 
     void reconcileSettlement() {
@@ -524,7 +609,7 @@ final class PhaseOneRuntime {
         }
         write(mayor, () -> {
             PhaseThreeRepository.TaxChange change = finance.changeTaxRate(townId,
-                    mayor.getUniqueId(), basisPoints, mayor.getName(), "镇长通过公共资金界面修改");
+                    mayor.getUniqueId(), basisPoints, mayor.getName(), "管理组通过公共资金界面修改");
             refreshTaxPolicies();
             return change;
         }, change -> {

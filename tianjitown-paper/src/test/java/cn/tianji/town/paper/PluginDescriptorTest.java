@@ -23,7 +23,7 @@ class PluginDescriptorTest {
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("plugin.yml 缺少 softdepend"));
         for (String plugin : List.of("Vault", "Residence", "QuickShop-Hikari", "XConomy",
-                "WorldGuard")) {
+                "Jobs", "GlobalMarketPlus", "WorldGuard")) {
             assertTrue(softDependencies.contains(plugin), plugin + " 必须声明为软依赖");
         }
     }
@@ -39,8 +39,7 @@ class PluginDescriptorTest {
                 "townadmin 不能在命令根节点要求完整管理员权限");
         for (String permission : List.of("tianjitown.admin.money", "tianjitown.admin.tax",
                 "tianjitown.admin.ledger", "tianjitown.admin.expand",
-                "tianjitown.admin.buff", "tianjitown.admin.order",
-                "tianjitown.admin.operations")) {
+                "tianjitown.admin.buff", "tianjitown.admin.operations")) {
             assertTrue(descriptor.contains(permission + ":"), permission + " 必须被声明");
         }
     }

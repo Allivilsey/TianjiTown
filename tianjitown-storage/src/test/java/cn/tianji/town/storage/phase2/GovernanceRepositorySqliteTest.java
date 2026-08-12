@@ -53,8 +53,24 @@ class GovernanceRepositorySqliteTest {
                 governance.recordActivity(playerId);
             }
 
-            assertEquals(MemberRole.OFFICER, governance.changeRoleByMayor(created.town().id(),
-                    officerId, MemberRole.OFFICER, created.mayorId(), "Mayor"));
+            assertEquals(MemberRole.DEPUTY_MAYOR, governance.changeRoleByMayor(created.town().id(),
+                    officerId, MemberRole.DEPUTY_MAYOR, created.mayorId(), "Mayor"));
+            UUID secondDeputy = UUID.randomUUID();
+            UUID thirdDeputy = UUID.randomUUID();
+            UUID fourthDeputy = UUID.randomUUID();
+            for (UUID playerId : List.of(secondDeputy, thirdDeputy, fourthDeputy)) {
+                phaseOne.addMember(created.town().id(), playerId, created.mayorId(), "Admin", "测试");
+            }
+            governance.changeRoleByMayor(created.town().id(), secondDeputy,
+                    MemberRole.DEPUTY_MAYOR, created.mayorId(), "Mayor");
+            governance.changeRoleByMayor(created.town().id(), thirdDeputy,
+                    MemberRole.DEPUTY_MAYOR, created.mayorId(), "Mayor");
+            assertThrows(GovernanceRepository.ConflictException.class,
+                    () -> governance.changeRoleByMayor(created.town().id(), fourthDeputy,
+                            MemberRole.DEPUTY_MAYOR, created.mayorId(), "Mayor"));
+            governance.removeMemberByMayor(created.town().id(), fourthDeputy, officerId,
+                    "Deputy");
+            assertFalse(phaseOne.listMemberIds(created.town().id()).contains(fourthDeputy));
             UUID applicantId = UUID.randomUUID();
             JoinApplicationSnapshot join = phaseOne.applyToTown(created.town().id(), applicantId,
                     Duration.ofHours(48), Duration.ZERO, Duration.ZERO, 3);
@@ -144,7 +160,7 @@ class GovernanceRepositorySqliteTest {
                 statement.setBytes(1, uuid(created.town().id()));
                 try (ResultSet result = statement.executeQuery()) {
                     assertTrue(result.next());
-                    assertEquals(4, result.getInt(1));
+                    assertEquals(6, result.getInt(1));
                 }
             }
         }

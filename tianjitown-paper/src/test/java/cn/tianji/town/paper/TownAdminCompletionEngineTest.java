@@ -74,7 +74,7 @@ class TownAdminCompletionEngineTest {
         assertEquals(List.of("<原因>"), engine.complete(
                 new String[]{"member", "remove", "天际", "之城", "MemberOne", ""},
                 snapshot, dynamic));
-        assertEquals(List.of("MEMBER", "OFFICER"), engine.complete(
+        assertEquals(List.of("DEPUTY_MAYOR", "MEMBER"), engine.complete(
                 new String[]{"member", "role", "天际", "之城", "MemberOne", ""},
                 snapshot, dynamic));
         assertEquals(List.of("cancel", "create-kick", "create-mayor", "settle"),
@@ -106,11 +106,9 @@ class TownAdminCompletionEngineTest {
                 new String[]{"buff", ""}, snapshot, dynamic));
         assertEquals(List.of("<buffKey>"), engine.complete(
                 new String[]{"buff", "grant", "天际", "之城", ""}, snapshot, dynamic));
-        assertEquals(List.of("MemberOne"), engine.complete(
+        assertEquals(List.of(), engine.complete(
                 new String[]{"order", "create", "天际", "之城", ""}, snapshot, dynamic));
-        assertEquals(List.of("<resourceKey>"), engine.complete(
-                new String[]{"order", "create", "天际", "之城", "MemberOne", ""},
-                snapshot, dynamic));
+        assertFalse(engine.complete(new String[]{""}, snapshot, dynamic).contains("order"));
     }
 
     @Test

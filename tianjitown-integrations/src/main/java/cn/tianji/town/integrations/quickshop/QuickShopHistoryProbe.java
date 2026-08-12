@@ -34,9 +34,12 @@ public final class QuickShopHistoryProbe {
         }
         try {
             ClassLoader loader = quickShop.getClass().getClassLoader();
-            Object quickShopCore = quickShop.getClass().getMethod("getQuickShop").invoke(quickShop);
-            Object database = quickShopCore.getClass().getMethod("getDatabaseHelper")
-                    .invoke(quickShopCore);
+            Class<?> entryPointType = Class.forName(
+                    "com.ghostchu.quickshop.QuickShopBukkit", false, loader);
+            Object quickShopCore = callApi(quickShop, entryPointType, "getQuickShop");
+            Class<?> apiType = Class.forName("com.ghostchu.quickshop.api.QuickShopAPI",
+                    false, loader);
+            Object database = callApi(quickShopCore, apiType, "getDatabaseHelper");
             Class<?> queryType = Class.forName("com.ghostchu.quickshop.database.MetricQuery",
                     true, loader);
             Constructor<?> constructor = java.util.Arrays.stream(queryType.getConstructors())
@@ -76,6 +79,18 @@ public final class QuickShopHistoryProbe {
                     && invocation.getCause() != null ? invocation.getCause() : exception;
             return Result.unavailable("QuickShop 交易历史读取失败: " + message(cause));
         }
+    }
+
+    static Object callApi(Object target, Class<?> apiType, String name)
+            throws ReflectiveOperationException {
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(apiType, "apiType");
+        Objects.requireNonNull(name, "name");
+        if (!apiType.isInstance(target)) {
+            throw new IllegalArgumentException("目标对象未实现 QuickShop API: "
+                    + apiType.getName());
+        }
+        return apiType.getMethod(name).invoke(target);
     }
 
     private static Object call(Object target, String name) throws ReflectiveOperationException {

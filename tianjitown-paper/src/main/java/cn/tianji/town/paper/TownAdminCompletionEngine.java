@@ -23,7 +23,7 @@ final class TownAdminCompletionEngine {
     private static final List<String> ROOTS = List.of(
             "help", "status", "reload", "audit", "station", "handbook", "application", "town",
             "member", "mayor", "vote", "land", "money", "tax", "ledger", "expand",
-            "buff", "order", "maintenance", "diagnose", "backup");
+            "buff", "maintenance", "diagnose", "backup");
 
     List<String> complete(String[] args, Snapshot snapshot, Dynamic dynamic) {
         Objects.requireNonNull(args, "args");
@@ -59,7 +59,7 @@ final class TownAdminCompletionEngine {
             case "vote" -> vote(args, snapshot, dynamic);
             case "land" -> land(args, snapshot, dynamic);
             case "money", "tax", "ledger", "expand" -> phaseThree(args, snapshot);
-            case "buff", "order" -> phaseFour(args, snapshot, dynamic);
+            case "buff" -> phaseFour(args, snapshot);
             default -> List.of();
         };
     }
@@ -69,7 +69,7 @@ final class TownAdminCompletionEngine {
                 "application", "land", "member", "station", "system", "town"));
         topics.add("vote");
         topics.addAll(List.of("money", "tax", "ledger", "expand"));
-        topics.addAll(List.of("buff", "order"));
+        topics.add("buff");
         if (dynamic.phaseZeroAllowed()) {
             topics.add("phase0");
         }
@@ -168,7 +168,7 @@ final class TownAdminCompletionEngine {
             return merge(phraseSuggestions, playerSuggestions);
         }
         if (tailLength == 2 && args[1].equalsIgnoreCase("role")) {
-            return filter(List.of("MEMBER", "OFFICER"), current(args));
+            return filter(List.of("MEMBER", "DEPUTY_MAYOR"), current(args));
         }
         return tailLength == 2 ? hint(current(args), REASON_HINT) : List.of();
     }
@@ -291,26 +291,19 @@ final class TownAdminCompletionEngine {
         return phraseSuggestions;
     }
 
-    private List<String> phaseFour(String[] args, Snapshot snapshot, Dynamic dynamic) {
-        String root = args[0].toLowerCase(Locale.ROOT);
+    private List<String> phaseFour(String[] args, Snapshot snapshot) {
         if (args.length == 2) {
-            return filter(root.equals("buff") ? List.of("list", "grant", "refund")
-                    : List.of("list", "create", "refund"), args[1]);
+            return filter(List.of("list", "grant", "refund"), args[1]);
         }
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("refund")) {
             return switch (args.length) {
-                case 3 -> filter(List.of(root.equals("buff") ? "<buffId>" : "<orderId>"),
-                        current(args));
+                case 3 -> filter(List.of("<buffId>"), current(args));
                 case 4 -> hint(current(args), REASON_HINT);
                 default -> List.of();
             };
         }
-        if (root.equals("order") && action.equals("list")) {
-            return args.length == 3
-                    ? filter(List.of("20", "50", "100", "200"), current(args)) : List.of();
-        }
-        if (!action.equals("list") && !action.equals("grant") && !action.equals("create")) {
+        if (!action.equals("list") && !action.equals("grant")) {
             return List.of();
         }
         List<String> names = townNames(snapshot, town -> town.status() == TownStatus.ACTIVE);
@@ -320,25 +313,12 @@ final class TownAdminCompletionEngine {
             return phrases;
         }
         int tail = args.length - match.end();
-        if (root.equals("buff")) {
-            if (action.equals("list")) {
-                return phrases;
-            }
-            return switch (tail) {
-                case 1 -> merge(phrases, hint(current(args), "<buffKey>"));
-                case 2 -> hint(current(args), REASON_HINT);
-                default -> List.of();
-            };
-        }
-        if (!action.equals("create")) {
+        if (action.equals("list")) {
             return phrases;
         }
         return switch (tail) {
-            case 1 -> merge(phrases, filter(dynamic.players().stream()
-                    .map(PlayerCandidate::label).toList(), current(args)));
-            case 2 -> hint(current(args), "<resourceKey>");
-            case 3 -> hint(current(args), "<数量>");
-            case 4 -> hint(current(args), REASON_HINT);
+            case 1 -> merge(phrases, hint(current(args), "<buffKey>"));
+            case 2 -> hint(current(args), REASON_HINT);
             default -> List.of();
         };
     }
