@@ -116,7 +116,7 @@ public final class PhaseThreeRepository {
         requireReason(reason);
         return transaction(connection -> {
             TownTax current = requireTownTax(connection, townId);
-            requireLeader(connection, townId, mayorId);
+            requireMayor(connection, townId, mayorId);
             if (current.basisPoints() == basisPoints) {
                 return new TaxChange(townId, basisPoints, current.revision());
             }
@@ -870,18 +870,18 @@ public final class PhaseThreeRepository {
         }
     }
 
-    private static void requireLeader(Connection connection, UUID townId, UUID playerId)
+    private static void requireMayor(Connection connection, UUID townId, UUID playerId)
             throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT 1 FROM town_members
                  WHERE town_id = ? AND player_uuid = ?
-                   AND role IN ('MAYOR', 'DEPUTY_MAYOR')
+                   AND role = 'MAYOR'
                 """)) {
             statement.setBytes(1, uuid(townId));
             statement.setBytes(2, uuid(playerId));
             try (ResultSet row = statement.executeQuery()) {
                 if (!row.next()) {
-                    throw new ConflictException("只有镇长或副镇长可以修改税率");
+                    throw new ConflictException("只有镇长可以修改税率");
                 }
             }
         }

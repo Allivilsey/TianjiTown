@@ -14,6 +14,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -97,7 +98,39 @@ class PhaseFourRepositorySqliteTest {
             PhaseFourRepository.BuffPurchase refundedBuff = repository.refundActiveBuff(
                     second.buff().buffId(), mayorId, "Mayor", "效果应用失败测试");
             assertEquals("CANCELLED", refundedBuff.buff().status());
+            assertThrows(PhaseFourRepository.ConflictException.class,
+                    () -> repository.refundActiveBuff(second.buff().buffId(), mayorId, "Mayor",
+                            "重复退款测试"));
+            assertEquals(refundedBuff.balanceAfterMinor(), accountBalance(gate, townId));
+            assertEquals(1, ledgerCount(gate, townId, "BUFF_REFUND"));
             assertEquals(1, repository.activeBuffsForPlayer(memberId, now).getFirst().level());
+        }
+    }
+
+    private static long accountBalance(DatabaseGate gate, UUID townId) throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT balance_minor FROM town_accounts WHERE town_id = ?")) {
+            statement.setBytes(1, uuid(townId));
+            try (ResultSet result = statement.executeQuery()) {
+                assertTrue(result.next());
+                return result.getLong(1);
+            }
+        }
+    }
+
+    private static int ledgerCount(DatabaseGate gate, UUID townId, String entryType)
+            throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT COUNT(*) FROM ledger_entries WHERE town_id = ? AND entry_type = ?
+                     """)) {
+            statement.setBytes(1, uuid(townId));
+            statement.setString(2, entryType);
+            try (ResultSet result = statement.executeQuery()) {
+                assertTrue(result.next());
+                return result.getInt(1);
+            }
         }
     }
 

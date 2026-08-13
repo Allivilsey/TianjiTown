@@ -4,9 +4,11 @@ import cn.tianji.town.core.application.ApplicationStatus;
 import cn.tianji.town.core.application.ApplicationText;
 import cn.tianji.town.core.land.ChunkPosition;
 import cn.tianji.town.core.land.InitialTerritory;
+import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.core.town.TownStatus;
 import cn.tianji.town.storage.database.DatabaseConfig;
 import cn.tianji.town.storage.database.DatabaseGate;
+import cn.tianji.town.storage.phase2.GovernanceRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -116,6 +118,41 @@ class PhaseOneRepositorySqliteTest {
             CreatedTown active = createTown(repository, 2, "复用镇", "复", "OLD");
             assertEquals(active.town().id(), repository.findTownByName("复用镇").orElseThrow().id());
             assertEquals(active.town().id(), repository.listTowns(true).getFirst().id());
+        }
+    }
+
+    @Test
+    void onlyTownLeadersCanUpdateTownProfile() {
+        DatabaseConfig config = new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("profile-permissions.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5));
+        try (DatabaseGate gate = new DatabaseGate(config)) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            PhaseOneRepository repository = new PhaseOneRepository(gate.dataSource(), () -> false);
+            CreatedTown created = createTown(repository, 1, "资料镇", "资料", "PROFILE");
+            TownSnapshot original = created.town();
+            UUID memberId = UUID.randomUUID();
+            repository.addMember(original.id(), memberId, created.mayorId(), "Admin", "测试成员");
+            ApplicationText changed = new ApplicationText("资料新镇", "新资料", "profile",
+                    "更新后的简介", List.of("更新后的规则"));
+
+            assertThrows(PhaseOneRepository.ConflictException.class,
+                    () -> repository.updateTownProfile(original.id(), changed,
+                            original.version(), UUID.randomUUID(), "Outsider", "越权修改"));
+            assertThrows(PhaseOneRepository.ConflictException.class,
+                    () -> repository.updateTownProfile(original.id(), changed,
+                            original.version(), memberId, "Member", "越权修改"));
+            TownSnapshot unchanged = repository.findTown(original.id()).orElseThrow();
+            assertEquals(original.profile(), unchanged.profile());
+            assertEquals(original.version(), unchanged.version());
+
+            GovernanceRepository governance = new GovernanceRepository(gate.dataSource(),
+                    () -> false);
+            governance.changeRoleByMayor(original.id(), memberId, MemberRole.DEPUTY_MAYOR,
+                    created.mayorId(), "Mayor");
+            TownSnapshot updated = repository.updateTownProfile(original.id(), changed,
+                    original.version(), memberId, "Deputy", "副镇长修改资料");
+            assertEquals(changed, updated.profile());
         }
     }
 

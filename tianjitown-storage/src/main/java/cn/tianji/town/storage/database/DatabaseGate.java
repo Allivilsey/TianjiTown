@@ -4,6 +4,7 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
+import org.flywaydb.core.api.MigrationVersion;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -14,6 +15,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 public final class DatabaseGate implements AutoCloseable {
+    private static final MigrationVersion SUPPORTED_SCHEMA_VERSION =
+            MigrationVersion.fromVersion("6.0");
     private final HikariDataSource dataSource;
     private final Flyway flyway;
 
@@ -56,15 +59,34 @@ public final class DatabaseGate implements AutoCloseable {
             return HealthResult.failure(exception.getClass().getSimpleName() + ": " + exception.getMessage());
         }
         try {
+            verifyMigrationHistory();
             flyway.migrate();
             flyway.validate();
             MigrationInfo current = flyway.info().current();
             if (current == null) {
                 return HealthResult.failure("未发现或执行任何 Flyway 迁移");
             }
+            if (!SUPPORTED_SCHEMA_VERSION.equals(current.getVersion())) {
+                return HealthResult.failure("Flyway schema 版本不受支持: 当前="
+                        + current.getVersion() + "，支持=" + SUPPORTED_SCHEMA_VERSION);
+            }
             return HealthResult.success(current.getVersion().toString());
         } catch (RuntimeException exception) {
             return HealthResult.failure(exception.getClass().getSimpleName() + ": " + exception.getMessage());
+        }
+    }
+
+    private void verifyMigrationHistory() {
+        for (MigrationInfo migration : flyway.info().all()) {
+            if (migration.getState().isFailed()) {
+                throw new IllegalStateException("检测到失败的 Flyway 迁移: version="
+                        + migration.getVersion() + ", state=" + migration.getState());
+            }
+            MigrationVersion version = migration.getVersion();
+            if (version != null && version.isNewerThan(SUPPORTED_SCHEMA_VERSION)) {
+                throw new IllegalStateException("检测到高于当前插件支持范围的 Flyway 迁移: version="
+                        + version + "，支持=" + SUPPORTED_SCHEMA_VERSION);
+            }
         }
     }
 

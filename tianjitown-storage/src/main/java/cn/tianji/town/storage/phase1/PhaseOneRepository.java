@@ -1157,6 +1157,7 @@ public final class PhaseOneRepository {
         requireWorkerThread();
         profile.requireValid();
         return transaction(connection -> {
+            requireManager(connection, townId, actorId);
             ensureTownNameAvailable(connection, profile, townId);
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE towns SET name = ?, normalized_name = ?, short_name = ?,

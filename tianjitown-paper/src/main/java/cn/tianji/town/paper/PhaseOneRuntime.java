@@ -612,7 +612,7 @@ final class PhaseOneRuntime {
         }
         write(mayor, () -> {
             PhaseThreeRepository.TaxChange change = finance.changeTaxRate(townId,
-                    mayor.getUniqueId(), basisPoints, mayor.getName(), "管理组通过公共资金界面修改");
+                    mayor.getUniqueId(), basisPoints, mayor.getName(), "镇长通过公共资金界面修改");
             refreshTaxPolicies();
             return change;
         }, change -> {

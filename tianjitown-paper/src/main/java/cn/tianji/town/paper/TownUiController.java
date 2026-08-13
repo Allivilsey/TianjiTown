@@ -680,7 +680,7 @@ final class TownUiController implements Listener {
                     List.of("§7点击后在聊天栏输入金额", "§7从个人 Vault 余额转入公共资金",
                             "§8输入“取消”可退出"), "DONATION_INPUT", null)));
         }
-        if (MemberRole.valueOf(account.role()).isLeader() && runtime.taxEnabled()) {
+        if (account.role().equals("MAYOR") && runtime.taxEnabled()) {
             int[] rates = {0, 250, 500, 1000};
             for (int index = 0; index < rates.length; index++) {
                 int rate = rates[index];

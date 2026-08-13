@@ -123,6 +123,9 @@ class GovernanceRepositorySqliteTest {
                     .findFirst().orElseThrow();
             assertEquals(VoteStatus.PASSED, settledKick.status());
             assertFalse(phaseOne.listMemberIds(created.town().id()).contains(targetId));
+            assertThrows(GovernanceRepository.ConflictException.class,
+                    () -> governance.cancelVote(settledKick.id(), created.mayorId(), "Mayor",
+                            "不能取消已结束投票"));
 
             assertThrows(IllegalArgumentException.class,
                     () -> governance.requestMayorTransfer(created.town().id(), candidateId,

@@ -246,6 +246,59 @@ class DatabaseGateTest {
         }
     }
 
+    @Test
+    void rejectsMigrationNewerThanSupportedSchema() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("future-migration.db");
+        initializeDatabase(url);
+        insertMigrationHistory(url, "99.0", "V99_0__unknown_future.sql", true);
+
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            DatabaseGate.HealthResult health = gate.verifyAndMigrate();
+
+            assertFalse(health.healthy());
+            assertTrue(health.detail().contains("高于当前插件支持范围"), health.detail());
+            assertTrue(health.detail().contains("99.0"), health.detail());
+        }
+    }
+
+    @Test
+    void rejectsFailedMigrationHistory() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("failed-migration.db");
+        initializeDatabase(url);
+        insertMigrationHistory(url, "6.1", "V6_1__interrupted_test.sql", false);
+
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            DatabaseGate.HealthResult health = gate.verifyAndMigrate();
+
+            assertFalse(health.healthy());
+            assertTrue(health.detail().contains("失败的 Flyway 迁移"), health.detail());
+            assertTrue(health.detail().contains("6.1"), health.detail());
+        }
+    }
+
+    private static void initializeDatabase(String url) {
+        Flyway.configure().dataSource(url, null, null).locations("classpath:db/migration")
+                .load().migrate();
+    }
+
+    private static void insertMigrationHistory(String url, String version, String script,
+                                               boolean success) throws SQLException {
+        try (Connection connection = DriverManager.getConnection(url);
+             PreparedStatement statement = connection.prepareStatement("""
+                     INSERT INTO flyway_schema_history
+                         (installed_rank, version, description, type, script, checksum,
+                          installed_by, execution_time, success)
+                     VALUES (10, ?, '测试迁移', 'SQL', ?, 1, 'test', 1, ?)
+                     """)) {
+            statement.setString(1, version);
+            statement.setString(2, script);
+            statement.setBoolean(3, success);
+            statement.executeUpdate();
+        }
+    }
+
     private static void insertVote(Connection connection, UUID voteId, UUID townId, UUID actorId,
                                    String type, long createdAt) throws SQLException {
         try (PreparedStatement vote = connection.prepareStatement("""

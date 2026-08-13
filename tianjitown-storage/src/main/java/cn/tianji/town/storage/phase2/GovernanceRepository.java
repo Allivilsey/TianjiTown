@@ -399,7 +399,7 @@ public final class GovernanceRepository {
         return transaction(connection -> {
             VoteSnapshot vote = requireVote(connection, voteId, actorId);
             if (vote.status() != VoteStatus.OPEN) {
-                return vote;
+                throw new ConflictException("投票已经结束，不能取消");
             }
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE governance_votes SET status = 'CANCELLED', settled_at = ?,

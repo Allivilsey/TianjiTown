@@ -36,8 +36,10 @@ class PhaseThreeRepositorySqliteTest {
             assertTrue(gate.verifyAndMigrate().healthy());
             UUID townId = UUID.randomUUID();
             UUID mayorId = UUID.randomUUID();
+            UUID deputyMayorId = UUID.randomUUID();
             UUID worldId = UUID.randomUUID();
             insertTown(gate, townId, mayorId, worldId);
+            insertMember(gate, townId, deputyMayorId, "DEPUTY_MAYOR");
             PhaseThreeRepository repository = new PhaseThreeRepository(gate.dataSource(), () -> false);
             repository.initializeAccounts();
 
@@ -111,6 +113,10 @@ class PhaseThreeRepositorySqliteTest {
                     750, "Mayor", "测试税率");
             assertEquals(750, changed.basisPoints());
             assertTrue(changed.revision() > 1);
+            assertThrows(PhaseThreeRepository.ConflictException.class,
+                    () -> repository.changeTaxRate(townId, deputyMayorId,
+                            1_000, "Deputy", "副镇长越权修改测试"));
+            assertEquals(750, repository.findFinanceByTown(townId).orElseThrow().taxRateBps());
 
             PhaseThreeRepository.EconomyOperation uncertain = repository.prepareOperation(townId,
                     "ADMIN_ADJUSTMENT", 100, mayorId, "Mayor", "adjustment:uncertain",
@@ -181,6 +187,20 @@ class PhaseThreeRepositorySqliteTest {
                 }
                 chunk.executeBatch();
             }
+        }
+    }
+
+    private static void insertMember(DatabaseGate gate, UUID townId, UUID playerId, String role)
+            throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     INSERT INTO town_members (town_id, player_uuid, role)
+                     VALUES (?, ?, ?)
+                     """)) {
+            statement.setBytes(1, uuid(townId));
+            statement.setBytes(2, uuid(playerId));
+            statement.setString(3, role);
+            statement.executeUpdate();
         }
     }
 

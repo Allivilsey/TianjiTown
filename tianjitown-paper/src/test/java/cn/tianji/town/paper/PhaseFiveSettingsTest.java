@@ -24,11 +24,14 @@ class PhaseFiveSettingsTest {
     }
 
     @Test
-    void rejectsInvalidBlacklistAndChance() throws Exception {
+    void rejectsInvalidBlacklistChanceAndWrongType() throws Exception {
         assertThrows(IllegalArgumentException.class,
                 () -> PhaseFiveSettings.load(configuration("NOT_A_MATERIAL", "0.25")));
         assertThrows(IllegalArgumentException.class,
                 () -> PhaseFiveSettings.load(configuration("STONE", "1.5")));
+        IllegalArgumentException wrongType = assertThrows(IllegalArgumentException.class,
+                () -> PhaseFiveSettings.load(configuration("STONE", "not-a-number")));
+        assertTrue(wrongType.getMessage().contains("phase5.building-refund.chance"));
         assertTrue(PhaseFiveSettings.isRedstoneCategory(Material.OAK_BUTTON));
         assertFalse(PhaseFiveSettings.isSafeSingleBlock(Material.OAK_DOOR));
         assertFalse(PhaseFiveSettings.isSafeSingleBlock(Material.SHULKER_BOX));

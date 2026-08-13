@@ -4,6 +4,7 @@ import cn.tianji.town.storage.database.DatabaseGate;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -40,28 +41,34 @@ final class PhaseFiveBackupService {
             throw new IllegalStateException("SQLite 备份不能在 Paper 主线程执行");
         }
         Instant startedAt = Instant.now();
-        Path directory = resolveDirectory();
-        String stem = PREFIX + STAMP.format(startedAt);
-        Path databaseFile = directory.resolve(stem + ".db");
-        Path configFile = directory.resolve(stem + "-config.yml");
-        Path checksumFile = directory.resolve(stem + ".sha256");
+        Path databaseFile = null;
+        Path configFile = null;
+        Path checksumFile = null;
+        Path reservationFile = null;
         try {
+            Path directory = resolveDirectory();
             Files.createDirectories(directory);
+            BackupPaths paths = reserveBackupPaths(directory, startedAt);
+            databaseFile = paths.databaseFile();
+            configFile = paths.configFile();
+            checksumFile = paths.checksumFile();
+            reservationFile = paths.reservationFile();
             database.onlineBackup(databaseFile);
             Files.copy(plugin.getDataFolder().toPath().resolve("config.yml"), configFile,
                     StandardCopyOption.COPY_ATTRIBUTES);
             String checksum = sha256(databaseFile);
             Files.writeString(checksumFile, checksum + "  " + databaseFile.getFileName()
                     + System.lineSeparator());
+            Files.deleteIfExists(reservationFile);
             prune(directory);
             Result result = new Result(true, startedAt,
                     "SQLite 在线备份与配置快照已完成，SHA-256=" + checksum, databaseFile);
             lastResult.set(result);
             return result;
         } catch (IOException | RuntimeException exception) {
-            cleanup(databaseFile, configFile, checksumFile);
+            cleanup(databaseFile, configFile, checksumFile, reservationFile);
             Result result = new Result(false, startedAt,
-                    "备份失败: " + safeMessage(exception), databaseFile);
+                    "备份失败: " + safeMessage(exception), null);
             lastResult.set(result);
             return result;
         }
@@ -72,10 +79,41 @@ final class PhaseFiveBackupService {
     }
 
     Path resolveDirectory() {
-        Path configured = settings.directory();
-        Path directory = configured.isAbsolute() ? configured
-                : plugin.getDataFolder().toPath().resolve(configured);
-        return directory.toAbsolutePath().normalize();
+        return resolveDirectory(plugin.getDataFolder().toPath(), settings.directory());
+    }
+
+    static Path resolveDirectory(Path dataDirectory, Path configured) {
+        Path normalizedDataDirectory = dataDirectory.toAbsolutePath().normalize();
+        if (configured.isAbsolute()) {
+            return configured.toAbsolutePath().normalize();
+        }
+        Path directory = normalizedDataDirectory.resolve(configured).normalize();
+        if (!directory.startsWith(normalizedDataDirectory)) {
+            throw new IllegalArgumentException("相对备份目录不能超出插件数据目录: " + configured);
+        }
+        return directory;
+    }
+
+    static BackupPaths reserveBackupPaths(Path directory, Instant startedAt) throws IOException {
+        String baseStem = PREFIX + STAMP.format(startedAt);
+        for (int sequence = 0; sequence < 10_000; sequence++) {
+            String stem = sequence == 0 ? baseStem : baseStem + "-" + sequence;
+            BackupPaths paths = new BackupPaths(directory.resolve(stem + ".db"),
+                    directory.resolve(stem + "-config.yml"),
+                    directory.resolve(stem + ".sha256"),
+                    directory.resolve(stem + ".pending"));
+            try {
+                Files.createFile(paths.reservationFile());
+            } catch (FileAlreadyExistsException exception) {
+                continue;
+            }
+            if (!Files.exists(paths.databaseFile()) && !Files.exists(paths.configFile())
+                    && !Files.exists(paths.checksumFile())) {
+                return paths;
+            }
+            Files.deleteIfExists(paths.reservationFile());
+        }
+        throw new IOException("同一秒内备份任务过多，无法分配唯一文件名");
     }
 
     private void prune(Path directory) throws IOException {
@@ -123,6 +161,9 @@ final class PhaseFiveBackupService {
 
     private static void cleanup(Path... paths) {
         for (Path path : paths) {
+            if (path == null) {
+                continue;
+            }
             try {
                 Files.deleteIfExists(path);
             } catch (IOException ignored) {
@@ -137,5 +178,9 @@ final class PhaseFiveBackupService {
     }
 
     record Result(boolean success, Instant completedAt, String detail, Path databaseFile) {
+    }
+
+    record BackupPaths(Path databaseFile, Path configFile, Path checksumFile,
+                       Path reservationFile) {
     }
 }

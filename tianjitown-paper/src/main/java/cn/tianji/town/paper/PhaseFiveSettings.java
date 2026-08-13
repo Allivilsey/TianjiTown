@@ -3,6 +3,7 @@ package cn.tianji.town.paper;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 
+import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.DateTimeException;
@@ -24,9 +25,9 @@ record PhaseFiveSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
 
     private static BuildingRefund loadBuildingRefund(ConfigurationSection config) {
         String root = "phase5.building-refund";
-        double chance = config.getDouble(root + ".chance", 0.1D);
-        int weeklyLimit = config.getInt(root + ".weekly-limit", 3_000);
-        int retentionWeeks = config.getInt(root + ".counter-retention-weeks", 12);
+        double chance = decimal(config, root + ".chance", 0.1D);
+        int weeklyLimit = integer(config, root + ".weekly-limit", 3_000);
+        int retentionWeeks = integer(config, root + ".counter-retention-weeks", 12);
         if (!Double.isFinite(chance) || chance <= 0 || chance > 1) {
             throw new IllegalArgumentException(root + ".chance 必须在 (0, 1] 范围内");
         }
@@ -39,11 +40,11 @@ record PhaseFiveSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
         }
         ZoneId resetZone;
         try {
-            resetZone = ZoneId.of(config.getString(root + ".reset-zone", "Asia/Shanghai"));
+            resetZone = ZoneId.of(text(config, root + ".reset-zone", "Asia/Shanghai"));
         } catch (DateTimeException exception) {
             throw new IllegalArgumentException(root + ".reset-zone 不是有效时区", exception);
         }
-        List<String> configured = config.getStringList(root + ".blacklist");
+        List<String> configured = stringList(config, root + ".blacklist");
         if (configured.isEmpty()) {
             throw new IllegalArgumentException(root + ".blacklist 至少需要一个方块或分组");
         }
@@ -60,34 +61,34 @@ record PhaseFiveSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
             }
             blacklist.add(material);
         }
-        return new BuildingRefund(config.getBoolean(root + ".enabled", true), chance,
+        return new BuildingRefund(bool(config, root + ".enabled", true), chance,
                 weeklyLimit, retentionWeeks, resetZone, blacklist);
     }
 
     private static BeaconEnhancement loadBeacon(ConfigurationSection config) {
         String root = "phase5.beacon";
-        long scanTicks = config.getLong(root + ".scan-interval-ticks", 100L);
+        long scanTicks = longInteger(config, root + ".scan-interval-ticks", 100L);
         if (scanTicks < 20 || scanTicks > 20L * 60) {
             throw new IllegalArgumentException(root
                     + ".scan-interval-ticks 必须在 20~1200 范围内");
         }
-        Set<String> worlds = config.getStringList(root + ".allowed-worlds").stream()
+        Set<String> worlds = stringList(config, root + ".allowed-worlds").stream()
                 .map(value -> value.toLowerCase(Locale.ROOT)).collect(
                         java.util.stream.Collectors.toUnmodifiableSet());
         if (worlds.isEmpty()) {
             throw new IllegalArgumentException(root + ".allowed-worlds 至少需要一个世界");
         }
-        return new BeaconEnhancement(config.getBoolean(root + ".enabled", true), scanTicks,
+        return new BeaconEnhancement(bool(config, root + ".enabled", true), scanTicks,
                 worlds);
     }
 
     private static Operations loadOperations(ConfigurationSection config) {
         String root = "phase5.operations";
-        int diagnosticsDays = config.getInt(root + ".quickshop-diagnostic-days", 7);
-        long diagnosticsMinutes = config.getLong(root + ".diagnostics-interval-minutes", 60);
-        long backupHours = config.getLong(root + ".backup.interval-hours", 6);
-        int retention = config.getInt(root + ".backup.retention-count", 14);
-        String directory = config.getString(root + ".backup.directory", "backups");
+        int diagnosticsDays = integer(config, root + ".quickshop-diagnostic-days", 7);
+        long diagnosticsMinutes = longInteger(config, root + ".diagnostics-interval-minutes", 60);
+        long backupHours = longInteger(config, root + ".backup.interval-hours", 6);
+        int retention = integer(config, root + ".backup.retention-count", 14);
+        String directory = text(config, root + ".backup.directory", "backups");
         if (diagnosticsDays < 1 || diagnosticsDays > 180) {
             throw new IllegalArgumentException(root
                     + ".quickshop-diagnostic-days 必须在 1~180 范围内");
@@ -103,8 +104,77 @@ record PhaseFiveSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
             throw new IllegalArgumentException(root + ".backup.directory 不能为空");
         }
         return new Operations(diagnosticsDays, Duration.ofMinutes(diagnosticsMinutes),
-                new Backup(config.getBoolean(root + ".backup.enabled", true),
+                new Backup(bool(config, root + ".backup.enabled", true),
                         Duration.ofHours(backupHours), retention, Path.of(directory)));
+    }
+
+    private static boolean bool(ConfigurationSection config, String path, boolean defaultValue) {
+        Object value = config.get(path);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        throw invalidType(path, "布尔值");
+    }
+
+    private static double decimal(ConfigurationSection config, String path, double defaultValue) {
+        Object value = config.get(path);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        throw invalidType(path, "数字");
+    }
+
+    private static int integer(ConfigurationSection config, String path, int defaultValue) {
+        long value = longInteger(config, path, defaultValue);
+        if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(path + " 超出整数范围");
+        }
+        return (int) value;
+    }
+
+    private static long longInteger(ConfigurationSection config, String path, long defaultValue) {
+        Object value = config.get(path);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (!(value instanceof Number number)) {
+            throw invalidType(path, "整数");
+        }
+        try {
+            return new BigDecimal(number.toString()).longValueExact();
+        } catch (ArithmeticException | NumberFormatException exception) {
+            throw new IllegalArgumentException(path + " 必须为 long 范围内的整数", exception);
+        }
+    }
+
+    private static String text(ConfigurationSection config, String path, String defaultValue) {
+        Object value = config.get(path);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof String text) {
+            return text;
+        }
+        throw invalidType(path, "文本");
+    }
+
+    private static List<String> stringList(ConfigurationSection config, String path) {
+        Object value = config.get(path);
+        if (!(value instanceof List<?> values)
+                || values.stream().anyMatch(item -> !(item instanceof String))) {
+            throw invalidType(path, "文本列表");
+        }
+        return values.stream().map(String.class::cast).toList();
+    }
+
+    private static IllegalArgumentException invalidType(String path, String expected) {
+        return new IllegalArgumentException(path + " 必须为" + expected);
     }
 
     static boolean isSafeSingleBlock(Material material) {

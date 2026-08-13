@@ -338,7 +338,7 @@ final class TownActions {
         write(action, actor, () -> {
             PhaseThreeRepository.TaxChange change = runtime.finance().changeTaxRate(townId,
                     actor.getUniqueId(), basisPoints, actor.getName(),
-                    "管理组通过共享业务入口修改");
+                    "镇长通过共享业务入口修改");
             runtime.refreshTaxPolicies();
             return change;
         }, change -> Map.of("town_id", change.townId(), "basis_points",
@@ -510,13 +510,15 @@ final class TownActions {
         completion.accept(TownActionOutcome.failure(TownActionFailures.from(action, exception)));
     }
 
-    private static <T> boolean validateText(String action, ApplicationText text,
-                                            Consumer<TownActionOutcome<T>> completion) {
+    static <T> boolean validateText(String action, ApplicationText text,
+                                    Consumer<TownActionOutcome<T>> completion) {
         try {
             text.requireValid();
             return true;
         } catch (IllegalArgumentException exception) {
-            failNow(action, exception, completion);
+            completion.accept(TownActionOutcome.failure(TownActionResult.failure(action,
+                    "VALIDATION_FAILED", Map.of("detail",
+                            TownActionFailures.safeMessage(exception)))));
             return false;
         }
     }

@@ -121,9 +121,8 @@ public final class PhaseFourRepository {
         requireReason(reason);
         return transaction(connection -> {
             ActiveBuff buff = requireBuff(connection, buffId);
-            Account account = requireAccount(connection, buff.townId());
             if (buff.status().equals("CANCELLED")) {
-                return new BuffPurchase(buff, account.balanceMinor());
+                throw new ConflictException("Buff 已取消并退款，不能重复操作");
             }
             if (!buff.status().equals("ACTIVE")) {
                 throw new ConflictException("只有当前生效的 Buff 可以退款取消");
