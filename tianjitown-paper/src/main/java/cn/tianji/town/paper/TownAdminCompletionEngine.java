@@ -31,7 +31,7 @@ final class TownAdminCompletionEngine {
         Objects.requireNonNull(dynamic, "dynamic");
         if (args.length <= 1) {
             List<String> roots = new ArrayList<>(ROOTS);
-            if (dynamic.phaseZeroAllowed()) {
+            if (dynamic.preflightAllowed()) {
                 roots.add("phase0");
             }
             return filter(roots, current(args));
@@ -43,7 +43,7 @@ final class TownAdminCompletionEngine {
                     ? filter(List.of("10", "20", "50", "100", "200"), args[1]) : List.of();
             case "diagnose" -> args.length == 2
                     ? filter(List.of("1", "7", "14", "30", "90", "180"), args[1]) : List.of();
-            case "phase0" -> phaseZero(args, dynamic);
+            case "phase0" -> preflight(args, dynamic);
             case "station" -> args.length == 2
                     ? filter(dynamic.playerSender()
                     ? List.of("create", "info", "list", "remove") : List.of("list"), args[1])
@@ -59,7 +59,7 @@ final class TownAdminCompletionEngine {
             case "vote" -> vote(args, snapshot, dynamic);
             case "land" -> land(args, snapshot, dynamic);
             case "money", "tax", "ledger", "expand" -> phaseThree(args, snapshot);
-            case "buff" -> phaseFour(args, snapshot);
+            case "buff" -> buffs(args, snapshot);
             default -> List.of();
         };
     }
@@ -70,14 +70,14 @@ final class TownAdminCompletionEngine {
         topics.add("vote");
         topics.addAll(List.of("money", "tax", "ledger", "expand"));
         topics.add("buff");
-        if (dynamic.phaseZeroAllowed()) {
+        if (dynamic.preflightAllowed()) {
             topics.add("phase0");
         }
         return topics;
     }
 
-    private List<String> phaseZero(String[] args, Dynamic dynamic) {
-        if (!dynamic.phaseZeroAllowed()) {
+    private List<String> preflight(String[] args, Dynamic dynamic) {
+        if (!dynamic.preflightAllowed()) {
             return List.of();
         }
         if (args.length == 2) {
@@ -291,7 +291,7 @@ final class TownAdminCompletionEngine {
         return phraseSuggestions;
     }
 
-    private List<String> phaseFour(String[] args, Snapshot snapshot) {
+    private List<String> buffs(String[] args, Snapshot snapshot) {
         if (args.length == 2) {
             return filter(List.of("list", "grant"), args[1]);
         }
@@ -439,7 +439,7 @@ final class TownAdminCompletionEngine {
     }
 
     record Dynamic(List<PlayerCandidate> players, List<String> worldNames, Integer currentChunkX,
-                   Integer currentChunkZ, boolean playerSender, boolean phaseZeroAllowed) {
+                   Integer currentChunkZ, boolean playerSender, boolean preflightAllowed) {
         Dynamic {
             players = List.copyOf(players);
             worldNames = List.copyOf(worldNames);

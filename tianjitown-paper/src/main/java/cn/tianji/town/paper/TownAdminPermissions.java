@@ -7,7 +7,7 @@ import java.util.function.Predicate;
 
 final class TownAdminPermissions {
     static final String ROOT = "tianjitown.admin";
-    static final String PHASE_ZERO = "tianjitown.admin.phase0";
+    static final String PREFLIGHT = "tianjitown.admin.phase0";
     static final String MONEY = "tianjitown.admin.money";
     static final String TAX = "tianjitown.admin.tax";
     static final String LEDGER = "tianjitown.admin.ledger";
@@ -16,7 +16,7 @@ final class TownAdminPermissions {
     static final String OPERATIONS = "tianjitown.admin.operations";
 
     private static final Map<String, String> SCOPED_ROOTS = Map.ofEntries(
-            Map.entry("phase0", PHASE_ZERO),
+            Map.entry("phase0", PREFLIGHT),
             Map.entry("money", MONEY),
             Map.entry("tax", TAX),
             Map.entry("ledger", LEDGER),

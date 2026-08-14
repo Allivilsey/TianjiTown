@@ -1,7 +1,7 @@
 package cn.tianji.town.paper;
 
-import cn.tianji.town.storage.phase1.ApplicationSnapshot;
-import cn.tianji.town.storage.phase1.TownSnapshot;
+import cn.tianji.town.storage.town.ApplicationSnapshot;
+import cn.tianji.town.storage.town.TownSnapshot;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
@@ -31,14 +31,14 @@ final class TownAdminTabCompleter implements TabCompleter {
     private final AtomicBoolean refreshing = new AtomicBoolean();
     private final AtomicBoolean refreshFailureLogged = new AtomicBoolean();
     private final AtomicLong refreshedAt = new AtomicLong();
-    private volatile PhaseOneRuntime runtime;
+    private volatile TownRuntime runtime;
     private volatile boolean started;
 
     TownAdminTabCompleter(TianjiTownPlugin plugin) {
         this.plugin = plugin;
     }
 
-    void start(PhaseOneRuntime runtime) {
+    void start(TownRuntime runtime) {
         this.runtime = runtime;
         requestRefresh();
         if (!started) {
@@ -91,7 +91,7 @@ final class TownAdminTabCompleter implements TabCompleter {
     }
 
     private void refreshClaimed() {
-        PhaseOneRuntime currentRuntime = runtime;
+        TownRuntime currentRuntime = runtime;
         try {
             List<ApplicationSnapshot> applications = currentRuntime.repository()
                     .listApplicationsForCompletion(500);
@@ -144,7 +144,7 @@ final class TownAdminTabCompleter implements TabCompleter {
                 plugin.getServer().getWorlds().stream().map(World::getName).toList(),
                 chunkX, chunkZ, sender instanceof Player,
                 TownAdminPermissions.has(sender::hasPermission,
-                        TownAdminPermissions.PHASE_ZERO));
+                        TownAdminPermissions.PREFLIGHT));
     }
 
     private static String safeMessage(Throwable throwable) {

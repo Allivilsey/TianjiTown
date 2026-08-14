@@ -9,16 +9,16 @@ import cn.tianji.town.core.land.ExpansionDirection;
 import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.core.town.TownStatus;
 import cn.tianji.town.core.governance.VoteType;
-import cn.tianji.town.storage.phase1.ApplicationSnapshot;
-import cn.tianji.town.storage.phase1.InitialMemberConfirmation;
-import cn.tianji.town.storage.phase1.JoinApplicationSnapshot;
-import cn.tianji.town.storage.phase1.PhaseOneRepository;
-import cn.tianji.town.storage.phase1.TownSnapshot;
-import cn.tianji.town.storage.phase2.MemberGovernanceSnapshot;
-import cn.tianji.town.storage.phase2.TransferSnapshot;
-import cn.tianji.town.storage.phase2.VoteSnapshot;
-import cn.tianji.town.storage.phase3.PhaseThreeRepository;
-import cn.tianji.town.storage.phase4.PhaseFourRepository;
+import cn.tianji.town.storage.town.ApplicationSnapshot;
+import cn.tianji.town.storage.town.InitialMemberConfirmation;
+import cn.tianji.town.storage.town.JoinApplicationSnapshot;
+import cn.tianji.town.storage.town.TownRepository;
+import cn.tianji.town.storage.town.TownSnapshot;
+import cn.tianji.town.storage.governance.MemberGovernanceSnapshot;
+import cn.tianji.town.storage.governance.TransferSnapshot;
+import cn.tianji.town.storage.governance.VoteSnapshot;
+import cn.tianji.town.storage.economy.EconomyRepository;
+import cn.tianji.town.storage.commerce.CommerceRepository;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
@@ -74,7 +74,7 @@ import java.util.function.Consumer;
 final class TownUiController implements Listener {
     private static final int MENU_TIMEOUT_TICKS = 20 * 60;
     private final TianjiTownPlugin plugin;
-    private final PhaseOneRuntime runtime;
+    private final TownRuntime runtime;
     private final TownActions actions;
     private final SitePolicy sitePolicy;
     private final NamespacedKey stationKey;
@@ -89,7 +89,7 @@ final class TownUiController implements Listener {
     private final Map<UUID, ReviewReasonSession> reviewReasonInputs = new ConcurrentHashMap<>();
     private final Set<UUID> donationInputs = ConcurrentHashMap.newKeySet();
 
-    TownUiController(TianjiTownPlugin plugin, PhaseOneRuntime runtime, TownActions actions) {
+    TownUiController(TianjiTownPlugin plugin, TownRuntime runtime, TownActions actions) {
         this.plugin = plugin;
         this.runtime = runtime;
         this.actions = actions;
@@ -359,7 +359,7 @@ final class TownUiController implements Listener {
                 .orElse(null), finance -> {
             if (runtime.taxEnabled() && finance != null && finance.hasUnreadTaxChange()) {
                 player.sendMessage(Component.text("小镇税率已更新为 "
-                                + PhaseOneRuntime.percent(finance.taxRateBps())
+                                + TownRuntime.percent(finance.taxRateBps())
                                 + "，同步用于 QuickShop、Jobs 与全球市场收入。 ", NamedTextColor.YELLOW)
                         .append(callbackButton(player, "[查看公共资金]",
                                 () -> openFinance(player, 0))));
@@ -564,7 +564,7 @@ final class TownUiController implements Listener {
     }
 
     private void renderMain(Player player, MainView view) {
-        PhaseOneRepository.PlayerDashboard dashboard = view.dashboard();
+        TownRepository.PlayerDashboard dashboard = view.dashboard();
         MemberGovernanceSnapshot governance = view.governance();
         if (governance != null && governance.requiresRulesConfirmation()) {
             renderRulesConfirmation(player, governance);
@@ -585,7 +585,7 @@ final class TownUiController implements Listener {
             items.add(new MenuItem(18, button(Material.EMERALD, "§6公共资金",
                     List.of("§7余额、税率、捐款、账本与领地扩张"), "FINANCE", "0")));
             items.add(new MenuItem(19, button(Material.BREWING_STAND, "§d公共 Buff",
-                    List.of(runtime.phaseFour().buffShopEnabled()
+                    List.of(runtime.buffs().buffShopEnabled()
                                     ? "§7查看效果、期限、等级与购买价格"
                                     : "§7商店已暂停，可查看仍在生效的 Buff"),
                     "BUFF_SHOP", null)));
@@ -652,23 +652,23 @@ final class TownUiController implements Listener {
 
     void openFinance(Player player, int page) {
         runtime.read(player, () -> {
-            PhaseThreeRepository.TownFinance account = runtime.finance()
+            EconomyRepository.TownFinance account = runtime.finance()
                     .findFinanceByPlayer(player.getUniqueId())
                     .orElseThrow(() -> new IllegalArgumentException("你不属于任何小镇"));
-            List<PhaseThreeRepository.LedgerEntry> ledger = runtime.finance().ledger(
+            List<EconomyRepository.LedgerEntry> ledger = runtime.finance().ledger(
                     account.townId(), page, 27);
             return new FinanceView(account, ledger, page);
         }, view -> renderFinance(player, view));
     }
 
     private void renderFinance(Player player, FinanceView view) {
-        PhaseThreeRepository.TownFinance account = view.account();
+        EconomyRepository.TownFinance account = view.account();
         List<String> summary = new ArrayList<>(List.of(
                 "§7小镇: " + account.townName(),
                 "§7公共余额: §f" + runtime.money(account.balanceMinor()),
-                "§7统一收入税率: §f" + PhaseOneRuntime.percent(account.taxRateBps()),
+                "§7统一收入税率: §f" + TownRuntime.percent(account.taxRateBps()),
                 "§7领地单元: §f" + account.unitCount() + "/"
-                        + runtime.phaseThreeSettings().maximumUnits(),
+                        + runtime.economySettings().maximumUnits(),
                 "§8适用于 QuickShop 实际收款、Jobs 工资与 GlobalMarketPlus 成交收入。",
                 "§8普通转账、管理员调整及其他 Vault 变动不征税。"));
         if (account.locked()) {
@@ -686,9 +686,9 @@ final class TownUiController implements Listener {
             int[] rates = {500, 1000, 1500, 2000, 2500};
             for (int index = 0; index < rates.length; index++) {
                 int rate = rates[index];
-                if (rate <= runtime.phaseThreeSettings().maximumTaxBps()) {
+                if (rate <= runtime.economySettings().maximumTaxBps()) {
                     items.add(new MenuItem(12 + index, button(Material.GOLD_NUGGET,
-                            "§e税率 " + PhaseOneRuntime.percent(rate),
+                            "§e税率 " + TownRuntime.percent(rate),
                             List.of(rate == account.taxRateBps() ? "§a当前税率" : "§7点击立即更新",
                                     "§7同步作用于 QuickShop、Jobs 与全球市场收入"),
                             rate == account.taxRateBps() ? null : "SET_TAX",
@@ -701,7 +701,7 @@ final class TownUiController implements Listener {
                     List.of("§7方向预览、线性价格和公共余额扣款"), "EXPANSION_MENU", null)));
         }
         int slot = 18;
-        for (PhaseThreeRepository.LedgerEntry entry : view.ledger()) {
+        for (EconomyRepository.LedgerEntry entry : view.ledger()) {
             boolean income = entry.amountMinor() > 0;
             items.add(new MenuItem(slot++, button(income ? Material.LIME_DYE : Material.RED_DYE,
                     (income ? "§a+" : "§c") + runtime.money(Math.abs(entry.amountMinor()))
@@ -731,7 +731,7 @@ final class TownUiController implements Listener {
 
     private void openExpansionMenu(Player player) {
         runtime.read(player, () -> {
-            Map<ExpansionDirection, PhaseOneRuntime.ExpansionPreview> previews = new LinkedHashMap<>();
+            Map<ExpansionDirection, TownRuntime.ExpansionPreview> previews = new LinkedHashMap<>();
             Map<ExpansionDirection, String> errors = new LinkedHashMap<>();
             for (ExpansionDirection direction : ExpansionDirection.values()) {
                 try {
@@ -746,7 +746,7 @@ final class TownUiController implements Listener {
             int[] slots = {10, 12, 14, 16};
             int index = 0;
             for (ExpansionDirection direction : ExpansionDirection.values()) {
-                PhaseOneRuntime.ExpansionPreview preview = menu.previews().get(direction);
+                TownRuntime.ExpansionPreview preview = menu.previews().get(direction);
                 List<String> lore = preview == null
                         ? List.of("§c" + menu.errors().get(direction))
                         : List.of("§7目标网格: " + preview.candidate().gridX() + ","
@@ -776,34 +776,34 @@ final class TownUiController implements Listener {
 
     void openBuffShop(Player player) {
         runtime.read(player, () -> {
-            Map<String, PhaseFourRepository.BuffQuote> quotes = new LinkedHashMap<>();
+            Map<String, CommerceRepository.BuffQuote> quotes = new LinkedHashMap<>();
             Map<String, String> errors = new LinkedHashMap<>();
-            for (BuffDefinition definition : runtime.phaseFour().settings().buffs().values()) {
+            for (BuffDefinition definition : runtime.buffs().settings().buffs().values()) {
                 try {
-                    quotes.put(definition.key(), runtime.phaseFour().repository().quoteBuff(
+                    quotes.put(definition.key(), runtime.buffs().repository().quoteBuff(
                             player.getUniqueId(), definition, BuffDurationOption.ONE_HOUR,
                             runtime.settlement().scale(), Instant.now()));
-                } catch (IllegalArgumentException | PhaseFourRepository.ConflictException exception) {
+                } catch (IllegalArgumentException | CommerceRepository.ConflictException exception) {
                     errors.put(definition.key(), exception.getMessage());
                 }
             }
-            List<PhaseFourRepository.ActiveBuff> active = runtime.phaseFour().repository()
+            List<CommerceRepository.ActiveBuff> active = runtime.buffs().repository()
                     .activeBuffsForPlayer(player.getUniqueId(), Instant.now());
             return new BuffShopView(active, quotes, errors);
         }, view -> {
-            Map<String, PhaseFourRepository.ActiveBuff> active = view.active().stream()
+            Map<String, CommerceRepository.ActiveBuff> active = view.active().stream()
                     .collect(java.util.stream.Collectors.toMap(
-                            PhaseFourRepository.ActiveBuff::buffKey, value -> value));
+                            CommerceRepository.ActiveBuff::buffKey, value -> value));
             List<MenuItem> items = new ArrayList<>();
             items.add(new MenuItem(4, button(Material.NETHER_STAR, "§d小镇公共 Buff",
-                    List.of(runtime.phaseFour().buffShopEnabled()
+                    List.of(runtime.buffs().buffShopEnabled()
                                     ? "§7使用公共资金购买，效果作用于全体成员且不限制世界"
                                     : "§e商店已暂停新购买，现有效果仍持续到期",
                             "§7可选择一小时、一天、一周或一月，长时段按比例折扣"), null, null)));
             int slot = 9;
-            for (BuffDefinition definition : runtime.phaseFour().settings().buffs().values()) {
-                PhaseFourRepository.BuffQuote quote = view.quotes().get(definition.key());
-                PhaseFourRepository.ActiveBuff current = active.get(definition.key());
+            for (BuffDefinition definition : runtime.buffs().settings().buffs().values()) {
+                CommerceRepository.BuffQuote quote = view.quotes().get(definition.key());
+                CommerceRepository.ActiveBuff current = active.get(definition.key());
                 List<String> lore = new ArrayList<>();
                 lore.add("§7类型: " + definition.effectKind());
                 lore.add("§7效果: " + definition.effectKey());
@@ -822,7 +822,7 @@ final class TownUiController implements Listener {
                 } else if (error != null) {
                     lore.add("§c" + error);
                 }
-                boolean purchasable = runtime.phaseFour().buffShopEnabled() && quote != null;
+                boolean purchasable = runtime.buffs().buffShopEnabled() && quote != null;
                 items.add(new MenuItem(slot++, button(purchasable ? Material.POTION
                                 : Material.GLASS_BOTTLE, "§d" + definition.displayName(), lore,
                         purchasable ? "BUFF_DURATIONS" : null, definition.key())));
@@ -835,10 +835,10 @@ final class TownUiController implements Listener {
 
     private void openBuffDurations(Player player, String buffKey) {
         runtime.read(player, () -> {
-            BuffDefinition definition = runtime.phaseFour().settings().requireBuff(buffKey);
-            Map<BuffDurationOption, PhaseFourRepository.BuffQuote> quotes = new LinkedHashMap<>();
+            BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey);
+            Map<BuffDurationOption, CommerceRepository.BuffQuote> quotes = new LinkedHashMap<>();
             for (BuffDurationOption duration : BuffDurationOption.values()) {
-                quotes.put(duration, runtime.phaseFour().repository().quoteBuff(
+                quotes.put(duration, runtime.buffs().repository().quoteBuff(
                         player.getUniqueId(), definition, duration,
                         runtime.settlement().scale(), Instant.now()));
             }
@@ -846,10 +846,10 @@ final class TownUiController implements Listener {
         }, quotes -> {
             List<MenuItem> items = new ArrayList<>();
             int slot = 10;
-            for (Map.Entry<BuffDurationOption, PhaseFourRepository.BuffQuote> entry
+            for (Map.Entry<BuffDurationOption, CommerceRepository.BuffQuote> entry
                     : quotes.entrySet()) {
                 BuffDurationOption duration = entry.getKey();
-                PhaseFourRepository.BuffQuote quote = entry.getValue();
+                CommerceRepository.BuffQuote quote = entry.getValue();
                 int discount = 100 - duration.discountBasisPoints() / 100;
                 items.add(new MenuItem(slot, button(Material.CLOCK,
                         "§d" + duration.displayName(),
@@ -1380,7 +1380,7 @@ final class TownUiController implements Listener {
                 case "BUFF_DURATIONS" -> openBuffDurations(player, target);
                 case "CONFIRM_BUY_BUFF" -> {
                     String[] parts = target.split(":");
-                    BuffDefinition definition = runtime.phaseFour().settings().requireBuff(parts[0]);
+                    BuffDefinition definition = runtime.buffs().settings().requireBuff(parts[0]);
                     BuffDurationOption duration = BuffDurationOption.valueOf(parts[1]);
                     openConfirmation(player, "确认购买 " + definition.displayName(),
                             "BUY_BUFF", target, "持续 " + duration.displayName()
@@ -1393,7 +1393,7 @@ final class TownUiController implements Listener {
                     BuffDurationOption duration = BuffDurationOption.valueOf(parts[1]);
                     actions.buyBuff(player, buffKey, duration, outcome ->
                         handleOutcome(player, outcome, purchase -> {
-                            BuffDefinition definition = runtime.phaseFour().settings()
+                            BuffDefinition definition = runtime.buffs().settings()
                                     .requireBuff(buffKey);
                             player.sendMessage("§a已购买 " + definition.displayName() + "，等级 "
                                     + purchase.buff().level() + "，到期时间 "
@@ -1409,7 +1409,7 @@ final class TownUiController implements Listener {
                             Integer.parseInt(parts[1]), outcome -> handleOutcome(player, outcome,
                                     change -> {
                                         player.sendMessage("§a小镇税率已更新为 "
-                                                + PhaseOneRuntime.percent(change.basisPoints())
+                                                + TownRuntime.percent(change.basisPoints())
                                                 + "。");
                                         openFinance(player, 0);
                                     }));
@@ -2448,21 +2448,21 @@ final class TownUiController implements Listener {
     private record MenuItem(int slot, ItemStack item) {
     }
 
-    private record MainView(PhaseOneRepository.PlayerDashboard dashboard,
+    private record MainView(TownRepository.PlayerDashboard dashboard,
                             MemberGovernanceSnapshot governance,
                             List<ApplicationSnapshot> reviewQueue) {
     }
 
-    private record FinanceView(PhaseThreeRepository.TownFinance account,
-                               List<PhaseThreeRepository.LedgerEntry> ledger, int page) {
+    private record FinanceView(EconomyRepository.TownFinance account,
+                               List<EconomyRepository.LedgerEntry> ledger, int page) {
     }
 
-    private record ExpansionMenu(Map<ExpansionDirection, PhaseOneRuntime.ExpansionPreview> previews,
+    private record ExpansionMenu(Map<ExpansionDirection, TownRuntime.ExpansionPreview> previews,
                                  Map<ExpansionDirection, String> errors) {
     }
 
-    private record BuffShopView(List<PhaseFourRepository.ActiveBuff> active,
-                                Map<String, PhaseFourRepository.BuffQuote> quotes,
+    private record BuffShopView(List<CommerceRepository.ActiveBuff> active,
+                                Map<String, CommerceRepository.BuffQuote> quotes,
                                 Map<String, String> errors) {
     }
 

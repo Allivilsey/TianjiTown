@@ -1,10 +1,10 @@
 package cn.tianji.town.paper;
 
-import cn.tianji.town.storage.phase1.PhaseOneRepository;
-import cn.tianji.town.storage.phase2.GovernanceRepository;
-import cn.tianji.town.storage.phase3.PhaseThreeRepository;
-import cn.tianji.town.storage.phase4.PhaseFourRepository;
-import cn.tianji.town.storage.phase5.PhaseFiveRepository;
+import cn.tianji.town.storage.town.TownRepository;
+import cn.tianji.town.storage.governance.GovernanceRepository;
+import cn.tianji.town.storage.economy.EconomyRepository;
+import cn.tianji.town.storage.commerce.CommerceRepository;
+import cn.tianji.town.storage.bonus.TownBonusRepository;
 
 import java.util.Locale;
 import java.util.Map;
@@ -26,11 +26,11 @@ final class TownActionFailures {
     }
 
     private static String reason(RuntimeException exception, String detail) {
-        if (exception instanceof PhaseOneRepository.StorageUnavailableException
+        if (exception instanceof TownRepository.StorageUnavailableException
                 || exception instanceof GovernanceRepository.StorageUnavailableException
-                || exception instanceof PhaseThreeRepository.StorageUnavailableException
-                || exception instanceof PhaseFourRepository.StorageUnavailableException
-                || exception instanceof PhaseFiveRepository.StorageUnavailableException) {
+                || exception instanceof EconomyRepository.StorageUnavailableException
+                || exception instanceof CommerceRepository.StorageUnavailableException
+                || exception instanceof TownBonusRepository.StorageUnavailableException) {
             return "STORAGE_UNAVAILABLE";
         }
         String type = exception.getClass().getSimpleName().toUpperCase(Locale.ROOT);

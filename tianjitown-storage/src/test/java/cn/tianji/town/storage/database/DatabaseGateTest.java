@@ -62,8 +62,8 @@ class DatabaseGateTest {
     }
 
     @Test
-    void upgradesPhaseOneDatabaseWithoutRebuildingExistingTown() throws Exception {
-        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("phase1-upgrade.db");
+    void upgradesSchemaOneDatabaseWithoutRebuildingExistingTown() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("schema1-upgrade.db");
         Flyway.configure().dataSource(url, null, null).locations("classpath:db/migration")
                 .target("1.1").load().migrate();
         UUID townId = UUID.randomUUID();
@@ -112,7 +112,7 @@ class DatabaseGateTest {
 
     @Test
     void upgradesExistingVotesToOneOpenVotePerTown() throws Exception {
-        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("phase2-vote-upgrade.db");
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("schema2-vote-upgrade.db");
         Flyway.configure().dataSource(url, null, null).locations("classpath:db/migration")
                 .target("2.0").load().migrate();
         UUID townId = UUID.randomUUID();
@@ -161,8 +161,8 @@ class DatabaseGateTest {
     }
 
     @Test
-    void upgradesOfficerRolesAndDailyRefundsToPhaseSix() throws Exception {
-        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("phase6-upgrade.db");
+    void upgradesOfficerRolesAndDailyRefundsToSchemaSix() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("schema6-upgrade.db");
         Flyway.configure().dataSource(url, null, null).locations("classpath:db/migration")
                 .target("5.0").load().migrate();
         UUID townId = UUID.randomUUID();

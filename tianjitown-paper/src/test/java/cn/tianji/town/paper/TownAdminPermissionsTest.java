@@ -16,7 +16,7 @@ class TownAdminPermissionsTest {
         assertScopedCommand(TownAdminPermissions.LEDGER, "ledger");
         assertScopedCommand(TownAdminPermissions.EXPAND, "expand");
         assertScopedCommand(TownAdminPermissions.BUFF, "buff");
-        assertScopedCommand(TownAdminPermissions.PHASE_ZERO, "phase0");
+        assertScopedCommand(TownAdminPermissions.PREFLIGHT, "phase0");
         assertScopedCommand(TownAdminPermissions.OPERATIONS, "diagnose");
         Predicate<String> operations = Set.of(TownAdminPermissions.OPERATIONS)::contains;
         assertTrue(TownAdminPermissions.canUseRoot(operations, "backup"));

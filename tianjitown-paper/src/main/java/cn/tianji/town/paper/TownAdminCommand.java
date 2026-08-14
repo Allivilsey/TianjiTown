@@ -12,9 +12,9 @@ import cn.tianji.town.core.ports.LandProtectionService;
 import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.core.town.TownStatus;
 import cn.tianji.town.integrations.residence.ResidenceSmokeTest;
-import cn.tianji.town.storage.phase1.ApplicationSnapshot;
-import cn.tianji.town.storage.phase1.AuditSnapshot;
-import cn.tianji.town.storage.phase1.TownSnapshot;
+import cn.tianji.town.storage.town.ApplicationSnapshot;
+import cn.tianji.town.storage.town.AuditSnapshot;
+import cn.tianji.town.storage.town.TownSnapshot;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -38,12 +38,12 @@ import java.util.UUID;
 final class TownAdminCommand implements CommandExecutor {
     private static final UUID CONSOLE_ID = new UUID(0, 0);
     private final TianjiTownPlugin plugin;
-    private final PhaseZeroCommand phaseZeroCommand;
+    private final PreflightCommand preflightCommand;
     private final CommandConfirmationManager confirmations = new CommandConfirmationManager();
 
     TownAdminCommand(TianjiTownPlugin plugin) {
         this.plugin = plugin;
-        this.phaseZeroCommand = new PhaseZeroCommand(plugin, new ResidenceSmokeTest());
+        this.preflightCommand = new PreflightCommand(plugin, new ResidenceSmokeTest());
     }
 
     @Override
@@ -79,7 +79,7 @@ final class TownAdminCommand implements CommandExecutor {
             }
             if (root.equals("reload")) {
                 plugin.reloadConfig();
-                sender.sendMessage("§a配置已重新读取；阶段3税收/消费、阶段4商店和阶段5加成开关立即生效。"
+                sender.sendMessage("§a配置已重新读取；税收/消费、Buff 商店和领地加成开关立即生效。"
                         + "SQLite、清算账户、金额精度和商品定义需重启后生效。");
                 return true;
             }
@@ -87,9 +87,9 @@ final class TownAdminCommand implements CommandExecutor {
                 return maintenance(sender, args);
             }
             if (root.equals("phase0")) {
-                return phaseZero(sender, command, label, args);
+                return preflight(sender, command, label, args);
             }
-            PhaseOneRuntime runtime = requireRuntime(sender);
+            TownRuntime runtime = requireRuntime(sender);
             if (runtime == null) {
                 return true;
             }
@@ -127,45 +127,45 @@ final class TownAdminCommand implements CommandExecutor {
         sender.sendMessage("§6TianjiTown " + plugin.getPluginMeta().getVersion()
                 + ": §f" + status.state());
         status.details().forEach(detail -> sender.sendMessage("§7- " + detail));
-        PhaseOneRuntime runtime = plugin.phaseOneRuntime();
+        TownRuntime runtime = plugin.townRuntime();
         if (runtime != null) {
             sender.sendMessage("§7- SQLite 运行状态: "
                     + (runtime.databaseAvailable() ? "READY" : "WRITE_LOCKED"));
             sender.sendMessage("§7- Buff 商店: "
-                    + (runtime.phaseFour().buffShopEnabled() ? "OPEN" : "PAUSED")
-                    + "，配置商品=" + runtime.phaseFour().settings().buffs().size());
+                    + (runtime.buffs().buffShopEnabled() ? "OPEN" : "PAUSED")
+                    + "，配置商品=" + runtime.buffs().settings().buffs().size());
             sender.sendMessage("§7- 建筑返还: "
-                    + (runtime.phaseFive().buildingRefundEnabled() ? "ENABLED" : "PAUSED")
-                    + "，黑名单=" + runtime.phaseFive().settings().buildingRefund()
-                    .blacklist().size() + "，周上限=" + runtime.phaseFive().settings()
+                    + (runtime.bonuses().buildingRefundEnabled() ? "ENABLED" : "PAUSED")
+                    + "，黑名单=" + runtime.bonuses().settings().buildingRefund()
+                    .blacklist().size() + "，周上限=" + runtime.bonuses().settings()
                     .buildingRefund().weeklyLimit());
             sender.sendMessage("§7- 信标增强: "
-                    + (runtime.phaseFive().beaconEnabled() ? "ENABLED" : "PAUSED"));
-            PhaseFiveRuntime.DiagnosticResult diagnostic = runtime.phaseFive().lastDiagnostic();
+                    + (runtime.bonuses().beaconEnabled() ? "ENABLED" : "PAUSED"));
+            TownBonusRuntime.DiagnosticResult diagnostic = runtime.bonuses().lastDiagnostic();
             sender.sendMessage("§7- 最近统一诊断: " + diagnostic.detail()
                     + (diagnostic.report() == null ? "" : "，报告=" + diagnostic.report()));
-            PhaseFiveBackupService.Result backup = runtime.phaseFive().lastBackup();
+            OnlineBackupService.Result backup = runtime.bonuses().lastBackup();
             sender.sendMessage("§7- 最近在线备份: " + backup.detail()
                     + (backup.databaseFile() == null ? "" : "，文件=" + backup.databaseFile()));
         }
         sender.sendMessage("§7- 玩家入口: " + (maintenanceMode() ? "MAINTENANCE" : "OPEN"));
     }
 
-    private boolean diagnose(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean diagnose(CommandSender sender, TownRuntime runtime, String[] args) {
         if (args.length > 2) {
             throw new IllegalArgumentException("用法: /townadmin diagnose [1~180天]");
         }
         int days = args.length == 2 ? Integer.parseInt(args[1])
-                : runtime.phaseFive().settings().operations().quickShopDiagnosticDays();
-        runtime.phaseFive().diagnose(sender, days);
+                : runtime.bonuses().settings().operations().quickShopDiagnosticDays();
+        runtime.bonuses().diagnose(sender, days);
         return true;
     }
 
-    private boolean backup(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean backup(CommandSender sender, TownRuntime runtime, String[] args) {
         if (args.length != 1) {
             throw new IllegalArgumentException("用法: /townadmin backup");
         }
-        runtime.phaseFive().createBackup(sender);
+        runtime.bonuses().createBackup(sender);
         return true;
     }
 
@@ -197,21 +197,21 @@ final class TownAdminCommand implements CommandExecutor {
         return true;
     }
 
-    private boolean phaseZero(CommandSender sender, Command command, String label, String[] args) {
+    private boolean preflight(CommandSender sender, Command command, String label, String[] args) {
         if (args.length >= 2 && args[1].equalsIgnoreCase("status")) {
-            return phaseZeroCommand.onCommand(sender, command, label, args);
+            return preflightCommand.onCommand(sender, command, label, args);
         }
         if (args.length >= 2 && args[1].equalsIgnoreCase("residence-smoke")) {
-            if (phaseZeroCommand.validateResidenceSmoke(sender, args)) {
+            if (preflightCommand.validateResidenceSmoke(sender, args)) {
                 String description = "在预发世界 " + args[2] + " 的区块 " + args[3] + ","
                         + args[4] + " 执行 Residence 冒烟测试";
                 String[] confirmedArgs = args.clone();
                 requestConfirmation(sender, description,
-                        () -> phaseZeroCommand.runResidenceSmoke(sender, confirmedArgs));
+                        () -> preflightCommand.runResidenceSmoke(sender, confirmedArgs));
             }
             return true;
         }
-        return phaseZeroCommand.onCommand(sender, command, label, args);
+        return preflightCommand.onCommand(sender, command, label, args);
     }
 
     private boolean confirm(CommandSender sender, String[] args) {
@@ -271,7 +271,7 @@ final class TownAdminCommand implements CommandExecutor {
         sender.sendMessage(message);
     }
 
-    private boolean audit(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean audit(CommandSender sender, TownRuntime runtime, String[] args) {
         if (args.length > 2) {
             throw new IllegalArgumentException("用法: /townadmin audit [1~200]");
         }
@@ -341,7 +341,7 @@ final class TownAdminCommand implements CommandExecutor {
         return true;
     }
 
-    private boolean application(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean application(CommandSender sender, TownRuntime runtime, String[] args) {
         if (args.length < 2) {
             applicationHelp(sender);
             return true;
@@ -392,7 +392,7 @@ final class TownAdminCommand implements CommandExecutor {
         return true;
     }
 
-    private boolean town(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean town(CommandSender sender, TownRuntime runtime, String[] args) {
         requireLength(args, 3, "town <view|delete> <小镇全名>");
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("view")) {
@@ -430,7 +430,7 @@ final class TownAdminCommand implements CommandExecutor {
         throw new IllegalArgumentException("town 只支持 view 或 delete");
     }
 
-    private void deleteTown(CommandSender sender, PhaseOneRuntime runtime,
+    private void deleteTown(CommandSender sender, TownRuntime runtime,
                             TownDeleteRequest request) {
         runtime.write(sender, () -> {
             TownSnapshot current = requireTown(runtime, request.townId());
@@ -459,7 +459,7 @@ final class TownAdminCommand implements CommandExecutor {
         });
     }
 
-    private boolean member(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean member(CommandSender sender, TownRuntime runtime, String[] args) {
         requireLength(args, 5,
                 "member <add|remove|role> <小镇全名> <玩家> <原因|角色>");
         String action = args[1].toLowerCase(Locale.ROOT);
@@ -495,7 +495,7 @@ final class TownAdminCommand implements CommandExecutor {
                     sender.sendMessage("§a成员已添加，正在同步 Residence 权限。");
                     Player added = Bukkit.getPlayer(playerId);
                     if (added != null) {
-                        runtime.phaseFour().refreshPlayer(added);
+                        runtime.buffs().refreshPlayer(added);
                     }
                     reconcileOne(sender, runtime, town.id(), true);
                 });
@@ -509,7 +509,7 @@ final class TownAdminCommand implements CommandExecutor {
                     sender.sendMessage("§a成员已移除，正在同步 Residence 权限。");
                     Player removed = Bukkit.getPlayer(playerId);
                     if (removed != null) {
-                        runtime.phaseFour().refreshPlayer(removed);
+                        runtime.buffs().refreshPlayer(removed);
                     }
                     reconcileOne(sender, runtime, town.id(), true);
                 });
@@ -518,7 +518,7 @@ final class TownAdminCommand implements CommandExecutor {
         return true;
     }
 
-    private boolean vote(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean vote(CommandSender sender, TownRuntime runtime, String[] args) {
         requireLength(args, 3,
                 "vote <create-kick|create-mayor|settle|cancel> <小镇全名|voteId> ...");
         String action = args[1].toLowerCase(Locale.ROOT);
@@ -548,9 +548,9 @@ final class TownAdminCommand implements CommandExecutor {
                     "vote 只支持 create-kick、create-mayor、settle 或 cancel");
         }
         requireLength(args, 4, "vote " + action + " <小镇全名> <玩家>");
-        PhaseTwoSettings settings;
+        GovernanceSettings settings;
         try {
-            settings = PhaseTwoSettings.load(plugin.getConfig());
+            settings = GovernanceSettings.load(plugin.getConfig());
         } catch (IllegalArgumentException exception) {
             sender.sendMessage("§c治理配置无效: " + exception.getMessage());
             plugin.getLogger().warning("拒绝创建治理投票: " + exception.getMessage());
@@ -577,7 +577,7 @@ final class TownAdminCommand implements CommandExecutor {
         return true;
     }
 
-    private MemberRequest memberRequest(PhaseOneRuntime runtime, String[] args) {
+    private MemberRequest memberRequest(TownRuntime runtime, String[] args) {
         List<TownSnapshot> candidates = runtime.repository().listTowns(false).stream()
                 .filter(town -> town.status() == TownStatus.ACTIVE).toList();
         TownCommandParser.NamedPlayerReason parsed = TownCommandParser.namedPlayerReason(args, 2,
@@ -589,7 +589,7 @@ final class TownAdminCommand implements CommandExecutor {
         return new MemberRequest(town.id(), parsed.player(), parsed.reason());
     }
 
-    private boolean mayor(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean mayor(CommandSender sender, TownRuntime runtime, String[] args) {
         requireLength(args, 5,
                 "mayor transfer <小镇全名> <玩家> <原因>");
         if (!args[1].equalsIgnoreCase("transfer")) {
@@ -611,7 +611,7 @@ final class TownAdminCommand implements CommandExecutor {
         return true;
     }
 
-    private boolean land(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean land(CommandSender sender, TownRuntime runtime, String[] args) {
         requireLength(args, 3, "land <preview|reconcile|rebuild> <小镇全名|all>");
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("preview")) {
@@ -659,7 +659,7 @@ final class TownAdminCommand implements CommandExecutor {
         return true;
     }
 
-    private boolean money(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean money(CommandSender sender, TownRuntime runtime, String[] args) {
         requirePermission(sender, TownAdminPermissions.MONEY);
         requireLength(args, 2, "money <view|adjust|reconcile> ...");
         String action = args[1].toLowerCase(Locale.ROOT);
@@ -701,7 +701,7 @@ final class TownAdminCommand implements CommandExecutor {
         throw new IllegalArgumentException("money 只支持 view、adjust 或 reconcile");
     }
 
-    private boolean tax(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean tax(CommandSender sender, TownRuntime runtime, String[] args) {
         requirePermission(sender, TownAdminPermissions.TAX);
         requireLength(args, 5, "tax set <小镇全名> <百分比> <原因>");
         if (!args[1].equalsIgnoreCase("set")) {
@@ -722,7 +722,7 @@ final class TownAdminCommand implements CommandExecutor {
         return true;
     }
 
-    private boolean ledger(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean ledger(CommandSender sender, TownRuntime runtime, String[] args) {
         requirePermission(sender, TownAdminPermissions.LEDGER);
         requireLength(args, 3, "ledger view <小镇全名>");
         if (!args[1].equalsIgnoreCase("view")) {
@@ -734,7 +734,7 @@ final class TownAdminCommand implements CommandExecutor {
             return runtime.finance().ledger(town.id(), 0, 45);
         }, entries -> {
             sender.sendMessage("§6完整公共账本（最新 " + entries.size() + " 条）");
-            for (cn.tianji.town.storage.phase3.PhaseThreeRepository.LedgerEntry entry : entries) {
+            for (cn.tianji.town.storage.economy.EconomyRepository.LedgerEntry entry : entries) {
                 sender.sendMessage("§7" + entry.createdAt() + " §f" + entry.entryType()
                         + " §e" + runtime.money(entry.amountMinor()) + " §8余额="
                         + runtime.money(entry.balanceAfterMinor()) + " " + entry.note());
@@ -743,7 +743,7 @@ final class TownAdminCommand implements CommandExecutor {
         return true;
     }
 
-    private boolean expand(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean expand(CommandSender sender, TownRuntime runtime, String[] args) {
         requirePermission(sender, TownAdminPermissions.EXPAND);
         requireLength(args, 3, "expand <view|preview> <小镇全名> [方向]");
         String action = args[1].toLowerCase(Locale.ROOT);
@@ -769,7 +769,7 @@ final class TownAdminCommand implements CommandExecutor {
                                 candidate.profile().name(), parsed.townName())).findFirst().orElseThrow();
                 var units = runtime.finance().territoryUnits(town.id());
                 var candidate = TerritoryRules.next(units.stream().map(
-                                cn.tianji.town.storage.phase3.PhaseThreeRepository
+                                cn.tianji.town.storage.economy.EconomyRepository
                                         .TerritoryUnitSnapshot::unit).toList(),
                         ExpansionDirection.parse(parsed.action()));
                 return new AdminExpansion(town, units, candidate);
@@ -777,14 +777,14 @@ final class TownAdminCommand implements CommandExecutor {
             throw new IllegalArgumentException("expand 只支持 view 或 preview");
         }, view -> {
             sender.sendMessage("§6" + view.town().profile().name() + " 领地单元: "
-                    + view.units().size() + "/" + runtime.phaseThreeSettings().maximumUnits());
+                    + view.units().size() + "/" + runtime.economySettings().maximumUnits());
             view.units().forEach(unit -> sender.sendMessage("§7- grid=" + unit.unit().gridX()
                     + "," + unit.unit().gridZ() + " area=" + unit.residenceAreaName()
                     + " projection=" + unit.projectionStatus()));
             if (view.preview() != null) {
                 Player player = (Player) sender;
-                long price = ExpansionPricing.price(runtime.phaseThreeSettings().expansionBaseCost(),
-                        runtime.phaseThreeSettings().expansionPerUnitIncrease(), view.units().size(),
+                long price = ExpansionPricing.price(runtime.economySettings().expansionBaseCost(),
+                        runtime.economySettings().expansionPerUnitIncrease(), view.units().size(),
                         runtime.settlement().scale()).minorUnits();
                 runtime.sitePolicy().teleportAndPreview(player, view.preview().territory());
                 player.sendMessage("§e预估价格: " + runtime.money(price));
@@ -793,7 +793,7 @@ final class TownAdminCommand implements CommandExecutor {
         return true;
     }
 
-    private boolean buff(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
+    private boolean buff(CommandSender sender, TownRuntime runtime, String[] args) {
         requirePermission(sender, TownAdminPermissions.BUFF);
         requireLength(args, 2, "buff <list|grant> ...");
         String action = args[1].toLowerCase(Locale.ROOT);
@@ -802,7 +802,7 @@ final class TownAdminCommand implements CommandExecutor {
             String townName = TownCommandParser.townName(args, 2);
             runtime.read(sender, () -> {
                 TownSnapshot town = requireTown(runtime, townName);
-                return runtime.phaseFour().repository().activeBuffsForTown(town.id(),
+                return runtime.buffs().repository().activeBuffsForTown(town.id(),
                         java.time.Instant.now());
             }, buffs -> {
                 sender.sendMessage("§6生效中的公共 Buff: " + buffs.size());
@@ -813,7 +813,7 @@ final class TownAdminCommand implements CommandExecutor {
             return true;
         }
         if (action.equals("grant")) {
-            if (!runtime.phaseFour().buffShopEnabled() || !runtime.consumptionEnabled()) {
+            if (!runtime.buffs().buffShopEnabled() || !runtime.consumptionEnabled()) {
                 throw new IllegalArgumentException("公共 Buff 新购买已由功能开关暂停");
             }
             requireLength(args, 5, "buff grant <小镇全名> <buffKey> <原因>");
@@ -821,17 +821,17 @@ final class TownAdminCommand implements CommandExecutor {
                 List<TownSnapshot> towns = runtime.repository().listTowns(true);
                 TownCommandParser.NamedActionReason parsed = TownCommandParser.namedActionReason(
                         args, 2, townNames(towns),
-                        runtime.phaseFour().settings().buffs().keySet());
+                        runtime.buffs().settings().buffs().keySet());
                 TownSnapshot town = towns.stream().filter(candidate -> sameName(
                                 candidate.profile().name(), parsed.townName())).findFirst()
                         .orElseThrow(() -> new IllegalArgumentException("小镇不存在"));
-                BuffDefinition definition = runtime.phaseFour().settings().requireBuff(
+                BuffDefinition definition = runtime.buffs().settings().requireBuff(
                         parsed.action().toLowerCase(Locale.ROOT));
                 return new BuffGrantRequest(town.id(), town.profile().name(), definition,
                         parsed.reason());
             }, request -> requestConfirmation(sender, "为小镇“" + request.townName()
                     + "”代购 Buff “" + request.definition().displayName() + "”并扣除公共资金",
-                    () -> runtime.write(sender, () -> runtime.phaseFour().repository()
+                    () -> runtime.write(sender, () -> runtime.buffs().repository()
                                     .purchaseBuffForTown(request.townId(), actorId(sender),
                                             sender.getName(), request.definition(),
                                             runtime.settlement().scale(),
@@ -841,14 +841,14 @@ final class TownAdminCommand implements CommandExecutor {
                             purchase -> {
                                 sender.sendMessage("§aBuff 代购完成，公共余额: "
                                         + runtime.money(purchase.balanceAfterMinor()));
-                                runtime.phaseFour().refreshAllPlayers();
+                                runtime.buffs().refreshAllPlayers();
                             })));
             return true;
         }
         throw new IllegalArgumentException("buff 只支持 list 或 grant；公共 Buff 不接受退款");
     }
 
-    private void rebuildLand(CommandSender sender, PhaseOneRuntime runtime,
+    private void rebuildLand(CommandSender sender, TownRuntime runtime,
                              LandRebuildRequest request) {
         runtime.read(sender, () -> {
             List<TownSnapshot> targets = request.towns().stream().map(reference -> {
@@ -884,31 +884,31 @@ final class TownAdminCommand implements CommandExecutor {
         return targets;
     }
 
-    private static List<TownMembers> loadTownMembers(PhaseOneRuntime runtime,
+    private static List<TownMembers> loadTownMembers(TownRuntime runtime,
                                                       List<TownSnapshot> towns) {
         return towns.stream().map(town -> new TownMembers(town,
                 runtime.repository().listMemberIds(town.id()))).toList();
     }
 
-    private void reconcileOne(CommandSender sender, PhaseOneRuntime runtime, UUID townId,
+    private void reconcileOne(CommandSender sender, TownRuntime runtime, UUID townId,
                               boolean repair) {
         runtime.read(sender, () -> new TownMembers(requireTown(runtime, townId),
                 runtime.repository().listMemberIds(townId)),
                 state -> runtime.reconcile(sender, state.town(), state.members(), repair));
     }
 
-    private static TownSnapshot requireTown(PhaseOneRuntime runtime, String townName) {
+    private static TownSnapshot requireTown(TownRuntime runtime, String townName) {
         return runtime.repository().findTownByName(townName)
                 .orElseThrow(() -> new IllegalArgumentException("找不到小镇 “" + townName + "”"));
     }
 
-    private static TownSnapshot requireTown(PhaseOneRuntime runtime, UUID townId) {
+    private static TownSnapshot requireTown(TownRuntime runtime, UUID townId) {
         return runtime.repository().findTown(townId)
                 .orElseThrow(() -> new IllegalArgumentException("找不到小镇记录"));
     }
 
-    private PhaseOneRuntime requireRuntime(CommandSender sender) {
-        PhaseOneRuntime runtime = plugin.phaseOneRuntime();
+    private TownRuntime requireRuntime(CommandSender sender) {
+        TownRuntime runtime = plugin.townRuntime();
         if (runtime == null) {
             sender.sendMessage("§c小镇系统尚未就绪。请先使用 /townadmin status 查看启动门禁。");
         }
@@ -1022,7 +1022,7 @@ final class TownAdminCommand implements CommandExecutor {
                 sender.sendMessage("§esystem §7统一诊断、在线备份、状态与维护");
             }
             if (TownAdminPermissions.has(sender::hasPermission,
-                    TownAdminPermissions.PHASE_ZERO)) {
+                    TownAdminPermissions.PREFLIGHT)) {
                 sender.sendMessage("§ephase0 §7预发环境验证");
             }
             sender.sendMessage("§8Tab 补全中的 <原因> 是位置提示，请替换为实际内容。");
@@ -1041,8 +1041,8 @@ final class TownAdminCommand implements CommandExecutor {
             case "vote" -> voteHelp(sender);
             case "land" -> landHelp(sender);
             case "money", "tax", "ledger", "expand" -> economyHelp(sender, topic);
-            case "buff" -> phaseFourHelp(sender);
-            case "phase0" -> phaseZeroHelp(sender);
+            case "buff" -> buffsHelp(sender);
+            case "phase0" -> preflightHelp(sender);
             default -> {
                 sender.sendMessage("§c未知帮助分类：" + topic);
                 help(sender, null);
@@ -1061,7 +1061,7 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private static void economyHelp(CommandSender sender, String topic) {
-        sender.sendMessage("§6阶段 3 经济与扩张");
+        sender.sendMessage("§6公共经济与领地扩张");
         switch (topic.toLowerCase(Locale.ROOT)) {
             case "money" -> {
                 sender.sendMessage("§e/townadmin money view <小镇全名>");
@@ -1078,8 +1078,8 @@ final class TownAdminCommand implements CommandExecutor {
         }
     }
 
-    private static void phaseFourHelp(CommandSender sender) {
-        sender.sendMessage("§6阶段 4 公共消费管理");
+    private static void buffsHelp(CommandSender sender) {
+        sender.sendMessage("§6公共 Buff 管理");
         sender.sendMessage("§e/townadmin buff list <小镇全名>");
         sender.sendMessage("§e/townadmin buff grant <小镇全名> <buffKey> <原因>");
         sender.sendMessage("§7公共 Buff 购买后不接受退款；管理员代购默认持续一小时。");
@@ -1116,13 +1116,13 @@ final class TownAdminCommand implements CommandExecutor {
         sender.sendMessage("§e/townadmin land rebuild <小镇全名|all> §7随后点击聊天确认按钮");
     }
 
-    private static void phaseZeroHelp(CommandSender sender) {
+    private static void preflightHelp(CommandSender sender) {
         if (!TownAdminPermissions.has(sender::hasPermission,
-                TownAdminPermissions.PHASE_ZERO)) {
-            sender.sendMessage("§c没有第 0 阶段验证权限。");
+                TownAdminPermissions.PREFLIGHT)) {
+            sender.sendMessage("§c没有预发验证权限。");
             return;
         }
-        sender.sendMessage("§6第 0 阶段预发验证");
+        sender.sendMessage("§6安装门禁与预发验证");
         sender.sendMessage("§e/townadmin phase0 status");
         sender.sendMessage("§e/townadmin phase0 residence-smoke <world> <chunkX> <chunkZ>"
                 + " <memberUuid> §7随后点击聊天确认按钮");
@@ -1159,7 +1159,7 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private record AdminExpansion(TownSnapshot town,
-                                  List<cn.tianji.town.storage.phase3.PhaseThreeRepository
+                                  List<cn.tianji.town.storage.economy.EconomyRepository
                                           .TerritoryUnitSnapshot> units,
                                   cn.tianji.town.core.land.TerritoryUnit preview) {
     }

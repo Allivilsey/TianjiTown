@@ -91,7 +91,7 @@ class TownAdminCompletionEngineTest {
     }
 
     @Test
-    void completesPhaseZeroWorldCoordinatesWithoutConfirmationFlags() {
+    void completesPreflightWorldCoordinatesWithoutConfirmationFlags() {
         assertEquals(List.of("world"), engine.complete(
                 new String[]{"phase0", "residence-smoke", "wo"}, snapshot, dynamic));
         assertEquals(List.of("12"), engine.complete(
@@ -101,7 +101,7 @@ class TownAdminCompletionEngineTest {
     }
 
     @Test
-    void completesPhaseFourManagementCommands() {
+    void completesBuffManagementCommands() {
         assertEquals(List.of("grant", "list"), engine.complete(
                 new String[]{"buff", ""}, snapshot, dynamic));
         assertEquals(List.of("<buffKey>"), engine.complete(
@@ -112,7 +112,7 @@ class TownAdminCompletionEngineTest {
     }
 
     @Test
-    void limitsPlayerOnlyActionsAndPhaseZeroRootsWhenUnavailable() {
+    void limitsPlayerOnlyActionsAndPreflightRootsWhenUnavailable() {
         TownAdminCompletionEngine.Dynamic console = new TownAdminCompletionEngine.Dynamic(
                 List.of(), List.of("world"), null, null, false, false);
         List<String> roots = engine.complete(new String[]{""}, snapshot, console);

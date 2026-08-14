@@ -6,15 +6,15 @@ import cn.tianji.town.core.governance.VoteType;
 import cn.tianji.town.core.land.ExpansionDirection;
 import cn.tianji.town.core.ports.LandProtectionService;
 import cn.tianji.town.core.town.MemberRole;
-import cn.tianji.town.storage.phase1.ApplicationSnapshot;
-import cn.tianji.town.storage.phase1.JoinApplicationSnapshot;
-import cn.tianji.town.storage.phase1.PhaseOneRepository;
-import cn.tianji.town.storage.phase1.TownSnapshot;
-import cn.tianji.town.storage.phase2.MemberGovernanceSnapshot;
-import cn.tianji.town.storage.phase2.TransferSnapshot;
-import cn.tianji.town.storage.phase2.VoteSnapshot;
-import cn.tianji.town.storage.phase3.PhaseThreeRepository;
-import cn.tianji.town.storage.phase4.PhaseFourRepository;
+import cn.tianji.town.storage.town.ApplicationSnapshot;
+import cn.tianji.town.storage.town.JoinApplicationSnapshot;
+import cn.tianji.town.storage.town.TownRepository;
+import cn.tianji.town.storage.town.TownSnapshot;
+import cn.tianji.town.storage.governance.MemberGovernanceSnapshot;
+import cn.tianji.town.storage.governance.TransferSnapshot;
+import cn.tianji.town.storage.governance.VoteSnapshot;
+import cn.tianji.town.storage.economy.EconomyRepository;
+import cn.tianji.town.storage.commerce.CommerceRepository;
 import org.bukkit.entity.Player;
 
 import java.time.Duration;
@@ -32,9 +32,9 @@ import java.util.function.Supplier;
  */
 final class TownActions {
     private final TianjiTownPlugin plugin;
-    private final PhaseOneRuntime runtime;
+    private final TownRuntime runtime;
 
-    TownActions(TianjiTownPlugin plugin, PhaseOneRuntime runtime) {
+    TownActions(TianjiTownPlugin plugin, TownRuntime runtime) {
         this.plugin = plugin;
         this.runtime = runtime;
     }
@@ -208,7 +208,7 @@ final class TownActions {
         }, changedTown -> {
             Player removed = plugin.getServer().getPlayer(targetId);
             if (removed != null) {
-                runtime.phaseFour().refreshPlayer(removed);
+                runtime.buffs().refreshPlayer(removed);
             }
             syncResidence(actor, changedTown);
             return Map.of("town_id", changedTown, "target_id", targetId);
@@ -217,9 +217,9 @@ final class TownActions {
 
     void requestMayorTransfer(Player actor, UUID townId, UUID candidateId,
                               Consumer<TownActionOutcome<TransferSnapshot>> completion) {
-        PhaseTwoSettings settings;
+        GovernanceSettings settings;
         try {
-            settings = PhaseTwoSettings.load(plugin.getConfig());
+            settings = GovernanceSettings.load(plugin.getConfig());
         } catch (IllegalArgumentException exception) {
             failNow("MAYOR_TRANSFER_REQUEST", exception, completion);
             return;
@@ -252,9 +252,9 @@ final class TownActions {
 
     void createVote(Player actor, UUID townId, VoteType type, UUID targetId,
                     Consumer<TownActionOutcome<VoteSnapshot>> completion) {
-        PhaseTwoSettings settings;
+        GovernanceSettings settings;
         try {
-            settings = PhaseTwoSettings.load(plugin.getConfig());
+            settings = GovernanceSettings.load(plugin.getConfig());
         } catch (IllegalArgumentException exception) {
             failNow("VOTE_CREATE", exception, completion);
             return;
@@ -284,7 +284,7 @@ final class TownActions {
             runtime.repository().leaveTown(actor.getUniqueId());
             return townId;
         }, changedTown -> {
-            runtime.phaseFour().refreshPlayer(actor);
+            runtime.buffs().refreshPlayer(actor);
             syncResidence(actor, changedTown);
             return Map.of("town_id", changedTown, "player_id", actor.getUniqueId());
         }, completion);
@@ -326,28 +326,28 @@ final class TownActions {
                                 actor.getName(), "镇长通过共享业务入口解散");
                         return town;
                     }, completed -> {
-                        runtime.phaseFour().refreshAllPlayers();
+                        runtime.buffs().refreshAllPlayers();
                         return Map.of("town_id", completed.id(), "status", "DELETED");
                     }, completion);
                 });
     }
 
     void changeTaxRate(Player actor, UUID townId, int basisPoints,
-                       Consumer<TownActionOutcome<PhaseThreeRepository.TaxChange>> completion) {
+                       Consumer<TownActionOutcome<EconomyRepository.TaxChange>> completion) {
         String action = "TAX_RATE_CHANGE";
         if (!runtime.taxEnabled()) {
             completion.accept(TownActionOutcome.failure(TownActionResult.failure(action,
                     "FEATURE_DISABLED")));
             return;
         }
-        if (!runtime.phaseThreeSettings().allowsTaxRate(basisPoints)) {
+        if (!runtime.economySettings().allowsTaxRate(basisPoints)) {
             completion.accept(TownActionOutcome.failure(TownActionResult.failure(action,
                     "VALIDATION_FAILED", Map.of("maximum_bps",
-                            runtime.phaseThreeSettings().maximumTaxBps()))));
+                            runtime.economySettings().maximumTaxBps()))));
             return;
         }
         write(action, actor, () -> {
-            PhaseThreeRepository.TaxChange change = runtime.finance().changeTaxRate(townId,
+            EconomyRepository.TaxChange change = runtime.finance().changeTaxRate(townId,
                     actor.getUniqueId(), basisPoints, actor.getName(),
                     "镇长通过共享业务入口修改");
             runtime.refreshTaxPolicies();
@@ -366,7 +366,7 @@ final class TownActions {
     }
 
     void donate(Player actor, long amountMinor,
-                Consumer<TownActionOutcome<PhaseThreeRepository.LedgerMutation>> completion) {
+                Consumer<TownActionOutcome<EconomyRepository.LedgerMutation>> completion) {
         String action = "TOWN_DONATE";
         if (rejectBeforeWrite(action, completion)) {
             return;
@@ -390,7 +390,7 @@ final class TownActions {
     }
 
     void expandTown(Player actor, ExpansionDirection direction,
-                    Consumer<TownActionOutcome<PhaseThreeRepository.ExpansionOperation>> completion) {
+                    Consumer<TownActionOutcome<EconomyRepository.ExpansionOperation>> completion) {
         String action = "TOWN_EXPAND";
         if (rejectBeforeWrite(action, completion)) {
             return;
@@ -411,17 +411,17 @@ final class TownActions {
     }
 
     void buyBuff(Player actor, String buffKey, BuffDurationOption duration,
-                 Consumer<TownActionOutcome<PhaseFourRepository.BuffPurchase>> completion) {
+                 Consumer<TownActionOutcome<CommerceRepository.BuffPurchase>> completion) {
         String action = "BUFF_BUY";
         if (rejectBeforeWrite(action, completion)) {
             return;
         }
-        if (!runtime.phaseFour().buffShopEnabled() || !runtime.consumptionEnabled()) {
+        if (!runtime.buffs().buffShopEnabled() || !runtime.consumptionEnabled()) {
             completion.accept(TownActionOutcome.failure(TownActionResult.failure(action,
                     "FEATURE_DISABLED")));
             return;
         }
-        runtime.phaseFour().buyBuffAction(actor, buffKey, duration, purchase -> completion.accept(
+        runtime.buffs().buyBuffAction(actor, buffKey, duration, purchase -> completion.accept(
                         TownActionOutcome.success(TownActionResult.success(action,
                                 Map.of("buff_key", buffKey, "buff_id", purchase.buff().buffId(),
                                         "level", purchase.buff().level(), "expires_at",
@@ -434,11 +434,11 @@ final class TownActions {
     void queryActor(Player actor, Consumer<TownActionOutcome<Void>> completion) {
         String action = "QUERY_ACTOR";
         runtime.readAction(actor, () -> {
-            PhaseOneRepository.PlayerDashboard dashboard = runtime.repository()
+            TownRepository.PlayerDashboard dashboard = runtime.repository()
                     .dashboard(actor.getUniqueId());
             MemberGovernanceSnapshot governance = runtime.governance()
                     .dashboard(actor.getUniqueId()).orElse(null);
-            PhaseThreeRepository.TownFinance finance = runtime.finance()
+            EconomyRepository.TownFinance finance = runtime.finance()
                     .findFinanceByPlayer(actor.getUniqueId()).orElse(null);
             Map<String, Object> values = new LinkedHashMap<>();
             values.put("player_id", actor.getUniqueId());

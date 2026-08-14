@@ -2,7 +2,7 @@
 
 天际服自用的单 Paper 服务器小镇系统。当前版本 `1.4.0` 包含申请、治理、统一收入税、完整公共账本、付费领地扩张、公共 Buff、每周建筑返还、领地信标和统一运维诊断。
 
-面向玩家、运营和管理员的完整功能与玩法规则见 [`docs/FUNCTIONS_AND_GAMEPLAY.md`](docs/FUNCTIONS_AND_GAMEPLAY.md)。
+文档按职责分类，入口见 [`docs/README.md`](docs/README.md)；完整功能与玩法规则见 [`docs/FUNCTIONS_AND_GAMEPLAY.md`](docs/FUNCTIONS_AND_GAMEPLAY.md)。
 
 ## 构建
 
@@ -33,7 +33,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 > 此 SQLite 版不会自动导入旧 MySQL 数据。已经在 MySQL 中运行的服务器应先保留完整备份，在隔离环境完成数据转换和验收后再切换；不要把旧 MySQL Flyway history 复制到 SQLite。
 
-第 5 阶段的升级、验收与回滚流程见 [`docs/phase-5/README.md`](docs/phase-5/README.md)，日常运维见 [`docs/phase-5/OPERATIONS.md`](docs/phase-5/OPERATIONS.md)。
+领地加成的升级、验收与回滚流程见 [`docs/deployment/TERRITORY_BONUSES.md`](docs/deployment/TERRITORY_BONUSES.md)，日常运维见 [`docs/operations/OPERATIONS.md`](docs/operations/OPERATIONS.md)。
 隔离测试服务器的 GUI 业务自动化接口见 [`docs/test-command.md`](docs/test-command.md)；该接口默认关闭且使用独立权限，不属于玩家或管理员正式功能。
 
 ## 管理员帮助
@@ -131,7 +131,7 @@ Buff 目录位于 `config.yml` 的 `phase4` 配置节。公共 Buff 不受世界
 
 建筑返还与领地信标位于 `config.yml` 的 `phase5` 配置节。建筑返还以 25% 概率处理生存模式成员在本镇有效 Residence 内放置的安全单方块，成功时只播放拾取音效，不展示内部额度。镇长或副镇长切换信标效果时，系统记录数据库中尚未存在或等级更高的效果，不再扫描区块中的信标。
 
-### 第 0 阶段预发验证
+### 安装门禁与预发验证
 
 ```text
 /townadmin phase0 status

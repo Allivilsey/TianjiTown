@@ -1,6 +1,6 @@
 package cn.tianji.town.paper;
 
-import cn.tianji.town.storage.phase3.PhaseThreeRepository;
+import cn.tianji.town.storage.economy.EconomyRepository;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -9,7 +9,7 @@ class TownActionFailuresTest {
     @Test
     void insufficientBalanceUsesSpecificReasonInsteadOfGenericConflict() {
         TownActionResult result = TownActionFailures.from("BUFF_BUY",
-                new PhaseThreeRepository.ConflictException("小镇公共余额不足"));
+                new EconomyRepository.ConflictException("小镇公共余额不足"));
 
         assertEquals("INSUFFICIENT_BALANCE", result.reason());
     }
