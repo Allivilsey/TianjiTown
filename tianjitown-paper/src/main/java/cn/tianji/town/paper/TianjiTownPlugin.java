@@ -4,6 +4,7 @@ import cn.tianji.town.core.ports.RegionBoundaryService;
 import cn.tianji.town.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
 import cn.tianji.town.integrations.jobs.JobsIncomeTaxAdapter;
 import cn.tianji.town.integrations.residence.ResidenceCommandGuard;
+import cn.tianji.town.integrations.residence.ResidenceDeletionGuard;
 import cn.tianji.town.integrations.residence.ResidenceLandProtectionService;
 import cn.tianji.town.integrations.quickshop.QuickShopTaxAdapter;
 import cn.tianji.town.integrations.vault.VaultEconomyProbe;
@@ -25,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class TianjiTownPlugin extends JavaPlugin {
-    private static final int CONFIG_SCHEMA = 6;
+    private static final int CONFIG_SCHEMA = 7;
     private final AtomicReference<GateStatus> gateStatus = new AtomicReference<>(
             new GateStatus(GateStatus.State.CHECKING, List.of("尚未开始")));
     private volatile DatabaseGate databaseGate;
@@ -102,7 +103,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         details.add("INFO Minecraft " + getServer().getMinecraftVersion()
                 + " / Java " + Runtime.version().feature());
         for (String name : List.of("Residence", "Vault", "XConomy", "QuickShop-Hikari",
-                "Jobs", "GlobalMarketPlus")) {
+                "Jobs", "GlobalMarketPlus", "WorldGuard")) {
             Plugin dependency = getServer().getPluginManager().getPlugin(name);
             if (dependency == null) {
                 details.add("FAIL " + name + " 未安装");
@@ -115,12 +116,6 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 details.add("OK " + name + " " + dependency.getPluginMeta().getVersion());
             }
         }
-        Plugin worldGuard = getServer().getPluginManager().getPlugin("WorldGuard");
-        details.add(worldGuard != null && worldGuard.isEnabled()
-                ? "OK WorldGuard " + worldGuard.getPluginMeta().getVersion()
-                + "（选址边界检测已启用）"
-                : "INFO WorldGuard 未安装（跳过外部区域边界检测）");
-
         boolean economyHealthy = false;
         if (getServer().getPluginManager().isPluginEnabled("Vault")) {
             VaultEconomyProbe.Result economy = new VaultEconomyProbe(getServer()).verify();
@@ -167,7 +162,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
             return true;
         }
         if (configured == CONFIG_SCHEMA - 1) {
-            upgradeConfigFromFive();
+            upgradeConfigFromSix();
             getConfig().set("schema-version", CONFIG_SCHEMA);
             saveConfig();
             details.add("OK config schema 已安全升级 " + configured + " -> " + CONFIG_SCHEMA);
@@ -183,42 +178,26 @@ public final class TianjiTownPlugin extends JavaPlugin {
         return false;
     }
 
-    private void upgradeConfigFromFive() {
+    private void upgradeConfigFromSix() {
         getConfig().options().copyDefaults(true);
-
-        // 清理第六版已移除或已更名的功能配置，避免旧字段继续误导服主。
+        getConfig().set("phase5.building-refund.chance", 0.25D);
         for (String path : List.of(
-                "phase4.resources",
-                "phase5.building-refund.daily-limit",
-                "phase5.building-refund.counter-retention-days",
-                "phase5.building-refund.materials",
-                "phase5.beacon.range-multiplier",
-                "phase5.beacon.maximum-range",
-                "phase5.beacon.maximum-tier",
-                "phase5.beacon.effect-level-bonus",
-                "phase5.beacon.maximum-effect-level")) {
+                "phase1.application.cooldown-minutes",
+                "phase1.site.require-service-area",
+                "phase1.site.service-areas",
+                "phase3.tax.maximum-basis-points",
+                "phase3.expansion.growth-factor",
+                "phase3.expansion.maximum-units",
+                "phase5.beacon.scan-interval-ticks")) {
             getConfig().set(path, null);
         }
-
-        ConfigurationSection catalog = getConfig().getConfigurationSection(
-                "phase4.buffs.catalog");
-        if (catalog == null) {
-            return;
-        }
-        for (String key : catalog.getKeys(false)) {
-            String path = "phase4.buffs.catalog." + key + ".purchasing-roles";
-            List<String> roles = getConfig().getStringList(path);
-            List<String> migrated = new ArrayList<>();
-            for (String role : roles) {
-                String mapped = role.equals("OFFICER") ? "DEPUTY_MAYOR" : role;
-                if (!migrated.contains(mapped)) {
-                    migrated.add(mapped);
-                }
+        ConfigurationSection catalog = getConfig().getConfigurationSection("phase4.buffs.catalog");
+        if (catalog != null) {
+            for (String key : catalog.getKeys(false)) {
+                getConfig().set("phase4.buffs.catalog." + key + ".price-multiplier", null);
+                getConfig().set("phase4.buffs.catalog." + key + ".duration-minutes", null);
+                getConfig().set("phase4.buffs.catalog." + key + ".allowed-worlds", null);
             }
-            if (migrated.contains("MAYOR") && !migrated.contains("DEPUTY_MAYOR")) {
-                migrated.add("DEPUTY_MAYOR");
-            }
-            getConfig().set(path, migrated);
         }
     }
 
@@ -252,9 +231,11 @@ public final class TianjiTownPlugin extends JavaPlugin {
         }
         Set<String> managedResidenceNames = ConcurrentHashMap.newKeySet();
         PhaseOneRuntime runtime;
+        ResidenceLandProtectionService residenceProtection =
+                new ResidenceLandProtectionService(getServer(), managedResidenceNames);
         try {
             runtime = new PhaseOneRuntime(this, candidate,
-                    new ResidenceLandProtectionService(getServer(), managedResidenceNames),
+                    residenceProtection,
                     regionBoundaryService());
             cn.tianji.town.integrations.vault.VaultSettlementService.Result settlement =
                     runtime.settlement().ensureAccount();
@@ -301,6 +282,9 @@ public final class TianjiTownPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(runtime.phaseFive(), this);
         getServer().getPluginManager().registerEvents(
                 new ResidenceCommandGuard(managedResidenceNames::contains), this);
+        getServer().getPluginManager().registerEvents(new ResidenceDeletionGuard(this,
+                managedResidenceNames::contains, residenceProtection::internalMutation,
+                runtime::reconcileAll), this);
         getServer().getScheduler().runTaskAsynchronously(this, () -> {
             try {
                 runtime.repository().listTowns(true).stream().map(town -> town.residenceName())
@@ -324,8 +308,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 20L * 30, 20L * 60);
         getServer().getScheduler().runTaskTimer(this, runtime.phaseFive()::refreshIndex,
                 20L * 15, 20L * 30);
-        getServer().getScheduler().runTaskTimer(this, runtime.phaseFive()::scanBeacons,
-                20L * 10, runtime.phaseFive().settings().beacon().scanIntervalTicks());
+        getServer().getScheduler().runTaskTimer(this, runtime.phaseFive()::refreshBeaconEffects,
+                20L * 10, runtime.phaseFive().settings().beacon().refreshIntervalTicks());
         getServer().getScheduler().runTaskTimer(this, runtime.phaseFive()::cleanupCounters,
                 20L * 60, 20L * 60 * 60);
         getServer().getScheduler().runTaskTimer(this, runtime.phaseFive()::diagnoseScheduled,
@@ -351,15 +335,10 @@ public final class TianjiTownPlugin extends JavaPlugin {
     }
 
     private RegionBoundaryService regionBoundaryService() {
-        if (!getServer().getPluginManager().isPluginEnabled("WorldGuard")) {
-            return (territory, bufferChunks) -> RegionBoundaryService.Collision.none();
-        }
         try {
             return new WorldGuardRegionBoundaryService(getServer());
         } catch (LinkageError error) {
-            getLogger().warning("WorldGuard API 无法加载，已停用外部区域边界检测: "
-                    + error.getMessage());
-            return (territory, bufferChunks) -> RegionBoundaryService.Collision.none();
+            throw new IllegalStateException("WorldGuard API 无法加载", error);
         }
     }
 

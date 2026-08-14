@@ -14,7 +14,7 @@ class ExpansionRulesTest {
     private static final UUID WORLD = UUID.randomUUID();
 
     @Test
-    void expandsInFixedThreeByThreeGridAndStaysConnected() {
+    void expandsInFixedFiveByFiveGridAndStaysConnected() {
         TerritoryUnit origin = unit(0, 0, 10, 20);
         TerritoryUnit east = TerritoryRules.next(List.of(origin), ExpansionDirection.EAST);
         TerritoryUnit north = TerritoryRules.next(List.of(origin, east), ExpansionDirection.NORTH);
@@ -26,16 +26,19 @@ class ExpansionRulesTest {
         assertEquals(-1, north.gridZ());
         assertEquals(1, northEast.gridX());
         assertEquals(-1, northEast.gridZ());
-        assertThrows(IllegalArgumentException.class,
-                () -> TerritoryRules.next(List.of(origin, east), ExpansionDirection.EAST));
+        TerritoryUnit farEast = TerritoryRules.next(List.of(origin, east),
+                ExpansionDirection.EAST);
+        assertEquals(2, farEast.gridX());
+        assertThrows(IllegalArgumentException.class, () -> TerritoryRules.next(
+                List.of(origin, east, farEast), ExpansionDirection.EAST));
     }
 
     @Test
-    void appliesExponentialPriceWithEconomyPrecision() {
+    void appliesLinearPriceWithEconomyPrecision() {
         MoneyAmount price = ExpansionPricing.price(new BigDecimal("100.00"),
                 new BigDecimal("1.5"), 3, 2);
 
-        assertEquals(new BigDecimal("225.00"), price.decimal());
+        assertEquals(new BigDecimal("103.00"), price.decimal());
     }
 
     private static TerritoryUnit unit(int gridX, int gridZ, int centerX, int centerZ) {

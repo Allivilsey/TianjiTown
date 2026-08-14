@@ -1,6 +1,7 @@
 package cn.tianji.town.paper;
 
 import cn.tianji.town.core.consumption.BuffDefinition;
+import cn.tianji.town.core.consumption.BuffDurationOption;
 import cn.tianji.town.storage.phase4.PhaseFourRepository;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -75,7 +76,7 @@ final class PhaseFourRuntime implements Listener {
                 settings.buffShopEnabled());
     }
 
-    void buyBuffAction(Player player, String key,
+    void buyBuffAction(Player player, String key, BuffDurationOption duration,
                        Consumer<PhaseFourRepository.BuffPurchase> success,
                        Consumer<RuntimeException> failure) {
         if (!buffShopEnabled() || !host.consumptionEnabled()) {
@@ -85,7 +86,7 @@ final class PhaseFourRuntime implements Listener {
         try {
             BuffDefinition definition = settings.requireBuff(key);
             host.writeAction(player, () -> repository.purchaseBuff(player.getUniqueId(),
-                            player.getName(), definition, host.settlement().scale(),
+                            player.getName(), definition, duration, host.settlement().scale(),
                             "buff-purchase:" + UUID.randomUUID(), Instant.now()),
                     purchase -> verifyBuffPurchase(player, purchase, success, failure),
                     failure);
@@ -323,7 +324,7 @@ final class PhaseFourRuntime implements Listener {
         Set<AttributeKey> attributes = new HashSet<>();
         Instant now = Instant.now();
         for (PhaseFourRepository.ActiveBuff buff : buffs) {
-            if (!buff.allowsWorld(player.getWorld().getName()) || !buff.expiresAt().isAfter(now)) {
+            if (!buff.expiresAt().isAfter(now)) {
                 continue;
             }
             if (buff.effectKind() == BuffDefinition.EffectKind.POTION) {

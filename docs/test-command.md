@@ -19,8 +19,8 @@
 
 ```text
 /testcommand query <actor>
-/testcommand action <actor> application create <name> <shortName> <residenceName> <description> <rule1|rule2>
-/testcommand action <actor> application update <applicationId> <version> <name> <shortName> <residenceName> <description> <rule1|rule2>
+/testcommand action <actor> application create <name> <shortName> <residenceName> <description> <rule1|rule2> <initialMemberUuid1> <initialMemberUuid2>
+/testcommand action <actor> application update <applicationId> <version> <name> <shortName> <residenceName> <description> <rule1|rule2> <initialMemberUuid1> <initialMemberUuid2>
 /testcommand action <actor> application select-site <applicationId>
 /testcommand action <actor> application submit <applicationId>
 /testcommand action <actor> application cancel <applicationId>
@@ -46,7 +46,7 @@
 /testcommand action <actor> finance donate <amountMinor>
 /testcommand action <actor> finance tax <townId> <basisPoints>
 /testcommand action <actor> finance acknowledge-tax <revision>
-/testcommand action <actor> buff buy <buffKey>
+/testcommand action <actor> buff buy <buffKey> <one_hour|one_day|one_week|one_month>
 ```
 
 `amountMinor` 使用最小货币单位，`basisPoints` 使用基点。例如货币精度为 2 时，`10000`

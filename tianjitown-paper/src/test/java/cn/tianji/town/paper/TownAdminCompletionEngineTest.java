@@ -102,7 +102,7 @@ class TownAdminCompletionEngineTest {
 
     @Test
     void completesPhaseFourManagementCommands() {
-        assertEquals(List.of("grant", "list", "refund"), engine.complete(
+        assertEquals(List.of("grant", "list"), engine.complete(
                 new String[]{"buff", ""}, snapshot, dynamic));
         assertEquals(List.of("<buffKey>"), engine.complete(
                 new String[]{"buff", "grant", "天际", "之城", ""}, snapshot, dynamic));

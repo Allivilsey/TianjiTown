@@ -5,6 +5,7 @@ import cn.tianji.town.core.application.ApplicationText;
 import cn.tianji.town.core.land.InitialTerritory;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record ApplicationSnapshot(
@@ -17,8 +18,18 @@ public record ApplicationSnapshot(
         UUID townId,
         String reviewMessage,
         String lastError,
+        List<InitialMemberConfirmation> initialMembers,
+        long applicationFeeMinor,
         long version,
         Instant createdAt,
         Instant updatedAt
 ) {
+    public ApplicationSnapshot {
+        initialMembers = initialMembers == null ? List.of() : List.copyOf(initialMembers);
+    }
+
+    public boolean initialMembersConfirmed() {
+        return initialMembers.size() == 2 && initialMembers.stream().allMatch(member ->
+                member.status() == InitialMemberConfirmation.Status.CONFIRMED);
+    }
 }

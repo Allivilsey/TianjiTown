@@ -7,6 +7,9 @@ import java.util.Set;
 import java.util.Comparator;
 
 public final class TerritoryRules {
+    public static final int GRID_RADIUS = 2;
+    public static final int MAXIMUM_UNITS = 25;
+
     private TerritoryRules() {
     }
 
@@ -24,11 +27,12 @@ public final class TerritoryRules {
         Grid candidate = occupied.stream()
                 .map(current -> new Grid(current.x() + direction.gridX(),
                         current.z() + direction.gridZ()))
-                .filter(grid -> Math.abs(grid.x()) <= 1 && Math.abs(grid.z()) <= 1)
+                .filter(grid -> Math.abs(grid.x()) <= GRID_RADIUS
+                        && Math.abs(grid.z()) <= GRID_RADIUS)
                 .filter(grid -> !occupied.contains(grid))
                 .min(Comparator.comparingInt((Grid grid) -> Math.abs(grid.x()) + Math.abs(grid.z()))
                         .thenComparingInt(Grid::z).thenComparingInt(Grid::x))
-                .orElseThrow(() -> new IllegalArgumentException("该方向在 3×3 网格内已无可扩张单元"));
+                .orElseThrow(() -> new IllegalArgumentException("该方向在 5×5 网格内已无可扩张单元"));
         int centerX = Math.addExact(origin.territory().center().x(),
                 Math.multiplyExact(candidate.x(), 3));
         int centerZ = Math.addExact(origin.territory().center().z(),

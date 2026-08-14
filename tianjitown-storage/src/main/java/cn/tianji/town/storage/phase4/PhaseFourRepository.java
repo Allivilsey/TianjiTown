@@ -1,6 +1,7 @@
 package cn.tianji.town.storage.phase4;
 
 import cn.tianji.town.core.consumption.BuffDefinition;
+import cn.tianji.town.core.consumption.BuffDurationOption;
 import cn.tianji.town.core.consumption.BuffPricing;
 import cn.tianji.town.core.consumption.BuffStackingRule;
 import cn.tianji.town.core.consumption.ResourceDefinition;
@@ -34,30 +35,32 @@ public final class PhaseFourRepository {
         this.forbiddenThread = Objects.requireNonNull(forbiddenThread, "forbiddenThread");
     }
 
-    public BuffQuote quoteBuff(UUID playerId, BuffDefinition definition, int moneyScale,
-                               Instant now) {
+    public BuffQuote quoteBuff(UUID playerId, BuffDefinition definition,
+                               BuffDurationOption duration, int moneyScale, Instant now) {
         requireWorkerThread();
         Objects.requireNonNull(playerId, "playerId");
         return query(connection -> quoteBuff(connection, requirePlayer(connection, playerId),
-                definition, moneyScale, now, false));
+                definition, duration, moneyScale, now, false));
     }
 
     public BuffPurchase purchaseBuff(UUID playerId, String actorName, BuffDefinition definition,
-                                     int moneyScale, String businessKey, Instant now) {
+                                     BuffDurationOption duration, int moneyScale,
+                                     String businessKey, Instant now) {
         requireWorkerThread();
         return transaction(connection -> purchaseBuff(connection,
                 requirePlayer(connection, playerId), playerId, actorName, definition, moneyScale,
-                businessKey, now, false, "成员通过公共 Buff 商店购买"));
+                duration, businessKey, now, false, "成员通过公共 Buff 商店购买"));
     }
 
     public BuffPurchase purchaseBuffForTown(UUID townId, UUID actorId, String actorName,
                                             BuffDefinition definition, int moneyScale,
-                                            String businessKey, Instant now, String reason) {
+                                            BuffDurationOption duration, String businessKey,
+                                            Instant now, String reason) {
         requireWorkerThread();
         requireReason(reason);
         return transaction(connection -> purchaseBuff(connection,
                 requireTownContext(connection, townId), actorId, actorName, definition, moneyScale,
-                businessKey, now, true, reason));
+                duration, businessKey, now, true, reason));
     }
 
     public List<ActiveBuff> activeBuffsForPlayer(UUID playerId, Instant now) {
@@ -391,14 +394,16 @@ public final class PhaseFourRepository {
     private BuffPurchase purchaseBuff(Connection connection, PlayerContext context,
                                       UUID actorId, String actorName,
                                       BuffDefinition definition, int moneyScale,
-                                      String businessKey, Instant now, boolean bypassRole,
+                                      BuffDurationOption duration, String businessKey,
+                                      Instant now, boolean bypassRole,
                                       String reason) throws SQLException {
         Optional<ActiveBuff> existing = findBuffByBusinessKey(connection, businessKey);
         if (existing.isPresent()) {
             return new BuffPurchase(existing.get(),
                     requireAccount(connection, context.townId()).balanceMinor());
         }
-        BuffQuote quote = quoteBuff(connection, context, definition, moneyScale, now, bypassRole);
+        BuffQuote quote = quoteBuff(connection, context, definition, duration, moneyScale, now,
+                bypassRole);
         ActiveBuff current = quote.current();
         if (current != null) {
             try (PreparedStatement statement = connection.prepareStatement("""
@@ -429,7 +434,7 @@ public final class PhaseFourRepository {
             statement.setInt(7, quote.nextLevel());
             statement.setInt(8, quote.nextStacks());
             statement.setDouble(9, definition.amountPerLevel());
-            statement.setString(10, String.join("\n", definition.allowedWorlds()));
+            statement.setString(10, "");
             statement.setLong(11, quote.priceMinor());
             statement.setBytes(12, actorId == null ? null : uuid(actorId));
             statement.setString(13, actorName == null ? "SYSTEM" : actorName);
@@ -445,8 +450,8 @@ public final class PhaseFourRepository {
     }
 
     private BuffQuote quoteBuff(Connection connection, PlayerContext context,
-                                BuffDefinition definition, int moneyScale, Instant now,
-                                boolean bypassRole) throws SQLException {
+                                BuffDefinition definition, BuffDurationOption duration,
+                                int moneyScale, Instant now, boolean bypassRole) throws SQLException {
         Objects.requireNonNull(definition, "definition");
         Objects.requireNonNull(now, "now");
         if (!bypassRole && !definition.allowsRole(context.role())) {
@@ -458,11 +463,12 @@ public final class PhaseFourRepository {
         int currentLevel = current == null ? 0 : current.level();
         int currentStacks = current == null ? 0 : current.stackCount();
         BuffPricing.NextStack next = BuffPricing.next(definition, currentLevel, currentStacks);
-        long price = BuffPricing.price(definition, currentStacks, moneyScale).minorUnits();
+        long price = BuffPricing.price(definition, duration, next.level(), moneyScale).minorUnits();
         Instant base = definition.stackingRule() == BuffStackingRule.REFRESH || current == null
                 ? now : current.expiresAt();
-        Instant expiry = base.plus(definition.duration());
-        return new BuffQuote(context, current, next.level(), next.stacks(), price, expiry);
+        Instant expiry = base.plus(duration.duration());
+        return new BuffQuote(context, current, next.level(), next.stacks(), duration,
+                price, expiry);
     }
 
     private ResourceOrder createOrder(Connection connection, PlayerContext context,
@@ -892,7 +898,8 @@ public final class PhaseFourRepository {
     }
 
     public record BuffQuote(PlayerContext context, ActiveBuff current, int nextLevel,
-                            int nextStacks, long priceMinor, Instant expiresAt) {
+                            int nextStacks, BuffDurationOption duration,
+                            long priceMinor, Instant expiresAt) {
     }
 
     public record BuffPurchase(ActiveBuff buff, long balanceAfterMinor) {

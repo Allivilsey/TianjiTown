@@ -9,12 +9,18 @@ public final class BuffPricing {
     private BuffPricing() {
     }
 
-    public static MoneyAmount price(BuffDefinition definition, int currentStacks, int scale) {
-        if (currentStacks < 0) {
-            throw new IllegalArgumentException("当前叠加层数不能小于 0");
+    public static MoneyAmount price(BuffDefinition definition, BuffDurationOption duration,
+                                    int nextLevel, int scale) {
+        if (duration == null) {
+            throw new IllegalArgumentException("Buff 时长不能为空");
+        }
+        if (nextLevel < 1) {
+            throw new IllegalArgumentException("购买后的 Buff 等级必须大于 0");
         }
         BigDecimal value = definition.basePrice()
-                .multiply(definition.priceMultiplier().pow(currentStacks));
+                .multiply(BigDecimal.valueOf(duration.hours()))
+                .multiply(BigDecimal.valueOf(duration.discountBasisPoints(), 4))
+                .multiply(BigDecimal.valueOf(nextLevel));
         return MoneyAmount.rounded(value, scale, RoundingMode.CEILING);
     }
 

@@ -1,4 +1,4 @@
-schema-version: 6
+schema-version: 7
 
 database:
   # 相对路径以 plugins/TianjiTown 为基准，也可填写绝对路径。
@@ -22,7 +22,7 @@ phase1:
   service-stations: []
   application:
     # 撤回或被拒绝后的再次申请冷却。
-    cooldown-minutes: 5
+    cooldown-hours: 24
     # 选址提交后的临时保留时间。
     reservation-minutes: 60
   membership:
@@ -33,20 +33,11 @@ phase1:
     rejection-cooldown-hours: 24
     leave-cooldown-hours: 24
   site:
-    # 配置了服务区的世界会限制在服务区内；未配置服务区的已加载世界不受此项限制。
-    require-service-area: true
     minimum-buffer-chunks: 1
     # 三维领地预览会重复刷新火焰粒子，使边界在水平面和 Y 轴方向上持续可见。
     preview-duration-seconds: 15
     preview-interval-ticks: 20
     preview-vertical-range-blocks: 24
-    # 坐标均为区块坐标；3×3 初始领地必须完整位于矩形内。
-    service-areas:
-      - world: world
-        min-chunk-x: -1000
-        max-chunk-x: 1000
-        min-chunk-z: -1000
-        max-chunk-z: 1000
     # 出生点、活动区和管理区应在此配置；以下示例保护出生区。
     blacklist:
       - world: world
@@ -75,15 +66,14 @@ phase3:
   # 可立即停止新税收；已存在账本查询和清算对账仍保持可用。
   tax:
     enabled: true
-    maximum-basis-points: 2500
   # 可立即停止捐款、扩张等新资金写入，不影响税款入账、退款和查询。
   consumption:
     enabled: true
   reconciliation-interval-minutes: 5
   expansion:
     base-cost: '1000.00'
-    growth-factor: '1.50'
-    maximum-units: 9
+    # 第 N 次扩张费用 = 基础费用 + 每单元增价 × (当前单元数 - 1)。
+    per-unit-increase: '500.00'
 
 phase4:
   buffs:
@@ -95,14 +85,11 @@ phase4:
         effect-kind: POTION
         effect-key: 'minecraft:speed'
         operation: AMPLIFIER
+        # 每小时基础价；四档时长会按小时线性计价并应用长期折扣。
         base-price: '500.00'
-        price-multiplier: '1.50'
-        duration-minutes: 60
         maximum-level: 3
         stacking: LEVEL_UP
         amount-per-level: 1.0
-        # 空列表表示所有世界；世界名按不区分大小写匹配。
-        allowed-worlds: [world]
         purchasing-roles: [MAYOR, DEPUTY_MAYOR]
       health:
         display-name: '公共生命'
@@ -110,19 +97,16 @@ phase4:
         effect-key: 'minecraft:max_health'
         operation: ADD_NUMBER
         base-price: '1000.00'
-        price-multiplier: '2.00'
-        duration-minutes: 60
         maximum-level: 2
         stacking: LEVEL_UP
         amount-per-level: 2.0
-        allowed-worlds: [world]
         purchasing-roles: [MAYOR, DEPUTY_MAYOR]
 
 phase5:
   building-refund:
     # 只处理玩家在自己小镇有效 Residence 内的安全单方块放置；每周一零点重新计数。
     enabled: true
-    chance: 0.10
+    chance: 0.25
     weekly-limit: 3000
     counter-retention-weeks: 12
     reset-zone: Asia/Shanghai
@@ -153,9 +137,9 @@ phase5:
       - CRYING_OBSIDIAN
       - ENCHANTING_TABLE
   beacon:
-    # 有效信标的原版效果覆盖其小镇领地；只有镇长与副镇长可编辑信标。
+    # 镇长或副镇长切换信标效果时记录更高等级；数据库内效果覆盖小镇领地。
     enabled: true
-    scan-interval-ticks: 100
+    refresh-interval-ticks: 100
     allowed-worlds: [world]
   operations:
     quickshop-diagnostic-days: 7

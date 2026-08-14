@@ -24,9 +24,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 public final class QuickShopTaxAdapter {
-    public static final String SUPPORTED_VERSION = "6.2.0.10";
+    public static final String MINIMUM_EXCLUSIVE_VERSION = "6.3.0.0";
     private static final String TAX_EVENT =
-            "com.ghostchu.quickshop.api.event.economy.ShopTaxEvent";
+            "com.ghostchu.quickshop.api.event.economy.ShopEnhancedTaxEvent";
     private static final String TRANSACTION_EVENT =
             "com.ghostchu.quickshop.api.event.economy.EconomyTransactionEvent";
     private static final String SUCCESS_EVENT =
@@ -67,9 +67,10 @@ public final class QuickShopTaxAdapter {
 
     public Capability register() {
         String version = quickShop.getPluginMeta().getVersion();
-        if (!SUPPORTED_VERSION.equals(version)) {
-            return Capability.failure("仅支持经验证的 QuickShop-Hikari " + SUPPORTED_VERSION
-                    + "，当前为 " + version + "；动态税已保持关闭");
+        if (!isNewerThanMinimum(version)) {
+            return Capability.failure("QuickShop-Hikari 必须高于 "
+                    + MINIMUM_EXCLUSIVE_VERSION + "，当前为 " + version
+                    + "；动态税已保持关闭");
         }
         try {
             ClassLoader loader = quickShop.getClass().getClassLoader();
@@ -113,7 +114,8 @@ public final class QuickShopTaxAdapter {
             UUID interactingId = (UUID) call(interacting, "getUniqueId");
             TaxPolicy policy = policyLookup.apply(receiverId);
             int basisPoints = policy == null ? 0 : policy.basisPoints();
-            call(event, "setTax", double.class, basisPoints / 10_000D);
+            call(event, selling ? "setShopTax" : "setInteractorTax", double.class,
+                    basisPoints / 10_000D);
             if (policy == null || basisPoints == 0) {
                 pending.remove();
                 return;
@@ -139,12 +141,12 @@ public final class QuickShopTaxAdapter {
         }
         try {
             Object transaction = call(event, "getTransaction");
-            Object recipient = call(transaction, "getTo");
+            Object recipient = call(transaction, "to");
             UUID recipientId = recipient == null ? null : (UUID) call(recipient, "getUniqueId");
             if (!tax.receiverId().equals(recipientId)) {
                 return;
             }
-            call(transaction, "setTaxer", qUserType, settlementUser);
+            call(transaction, "taxer", qUserType, settlementUser);
         } catch (ReflectiveOperationException | RuntimeException exception) {
             pending.remove();
             owner.getLogger().severe("QuickShop 税款账户切换失败: " + message(exception));
@@ -218,7 +220,8 @@ public final class QuickShopTaxAdapter {
                                   Class<?> qUserType) throws NoSuchMethodException {
         Class<?> shopType = taxEvent.getMethod("getShop").getReturnType();
         taxEvent.getMethod("getUser");
-        taxEvent.getMethod("setTax", double.class);
+        taxEvent.getMethod("setShopTax", double.class);
+        taxEvent.getMethod("setInteractorTax", double.class);
         shopType.getMethod("isSelling");
         shopType.getMethod("getOwner");
         shopType.getMethod("getRuntimeRandomUniqueId");
@@ -227,14 +230,48 @@ public final class QuickShopTaxAdapter {
         qUserType.getMethod("getUniqueId");
 
         Class<?> transactionType = transactionEvent.getMethod("getTransaction").getReturnType();
-        transactionType.getMethod("getTo");
-        transactionType.getMethod("setTaxer", qUserType);
+        transactionType.getMethod("to");
+        transactionType.getMethod("taxer", qUserType);
 
         successEvent.getMethod("getShop");
         successEvent.getMethod("getPurchaser");
         successEvent.getMethod("getTax");
         successEvent.getMethod("getBalance");
         successEvent.getMethod("getBalanceWithoutTax");
+    }
+
+    static boolean isNewerThanMinimum(String version) {
+        if (version == null || version.isBlank()) {
+            return false;
+        }
+        int[] candidate = numericParts(version);
+        int[] minimum = numericParts(MINIMUM_EXCLUSIVE_VERSION);
+        if (candidate.length < 4) {
+            return false;
+        }
+        int length = Math.max(candidate.length, minimum.length);
+        for (int index = 0; index < length; index++) {
+            int left = index < candidate.length ? candidate[index] : 0;
+            int right = index < minimum.length ? minimum[index] : 0;
+            if (left != right) {
+                return left > right;
+            }
+        }
+        return false;
+    }
+
+    private static int[] numericParts(String version) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\d+")
+                .matcher(version);
+        java.util.ArrayList<Integer> parts = new java.util.ArrayList<>();
+        while (matcher.find()) {
+            try {
+                parts.add(Integer.parseInt(matcher.group()));
+            } catch (NumberFormatException exception) {
+                return new int[0];
+            }
+        }
+        return parts.stream().mapToInt(Integer::intValue).toArray();
     }
 
     @SuppressWarnings("unchecked")

@@ -293,16 +293,9 @@ final class TownAdminCompletionEngine {
 
     private List<String> phaseFour(String[] args, Snapshot snapshot) {
         if (args.length == 2) {
-            return filter(List.of("list", "grant", "refund"), args[1]);
+            return filter(List.of("list", "grant"), args[1]);
         }
         String action = args[1].toLowerCase(Locale.ROOT);
-        if (action.equals("refund")) {
-            return switch (args.length) {
-                case 3 -> filter(List.of("<buffId>"), current(args));
-                case 4 -> hint(current(args), REASON_HINT);
-                default -> List.of();
-            };
-        }
         if (!action.equals("list") && !action.equals("grant")) {
             return List.of();
         }

@@ -20,6 +20,7 @@ class PhaseFiveSettingsTest {
         assertTrue(settings.buildingRefund().blacklist().contains(Material.REDSTONE_BLOCK));
         assertTrue(settings.buildingRefund().blacklist().contains(Material.CHEST));
         assertTrue(settings.beacon().allowsWorld("WORLD"));
+        assertEquals(100, settings.beacon().refreshIntervalTicks());
         assertEquals(14, settings.operations().backup().retentionCount());
     }
 
@@ -51,7 +52,7 @@ class PhaseFiveSettingsTest {
                     blacklist: [%s]
                   beacon:
                     enabled: true
-                    scan-interval-ticks: 100
+                    refresh-interval-ticks: 100
                     allowed-worlds: [world]
                   operations:
                     quickshop-diagnostic-days: 7

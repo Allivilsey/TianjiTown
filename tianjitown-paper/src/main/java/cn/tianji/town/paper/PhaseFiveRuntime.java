@@ -5,31 +5,27 @@ import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.integrations.quickshop.QuickShopHistoryProbe;
 import cn.tianji.town.storage.phase3.PhaseThreeRepository;
 import cn.tianji.town.storage.phase5.PhaseFiveRepository;
-import org.bukkit.Chunk;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
+import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Beacon;
 import org.bukkit.block.Block;
-import org.bukkit.block.BlockState;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.Event;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockMultiPlaceEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.world.ChunkLoadEvent;
-import org.bukkit.event.world.ChunkUnloadEvent;
+import org.bukkit.inventory.BeaconInventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
@@ -50,7 +46,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -65,11 +60,8 @@ final class PhaseFiveRuntime implements Listener {
     private final PhaseFiveSettings settings;
     private final QuickShopHistoryProbe quickShopHistory;
     private final PhaseFiveBackupService backups;
-    private final NamespacedKey beaconManagedKey;
-    private final NamespacedKey beaconOriginalRangeKey;
     private final AtomicReference<PhaseFiveRepository.BonusIndex> index = new AtomicReference<>(
-            new PhaseFiveRepository.BonusIndex(Map.of(), Map.of(), Map.of(), Map.of()));
-    private final Map<BeaconKey, Double> modifiedBeacons = new HashMap<>();
+            new PhaseFiveRepository.BonusIndex(Map.of(), Map.of(), Map.of(), Map.of(), Map.of()));
     private final Map<PlayerEffectKey, ManagedEffect> managedEffects = new HashMap<>();
     private final AtomicBoolean indexRefreshRunning = new AtomicBoolean();
     private final AtomicBoolean diagnosticRunning = new AtomicBoolean();
@@ -87,8 +79,6 @@ final class PhaseFiveRuntime implements Listener {
                 host.settlement().accountId(), host.settlement().scale());
         this.backups = new PhaseFiveBackupService(plugin, host.database(),
                 settings.operations().backup());
-        this.beaconManagedKey = new NamespacedKey(plugin, "enhanced_beacon");
-        this.beaconOriginalRangeKey = new NamespacedKey(plugin, "beacon_original_range");
     }
 
     PhaseFiveSettings settings() {
@@ -211,42 +201,17 @@ final class PhaseFiveRuntime implements Listener {
         diagnose(plugin.getServer().getConsoleSender(), settings.operations().quickShopDiagnosticDays());
     }
 
-    void scanBeacons() {
+    void refreshBeaconEffects() {
         if (!plugin.isEnabled()) {
             return;
         }
         if (!beaconEnabled()) {
-            resetAllBeacons();
-            resetTaggedBeacons();
             clearManagedEffects();
             return;
         }
         PhaseFiveSettings.BeaconEnhancement config = settings.beacon();
         PhaseFiveRepository.BonusIndex snapshot = index.get();
-        Map<UUID, List<PotionEffect>> effectsByTown = new HashMap<>();
         Map<PlayerEffectKey, Integer> desiredEffects = new HashMap<>();
-        for (World world : plugin.getServer().getWorlds()) {
-            if (!config.allowsWorld(world.getName())) {
-                continue;
-            }
-            for (Chunk chunk : world.getLoadedChunks()) {
-                UUID townId = snapshot.territories().get(new PhaseFiveRepository.ChunkKey(
-                        world.getUID(), chunk.getX(), chunk.getZ()));
-                if (townId == null) {
-                    continue;
-                }
-                String residenceName = snapshot.residenceNames().get(townId);
-                if (residenceName == null) {
-                    continue;
-                }
-                for (BlockState state : chunk.getTileEntities(
-                        block -> block.getType() == Material.BEACON, false)) {
-                    if (state instanceof Beacon beacon) {
-                        collectTownBeaconEffects(beacon, townId, residenceName, effectsByTown);
-                    }
-                }
-            }
-        }
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             World world = player.getWorld();
             if (!config.allowsWorld(world.getName())) {
@@ -255,31 +220,33 @@ final class PhaseFiveRuntime implements Listener {
             UUID townId = snapshot.territories().get(new PhaseFiveRepository.ChunkKey(
                     world.getUID(), player.getChunk().getX(), player.getChunk().getZ()));
             String residenceName = townId == null ? null : snapshot.residenceNames().get(townId);
-            List<PotionEffect> effects = townId == null ? null : effectsByTown.get(townId);
+            Map<String, Integer> effects = townId == null ? null
+                    : snapshot.beaconEffects().get(townId);
             Location location = player.getLocation();
             if (residenceName == null || effects == null || !host.landProtection().contains(
                     residenceName, world.getUID(), location.getBlockX(), location.getBlockY(),
                     location.getBlockZ())) {
                 continue;
             }
-            for (PotionEffect effect : effects) {
-                desiredEffects.merge(new PlayerEffectKey(player.getUniqueId(), effect.getType()),
-                        effect.getAmplifier(), Math::max);
+            for (Map.Entry<String, Integer> effect : effects.entrySet()) {
+                PotionEffectType type = PotionEffectType.getByKey(
+                        org.bukkit.NamespacedKey.fromString(effect.getKey()));
+                if (type != null) {
+                    desiredEffects.merge(new PlayerEffectKey(player.getUniqueId(), type),
+                            effect.getValue(), Math::max);
+                }
             }
         }
         applyManagedEffects(desiredEffects, config);
     }
 
     void clearAll() {
-        resetAllBeacons();
-        resetTaggedBeacons();
         clearManagedEffects();
-        modifiedBeacons.clear();
         managedEffects.clear();
     }
 
     void recoverTaggedBeacons() {
-        resetTaggedBeacons();
+        // 第七版不再修改或扫描信标方块，无需恢复方块持久化状态。
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -326,9 +293,7 @@ final class PhaseFiveRuntime implements Listener {
             Map<Integer, ItemStack> overflow = player.getInventory().addItem(refund);
             overflow.values().forEach(item -> player.getWorld().dropItemNaturally(
                     player.getLocation(), item));
-            player.sendActionBar(net.kyori.adventure.text.Component.text(
-                    "建筑返还 +1（本周 " + result.used() + "/" + result.limit() + "）",
-                    net.kyori.adventure.text.format.NamedTextColor.GREEN));
+            player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.7F, 1.35F);
         });
     }
 
@@ -360,98 +325,44 @@ final class PhaseFiveRuntime implements Listener {
                 net.kyori.adventure.text.format.NamedTextColor.RED));
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onBeaconBreak(BlockBreakEvent event) {
-        if (event.getBlock().getType() == Material.BEACON) {
-            BeaconKey key = BeaconKey.of(event.getBlock());
-            modifiedBeacons.remove(key);
-            plugin.getServer().getScheduler().runTask(plugin, this::scanBeacons);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onChunkLoad(ChunkLoadEvent event) {
-        boolean recovered = false;
-        for (BlockState state : event.getChunk().getTileEntities(
-                block -> block.getType() == Material.BEACON, false)) {
-            if (!(state instanceof Beacon beacon)
-                    || !beacon.getPersistentDataContainer().has(beaconManagedKey,
-                    PersistentDataType.BYTE)) {
-                continue;
-            }
-            Double original = beacon.getPersistentDataContainer().get(beaconOriginalRangeKey,
-                    PersistentDataType.DOUBLE);
-            modifiedBeacons.remove(BeaconKey.of(beacon.getBlock()));
-            restoreBeacon(beacon, original == null ? -1D : original);
-            recovered = true;
-        }
-        if (recovered) {
-            // 先清理上次非正常停服留下的状态，再由正常扫描重新判断是否增强。
-            plugin.getServer().getScheduler().runTask(plugin, this::scanBeacons);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onChunkUnload(ChunkUnloadEvent event) {
-        Chunk chunk = event.getChunk();
-        for (BlockState state : chunk.getTileEntities(
-                block -> block.getType() == Material.BEACON, false)) {
-            if (state instanceof Beacon beacon) {
-                BeaconKey key = BeaconKey.of(beacon.getBlock());
-                Double original = modifiedBeacons.remove(key);
-                if (original == null && beacon.getPersistentDataContainer().has(
-                        beaconManagedKey, PersistentDataType.BYTE)) {
-                    original = beacon.getPersistentDataContainer().get(beaconOriginalRangeKey,
-                            PersistentDataType.DOUBLE);
-                    if (original == null) {
-                        original = -1D;
-                    }
-                }
-                if (original != null) {
-                    restoreBeacon(beacon, original);
-                }
-            }
-        }
-    }
-
-    private void collectTownBeaconEffects(Beacon beacon, UUID townId, String residenceName,
-                                          Map<UUID, List<PotionEffect>> effectsByTown) {
-        Block block = beacon.getBlock();
-        if (beacon.getTier() < 1 || !host.landProtection().contains(residenceName,
-                block.getWorld().getUID(), block.getX(), block.getY(), block.getZ())) {
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onBeaconInventoryClose(InventoryCloseEvent event) {
+        if (!beaconEnabled() || !(event.getInventory() instanceof BeaconInventory inventory)
+                || !(inventory.getHolder() instanceof Beacon beacon)) {
             return;
         }
-        if (beacon.getPrimaryEffect() != null) {
-            effectsByTown.computeIfAbsent(townId, ignored -> new ArrayList<>())
-                    .add(beacon.getPrimaryEffect());
-        }
-        if (beacon.getSecondaryEffect() != null) {
-            effectsByTown.computeIfAbsent(townId, ignored -> new ArrayList<>())
-                    .add(beacon.getSecondaryEffect());
-        }
+        plugin.getServer().getScheduler().runTask(plugin, () -> recordBeaconEffects(beacon));
     }
 
-    private void restoreUnseenBeacons(Set<BeaconKey> seen) {
-        for (BeaconKey key : new ArrayList<>(modifiedBeacons.keySet())) {
-            if (seen.contains(key)) {
-                continue;
-            }
-            Double original = modifiedBeacons.remove(key);
-            World world = plugin.getServer().getWorld(key.worldId());
-            if (world == null || !world.isChunkLoaded(key.blockX() >> 4, key.blockZ() >> 4)) {
-                continue;
-            }
-            BlockState state = world.getBlockAt(key.blockX(), key.blockY(), key.blockZ()).getState();
-            if (state instanceof Beacon beacon && original != null) {
-                restoreBeacon(beacon, original);
-            }
+    private void recordBeaconEffects(Beacon beacon) {
+        Block block = beacon.getBlock();
+        PhaseFiveRepository.BonusIndex snapshot = index.get();
+        UUID townId = snapshot.territories().get(new PhaseFiveRepository.ChunkKey(
+                block.getWorld().getUID(), block.getChunk().getX(), block.getChunk().getZ()));
+        String residenceName = townId == null ? null : snapshot.residenceNames().get(townId);
+        if (beacon.getTier() < 1 || residenceName == null || !host.landProtection().contains(
+                residenceName, block.getWorld().getUID(), block.getX(), block.getY(),
+                block.getZ())) {
+            return;
+        }
+        List<PotionEffect> effects = java.util.stream.Stream.of(beacon.getPrimaryEffect(),
+                        beacon.getSecondaryEffect()).filter(Objects::nonNull).toList();
+        for (PotionEffect effect : effects) {
+            String effectKey = effect.getType().getKey().toString();
+            host.write(plugin.getServer().getConsoleSender(),
+                    () -> repository.recordBeaconEffect(townId, effectKey,
+                            effect.getAmplifier()), changed -> {
+                        if (changed) {
+                            refreshIndex();
+                        }
+                    });
         }
     }
 
     private void applyManagedEffects(Map<PlayerEffectKey, Integer> desired,
                                      PhaseFiveSettings.BeaconEnhancement config) {
         int duration = Math.toIntExact(Math.min(Integer.MAX_VALUE,
-                config.scanIntervalTicks() * 2 + 40));
+                config.refreshIntervalTicks() * 2 + 40));
         for (Map.Entry<PlayerEffectKey, Integer> entry : desired.entrySet()) {
             Player player = plugin.getServer().getPlayer(entry.getKey().playerId());
             if (player == null) {
@@ -487,38 +398,6 @@ final class PhaseFiveRuntime implements Listener {
         }
     }
 
-    private void resetAllBeacons() {
-        restoreUnseenBeacons(Set.of());
-    }
-
-    private void resetTaggedBeacons() {
-        for (World world : plugin.getServer().getWorlds()) {
-            for (Chunk chunk : world.getLoadedChunks()) {
-                for (BlockState state : chunk.getTileEntities(
-                        block -> block.getType() == Material.BEACON, false)) {
-                    if (!(state instanceof Beacon beacon)
-                            || !beacon.getPersistentDataContainer().has(beaconManagedKey,
-                            PersistentDataType.BYTE)) {
-                        continue;
-                    }
-                    Double original = beacon.getPersistentDataContainer().get(
-                            beaconOriginalRangeKey, PersistentDataType.DOUBLE);
-                    restoreBeacon(beacon, original == null ? -1D : original);
-                }
-            }
-        }
-    }
-
-    private void restoreBeacon(Beacon beacon, double originalRange) {
-        if (originalRange < 0) {
-            beacon.resetEffectRange();
-        } else {
-            beacon.setEffectRange(originalRange);
-        }
-        beacon.getPersistentDataContainer().remove(beaconManagedKey);
-        beacon.getPersistentDataContainer().remove(beaconOriginalRangeKey);
-        beacon.update(true, false);
-    }
 
     private void finishDiagnostic(CommandSender sender, int days,
                                   PhaseFiveRepository.DiagnosticSnapshot database,
@@ -627,13 +506,6 @@ final class PhaseFiveRuntime implements Listener {
     private static String safeMessage(Throwable throwable) {
         String value = throwable.getMessage();
         return value == null || value.isBlank() ? throwable.getClass().getSimpleName() : value;
-    }
-
-    private record BeaconKey(UUID worldId, int blockX, int blockY, int blockZ) {
-        private static BeaconKey of(Block block) {
-            return new BeaconKey(block.getWorld().getUID(), block.getX(), block.getY(),
-                    block.getZ());
-        }
     }
 
     private record PlayerEffectKey(UUID playerId, PotionEffectType type) {

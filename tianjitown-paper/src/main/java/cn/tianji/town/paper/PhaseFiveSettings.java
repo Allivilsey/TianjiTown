@@ -67,10 +67,10 @@ record PhaseFiveSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
 
     private static BeaconEnhancement loadBeacon(ConfigurationSection config) {
         String root = "phase5.beacon";
-        long scanTicks = longInteger(config, root + ".scan-interval-ticks", 100L);
-        if (scanTicks < 20 || scanTicks > 20L * 60) {
+        long refreshTicks = longInteger(config, root + ".refresh-interval-ticks", 100L);
+        if (refreshTicks < 20 || refreshTicks > 20L * 60) {
             throw new IllegalArgumentException(root
-                    + ".scan-interval-ticks 必须在 20~1200 范围内");
+                    + ".refresh-interval-ticks 必须在 20~1200 范围内");
         }
         Set<String> worlds = stringList(config, root + ".allowed-worlds").stream()
                 .map(value -> value.toLowerCase(Locale.ROOT)).collect(
@@ -78,7 +78,7 @@ record PhaseFiveSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
         if (worlds.isEmpty()) {
             throw new IllegalArgumentException(root + ".allowed-worlds 至少需要一个世界");
         }
-        return new BeaconEnhancement(bool(config, root + ".enabled", true), scanTicks,
+        return new BeaconEnhancement(bool(config, root + ".enabled", true), refreshTicks,
                 worlds);
     }
 
@@ -217,7 +217,8 @@ record PhaseFiveSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
         }
     }
 
-    record BeaconEnhancement(boolean enabled, long scanIntervalTicks, Set<String> allowedWorlds) {
+    record BeaconEnhancement(boolean enabled, long refreshIntervalTicks,
+                             Set<String> allowedWorlds) {
         BeaconEnhancement {
             allowedWorlds = Set.copyOf(allowedWorlds);
         }

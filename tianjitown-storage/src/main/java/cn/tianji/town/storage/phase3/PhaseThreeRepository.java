@@ -187,7 +187,8 @@ public final class PhaseThreeRepository {
         }
         requireTaxRate(tax.taxRateBps());
         return transaction(connection -> {
-            Optional<LedgerMutation> existing = findLedgerByBusinessKey(connection, tax.businessKey());
+            String subsidyKey = tax.businessKey() + ":subsidy";
+            Optional<LedgerMutation> existing = findLedgerByBusinessKey(connection, subsidyKey);
             if (existing.isPresent()) {
                 return existing.get();
             }
@@ -211,9 +212,11 @@ public final class PhaseThreeRepository {
                 statement.setString(11, tax.worldName());
                 statement.executeUpdate();
             }
-            return postLedger(connection, tax.townId(), "QUICKSHOP_TAX", tax.taxMinor(),
+            postLedger(connection, tax.townId(), "QUICKSHOP_TAX", tax.taxMinor(),
                     tax.receiverId(), tax.receiverId().toString(), tax.businessKey(),
                     tax.shopType() + " 商店税，shop=" + tax.shopId(), false);
+            return postLedger(connection, tax.townId(), "SERVER_TAX_SUBSIDY", tax.taxMinor(),
+                    null, "SERVER", subsidyKey, "QuickShop 税收等额服务器补贴", false);
         });
     }
 
@@ -228,8 +231,8 @@ public final class PhaseThreeRepository {
         }
         requireTaxRate(tax.taxRateBps());
         return transaction(connection -> {
-            Optional<LedgerMutation> existing = findLedgerByBusinessKey(connection,
-                    tax.businessKey());
+            String subsidyKey = tax.businessKey() + ":subsidy";
+            Optional<LedgerMutation> existing = findLedgerByBusinessKey(connection, subsidyKey);
             if (existing.isPresent()) {
                 return existing.get();
             }
@@ -250,9 +253,11 @@ public final class PhaseThreeRepository {
                 statement.setLong(8, tax.taxMinor());
                 statement.executeUpdate();
             }
-            return postLedger(connection, tax.townId(), tax.source() + "_TAX",
+            postLedger(connection, tax.townId(), tax.source() + "_TAX",
                     tax.taxMinor(), tax.receiverId(), tax.receiverName(), tax.businessKey(),
                     tax.source() + " 收入税", false);
+            return postLedger(connection, tax.townId(), "SERVER_TAX_SUBSIDY", tax.taxMinor(),
+                    null, "SERVER", subsidyKey, tax.source() + " 税收等额服务器补贴", false);
         });
     }
 
@@ -928,8 +933,8 @@ public final class PhaseThreeRepository {
     }
 
     private static void requireTaxRate(int basisPoints) {
-        if (basisPoints < 0 || basisPoints >= 10_000) {
-            throw new IllegalArgumentException("税率必须在 0%（含）到 100%（不含）之间");
+        if (basisPoints < 500 || basisPoints > 2_500 || basisPoints % 500 != 0) {
+            throw new IllegalArgumentException("税率必须为 5%~25%，且以 5% 为步进");
         }
     }
 

@@ -2,6 +2,8 @@
 
 天际服自用的单 Paper 服务器小镇系统。当前版本 `1.4.0` 包含申请、治理、统一收入税、完整公共账本、付费领地扩张、公共 Buff、每周建筑返还、领地信标和统一运维诊断。
 
+面向玩家、运营和管理员的完整功能与玩法规则见 [`docs/FUNCTIONS_AND_GAMEPLAY.md`](docs/FUNCTIONS_AND_GAMEPLAY.md)。
+
 ## 构建
 
 要求 Maven 3.9+ 与 JDK 25+：
@@ -10,11 +12,11 @@
 mvn -B clean verify
 ```
 
-唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.4.0.jar`。Paper API、Residence、Vault 与可选的 WorldGuard API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
+唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.4.0.jar`。Paper API、Residence、Vault 与必需的 WorldGuard API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
 
 ## 安装与 SQLite
 
-1. 安装并启用 Residence、Vault、XConomy、QuickShop-Hikari、Jobs 和 GlobalMarketPlus，确保 Vault 已注册可用的 `Economy` 服务。推荐同时安装 WorldGuard；安装后选址会检查 3×3 领地及其区块缓冲范围是否接触 WorldGuard 区域。插件不再校验固定的 Minecraft、Java 或依赖版本，但必需依赖未启用时仍会锁定写功能。
+1. 安装并启用 Residence、Vault、XConomy、WorldGuard、QuickShop-Hikari（版本必须严格高于 `6.3.0.0`）、Jobs 和 GlobalMarketPlus，确保 Vault 已注册可用的 `Economy` 服务。选址会检查初始 3×3 区块领地及其缓冲范围是否接触 WorldGuard 区域；必需依赖未启用时写功能会保持锁定。
 2. 将 JAR 放入 `plugins`，首次启动会自动创建 `plugins/TianjiTown/tianjitown.db` 并执行 Flyway 迁移。
 3. 如需更改位置，在 `config.yml` 中设置相对或绝对文件路径：
 
@@ -25,7 +27,7 @@ database:
   busy-timeout-ms: 5000
 ```
 
-4. 按实际地图修改 `phase1.site.service-areas` 和 `blacklist`，重启后执行 `/townadmin status`。状态为 `READY` 时才开放服务台。
+4. 按实际地图修改 `phase1.site.blacklist`，重启后执行 `/townadmin status`。状态为 `READY` 时才开放服务台。
 
 SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无需额外数据库服务。数据库文件位置和超时参数只在插件重启后生效。
 
@@ -121,14 +123,13 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 ```text
 /townadmin buff list <小镇全名>
 /townadmin buff grant <小镇全名> <buffKey> <原因>
-/townadmin buff refund <buffId> <原因>
 ```
 
-Buff 目录位于 `config.yml` 的 `phase4` 配置节。效果、价格、期限和角色权限在启动时校验，修改后需要重启；`shop-enabled` 开关可通过 `reload` 热更新。公共资源采购功能及其玩家、管理入口均已移除。
+Buff 目录位于 `config.yml` 的 `phase4` 配置节。公共 Buff 不受世界限制，购买时可选 1 小时、1 天、1 周或 1 月，长期档按比例折扣且购买后不接受退款。效果、每小时价格和角色权限在启动时校验，修改后需要重启；`shop-enabled` 开关可通过 `reload` 热更新。
 
 ### 领地加成
 
-建筑返还与领地信标位于 `config.yml` 的 `phase5` 配置节。建筑返还允许生存模式成员在自己小镇有效 Residence 内放置未列入黑名单的安全单方块；多方块、容器、特殊方块、带物品数据的物品和非玩家放置均被排除。每镇每成员每周额度为 3000，每周一 00:00 按配置时区刷新，SQLite 原子计数防止超发。有效信标保留原版效果和等级，但作用范围覆盖所属小镇领地；只有本镇镇长或副镇长可编辑效果。
+建筑返还与领地信标位于 `config.yml` 的 `phase5` 配置节。建筑返还以 25% 概率处理生存模式成员在本镇有效 Residence 内放置的安全单方块，成功时只播放拾取音效，不展示内部额度。镇长或副镇长切换信标效果时，系统记录数据库中尚未存在或等级更高的效果，不再扫描区块中的信标。
 
 ### 第 0 阶段预发验证
 

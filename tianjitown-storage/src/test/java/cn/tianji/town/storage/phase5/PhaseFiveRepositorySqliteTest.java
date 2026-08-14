@@ -17,6 +17,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PhaseFiveRepositorySqliteTest {
@@ -42,6 +43,13 @@ class PhaseFiveRepositorySqliteTest {
             assertEquals(MemberRole.MAYOR, index.roles().get(playerId));
             assertEquals(townId, index.territories().get(
                     new PhaseFiveRepository.ChunkKey(worldId, 10, 20)));
+            assertTrue(repository.recordBeaconEffect(townId, "minecraft:speed", 0));
+            assertFalse(repository.recordBeaconEffect(townId, "minecraft:speed", 0));
+            assertThrows(IllegalArgumentException.class,
+                    () -> repository.recordBeaconEffect(townId, "minecraft:speed", -1));
+            assertTrue(repository.recordBeaconEffect(townId, "minecraft:speed", 1));
+            assertEquals(1, repository.loadBonusIndex().beaconEffects().get(townId)
+                    .get("minecraft:speed"));
             LocalDate day = LocalDate.of(2026, 8, 10);
             assertTrue(repository.reserveBuildingRefund(townId, playerId, worldId, 10, 20,
                     day, "minecraft:stone", 2).granted());

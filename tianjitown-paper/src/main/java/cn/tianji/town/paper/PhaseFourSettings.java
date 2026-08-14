@@ -6,7 +6,6 @@ import cn.tianji.town.core.town.MemberRole;
 import org.bukkit.configuration.ConfigurationSection;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,13 +53,10 @@ record PhaseFourSettings(boolean buffShopEnabled, Map<String, BuffDefinition> bu
                     text(section, "effect-key"),
                     section.getString("operation", "AMPLIFIER"),
                     decimal(section, "base-price"),
-                    decimal(section, "price-multiplier"),
-                    Duration.ofMinutes(section.getLong("duration-minutes")),
                     section.getInt("maximum-level"),
                     enumValue(BuffStackingRule.class, text(section, "stacking"),
-                            key + ".stacking"),
+                    key + ".stacking"),
                     section.getDouble("amount-per-level"),
-                    Set.copyOf(section.getStringList("allowed-worlds")),
                     roles(section, "purchasing-roles"));
             if (result.putIfAbsent(key, definition) != null) {
                 throw new IllegalArgumentException("重复 Buff key: " + key);

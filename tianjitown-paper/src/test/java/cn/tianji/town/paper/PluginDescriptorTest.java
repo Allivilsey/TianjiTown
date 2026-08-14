@@ -13,19 +13,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PluginDescriptorTest {
     @Test
-    void runtimeIntegrationsAreSoftDependencies() throws IOException {
+    void declaresWorldGuardAsRequiredAndOtherIntegrationsAsSoftDependencies() throws IOException {
         String descriptor = descriptor();
 
-        assertFalse(descriptor.lines().map(String::stripLeading)
-                .anyMatch(line -> line.startsWith("depend:")));
+        String dependencies = descriptor.lines().map(String::strip)
+                .filter(line -> line.startsWith("depend:"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("plugin.yml 缺少 depend"));
+        assertTrue(dependencies.contains("WorldGuard"), "WorldGuard 必须声明为硬依赖");
         String softDependencies = descriptor.lines().map(String::strip)
                 .filter(line -> line.startsWith("softdepend:"))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("plugin.yml 缺少 softdepend"));
         for (String plugin : List.of("Vault", "Residence", "QuickShop-Hikari", "XConomy",
-                "Jobs", "GlobalMarketPlus", "WorldGuard")) {
+                "Jobs", "GlobalMarketPlus")) {
             assertTrue(softDependencies.contains(plugin), plugin + " 必须声明为软依赖");
         }
+        assertFalse(softDependencies.contains("WorldGuard"));
     }
 
     @Test

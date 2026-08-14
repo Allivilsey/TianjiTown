@@ -28,7 +28,7 @@ public final class QuickShopHistoryProbe {
 
     public Result inspect(Instant since) {
         Objects.requireNonNull(since, "since");
-        if (!QuickShopTaxAdapter.SUPPORTED_VERSION.equals(
+        if (!QuickShopTaxAdapter.isNewerThanMinimum(
                 quickShop.getPluginMeta().getVersion())) {
             return Result.unavailable("QuickShop 版本未通过交易历史适配器验证");
         }

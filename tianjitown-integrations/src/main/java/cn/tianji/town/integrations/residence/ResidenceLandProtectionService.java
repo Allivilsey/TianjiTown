@@ -26,10 +26,15 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             java.util.List.of("build", "destroy", "place", "container", "use", "move");
     private final Server server;
     private final Set<String> managedNames;
+    private final ThreadLocal<Integer> internalMutations = ThreadLocal.withInitial(() -> 0);
 
     public ResidenceLandProtectionService(Server server, Set<String> managedNames) {
         this.server = Objects.requireNonNull(server, "server");
         this.managedNames = Objects.requireNonNull(managedNames, "managedNames");
+    }
+
+    public boolean internalMutation() {
+        return internalMutations.get() > 0;
     }
 
     @Override
@@ -114,7 +119,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             if (!existing.isServerLand() || !matchesMainBounds(existing, bounds)) {
                 return Result.failure("拒绝移除同名但并非当前小镇投影的 Residence: " + name);
             }
-            manager.removeResidence(name);
+            removeResidence(manager, name);
             return manager.getByName(name) == null
                     ? Result.ok("Residence 已移除")
                     : Result.failure("Residence 移除后仍可读取");
@@ -146,7 +151,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             return Result.failure("同名 Residence 不属于受控服务端账户，拒绝重建: " + name);
         }
         // 名称来自数据库登记清单；重建前仍要求现有投影属于受控服务端账户。
-        manager.removeResidence(name);
+        removeResidence(manager, name);
         return create(name, territory, members);
     }
 
@@ -219,7 +224,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             manager.calculateChunks(residence);
             Result permissions = verifyPermissions(name, residence, members, true);
             if (!permissions.success()) {
-                residence.removeArea(area.name());
+                removeArea(residence, area.name());
                 manager.calculateChunks(residence);
             }
             return permissions;
@@ -227,7 +232,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             String cleanup = "";
             if (areaAdded && residence != null) {
                 try {
-                    residence.removeArea(area.name());
+                    removeArea(residence, area.name());
                     if (manager != null) {
                         manager.calculateChunks(residence);
                     }
@@ -255,7 +260,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             if (residence.getArea(areaName) == residence.getMainArea()) {
                 return Result.failure("拒绝移除 Residence 主区域");
             }
-            residence.removeArea(areaName);
+            removeArea(residence, areaName);
             manager.calculateChunks(residence);
             return residence.getArea(areaName) != null
                     ? Result.failure("Residence 区域移除后仍可读取")
@@ -451,6 +456,28 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     private void requireMainThread() {
         if (!server.isPrimaryThread()) {
             throw new IllegalStateException("Residence API 必须在 Paper 主线程调用");
+        }
+    }
+
+    private void removeResidence(ResidenceManager manager, String name) {
+        withInternalMutation(() -> manager.removeResidence(name));
+    }
+
+    private void removeArea(ClaimedResidence residence, String areaName) {
+        withInternalMutation(() -> residence.removeArea(areaName));
+    }
+
+    private void withInternalMutation(Runnable action) {
+        internalMutations.set(internalMutations.get() + 1);
+        try {
+            action.run();
+        } finally {
+            int remaining = internalMutations.get() - 1;
+            if (remaining == 0) {
+                internalMutations.remove();
+            } else {
+                internalMutations.set(remaining);
+            }
         }
     }
 

@@ -1,6 +1,7 @@
 package cn.tianji.town.paper;
 
 import cn.tianji.town.core.application.ApplicationText;
+import cn.tianji.town.core.consumption.BuffDurationOption;
 import cn.tianji.town.core.governance.VoteType;
 import cn.tianji.town.core.land.ExpansionDirection;
 import cn.tianji.town.core.ports.LandProtectionService;
@@ -38,31 +39,41 @@ final class TownActions {
         this.runtime = runtime;
     }
 
-    void createApplication(Player actor, ApplicationText text,
+    void createApplication(Player actor, ApplicationText text, List<UUID> initialMemberIds,
                            Consumer<TownActionOutcome<ApplicationSnapshot>> completion) {
         if (!validateText("APPLICATION_CREATE", text, completion)) {
             return;
         }
-        Duration cooldown = Duration.ofMinutes(plugin.getConfig()
-                .getLong("phase1.application.cooldown-minutes", 5));
+        Duration cooldown = Duration.ofHours(plugin.getConfig()
+                .getLong("phase1.application.cooldown-hours", 24));
         write("APPLICATION_CREATE", actor,
-                () -> runtime.repository().createDraft(actor.getUniqueId(), text, cooldown),
+                () -> runtime.repository().createDraft(actor.getUniqueId(), text,
+                        initialMemberIds, cooldown),
                 application -> Map.of("application_id", application.id(),
                         "status", application.status()), completion);
     }
 
     void updateApplication(Player actor, UUID applicationId, ApplicationText text,
-                           long expectedVersion,
+                           List<UUID> initialMemberIds, long expectedVersion,
                            Consumer<TownActionOutcome<ApplicationSnapshot>> completion) {
         if (!validateText("APPLICATION_UPDATE", text, completion)) {
             return;
         }
         write("APPLICATION_UPDATE", actor,
                 () -> runtime.repository().updateApplicationText(applicationId,
-                        actor.getUniqueId(), text, expectedVersion),
+                        actor.getUniqueId(), text, initialMemberIds, expectedVersion),
                 application -> Map.of("application_id", application.id(),
                         "status", application.status(), "version", application.version()),
                 completion);
+    }
+
+    void respondInitialMember(Player actor, UUID applicationId, boolean confirm,
+                              Consumer<TownActionOutcome<ApplicationSnapshot>> completion) {
+        write("INITIAL_MEMBER_RESPONSE", actor,
+                () -> runtime.repository().respondInitialMember(applicationId,
+                        actor.getUniqueId(), confirm),
+                application -> Map.of("application_id", application.id(),
+                        "confirmed", confirm), completion);
     }
 
     void selectApplicationSite(Player actor, UUID applicationId,
@@ -399,7 +410,7 @@ final class TownActions {
                         TownActionFailures.from(action, exception))));
     }
 
-    void buyBuff(Player actor, String buffKey,
+    void buyBuff(Player actor, String buffKey, BuffDurationOption duration,
                  Consumer<TownActionOutcome<PhaseFourRepository.BuffPurchase>> completion) {
         String action = "BUFF_BUY";
         if (rejectBeforeWrite(action, completion)) {
@@ -410,7 +421,7 @@ final class TownActions {
                     "FEATURE_DISABLED")));
             return;
         }
-        runtime.phaseFour().buyBuffAction(actor, buffKey, purchase -> completion.accept(
+        runtime.phaseFour().buyBuffAction(actor, buffKey, duration, purchase -> completion.accept(
                         TownActionOutcome.success(TownActionResult.success(action,
                                 Map.of("buff_key", buffKey, "buff_id", purchase.buff().buffId(),
                                         "level", purchase.buff().level(), "expires_at",

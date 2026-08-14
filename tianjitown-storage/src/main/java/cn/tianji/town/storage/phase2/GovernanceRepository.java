@@ -260,6 +260,10 @@ public final class GovernanceRepository {
             if (!adminBypass && !memberExists(connection, townId, creatorId)) {
                 throw new ConflictException("只有本镇成员可以发起投票");
             }
+            if (!adminBypass && type == VoteType.REPLACE_MAYOR
+                    && memberRole(connection, townId, creatorId) == MemberRole.MEMBER) {
+                throw new ConflictException("普通镇员不能发起强制更换镇长投票");
+            }
             requireNoOpenVote(connection, townId);
             UUID mayorId = mayorId(connection, townId);
             UUID subjectId;

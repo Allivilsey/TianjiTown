@@ -36,6 +36,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 final class PhaseOneRuntime {
+    private static final BigDecimal APPLICATION_FEE = new BigDecimal("2000.00");
     private final TianjiTownPlugin plugin;
     private final DatabaseGate database;
     private final PhaseOneRepository repository;
@@ -340,14 +341,59 @@ final class PhaseOneRuntime {
         }
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                PhaseOneRepository.Provisioning provisioning = repository.beginProvision(applicationId,
-                        reviewerId, reviewerName, reason, idempotencyKey);
-                databaseAvailable.set(true);
-                plugin.getServer().getScheduler().runTask(plugin,
-                        () -> projectProvision(sender, applicationId, provisioning, completion));
+                ApplicationSnapshot application = repository.findApplication(applicationId)
+                        .orElseThrow(() -> new IllegalArgumentException("申请不存在"));
+                long feeMinor = application.applicationFeeMinor() > 0
+                        ? application.applicationFeeMinor()
+                        : APPLICATION_FEE.movePointRight(settlement.scale())
+                        .longValueExact();
+                plugin.getServer().getScheduler().runTask(plugin, () -> chargeAndBeginProvision(
+                        sender, application, reviewerId, reviewerName, reason, idempotencyKey,
+                        feeMinor, completion));
             } catch (RuntimeException exception) {
                 provisions.finish(applicationId);
                 handleFailure(sender, exception);
+            }
+        });
+    }
+
+    private void chargeAndBeginProvision(CommandSender sender, ApplicationSnapshot application,
+                                         UUID reviewerId, String reviewerName, String reason,
+                                         String idempotencyKey, long feeMinor,
+                                         Consumer<ApplicationSnapshot> completion) {
+        boolean needsCharge = application.applicationFeeMinor() == 0;
+        if (needsCharge) {
+            VaultSettlementService.Result payment = settlement.transferFromPlayer(
+                    plugin.getServer().getOfflinePlayer(application.applicantId()), feeMinor);
+            if (!payment.success()) {
+                provisions.finish(application.id());
+                sender.sendMessage("§c申请人无法支付建镇申请费 " + money(feeMinor)
+                        + ": " + payment.message());
+                return;
+            }
+        }
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                PhaseOneRepository.Provisioning provisioning = repository.beginProvision(
+                        application.id(), reviewerId, reviewerName, reason, idempotencyKey,
+                        feeMinor);
+                databaseAvailable.set(true);
+                plugin.getServer().getScheduler().runTask(plugin,
+                        () -> projectProvision(sender, application.id(), provisioning, completion));
+            } catch (RuntimeException exception) {
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    if (needsCharge) {
+                        VaultSettlementService.Result refund = settlement.transferToPlayer(
+                                plugin.getServer().getOfflinePlayer(application.applicantId()),
+                                feeMinor);
+                        if (!refund.success()) {
+                            plugin.getLogger().severe("建镇申请数据库写入失败且申请费自动返还失败: "
+                                    + refund.message());
+                        }
+                    }
+                    provisions.finish(application.id());
+                    handleFailure(sender, exception);
+                });
             }
         });
     }
@@ -451,6 +497,12 @@ final class PhaseOneRuntime {
     }
 
     void acceptQuickShopTax(QuickShopTaxAdapter.SuccessfulTax tax) {
+        VaultSettlementService.Result subsidy = settlement.adjustSettlement(tax.taxMinor());
+        if (!subsidy.success()) {
+            plugin.getLogger().severe("QuickShop 税收服务器补贴入账失败，暂不写入双倍账本: "
+                    + subsidy.message());
+            return;
+        }
         pendingTaxes.submit(tax);
     }
 
@@ -485,7 +537,8 @@ final class PhaseOneRuntime {
         if (tax == null) {
             return JobsIncomeTaxAdapter.TaxResult.unchanged(earning.grossAmount());
         }
-        VaultSettlementService.Result transferred = settlement.adjustSettlement(tax.taxMinor());
+        VaultSettlementService.Result transferred = settlement.adjustSettlement(
+                Math.multiplyExact(tax.taxMinor(), 2));
         if (!transferred.success()) {
             plugin.getLogger().severe("Jobs 收入税转入清算账户失败，已保留玩家原始收入: "
                     + transferred.message());
@@ -509,6 +562,15 @@ final class PhaseOneRuntime {
         if (!transferred.success()) {
             plugin.getLogger().severe("GlobalMarketPlus 收入税扣取失败，未写入小镇账本: "
                     + transferred.message());
+            return;
+        }
+        VaultSettlementService.Result subsidy = settlement.adjustSettlement(tax.taxMinor());
+        if (!subsidy.success()) {
+            VaultSettlementService.Result refunded = settlement.transferToPlayer(
+                    earning.player(), tax.taxMinor());
+            plugin.getLogger().severe("GlobalMarketPlus 税收服务器补贴入账失败，税款"
+                    + (refunded.success() ? "已返还玩家: " : "返还玩家也失败: ")
+                    + subsidy.message());
             return;
         }
         pendingIncomeTaxes.submit(tax);
@@ -655,7 +717,8 @@ final class PhaseOneRuntime {
                 snapshots.stream().map(PhaseThreeRepository.TerritoryUnitSnapshot::unit).toList(),
                 direction);
         long price = ExpansionPricing.price(phaseThreeSettings.expansionBaseCost(),
-                phaseThreeSettings.expansionGrowthFactor(), snapshots.size(), settlement.scale())
+                phaseThreeSettings.expansionPerUnitIncrease(), snapshots.size(),
+                settlement.scale())
                 .minorUnits();
         PhaseThreeRepository.TerritoryUnitSnapshot origin = snapshots.stream()
                 .filter(unit -> unit.unit().gridX() == 0 && unit.unit().gridZ() == 0)
@@ -918,8 +981,7 @@ final class PhaseOneRuntime {
     }
 
     private void sendTaxRangeError(CommandSender sender) {
-        sender.sendMessage("§c税率必须在 0% 到配置上限 "
-                + percent(phaseThreeSettings.maximumTaxBps()) + "（含）之间。");
+        sender.sendMessage("§c税率必须在 5%~25% 之间，并按 5% 递增。");
     }
 
     private static String coordinate(int value) {

@@ -91,6 +91,32 @@ public final class VaultSettlementService {
                 compensated, !compensated);
     }
 
+    public Result transferToPlayer(OfflinePlayer player, long amountMinor) {
+        requireMainThread();
+        if (amountMinor <= 0) {
+            throw new IllegalArgumentException("返还金额必须大于 0");
+        }
+        Economy economy;
+        try {
+            economy = readyEconomy();
+        } catch (AvailabilityException exception) {
+            return Result.failure(exception.getMessage(), false, false);
+        }
+        double amount = decimal(amountMinor);
+        EconomyResponse withdrawn = economy.withdrawPlayer(account, amount);
+        if (!withdrawn.transactionSuccess()) {
+            return Result.failure("清算账户扣款失败: " + withdrawn.errorMessage, false, false);
+        }
+        EconomyResponse deposited = economy.depositPlayer(player, amount);
+        if (deposited.transactionSuccess()) {
+            return Result.success("资金已返还玩家");
+        }
+        EconomyResponse compensation = economy.depositPlayer(account, amount);
+        boolean compensated = compensation.transactionSuccess();
+        return Result.failure("玩家返还入账失败: " + deposited.errorMessage,
+                compensated, !compensated);
+    }
+
     public Result adjustSettlement(long amountMinor) {
         requireMainThread();
         if (amountMinor == 0) {

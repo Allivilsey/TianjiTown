@@ -137,6 +137,10 @@ class GovernanceRepositorySqliteTest {
             assertEquals(candidateId, transferred.mayorId());
             assertEquals(MemberRole.MAYOR, governance.memberRole(created.town().id(), candidateId));
 
+            assertThrows(GovernanceRepository.ConflictException.class,
+                    () -> governance.createVote(created.town().id(), VoteType.REPLACE_MAYOR,
+                            created.mayorId(), applicantId, Duration.ofDays(30), Duration.ZERO,
+                            Duration.ofHours(72), false));
             VoteSnapshot replace = governance.createVote(created.town().id(),
                     VoteType.REPLACE_MAYOR, created.mayorId(), officerId,
                     Duration.ofDays(30), Duration.ZERO, Duration.ofHours(72), false);
@@ -163,7 +167,7 @@ class GovernanceRepositorySqliteTest {
                 statement.setBytes(1, uuid(created.town().id()));
                 try (ResultSet result = statement.executeQuery()) {
                     assertTrue(result.next());
-                    assertEquals(6, result.getInt(1));
+                    assertEquals(8, result.getInt(1));
                 }
             }
         }
@@ -171,16 +175,21 @@ class GovernanceRepositorySqliteTest {
 
     private static CreatedTown createTown(PhaseOneRepository repository) {
         UUID mayorId = UUID.randomUUID();
+        UUID initialMemberOne = UUID.randomUUID();
+        UUID initialMemberTwo = UUID.randomUUID();
         ApplicationText text = new ApplicationText("治理测试镇", "治理", "GOV",
                 "测试简介", List.of("初始规则"));
-        ApplicationSnapshot draft = repository.createDraft(mayorId, text, Duration.ZERO);
+        ApplicationSnapshot draft = repository.createDraft(mayorId, text,
+                List.of(initialMemberOne, initialMemberTwo), Duration.ZERO);
+        repository.respondInitialMember(draft.id(), initialMemberOne, true);
+        repository.respondInitialMember(draft.id(), initialMemberTwo, true);
         InitialTerritory territory = new InitialTerritory(new ChunkPosition(UUID.randomUUID(),
                 "world", 100, 100));
         ApplicationSnapshot selected = repository.selectSite(draft.id(), mayorId, territory,
                 Instant.now().plus(Duration.ofHours(1)), 1);
         ApplicationSnapshot submitted = repository.submit(selected.id(), mayorId);
         PhaseOneRepository.Provisioning provisioning = repository.beginProvision(submitted.id(),
-                UUID.randomUUID(), "Admin", "审核通过", "phase2:test:" + submitted.id());
+                UUID.randomUUID(), "Admin", "审核通过", "phase2:test:" + submitted.id(), 200_000);
         repository.finishProvision(submitted.id(), true, "ok");
         return new CreatedTown(repository.findTown(provisioning.town().id()).orElseThrow(), mayorId);
     }

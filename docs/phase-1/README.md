@@ -10,7 +10,7 @@
 2. 在生产所用 Leaf/Paper 与 Java 组合上验证 Paper API 编译产物；插件不再执行固定版本匹配。
 3. 确认 Vault 已注册可用的 XConomy `Economy` 服务，Residence、Vault、XConomy 和 QuickShop-Hikari 均已启用。
 4. 确认 `database.file` 指向 TianjiTown 专用的空 SQLite 文件，其父目录对服务器进程可写。
-5. 按实际地图修改 `phase1.site.service-areas`、`blacklist` 和 `minimum-buffer-chunks`。所有已加载世界均可选址；已配置服务区的世界会限制在服务区内，默认坐标只是示例，不可直接用于生产。
+5. 按实际地图修改 `phase1.site.blacklist` 和 `minimum-buffer-chunks`。所有已加载世界均可选址，WorldGuard 区域、地图黑名单、世界边界和领地缓冲仍会被严格检查。
 6. 使用现有阶段 0 脚本备份 Residence、QuickShop H2、XConomy/清算账户，并用 `scripts/backup_sqlite.sh` 备份 TianjiTown SQLite，完成一次隔离恢复演练。
 
 ## 安装或升级
@@ -64,7 +64,7 @@
 - 领地检查/修复：`/townadmin land reconcile <小镇全名|all> [repair]`
 - 领地重建：`/townadmin land rebuild <小镇全名|all>`，随后点击聊天栏确认按钮
 
-Tab 补全中的 `<原因>` 是位置提示，必须替换为实际内容。危险操作的聊天确认仅限发起者使用，60 秒后失效；确认前若目标版本变化，操作会安全中止。删除操作先安全归档并保持名称、领地名称和区块锁定；只有对应 Residence 确认移除后才释放这些占位，同时保留小镇历史记录与审计记录。升级前已经归档的小镇默认继续锁定，可重新执行删除命令并点击确认完成安全释放。若自动对账发现 `ACTIVE` 小镇的 Residence 已被外部删除，系统会安全归档并继续保留复用锁，不会自动重建或删除外部领地。
+Tab 补全中的 `<原因>` 是位置提示，必须替换为实际内容。危险操作的聊天确认仅限发起者使用，60 秒后失效；确认前若目标版本变化，操作会安全中止。删除操作先安全归档并保持名称、领地名称和区块锁定；只有对应 Residence 确认移除后才释放这些占位，同时保留小镇历史记录与审计记录。升级前已经归档的小镇默认继续锁定，可重新执行删除命令并点击确认完成安全释放。若 `ACTIVE` 小镇的 Residence 被外部删除，系统会阻止删除、通知删除来源，并立即触发投影对账恢复。
 
 ## 回滚
 

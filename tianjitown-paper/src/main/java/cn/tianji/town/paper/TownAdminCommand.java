@@ -3,6 +3,7 @@ package cn.tianji.town.paper;
 import cn.tianji.town.core.application.ApplicationText;
 import cn.tianji.town.core.economy.MoneyAmount;
 import cn.tianji.town.core.consumption.BuffDefinition;
+import cn.tianji.town.core.consumption.BuffDurationOption;
 import cn.tianji.town.core.land.ExpansionDirection;
 import cn.tianji.town.core.land.ExpansionPricing;
 import cn.tianji.town.core.land.TerritoryRules;
@@ -783,7 +784,7 @@ final class TownAdminCommand implements CommandExecutor {
             if (view.preview() != null) {
                 Player player = (Player) sender;
                 long price = ExpansionPricing.price(runtime.phaseThreeSettings().expansionBaseCost(),
-                        runtime.phaseThreeSettings().expansionGrowthFactor(), view.units().size(),
+                        runtime.phaseThreeSettings().expansionPerUnitIncrease(), view.units().size(),
                         runtime.settlement().scale()).minorUnits();
                 runtime.sitePolicy().teleportAndPreview(player, view.preview().territory());
                 player.sendMessage("§e预估价格: " + runtime.money(price));
@@ -794,7 +795,7 @@ final class TownAdminCommand implements CommandExecutor {
 
     private boolean buff(CommandSender sender, PhaseOneRuntime runtime, String[] args) {
         requirePermission(sender, TownAdminPermissions.BUFF);
-        requireLength(args, 2, "buff <list|grant|refund> ...");
+        requireLength(args, 2, "buff <list|grant> ...");
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("list")) {
             requireLength(args, 3, "buff list <小镇全名>");
@@ -834,6 +835,7 @@ final class TownAdminCommand implements CommandExecutor {
                                     .purchaseBuffForTown(request.townId(), actorId(sender),
                                             sender.getName(), request.definition(),
                                             runtime.settlement().scale(),
+                                            BuffDurationOption.ONE_HOUR,
                                             "admin-buff-purchase:" + UUID.randomUUID(),
                                             java.time.Instant.now(), request.reason()),
                             purchase -> {
@@ -843,22 +845,7 @@ final class TownAdminCommand implements CommandExecutor {
                             })));
             return true;
         }
-        if (action.equals("refund")) {
-            requireLength(args, 4, "buff refund <buffId> <原因>");
-            UUID buffId = UUID.fromString(args[2]);
-            String reason = reasonTail(args, 3);
-            requestConfirmation(sender, "退款并取消公共 Buff " + buffId,
-                    () -> runtime.write(sender, () -> runtime.phaseFour().repository()
-                                    .refundActiveBuff(buffId, actorId(sender), sender.getName(),
-                                            reason),
-                            purchase -> {
-                                sender.sendMessage("§aBuff 已取消并退款，公共余额: "
-                                        + runtime.money(purchase.balanceAfterMinor()));
-                                runtime.phaseFour().refreshAllPlayers();
-                            }));
-            return true;
-        }
-        throw new IllegalArgumentException("buff 只支持 list、grant 或 refund");
+        throw new IllegalArgumentException("buff 只支持 list 或 grant；公共 Buff 不接受退款");
     }
 
     private void rebuildLand(CommandSender sender, PhaseOneRuntime runtime,
@@ -1095,7 +1082,7 @@ final class TownAdminCommand implements CommandExecutor {
         sender.sendMessage("§6阶段 4 公共消费管理");
         sender.sendMessage("§e/townadmin buff list <小镇全名>");
         sender.sendMessage("§e/townadmin buff grant <小镇全名> <buffKey> <原因>");
-        sender.sendMessage("§e/townadmin buff refund <buffId> <原因>");
+        sender.sendMessage("§7公共 Buff 购买后不接受退款；管理员代购默认持续一小时。");
     }
 
     private static void townHelp(CommandSender sender) {

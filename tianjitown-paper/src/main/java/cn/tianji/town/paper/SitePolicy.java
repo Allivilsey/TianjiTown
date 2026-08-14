@@ -84,14 +84,6 @@ final class SitePolicy {
         if (!insideWorldBorder(world, territory)) {
             return Validation.failure("3×3 区块会超出世界边界");
         }
-        List<Rectangle> serviceAreas = rectangles("phase1.site.service-areas", world.getName());
-        boolean requireArea = plugin.getConfig().getBoolean("phase1.site.require-service-area", true);
-        boolean serviceAreaConfigured = hasRectangleConfiguration(
-                "phase1.site.service-areas", world.getName());
-        if (requireArea && serviceAreaConfigured
-                && serviceAreas.stream().noneMatch(area -> area.contains(territory))) {
-            return Validation.failure("3×3 区块不完全位于已配置的服务区");
-        }
         if (rectangles("phase1.site.blacklist", world.getName()).stream()
                 .anyMatch(area -> area.overlaps(territory))) {
             return Validation.failure("3×3 区块与出生点、活动区或管理黑名单重叠");
@@ -221,11 +213,6 @@ final class SitePolicy {
             }
         }
         return List.copyOf(result);
-    }
-
-    private boolean hasRectangleConfiguration(String path, String world) {
-        return plugin.getConfig().getMapList(path).stream()
-                .anyMatch(raw -> world.equals(String.valueOf(raw.get("world"))));
     }
 
     private static int number(java.util.Map<?, ?> map, String key) {

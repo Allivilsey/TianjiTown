@@ -39,7 +39,7 @@ public final class PhaseOneRepository {
     }
 
     public ApplicationSnapshot createDraft(UUID applicantId, ApplicationText text,
-                                           Duration cooldown) {
+                                           List<UUID> initialMemberIds, Duration cooldown) {
         requireWorkerThread();
         text.requireValid();
         Objects.requireNonNull(cooldown, "cooldown");
@@ -76,6 +76,7 @@ public final class PhaseOneRepository {
                 statement.setBytes(2, uuid(applicantId));
                 statement.executeUpdate();
             }
+            replaceInitialMembers(connection, applicationId, applicantId, initialMemberIds);
             audit(connection, null, applicantId, applicantId.toString(), "APPLICATION_CREATE",
                     "APPLICATION", applicationId.toString(), "玩家创建草稿", text.name());
             return requireApplication(connection, applicationId);
@@ -83,7 +84,9 @@ public final class PhaseOneRepository {
     }
 
     public ApplicationSnapshot updateApplicationText(UUID applicationId, UUID applicantId,
-                                                     ApplicationText text, long expectedVersion) {
+                                                     ApplicationText text,
+                                                     List<UUID> initialMemberIds,
+                                                     long expectedVersion) {
         requireWorkerThread();
         text.requireValid();
         return transaction(connection -> {
@@ -106,6 +109,39 @@ public final class PhaseOneRepository {
                 statement.setLong(9, expectedVersion);
                 requireUpdated(statement, "申请资料已被其他操作修改，请重新打开");
             }
+            replaceInitialMembers(connection, applicationId, applicantId, initialMemberIds);
+            return requireApplication(connection, applicationId);
+        });
+    }
+
+    public ApplicationSnapshot respondInitialMember(UUID applicationId, UUID playerId,
+                                                     boolean confirm) {
+        requireWorkerThread();
+        return transaction(connection -> {
+            ApplicationSnapshot current = requireApplication(connection, applicationId);
+            if (current.status() != ApplicationStatus.DRAFT
+                    && current.status() != ApplicationStatus.SITE_SELECTED
+                    && current.status() != ApplicationStatus.NEED_CHANGES) {
+                throw new ConflictException("该建镇申请已不能确认初始成员");
+            }
+            if (confirm && memberTownId(connection, playerId).isPresent()) {
+                throw new ConflictException("你已经属于其他小镇，不能确认成为初始成员");
+            }
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE application_initial_members
+                       SET confirmation_status = ?,
+                           responded_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
+                     WHERE application_id = ? AND player_uuid = ?
+                    """)) {
+                statement.setString(1, confirm ? "CONFIRMED" : "REJECTED");
+                statement.setBytes(2, uuid(applicationId));
+                statement.setBytes(3, uuid(playerId));
+                requireUpdated(statement, "你不在该申请的初始成员名单中");
+            }
+            audit(connection, null, playerId, playerId.toString(),
+                    confirm ? "INITIAL_MEMBER_CONFIRM" : "INITIAL_MEMBER_REJECT",
+                    "APPLICATION", applicationId.toString(),
+                    confirm ? "确认成为建镇初始成员" : "拒绝成为建镇初始成员", "");
             return requireApplication(connection, applicationId);
         });
     }
@@ -170,6 +206,7 @@ public final class PhaseOneRepository {
                 throw new ConflictException("选址预留不存在或已经过期，请重新选址");
             }
             current.text().requireValid();
+            requireConfirmedInitialMembers(connection, current);
             ensureNameAvailable(connection, current.text(), applicationId);
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE town_applications
@@ -219,7 +256,8 @@ public final class PhaseOneRepository {
     }
 
     public Provisioning beginProvision(UUID applicationId, UUID reviewerId, String reviewerName,
-                                       String reason, String idempotencyKey) {
+                                       String reason, String idempotencyKey,
+                                       long applicationFeeMinor) {
         requireWorkerThread();
         requireReason(reason);
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
@@ -255,6 +293,10 @@ public final class PhaseOneRepository {
             if (memberTownId(connection, application.applicantId()).isPresent()) {
                 throw new ConflictException("申请人已经加入其他小镇");
             }
+            if (applicationFeeMinor <= 0) {
+                throw new IllegalArgumentException("建镇申请费用必须大于 0");
+            }
+            requireConfirmedInitialMembers(connection, application);
             if (application.territory() == null || application.reservationExpiresAt() == null
                     || !application.reservationExpiresAt().isAfter(Instant.now())) {
                 throw new ConflictException("选址预留已经过期，不能批准");
@@ -265,17 +307,20 @@ public final class PhaseOneRepository {
             UUID townId = UUID.randomUUID();
             UUID unitId = UUID.randomUUID();
             String residenceName = TownResidenceName.initial(application.text().residenceName());
-            insertTown(connection, townId, application, residenceName, unitId);
+            insertTown(connection, townId, application, residenceName, unitId,
+                    applicationFeeMinor);
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE town_applications
                        SET status = 'APPROVED_PROVISIONING', town_id = ?, review_message = ?,
+                           application_fee_minor = ?,
                            version = version + 1
                      WHERE application_id = ? AND version = ?
                     """)) {
                 statement.setBytes(1, uuid(townId));
                 statement.setString(2, reason);
-                statement.setBytes(3, uuid(applicationId));
-                statement.setLong(4, application.version());
+                statement.setLong(3, applicationFeeMinor);
+                statement.setBytes(4, uuid(applicationId));
+                statement.setLong(5, application.version());
                 requireUpdated(statement, "申请已被其他管理员处理");
             }
             releaseReservation(connection, applicationId);
@@ -1485,7 +1530,8 @@ public final class PhaseOneRepository {
     }
 
     private void insertTown(Connection connection, UUID townId, ApplicationSnapshot application,
-                            String residenceName, UUID unitId) throws SQLException {
+                            String residenceName, UUID unitId, long applicationFeeMinor)
+            throws SQLException {
         ApplicationText text = application.text();
         try (PreparedStatement town = connection.prepareStatement("""
                 INSERT INTO towns (town_id, name, normalized_name, short_name, normalized_short_name,
@@ -1493,7 +1539,7 @@ public final class PhaseOneRepository {
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'PROVISIONING', ?)
                 """);
              PreparedStatement member = connection.prepareStatement("""
-                     INSERT INTO town_members (town_id, player_uuid, role) VALUES (?, ?, 'MAYOR')
+                     INSERT INTO town_members (town_id, player_uuid, role) VALUES (?, ?, ?)
                      """);
              PreparedStatement unit = connection.prepareStatement("""
                      INSERT INTO territory_units
@@ -1511,7 +1557,15 @@ public final class PhaseOneRepository {
             town.executeUpdate();
             member.setBytes(1, uuid(townId));
             member.setBytes(2, uuid(application.applicantId()));
+            member.setString(3, MemberRole.MAYOR.name());
             member.executeUpdate();
+            for (InitialMemberConfirmation initial : application.initialMembers()) {
+                member.setBytes(1, uuid(townId));
+                member.setBytes(2, uuid(initial.playerId()));
+                member.setString(3, MemberRole.MEMBER.name());
+                member.addBatch();
+            }
+            member.executeBatch();
             InitialTerritory territory = application.territory();
             unit.setBytes(1, uuid(unitId));
             unit.setBytes(2, uuid(townId));
@@ -1529,6 +1583,29 @@ public final class PhaseOneRepository {
                 chunk.addBatch();
             }
             chunk.executeBatch();
+        }
+        try (PreparedStatement account = connection.prepareStatement("""
+                UPDATE town_accounts SET balance_minor = ?, version = version + 1
+                 WHERE town_id = ? AND balance_minor = 0
+                """);
+             PreparedStatement ledger = connection.prepareStatement("""
+                INSERT INTO ledger_entries
+                    (entry_id, town_id, entry_type, amount_minor, balance_after_minor,
+                     actor_uuid, actor_name, business_key, note)
+                VALUES (?, ?, 'APPLICATION_FEE', ?, ?, ?, ?, ?, ?)
+                """)) {
+            account.setLong(1, applicationFeeMinor);
+            account.setBytes(2, uuid(townId));
+            requireUpdated(account, "无法写入建镇初始资金");
+            ledger.setBytes(1, uuid(UUID.randomUUID()));
+            ledger.setBytes(2, uuid(townId));
+            ledger.setLong(3, applicationFeeMinor);
+            ledger.setLong(4, applicationFeeMinor);
+            ledger.setBytes(5, uuid(application.applicantId()));
+            ledger.setString(6, application.applicantId().toString());
+            ledger.setString(7, "application-fee:" + application.id());
+            ledger.setString(8, "建镇申请费转为小镇初始公共资金");
+            ledger.executeUpdate();
         }
     }
 
@@ -1675,7 +1752,89 @@ public final class PhaseOneRepository {
                 """)) {
             statement.setBytes(1, uuid(applicationId));
             try (ResultSet result = statement.executeQuery()) {
-                return result.next() ? Optional.of(readApplication(result)) : Optional.empty();
+                return result.next()
+                        ? Optional.of(withInitialMembers(connection, readApplication(result)))
+                        : Optional.empty();
+            }
+        }
+    }
+
+    private ApplicationSnapshot withInitialMembers(Connection connection,
+                                                   ApplicationSnapshot application)
+            throws SQLException {
+        List<InitialMemberConfirmation> members = new ArrayList<>(2);
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT player_uuid, confirmation_status, responded_at
+                  FROM application_initial_members
+                 WHERE application_id = ? ORDER BY created_at, player_uuid
+                """)) {
+            statement.setBytes(1, uuid(application.id()));
+            try (ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    Timestamp responded = result.getTimestamp("responded_at");
+                    members.add(new InitialMemberConfirmation(
+                            readUuid(result, "player_uuid"),
+                            InitialMemberConfirmation.Status.valueOf(
+                                    result.getString("confirmation_status")),
+                            responded == null ? null : responded.toInstant()));
+                }
+            }
+        }
+        return new ApplicationSnapshot(application.id(), application.applicantId(),
+                application.text(), application.status(), application.territory(),
+                application.reservationExpiresAt(), application.townId(),
+                application.reviewMessage(), application.lastError(), members,
+                application.applicationFeeMinor(), application.version(),
+                application.createdAt(), application.updatedAt());
+    }
+
+    private void replaceInitialMembers(Connection connection, UUID applicationId,
+                                       UUID applicantId, List<UUID> memberIds)
+            throws SQLException {
+        if (memberIds == null || memberIds.size() != 2
+                || memberIds.stream().distinct().count() != 2) {
+            throw new ConflictException("建镇申请必须填写两名不同的初始成员");
+        }
+        for (UUID memberId : memberIds) {
+            if (memberId == null || memberId.equals(applicantId)) {
+                throw new ConflictException("初始成员不能包含申请人");
+            }
+            if (memberTownId(connection, memberId).isPresent()) {
+                throw new ConflictException("初始成员 " + memberId + " 已经属于其他小镇");
+            }
+        }
+        try (PreparedStatement delete = connection.prepareStatement("""
+                DELETE FROM application_initial_members
+                 WHERE application_id = ? AND player_uuid NOT IN (?, ?)
+                """);
+             PreparedStatement insert = connection.prepareStatement("""
+                INSERT INTO application_initial_members (application_id, player_uuid)
+                VALUES (?, ?) ON CONFLICT (application_id, player_uuid) DO NOTHING
+                """)) {
+            delete.setBytes(1, uuid(applicationId));
+            delete.setBytes(2, uuid(memberIds.get(0)));
+            delete.setBytes(3, uuid(memberIds.get(1)));
+            delete.executeUpdate();
+            for (UUID memberId : memberIds) {
+                insert.setBytes(1, uuid(applicationId));
+                insert.setBytes(2, uuid(memberId));
+                insert.addBatch();
+            }
+            insert.executeBatch();
+        }
+    }
+
+    private void requireConfirmedInitialMembers(Connection connection,
+                                                ApplicationSnapshot application)
+            throws SQLException {
+        ApplicationSnapshot current = application.initialMembers().isEmpty()
+                ? withInitialMembers(connection, application) : application;
+        if (!current.initialMembersConfirmed()) {
+            throw new ConflictException("两名初始成员均确认后才能提交或批准申请");
+        }
+        for (InitialMemberConfirmation member : current.initialMembers()) {
+            if (memberTownId(connection, member.playerId()).isPresent()) {
+                throw new ConflictException("初始成员已经加入其他小镇，请修改申请名单");
             }
         }
     }
@@ -1698,7 +1857,8 @@ public final class PhaseOneRepository {
                 ApplicationStatus.valueOf(result.getString("status")), territory,
                 reservationExpiry == null ? null : reservationExpiry.toInstant(),
                 townBytes == null ? null : uuid(townBytes), result.getString("review_message"),
-                result.getString("last_error"), result.getLong("version"),
+                result.getString("last_error"), List.of(),
+                result.getLong("application_fee_minor"), result.getLong("version"),
                 result.getTimestamp("created_at").toInstant(),
                 result.getTimestamp("updated_at").toInstant());
     }

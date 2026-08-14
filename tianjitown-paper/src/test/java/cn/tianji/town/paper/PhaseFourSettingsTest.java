@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PhaseFourSettingsTest {
     @Test
     void loadsConfiguredBuffCatalog() throws Exception {
-        YamlConfiguration config = configuration("1.5", "MAYOR");
+        YamlConfiguration config = configuration("100.00", "MAYOR");
 
         PhaseFourSettings settings = PhaseFourSettings.load(config);
 
@@ -28,12 +28,12 @@ class PhaseFourSettingsTest {
     @Test
     void rejectsInvalidCatalogValues() throws Exception {
         assertThrows(IllegalArgumentException.class,
-                () -> PhaseFourSettings.load(configuration("1.5", "OFFICER")));
+                () -> PhaseFourSettings.load(configuration("100.00", "OFFICER")));
         assertThrows(IllegalArgumentException.class,
-                () -> PhaseFourSettings.load(configuration("0.5", "MAYOR")));
+                () -> PhaseFourSettings.load(configuration("0", "MAYOR")));
     }
 
-    private static YamlConfiguration configuration(String multiplier, String role)
+    private static YamlConfiguration configuration(String basePrice, String role)
             throws Exception {
         YamlConfiguration config = new YamlConfiguration();
         config.loadFromString("""
@@ -46,15 +46,12 @@ class PhaseFourSettingsTest {
                         effect-kind: POTION
                         effect-key: minecraft:speed
                         operation: AMPLIFIER
-                        base-price: '100.00'
-                        price-multiplier: '%s'
-                        duration-minutes: 60
+                        base-price: '%s'
                         maximum-level: 2
                         stacking: LEVEL_UP
                         amount-per-level: 1.0
-                        allowed-worlds: [world]
                         purchasing-roles: [%s]
-                """.formatted(multiplier, role));
+                """.formatted(basePrice, role));
         return config;
     }
 }

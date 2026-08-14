@@ -2,6 +2,7 @@ package cn.tianji.town.paper;
 
 import cn.tianji.town.core.application.ApplicationText;
 import cn.tianji.town.core.governance.VoteType;
+import cn.tianji.town.core.consumption.BuffDurationOption;
 import cn.tianji.town.core.land.ExpansionDirection;
 import cn.tianji.town.core.town.MemberRole;
 import org.bukkit.command.Command;
@@ -77,14 +78,15 @@ final class TestCommand implements CommandExecutor, TabCompleter {
                 yield true;
             }
             case "application:create" -> {
-                requireLength(args, 9);
-                actions.createApplication(actor, applicationText(args, 4), output(sender));
+                requireLength(args, 11);
+                actions.createApplication(actor, applicationText(args, 4),
+                        List.of(uuid(args[9]), uuid(args[10])), output(sender));
                 yield true;
             }
             case "application:update" -> {
-                requireLength(args, 11);
+                requireLength(args, 13);
                 actions.updateApplication(actor, uuid(args[4]), applicationText(args, 6),
-                        number(args[5]), output(sender));
+                        List.of(uuid(args[11]), uuid(args[12])), number(args[5]), output(sender));
                 yield true;
             }
             case "application:submit" -> {
@@ -187,8 +189,9 @@ final class TestCommand implements CommandExecutor, TabCompleter {
                 yield true;
             }
             case "buff:buy" -> {
-                requireLength(args, 5);
-                actions.buyBuff(actor, args[4], output(sender));
+                requireLength(args, 6);
+                actions.buyBuff(actor, args[4], BuffDurationOption.parse(args[5]),
+                        output(sender));
                 yield true;
             }
             case "town:expand" -> {

@@ -21,21 +21,21 @@ class PhaseThreeSettingsTest {
         assertEquals(2, settings.fallbackScale());
         assertEquals(2500, settings.maximumTaxBps());
         assertEquals(new BigDecimal("1000.00"), settings.expansionBaseCost());
-        assertEquals(new BigDecimal("1.50"), settings.expansionGrowthFactor());
-        assertEquals(9, settings.maximumUnits());
+        assertEquals(new BigDecimal("500.00"), settings.expansionPerUnitIncrease());
+        assertEquals(25, settings.maximumUnits());
+        assertTrue(settings.allowsTaxRate(500));
         assertTrue(settings.allowsTaxRate(2500));
         assertFalse(settings.allowsTaxRate(2501));
-        assertFalse(settings.allowsTaxRate(-1));
+        assertFalse(settings.allowsTaxRate(499));
+        assertFalse(settings.allowsTaxRate(501));
     }
 
     @Test
     void rejectsUnsafeTaxMoneyAndExpansionSettings() {
         for (Setting setting : new Setting[]{
                 new Setting("phase3.money-scale", 9),
-                new Setting("phase3.tax.maximum-basis-points", 10_000),
                 new Setting("phase3.expansion.base-cost", "0"),
-                new Setting("phase3.expansion.growth-factor", "0.99"),
-                new Setting("phase3.expansion.maximum-units", 10)}) {
+                new Setting("phase3.expansion.per-unit-increase", "-0.01")}) {
             MemoryConfiguration config = new MemoryConfiguration();
             config.set(setting.path(), setting.value());
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,

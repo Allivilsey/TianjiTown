@@ -4,11 +4,13 @@ import cn.tianji.town.core.application.ApplicationStatus;
 import cn.tianji.town.core.application.ApplicationText;
 import cn.tianji.town.core.economy.MoneyAmount;
 import cn.tianji.town.core.consumption.BuffDefinition;
+import cn.tianji.town.core.consumption.BuffDurationOption;
 import cn.tianji.town.core.land.ExpansionDirection;
 import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.core.town.TownStatus;
 import cn.tianji.town.core.governance.VoteType;
 import cn.tianji.town.storage.phase1.ApplicationSnapshot;
+import cn.tianji.town.storage.phase1.InitialMemberConfirmation;
 import cn.tianji.town.storage.phase1.JoinApplicationSnapshot;
 import cn.tianji.town.storage.phase1.PhaseOneRepository;
 import cn.tianji.town.storage.phase1.TownSnapshot;
@@ -681,11 +683,11 @@ final class TownUiController implements Listener {
                             "§8输入“取消”可退出"), "DONATION_INPUT", null)));
         }
         if (account.role().equals("MAYOR") && runtime.taxEnabled()) {
-            int[] rates = {0, 250, 500, 1000};
+            int[] rates = {500, 1000, 1500, 2000, 2500};
             for (int index = 0; index < rates.length; index++) {
                 int rate = rates[index];
                 if (rate <= runtime.phaseThreeSettings().maximumTaxBps()) {
-                    items.add(new MenuItem(13 + index, button(Material.GOLD_NUGGET,
+                    items.add(new MenuItem(12 + index, button(Material.GOLD_NUGGET,
                             "§e税率 " + PhaseOneRuntime.percent(rate),
                             List.of(rate == account.taxRateBps() ? "§a当前税率" : "§7点击立即更新",
                                     "§7同步作用于 QuickShop、Jobs 与全球市场收入"),
@@ -696,7 +698,7 @@ final class TownUiController implements Listener {
         }
         if (account.role().equals("MAYOR") && runtime.consumptionEnabled()) {
             items.add(new MenuItem(17, button(Material.FILLED_MAP, "§b领地扩张",
-                    List.of("§7方向预览、指数价格和公共余额扣款"), "EXPANSION_MENU", null)));
+                    List.of("§7方向预览、线性价格和公共余额扣款"), "EXPANSION_MENU", null)));
         }
         int slot = 18;
         for (PhaseThreeRepository.LedgerEntry entry : view.ledger()) {
@@ -779,8 +781,8 @@ final class TownUiController implements Listener {
             for (BuffDefinition definition : runtime.phaseFour().settings().buffs().values()) {
                 try {
                     quotes.put(definition.key(), runtime.phaseFour().repository().quoteBuff(
-                            player.getUniqueId(), definition, runtime.settlement().scale(),
-                            Instant.now()));
+                            player.getUniqueId(), definition, BuffDurationOption.ONE_HOUR,
+                            runtime.settlement().scale(), Instant.now()));
                 } catch (IllegalArgumentException | PhaseFourRepository.ConflictException exception) {
                     errors.put(definition.key(), exception.getMessage());
                 }
@@ -795,9 +797,9 @@ final class TownUiController implements Listener {
             List<MenuItem> items = new ArrayList<>();
             items.add(new MenuItem(4, button(Material.NETHER_STAR, "§d小镇公共 Buff",
                     List.of(runtime.phaseFour().buffShopEnabled()
-                                    ? "§7使用公共资金购买，效果作用于符合世界条件的全体成员"
+                                    ? "§7使用公共资金购买，效果作用于全体成员且不限制世界"
                                     : "§e商店已暂停新购买，现有效果仍持续到期",
-                            "§7叠加价格和等级上限均由配置定义"), null, null)));
+                            "§7可选择一小时、一天、一周或一月，长时段按比例折扣"), null, null)));
             int slot = 9;
             for (BuffDefinition definition : runtime.phaseFour().settings().buffs().values()) {
                 PhaseFourRepository.BuffQuote quote = view.quotes().get(definition.key());
@@ -805,7 +807,7 @@ final class TownUiController implements Listener {
                 List<String> lore = new ArrayList<>();
                 lore.add("§7类型: " + definition.effectKind());
                 lore.add("§7效果: " + definition.effectKey());
-                lore.add("§7持续: " + definition.duration().toMinutes() + " 分钟");
+                lore.add("§7持续: 可选一小时 / 一天 / 一周 / 一月");
                 lore.add("§7叠加: " + definition.stackingRule() + "，上限 "
                         + definition.maximumLevel());
                 if (current != null) {
@@ -815,7 +817,7 @@ final class TownUiController implements Listener {
                 }
                 String error = view.errors().get(definition.key());
                 if (quote != null) {
-                    lore.add("§e本次价格: " + runtime.money(quote.priceMinor()));
+                    lore.add("§e一小时价格: " + runtime.money(quote.priceMinor()));
                     lore.add("§e购买后等级: " + quote.nextLevel());
                 } else if (error != null) {
                     lore.add("§c" + error);
@@ -823,11 +825,44 @@ final class TownUiController implements Listener {
                 boolean purchasable = runtime.phaseFour().buffShopEnabled() && quote != null;
                 items.add(new MenuItem(slot++, button(purchasable ? Material.POTION
                                 : Material.GLASS_BOTTLE, "§d" + definition.displayName(), lore,
-                        purchasable ? "CONFIRM_BUY_BUFF" : null, definition.key())));
+                        purchasable ? "BUFF_DURATIONS" : null, definition.key())));
             }
             items.add(new MenuItem(49, button(Material.ARROW, "§7返回主菜单", List.of(),
                     "MAIN", null)));
             openMenu(player, 54, "公共 Buff 商店", items);
+        });
+    }
+
+    private void openBuffDurations(Player player, String buffKey) {
+        runtime.read(player, () -> {
+            BuffDefinition definition = runtime.phaseFour().settings().requireBuff(buffKey);
+            Map<BuffDurationOption, PhaseFourRepository.BuffQuote> quotes = new LinkedHashMap<>();
+            for (BuffDurationOption duration : BuffDurationOption.values()) {
+                quotes.put(duration, runtime.phaseFour().repository().quoteBuff(
+                        player.getUniqueId(), definition, duration,
+                        runtime.settlement().scale(), Instant.now()));
+            }
+            return quotes;
+        }, quotes -> {
+            List<MenuItem> items = new ArrayList<>();
+            int slot = 10;
+            for (Map.Entry<BuffDurationOption, PhaseFourRepository.BuffQuote> entry
+                    : quotes.entrySet()) {
+                BuffDurationOption duration = entry.getKey();
+                PhaseFourRepository.BuffQuote quote = entry.getValue();
+                int discount = 100 - duration.discountBasisPoints() / 100;
+                items.add(new MenuItem(slot, button(Material.CLOCK,
+                        "§d" + duration.displayName(),
+                        List.of("§7持续 " + duration.hours() + " 小时",
+                                "§7折扣 " + discount + "%",
+                                "§e价格: " + runtime.money(quote.priceMinor()),
+                                "§e购买后等级: " + quote.nextLevel()),
+                        "CONFIRM_BUY_BUFF", buffKey + ":" + duration.name())));
+                slot += 2;
+            }
+            items.add(new MenuItem(22, button(Material.ARROW, "§7返回 Buff 商店", List.of(),
+                    "BUFF_SHOP", null)));
+            openMenu(player, 27, "选择公共 Buff 时长", items);
         });
     }
 
@@ -836,6 +871,8 @@ final class TownUiController implements Listener {
             case "QUICKSHOP_TAX" -> "QuickShop 税收";
             case "JOBS_TAX" -> "Jobs 税收";
             case "GLOBALMARKETPLUS_TAX" -> "全球市场税收";
+            case "SERVER_TAX_SUBSIDY" -> "服务器税收补贴";
+            case "APPLICATION_FEE" -> "建镇初始资金";
             case "DONATION" -> "成员捐款";
             case "EXPANSION" -> "领地扩张";
             case "EXPANSION_REFUND" -> "扩张退款";
@@ -868,7 +905,12 @@ final class TownUiController implements Listener {
         List<String> summary = new ArrayList<>(List.of("§7名称: " + application.text().name(),
                 "§7简称: " + application.text().shortName(),
                 "§7领地名称: " + application.text().residenceName(),
-                "§7状态: " + application.status()));
+                "§7状态: " + application.status(),
+                "§7建镇申请费: §f2000（批准后转为初始公共资金）"));
+        for (InitialMemberConfirmation member : application.initialMembers()) {
+            summary.add("§7初始成员: " + displayName(member.playerId()) + " · "
+                    + member.status());
+        }
         if (application.territory() != null) {
             summary.add("§7中心区块: " + application.territory().center().x() + ", "
                     + application.territory().center().z());
@@ -894,9 +936,14 @@ final class TownUiController implements Listener {
                 items.add(new MenuItem(14, button(Material.ENDER_EYE, "§b预览已选领地",
                         List.of("§7传送至领地中心并显示火焰边界"), "PREVIEW_SITE",
                         application.id().toString())));
-                items.add(new MenuItem(16, button(Material.LIME_CONCRETE, "§a提交申请",
-                        List.of("§7进入确认页面"), "CONFIRM_SUBMIT",
-                        application.id().toString())));
+                boolean confirmed = application.initialMembersConfirmed();
+                items.add(new MenuItem(16, button(confirmed ? Material.LIME_CONCRETE
+                                : Material.GRAY_CONCRETE,
+                        confirmed ? "§a提交申请" : "§7等待初始成员确认",
+                        confirmed ? List.of("§7进入确认页面", "§7批准时申请人需支付 2000")
+                                : List.of("§c两名初始成员均确认后才可提交"),
+                        confirmed ? "CONFIRM_SUBMIT" : null,
+                        confirmed ? application.id().toString() : null)));
             }
             items.add(new MenuItem(22, button(Material.BARRIER, "§c撤回申请",
                     List.of("§7撤回后进入申请冷却"), "CONFIRM_CANCEL",
@@ -1013,7 +1060,7 @@ final class TownUiController implements Listener {
                         List.of("§7赞成票必须严格超过有效选民的 50%"),
                         "CONFIRM_CREATE_VOTE", townId + ":KICK_MEMBER:" + targetId)));
             }
-            if (!targetIsMayor) {
+            if (!targetIsMayor && view.viewer().role().isLeader()) {
                 items.add(new MenuItem(22, button(Material.ENCHANTED_BOOK, "§e提名为新镇长",
                         List.of("§7发起 2/3 强制更换镇长投票"),
                         "CONFIRM_CREATE_VOTE", townId + ":REPLACE_MAYOR:" + targetId)));
@@ -1258,7 +1305,12 @@ final class TownUiController implements Listener {
                     "§7领地名称: " + application.text().residenceName(),
                     "§7简介: " + application.text().description(),
                     "§7规则: " + String.join(" | ", application.text().rules()),
-                    "§7状态: " + application.status()));
+                    "§7状态: " + application.status(),
+                    "§7申请费: 2000（批准后成为初始公共资金）"));
+            for (InitialMemberConfirmation member : application.initialMembers()) {
+                summary.add("§7初始成员: " + displayName(member.playerId()) + " · "
+                        + member.status());
+            }
             if (application.territory() != null) {
                 summary.add("§7选址: " + application.territory().center().worldName() + " "
                         + application.territory().center().x() + ","
@@ -1311,7 +1363,7 @@ final class TownUiController implements Listener {
                     openMain(player);
                 }
                 case "CREATE_APPLICATION" -> startApplicationForm(player, null, 0,
-                        new ApplicationText("", "", "", "", List.of()));
+                        new ApplicationText("", "", "", "", List.of()), List.of());
                 case "APPLICATION" -> loadApplication(player, UUID.fromString(target));
                 case "EDIT_APPLICATION" -> loadApplicationForChatForm(player, UUID.fromString(target));
                 case "SELECT_SITE" -> selectSite(player, UUID.fromString(target));
@@ -1325,22 +1377,31 @@ final class TownUiController implements Listener {
                 case "TOWN" -> openTown(player, UUID.fromString(target));
                 case "FINANCE" -> openFinance(player, Integer.parseInt(target));
                 case "BUFF_SHOP" -> openBuffShop(player);
+                case "BUFF_DURATIONS" -> openBuffDurations(player, target);
                 case "CONFIRM_BUY_BUFF" -> {
-                    BuffDefinition definition = runtime.phaseFour().settings().requireBuff(target);
+                    String[] parts = target.split(":");
+                    BuffDefinition definition = runtime.phaseFour().settings().requireBuff(parts[0]);
+                    BuffDurationOption duration = BuffDurationOption.valueOf(parts[1]);
                     openConfirmation(player, "确认购买 " + definition.displayName(),
-                            "BUY_BUFF", target, "将按当前叠加层数从公共资金扣款；"
-                                    + "效果到期后自动移除", "BUFF_SHOP", null);
+                            "BUY_BUFF", target, "持续 " + duration.displayName()
+                                    + "，将从公共资金扣款且不接受退款", "BUFF_DURATIONS",
+                            definition.key());
                 }
-                case "BUY_BUFF" -> actions.buyBuff(player, target, outcome ->
+                case "BUY_BUFF" -> {
+                    String[] parts = target.split(":");
+                    String buffKey = parts[0];
+                    BuffDurationOption duration = BuffDurationOption.valueOf(parts[1]);
+                    actions.buyBuff(player, buffKey, duration, outcome ->
                         handleOutcome(player, outcome, purchase -> {
                             BuffDefinition definition = runtime.phaseFour().settings()
-                                    .requireBuff(target);
+                                    .requireBuff(buffKey);
                             player.sendMessage("§a已购买 " + definition.displayName() + "，等级 "
                                     + purchase.buff().level() + "，到期时间 "
                                     + purchase.buff().expiresAt() + "；公共余额 "
                                     + runtime.money(purchase.balanceAfterMinor()));
                             openBuffShop(player);
                         }));
+                }
                 case "DONATION_INPUT" -> startDonationInput(player);
                 case "SET_TAX" -> {
                     String[] parts = target.split(":");
@@ -1562,7 +1623,8 @@ final class TownUiController implements Listener {
         runtime.read(player, () -> runtime.repository().findApplication(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("申请不存在")), application ->
                 startApplicationForm(player, application.id(), application.version(),
-                        application.text()));
+                        application.text(), application.initialMembers().stream()
+                                .map(member -> displayName(member.playerId())).toList()));
     }
 
     private void loadTownForForm(Player player, UUID townId) {
@@ -1808,14 +1870,15 @@ final class TownUiController implements Listener {
     }
 
     private void startApplicationForm(Player player, UUID targetId, long version,
-                                      ApplicationText text) {
+                                      ApplicationText text, List<String> initialMemberNames) {
         if (maintenanceMode()) {
             player.sendMessage("§c小镇系统正在维护，申请编辑暂时停用。");
             return;
         }
         UUID formId = UUID.randomUUID();
         applicationForms.put(player.getUniqueId(),
-                new ApplicationFormSession(formId, targetId, version, text));
+                new ApplicationFormSession(formId, targetId, version, text,
+                        normalizedMemberNames(initialMemberNames)));
         chatInputs.remove(player.getUniqueId());
         reviewReasonInputs.remove(player.getUniqueId());
         player.closeInventory();
@@ -1849,8 +1912,8 @@ final class TownUiController implements Listener {
 
     private Component applicationFieldLine(Player player, ApplicationFormSession form,
                                            ApplicationField field) {
-        String value = fieldValue(form.text(), field);
-        List<String> errors = fieldErrors(form.text(), field);
+        String value = fieldValue(form, field);
+        List<String> errors = fieldErrors(player, form, field);
         NamedTextColor valueColor = value.isBlank() ? NamedTextColor.RED
                 : errors.isEmpty() ? NamedTextColor.GREEN : NamedTextColor.RED;
         String display = value.isBlank() ? "（未填写）" : preview(value, 100);
@@ -1953,7 +2016,11 @@ final class TownUiController implements Listener {
             return;
         }
         ApplicationText updated = updateField(form.text(), input.field(), value);
-        List<String> errors = fieldErrors(updated, input.field());
+        List<String> members = updateInitialMemberNames(form.initialMemberNames(),
+                input.field(), value);
+        ApplicationFormSession candidate = new ApplicationFormSession(form.id(),
+                form.targetId(), form.version(), updated, members);
+        List<String> errors = fieldErrors(player, candidate, input.field());
         if (!errors.isEmpty()) {
             chatInputs.put(player.getUniqueId(), input);
             player.sendMessage("§c输入已被拒绝: " + String.join("；", errors));
@@ -1962,8 +2029,7 @@ final class TownUiController implements Listener {
             renderApplicationForm(player, form.id());
             return;
         }
-        applicationForms.put(player.getUniqueId(), new ApplicationFormSession(
-                form.id(), form.targetId(), form.version(), updated));
+        applicationForms.put(player.getUniqueId(), candidate);
         playSound(player, Sound.BLOCK_NOTE_BLOCK_PLING);
         renderApplicationForm(player, form.id());
     }
@@ -1982,6 +2048,7 @@ final class TownUiController implements Listener {
         }
         try {
             form.text().requireValid();
+            requireInitialMemberIds(player, form.initialMemberNames());
         } catch (IllegalArgumentException exception) {
             player.sendMessage("§c申请资料尚未完成: " + exception.getMessage());
             renderApplicationForm(player, form.id());
@@ -1989,16 +2056,21 @@ final class TownUiController implements Listener {
         }
         applicationForms.remove(player.getUniqueId(), form);
         chatInputs.remove(player.getUniqueId());
+        List<UUID> initialMemberIds = requireInitialMemberIds(player,
+                form.initialMemberNames());
         if (form.targetId() == null) {
-            actions.createApplication(player, form.text(), outcome ->
+            actions.createApplication(player, form.text(), initialMemberIds, outcome ->
                     handleOutcome(player, outcome, application -> {
                 player.sendMessage("§a申请草稿已保存，请继续选择领地并确认提交。");
+                notifyInitialMembers(application);
                 openApplication(player, application);
             }));
         } else {
-            actions.updateApplication(player, form.targetId(), form.text(), form.version(), outcome ->
+            actions.updateApplication(player, form.targetId(), form.text(), initialMemberIds,
+                    form.version(), outcome ->
                     handleOutcome(player, outcome, application -> {
                 player.sendMessage("§a申请资料已保存。");
+                notifyInitialMembers(application);
                 openApplication(player, application);
             }));
         }
@@ -2032,23 +2104,121 @@ final class TownUiController implements Listener {
                 rules);
     }
 
-    private static List<String> fieldErrors(ApplicationText text, ApplicationField field) {
-        return text.validate().stream().filter(error -> switch (field) {
+    private static List<String> normalizedMemberNames(List<String> names) {
+        List<String> result = new ArrayList<>(List.of("", ""));
+        if (names != null) {
+            for (int index = 0; index < Math.min(2, names.size()); index++) {
+                result.set(index, Objects.requireNonNullElse(names.get(index), "").strip());
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<String> updateInitialMemberNames(List<String> current,
+                                                         ApplicationField field,
+                                                         String value) {
+        List<String> result = new ArrayList<>(normalizedMemberNames(current));
+        if (field == ApplicationField.INITIAL_MEMBER_ONE) {
+            result.set(0, value.strip());
+        } else if (field == ApplicationField.INITIAL_MEMBER_TWO) {
+            result.set(1, value.strip());
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<UUID> requireInitialMemberIds(Player applicant, List<String> names) {
+        List<String> normalized = normalizedMemberNames(names);
+        List<UUID> ids = new ArrayList<>(2);
+        for (String name : normalized) {
+            Player member = Bukkit.getPlayerExact(name);
+            if (member == null) {
+                throw new IllegalArgumentException("两名初始成员必须在线并使用准确玩家名");
+            }
+            if (member.getUniqueId().equals(applicant.getUniqueId())) {
+                throw new IllegalArgumentException("初始成员不能包含申请人");
+            }
+            ids.add(member.getUniqueId());
+        }
+        if (ids.stream().distinct().count() != 2) {
+            throw new IllegalArgumentException("必须填写两名不同的初始成员");
+        }
+        return List.copyOf(ids);
+    }
+
+    private void notifyInitialMembers(ApplicationSnapshot application) {
+        for (InitialMemberConfirmation confirmation : application.initialMembers()) {
+            if (confirmation.status() == InitialMemberConfirmation.Status.CONFIRMED) {
+                continue;
+            }
+            Player member = Bukkit.getPlayer(confirmation.playerId());
+            if (member == null) {
+                continue;
+            }
+            member.sendMessage(Component.text(application.text().name() + " 邀请你作为建镇初始成员。 ",
+                            NamedTextColor.GOLD)
+                    .append(callbackButton(member, "[确认]", () -> respondInitialMember(
+                            member, application.id(), true)))
+                    .append(Component.space())
+                    .append(callbackButton(member, "[拒绝]", () -> respondInitialMember(
+                            member, application.id(), false))));
+        }
+    }
+
+    private void respondInitialMember(Player member, UUID applicationId, boolean confirm) {
+        actions.respondInitialMember(member, applicationId, confirm, outcome ->
+                handleOutcome(member, outcome, application -> {
+                    member.sendMessage(confirm ? "§a你已确认成为该小镇的初始成员。"
+                            : "§e你已拒绝成为该小镇的初始成员。");
+                    Player applicant = Bukkit.getPlayer(application.applicantId());
+                    if (applicant != null) {
+                        applicant.sendMessage((confirm ? "§a" : "§e") + member.getName()
+                                + (confirm ? " 已确认" : " 已拒绝") + "成为建镇初始成员。");
+                    }
+                }));
+    }
+
+    private List<String> fieldErrors(Player player, ApplicationFormSession form,
+                                     ApplicationField field) {
+        if (field == ApplicationField.INITIAL_MEMBER_ONE
+                || field == ApplicationField.INITIAL_MEMBER_TWO) {
+            int index = field == ApplicationField.INITIAL_MEMBER_ONE ? 0 : 1;
+            String name = form.initialMemberNames().get(index);
+            List<String> errors = new ArrayList<>();
+            if (name.isBlank()) {
+                errors.add("必须填写初始成员");
+            } else {
+                Player candidate = Bukkit.getPlayerExact(name);
+                if (candidate == null) {
+                    errors.add("初始成员必须在线并使用准确玩家名");
+                } else if (candidate.getUniqueId().equals(player.getUniqueId())) {
+                    errors.add("初始成员不能是申请人本人");
+                }
+            }
+            if (!name.isBlank() && form.initialMemberNames().stream()
+                    .filter(name::equalsIgnoreCase).count() > 1) {
+                errors.add("两名初始成员不能相同");
+            }
+            return List.copyOf(errors);
+        }
+        return form.text().validate().stream().filter(error -> switch (field) {
             case NAME -> error.startsWith("名称");
             case SHORT_NAME -> error.startsWith("简称");
             case RESIDENCE_NAME -> error.startsWith("领地名称");
             case DESCRIPTION -> error.startsWith("简介");
             case RULES -> error.startsWith("规则");
+            case INITIAL_MEMBER_ONE, INITIAL_MEMBER_TWO -> false;
         }).toList();
     }
 
-    private static String fieldValue(ApplicationText text, ApplicationField field) {
+    private static String fieldValue(ApplicationFormSession form, ApplicationField field) {
         return switch (field) {
-            case NAME -> text.name();
-            case SHORT_NAME -> text.shortName();
-            case RESIDENCE_NAME -> text.residenceName();
-            case DESCRIPTION -> text.description();
-            case RULES -> String.join(" | ", text.rules());
+            case NAME -> form.text().name();
+            case SHORT_NAME -> form.text().shortName();
+            case RESIDENCE_NAME -> form.text().residenceName();
+            case DESCRIPTION -> form.text().description();
+            case RULES -> String.join(" | ", form.text().rules());
+            case INITIAL_MEMBER_ONE -> form.initialMemberNames().get(0);
+            case INITIAL_MEMBER_TWO -> form.initialMemberNames().get(1);
         };
     }
 
@@ -2309,7 +2479,11 @@ final class TownUiController implements Listener {
     }
 
     private record ApplicationFormSession(UUID id, UUID targetId, long version,
-                                          ApplicationText text) {
+                                          ApplicationText text,
+                                          List<String> initialMemberNames) {
+        private ApplicationFormSession {
+            initialMemberNames = normalizedMemberNames(initialMemberNames);
+        }
     }
 
     private record ChatInputSession(UUID formId, ApplicationField field) {
@@ -2345,7 +2519,11 @@ final class TownUiController implements Listener {
         DESCRIPTION("小镇简介", "最多 500 个字符，不允许格式代码或 MiniMessage 标签",
                 "简要说明定位、风格和发展目标"),
         RULES("小镇规则", "至少 1 条、最多 50 条；多条规则使用竖线 | 分隔",
-                "每条规则保持简短清晰");
+                "每条规则保持简短清晰"),
+        INITIAL_MEMBER_ONE("初始成员一", "必须填写一名在线且无镇籍的其他玩家",
+                "先与玩家沟通，保存后系统会发送确认按钮"),
+        INITIAL_MEMBER_TWO("初始成员二", "必须填写另一名在线且无镇籍的其他玩家",
+                "两名成员都确认后才可提交申请");
 
         private final String label;
         private final String requirement;

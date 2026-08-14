@@ -1,6 +1,7 @@
 package cn.tianji.town.storage.phase4;
 
 import cn.tianji.town.core.consumption.BuffDefinition;
+import cn.tianji.town.core.consumption.BuffDurationOption;
 import cn.tianji.town.core.consumption.BuffStackingRule;
 import cn.tianji.town.core.consumption.ResourceDefinition;
 import cn.tianji.town.core.town.MemberRole;
@@ -45,26 +46,27 @@ class PhaseFourRepositorySqliteTest {
             Instant now = Instant.now();
             BuffDefinition buff = new BuffDefinition("speed", "公共迅捷",
                     BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
-                    new BigDecimal("100.00"), new BigDecimal("2.00"), Duration.ofHours(1),
-                    2, BuffStackingRule.LEVEL_UP, 1, Set.of("world"),
+                    new BigDecimal("100.00"), 2, BuffStackingRule.LEVEL_UP, 1,
                     Set.of(MemberRole.MAYOR));
 
             PhaseFourRepository.BuffPurchase first = repository.purchaseBuff(mayorId, "Mayor",
-                    buff, 2, "buff:test:1", now);
+                    buff, BuffDurationOption.ONE_HOUR, 2, "buff:test:1", now);
             assertEquals(1, first.buff().level());
             assertEquals(90_000, first.balanceAfterMinor());
             assertEquals(first.buff().buffId(), repository.purchaseBuff(mayorId, "Mayor", buff,
-                    2, "buff:test:1", now).buff().buffId());
+                    BuffDurationOption.ONE_HOUR, 2, "buff:test:1", now).buff().buffId());
             assertThrows(PhaseFourRepository.ConflictException.class,
-                    () -> repository.purchaseBuff(memberId, "Member", buff, 2,
+                    () -> repository.purchaseBuff(memberId, "Member", buff,
+                            BuffDurationOption.ONE_HOUR, 2,
                             "buff:denied", now));
 
             PhaseFourRepository.BuffPurchase second = repository.purchaseBuff(mayorId, "Mayor",
-                    buff, 2, "buff:test:2", now.plusSeconds(1));
+                    buff, BuffDurationOption.ONE_HOUR, 2, "buff:test:2", now.plusSeconds(1));
             assertEquals(2, second.buff().level());
             assertEquals(70_000, second.balanceAfterMinor());
             assertThrows(IllegalArgumentException.class,
-                    () -> repository.purchaseBuff(mayorId, "Mayor", buff, 2,
+                    () -> repository.purchaseBuff(mayorId, "Mayor", buff,
+                            BuffDurationOption.ONE_HOUR, 2,
                             "buff:test:3", now.plusSeconds(2)));
             assertEquals(1, repository.activeBuffsForPlayer(memberId, now).size());
 
