@@ -4,12 +4,9 @@ import cn.tianji.town.core.consumption.BuffDefinition;
 import cn.tianji.town.core.consumption.BuffDurationOption;
 import cn.tianji.town.core.consumption.BuffPricing;
 import cn.tianji.town.core.consumption.BuffStackingRule;
-import cn.tianji.town.core.consumption.ResourceDefinition;
-import cn.tianji.town.core.economy.MoneyAmount;
 import cn.tianji.town.core.town.MemberRole;
 
 import javax.sql.DataSource;
-import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -163,234 +160,6 @@ public final class CommerceRepository {
         });
     }
 
-    public ResourceQuote quoteResource(UUID playerId, ResourceDefinition definition, int quantity,
-                                       int moneyScale, Instant dayStart, Instant dayEnd) {
-        requireWorkerThread();
-        return query(connection -> quoteResource(connection, requirePlayer(connection, playerId),
-                definition, quantity, moneyScale, dayStart, dayEnd, false));
-    }
-
-    public ResourceOrder createOrder(UUID playerId, String playerName,
-                                     ResourceDefinition definition, int quantity, int moneyScale,
-                                     Instant dayStart, Instant dayEnd, String businessKey) {
-        requireWorkerThread();
-        return transaction(connection -> createOrder(connection,
-                requirePlayer(connection, playerId), playerId, playerName, definition, quantity,
-                moneyScale, dayStart, dayEnd, businessKey, false,
-                "成员通过资源商店采购"));
-    }
-
-    public ResourceOrder createOrderForTown(UUID townId, UUID buyerId, String buyerName,
-                                            UUID actorId, String actorName,
-                                            ResourceDefinition definition, int quantity,
-                                            int moneyScale, Instant dayStart, Instant dayEnd,
-                                            String businessKey, String reason) {
-        requireWorkerThread();
-        requireReason(reason);
-        return transaction(connection -> {
-            PlayerContext buyer = requirePlayer(connection, buyerId);
-            if (!buyer.townId().equals(townId)) {
-                throw new ConflictException("目标玩家不是该小镇成员");
-            }
-            return createOrder(connection, buyer, buyerId, buyerName, definition, quantity,
-                    moneyScale, dayStart, dayEnd, businessKey, true,
-                    actorName + " 代办: " + reason, actorId, actorName);
-        });
-    }
-
-    public List<ResourceOrder> ordersForPlayer(UUID playerId, int page, int pageSize) {
-        requireWorkerThread();
-        if (page < 0 || pageSize < 1 || pageSize > 45) {
-            throw new IllegalArgumentException("订单分页参数无效");
-        }
-        return query(connection -> {
-            List<ResourceOrder> result = new ArrayList<>();
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT * FROM resource_orders WHERE buyer_uuid = ?
-                     ORDER BY created_at DESC, order_id LIMIT ? OFFSET ?
-                    """)) {
-                statement.setBytes(1, uuid(playerId));
-                statement.setInt(2, pageSize);
-                statement.setInt(3, Math.multiplyExact(page, pageSize));
-                try (ResultSet rows = statement.executeQuery()) {
-                    while (rows.next()) {
-                        result.add(readOrder(rows));
-                    }
-                }
-            }
-            return List.copyOf(result);
-        });
-    }
-
-    public List<ResourceOrder> openOrders(int limit) {
-        requireWorkerThread();
-        if (limit < 1 || limit > 1_000) {
-            throw new IllegalArgumentException("订单查询上限无效");
-        }
-        return query(connection -> {
-            List<ResourceOrder> result = new ArrayList<>();
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT * FROM resource_orders
-                     WHERE status IN ('PENDING', 'CLAIMING', 'REFUND_REQUIRED')
-                     ORDER BY created_at, order_id LIMIT ?
-                    """)) {
-                statement.setInt(1, limit);
-                try (ResultSet rows = statement.executeQuery()) {
-                    while (rows.next()) {
-                        result.add(readOrder(rows));
-                    }
-                }
-            }
-            return List.copyOf(result);
-        });
-    }
-
-    public int pendingOrderCount(UUID playerId) {
-        requireWorkerThread();
-        return query(connection -> {
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT COUNT(*) AS total FROM resource_orders
-                     WHERE buyer_uuid = ? AND status IN ('PENDING', 'CLAIMING')
-                    """)) {
-                statement.setBytes(1, uuid(playerId));
-                try (ResultSet row = statement.executeQuery()) {
-                    row.next();
-                    return row.getInt("total");
-                }
-            }
-        });
-    }
-
-    public ResourceOrder reserveClaim(UUID orderId, UUID playerId, Instant now) {
-        requireWorkerThread();
-        return transaction(connection -> {
-            ResourceOrder order = requireOrder(connection, orderId);
-            requireOrderOwner(order, playerId);
-            if (order.status().equals("CLAIMED") || order.status().equals("CLAIMING")) {
-                return order;
-            }
-            if (!order.status().equals("PENDING")) {
-                throw new ConflictException("订单当前不可领取: " + order.status());
-            }
-            UUID token = UUID.randomUUID();
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE resource_orders
-                       SET status = 'CLAIMING', claim_token = ?, claim_started_at = ?, last_error = NULL
-                     WHERE order_id = ? AND status = 'PENDING'
-                    """)) {
-                statement.setBytes(1, uuid(token));
-                statement.setLong(2, now.toEpochMilli());
-                statement.setBytes(3, uuid(orderId));
-                requireUpdated(statement, "订单已被其他领取请求占用");
-            }
-            return requireOrder(connection, orderId);
-        });
-    }
-
-    public ResourceOrder completeClaim(UUID orderId, UUID playerId, UUID claimToken,
-                                       Instant now) {
-        requireWorkerThread();
-        return transaction(connection -> {
-            ResourceOrder order = requireOrder(connection, orderId);
-            requireOrderOwner(order, playerId);
-            if (order.status().equals("CLAIMED")) {
-                return order;
-            }
-            if (!order.status().equals("CLAIMING") || !Objects.equals(order.claimToken(), claimToken)) {
-                throw new ConflictException("领取标记与订单状态不一致");
-            }
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE resource_orders SET status = 'CLAIMED', claimed_at = ?, last_error = NULL
-                     WHERE order_id = ? AND status = 'CLAIMING' AND claim_token = ?
-                    """)) {
-                statement.setLong(1, now.toEpochMilli());
-                statement.setBytes(2, uuid(orderId));
-                statement.setBytes(3, uuid(claimToken));
-                requireUpdated(statement, "订单领取状态已变化");
-            }
-            audit(connection, playerId, order.buyerName(), "RESOURCE_CLAIM", "ORDER",
-                    orderId.toString(), "玩家领取", order.resourceName() + " x" + order.quantity());
-            return requireOrder(connection, orderId);
-        });
-    }
-
-    public ResourceOrder releaseClaim(UUID orderId, UUID playerId, UUID claimToken, String error) {
-        requireWorkerThread();
-        return transaction(connection -> {
-            ResourceOrder order = requireOrder(connection, orderId);
-            requireOrderOwner(order, playerId);
-            if (order.status().equals("PENDING")) {
-                return order;
-            }
-            if (!order.status().equals("CLAIMING") || !Objects.equals(order.claimToken(), claimToken)) {
-                throw new ConflictException("订单领取状态已变化");
-            }
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE resource_orders
-                       SET status = 'PENDING', claim_token = NULL, claim_started_at = NULL,
-                           last_error = ?
-                     WHERE order_id = ? AND status = 'CLAIMING' AND claim_token = ?
-                    """)) {
-                statement.setString(1, safe(error));
-                statement.setBytes(2, uuid(orderId));
-                statement.setBytes(3, uuid(claimToken));
-                requireUpdated(statement, "订单领取状态已变化");
-            }
-            return requireOrder(connection, orderId);
-        });
-    }
-
-    public ResourceOrder requireOrderRefund(UUID orderId, String error) {
-        requireWorkerThread();
-        return transaction(connection -> {
-            ResourceOrder order = requireOrder(connection, orderId);
-            if (order.status().equals("REFUND_REQUIRED")) {
-                return order;
-            }
-            if (!order.status().equals("PENDING")) {
-                throw new ConflictException("只有未开始领取的订单能标记为待退款");
-            }
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE resource_orders SET status = 'REFUND_REQUIRED', last_error = ?
-                     WHERE order_id = ? AND status = 'PENDING'
-                    """)) {
-                statement.setString(1, safe(error));
-                statement.setBytes(2, uuid(orderId));
-                requireUpdated(statement, "订单状态已变化");
-            }
-            return requireOrder(connection, orderId);
-        });
-    }
-
-    public ResourceOrder refundOrder(UUID orderId, UUID actorId, String actorName, String reason) {
-        requireWorkerThread();
-        requireReason(reason);
-        return transaction(connection -> {
-            ResourceOrder order = requireOrder(connection, orderId);
-            if (order.status().equals("REFUNDED")) {
-                return order;
-            }
-            if (!order.status().equals("PENDING") && !order.status().equals("REFUND_REQUIRED")) {
-                throw new ConflictException("领取中或已领取订单不能退款");
-            }
-            postLedger(connection, order.townId(), "RESOURCE_REFUND", order.totalMinor(),
-                    actorId, actorName, "resource-refund:" + order.orderId(),
-                    "资源订单退款: " + order.resourceName() + " x" + order.quantity()
-                            + "；" + reason, true);
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE resource_orders SET status = 'REFUNDED', last_error = ?
-                     WHERE order_id = ? AND status IN ('PENDING', 'REFUND_REQUIRED')
-                    """)) {
-                statement.setString(1, safe(reason));
-                statement.setBytes(2, uuid(orderId));
-                requireUpdated(statement, "订单状态已变化");
-            }
-            audit(connection, actorId, actorName, "RESOURCE_REFUND", "ORDER",
-                    orderId.toString(), reason, "退回公共资金 " + order.totalMinor());
-            return requireOrder(connection, orderId);
-        });
-    }
-
     private BuffPurchase purchaseBuff(Connection connection, PlayerContext context,
                                       UUID actorId, String actorName,
                                       BuffDefinition definition, int moneyScale,
@@ -471,95 +240,6 @@ public final class CommerceRepository {
                 price, expiry);
     }
 
-    private ResourceOrder createOrder(Connection connection, PlayerContext context,
-                                      UUID buyerId, String buyerName,
-                                      ResourceDefinition definition, int quantity, int moneyScale,
-                                      Instant dayStart, Instant dayEnd, String businessKey,
-                                      boolean bypassRole, String reason) throws SQLException {
-        return createOrder(connection, context, buyerId, buyerName, definition, quantity,
-                moneyScale, dayStart, dayEnd, businessKey, bypassRole, reason, buyerId, buyerName);
-    }
-
-    private ResourceOrder createOrder(Connection connection, PlayerContext context,
-                                      UUID buyerId, String buyerName,
-                                      ResourceDefinition definition, int quantity, int moneyScale,
-                                      Instant dayStart, Instant dayEnd, String businessKey,
-                                      boolean bypassRole, String reason, UUID actorId,
-                                      String actorName) throws SQLException {
-        Optional<ResourceOrder> existing = findOrderByBusinessKey(connection, businessKey);
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-        ResourceQuote quote = quoteResource(connection, context, definition, quantity, moneyScale,
-                dayStart, dayEnd, bypassRole);
-        postLedger(connection, context.townId(), "RESOURCE_PURCHASE", -quote.totalMinor(),
-                actorId, actorName, businessKey,
-                "采购资源 " + definition.displayName() + " x" + quantity, false);
-        UUID orderId = UUID.randomUUID();
-        try (PreparedStatement statement = connection.prepareStatement("""
-                INSERT INTO resource_orders
-                    (order_id, town_id, buyer_uuid, buyer_name, resource_key, resource_name,
-                     material_key, quantity, total_minor, business_key, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
-                """)) {
-            statement.setBytes(1, uuid(orderId));
-            statement.setBytes(2, uuid(context.townId()));
-            statement.setBytes(3, uuid(buyerId));
-            statement.setString(4, buyerName);
-            statement.setString(5, definition.key());
-            statement.setString(6, definition.displayName());
-            statement.setString(7, definition.materialKey());
-            statement.setInt(8, quantity);
-            statement.setLong(9, quote.totalMinor());
-            statement.setString(10, businessKey);
-            statement.executeUpdate();
-        }
-        audit(connection, actorId, actorName, "RESOURCE_PURCHASE", "ORDER",
-                orderId.toString(), reason,
-                definition.key() + " quantity=" + quantity + " price=" + quote.totalMinor());
-        return requireOrder(connection, orderId);
-    }
-
-    private ResourceQuote quoteResource(Connection connection, PlayerContext context,
-                                         ResourceDefinition definition, int quantity,
-                                         int moneyScale, Instant dayStart, Instant dayEnd,
-                                         boolean bypassRole) throws SQLException {
-        Objects.requireNonNull(definition, "definition");
-        if (quantity < 1 || quantity > definition.maximumPerOrder()) {
-            throw new IllegalArgumentException("采购数量超出每次上限");
-        }
-        if (!bypassRole && !definition.allowsRole(context.role())) {
-            throw new ConflictException("你的成员角色没有采购该资源的权限");
-        }
-        int used = dailyUsage(connection, context.townId(), definition.key(), dayStart, dayEnd);
-        if (Math.addExact(used, quantity) > definition.dailyLimit()) {
-            throw new ConflictException("该资源今日采购额度不足，已用 " + used + "/"
-                    + definition.dailyLimit());
-        }
-        long total = MoneyAmount.rounded(definition.unitPrice().multiply(
-                        java.math.BigDecimal.valueOf(quantity)), moneyScale, RoundingMode.CEILING)
-                .minorUnits();
-        return new ResourceQuote(context, quantity, used, definition.dailyLimit(), total);
-    }
-
-    private static int dailyUsage(Connection connection, UUID townId, String resourceKey,
-                                  Instant dayStart, Instant dayEnd) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT COALESCE(SUM(quantity), 0) AS total FROM resource_orders
-                 WHERE town_id = ? AND resource_key = ? AND created_at >= ? AND created_at < ?
-                   AND status <> 'REFUNDED'
-                """)) {
-            statement.setBytes(1, uuid(townId));
-            statement.setString(2, resourceKey);
-            statement.setLong(3, dayStart.toEpochMilli());
-            statement.setLong(4, dayEnd.toEpochMilli());
-            try (ResultSet row = statement.executeQuery()) {
-                row.next();
-                return row.getInt("total");
-            }
-        }
-    }
-
     private static List<ActiveBuff> listActiveBuffs(Connection connection, UUID townId,
                                                      Instant now) throws SQLException {
         List<ActiveBuff> result = new ArrayList<>();
@@ -627,32 +307,6 @@ public final class CommerceRepository {
                     throw new ConflictException("Buff 记录不存在");
                 }
                 return readBuff(row);
-            }
-        }
-    }
-
-    private static Optional<ResourceOrder> findOrderByBusinessKey(Connection connection,
-                                                                   String businessKey)
-            throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT * FROM resource_orders WHERE business_key = ?")) {
-            statement.setString(1, businessKey);
-            try (ResultSet row = statement.executeQuery()) {
-                return row.next() ? Optional.of(readOrder(row)) : Optional.empty();
-            }
-        }
-    }
-
-    private static ResourceOrder requireOrder(Connection connection, UUID orderId)
-            throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT * FROM resource_orders WHERE order_id = ?")) {
-            statement.setBytes(1, uuid(orderId));
-            try (ResultSet row = statement.executeQuery()) {
-                if (!row.next()) {
-                    throw new ConflictException("资源订单不存在");
-                }
-                return readOrder(row);
             }
         }
     }
@@ -781,25 +435,6 @@ public final class CommerceRepository {
                 row.getString("last_error"));
     }
 
-    private static ResourceOrder readOrder(ResultSet row) throws SQLException {
-        byte[] token = row.getBytes("claim_token");
-        return new ResourceOrder(readUuid(row, "order_id"), readUuid(row, "town_id"),
-                readUuid(row, "buyer_uuid"), row.getString("buyer_name"),
-                row.getString("resource_key"), row.getString("resource_name"),
-                row.getString("material_key"), row.getInt("quantity"),
-                row.getLong("total_minor"), row.getString("business_key"),
-                row.getString("status"), token == null ? null : uuid(token),
-                nullableInstant(row, "claim_started_at"),
-                nullableInstant(row, "claimed_at"),
-                row.getString("last_error"), instant(row, "created_at"));
-    }
-
-    private static void requireOrderOwner(ResourceOrder order, UUID playerId) {
-        if (!order.buyerId().equals(playerId)) {
-            throw new ConflictException("该订单不属于当前玩家");
-        }
-    }
-
     private void requireWorkerThread() {
         if (forbiddenThread.getAsBoolean()) {
             throw new IllegalStateException("禁止在 Paper 主线程执行数据库 I/O");
@@ -873,11 +508,6 @@ public final class CommerceRepository {
         return Instant.ofEpochMilli(row.getLong(column));
     }
 
-    private static Instant nullableInstant(ResultSet row, String column) throws SQLException {
-        long value = row.getLong(column);
-        return row.wasNull() ? null : Instant.ofEpochMilli(value);
-    }
-
     private static String safe(String value) {
         if (value == null) {
             return "";
@@ -915,17 +545,6 @@ public final class CommerceRepository {
             return allowedWorlds.isEmpty() || allowedWorlds.stream()
                     .anyMatch(worldName::equalsIgnoreCase);
         }
-    }
-
-    public record ResourceQuote(PlayerContext context, int quantity, int usedToday,
-                                int dailyLimit, long totalMinor) {
-    }
-
-    public record ResourceOrder(UUID orderId, UUID townId, UUID buyerId, String buyerName,
-                                String resourceKey, String resourceName, String materialKey,
-                                int quantity, long totalMinor, String businessKey, String status,
-                                UUID claimToken, Instant claimStartedAt, Instant claimedAt,
-                                String lastError, Instant createdAt) {
     }
 
     public static class ConflictException extends RuntimeException {

@@ -161,7 +161,7 @@ class DatabaseGateTest {
     }
 
     @Test
-    void upgradesOfficerRolesAndDailyRefundsToSchemaSix() throws Exception {
+    void upgradesRolesWeeklyRefundsAndHistoricalResourceData() throws Exception {
         String url = "jdbc:sqlite:" + temporaryDirectory.resolve("schema6-upgrade.db");
         Flyway.configure().dataSource(url, null, null).locations("classpath:db/migration")
                 .target("5.0").load().migrate();
@@ -182,6 +182,7 @@ class DatabaseGateTest {
             for (int index = 0; index < 4; index++) {
                 insertMember(connection, townId, UUID.randomUUID(), "OFFICER", index + 1L);
             }
+            insertHistoricalResourceData(connection, townId, mayorId);
             try (PreparedStatement refund = connection.prepareStatement("""
                     INSERT INTO building_refund_daily
                         (town_id, player_uuid, day_key, refund_count, last_material_key)
@@ -222,6 +223,23 @@ class DatabaseGateTest {
                     assertTrue(refund.next());
                     assertEquals("2026-08-10", refund.getString("week_start"));
                     assertEquals(14, refund.getInt("refund_count"));
+                }
+                try (ResultSet order = statement.executeQuery("""
+                        SELECT resource_key, quantity, status FROM resource_orders
+                         WHERE business_key = 'legacy-resource:test'
+                        """)) {
+                    assertTrue(order.next());
+                    assertEquals("iron", order.getString("resource_key"));
+                    assertEquals(16, order.getInt("quantity"));
+                    assertEquals("PENDING", order.getString("status"));
+                }
+                try (ResultSet ledger = statement.executeQuery("""
+                        SELECT entry_type, amount_minor FROM ledger_entries
+                         WHERE business_key = 'legacy-resource:test'
+                        """)) {
+                    assertTrue(ledger.next());
+                    assertEquals("RESOURCE_PURCHASE", ledger.getString("entry_type"));
+                    assertEquals(-8_000, ledger.getLong("amount_minor"));
                 }
             }
         }
@@ -329,6 +347,38 @@ class DatabaseGateTest {
             member.setString(3, role);
             member.setLong(4, joinedAt);
             member.executeUpdate();
+        }
+    }
+
+    private static void insertHistoricalResourceData(Connection connection, UUID townId,
+                                                     UUID buyerId) throws SQLException {
+        try (PreparedStatement account = connection.prepareStatement("""
+                UPDATE town_accounts SET balance_minor = 92000 WHERE town_id = ?
+                """);
+             PreparedStatement order = connection.prepareStatement("""
+                INSERT INTO resource_orders
+                    (order_id, town_id, buyer_uuid, buyer_name, resource_key, resource_name,
+                     material_key, quantity, total_minor, business_key, status)
+                VALUES (?, ?, ?, 'Mayor', 'iron', '铁锭补给', 'minecraft:iron_ingot',
+                        16, 8000, 'legacy-resource:test', 'PENDING')
+                """);
+             PreparedStatement ledger = connection.prepareStatement("""
+                INSERT INTO ledger_entries
+                    (entry_id, town_id, entry_type, amount_minor, balance_after_minor,
+                     actor_uuid, actor_name, business_key, note)
+                VALUES (?, ?, 'RESOURCE_PURCHASE', -8000, 92000, ?, 'Mayor',
+                        'legacy-resource:test', '历史资源采购')
+                """)) {
+            account.setBytes(1, uuid(townId));
+            account.executeUpdate();
+            order.setBytes(1, uuid(UUID.randomUUID()));
+            order.setBytes(2, uuid(townId));
+            order.setBytes(3, uuid(buyerId));
+            order.executeUpdate();
+            ledger.setBytes(1, uuid(UUID.randomUUID()));
+            ledger.setBytes(2, uuid(townId));
+            ledger.setBytes(3, uuid(buyerId));
+            ledger.executeUpdate();
         }
     }
 

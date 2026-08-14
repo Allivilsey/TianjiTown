@@ -184,7 +184,8 @@ public final class TownBonusRepository {
                     """));
             counts.put("lockedAccounts", scalar(connection,
                     "SELECT COUNT(*) FROM town_accounts WHERE locked = 1"));
-            counts.put("openOrders", scalar(connection, """
+            // 只读统计历史遗留状态，不提供领取、退款或状态修复能力。
+            counts.put("legacyOpenResourceOrders", scalar(connection, """
                     SELECT COUNT(*) FROM resource_orders
                      WHERE status IN ('PENDING', 'CLAIMING', 'REFUND_REQUIRED')
                     """));

@@ -3,7 +3,6 @@ package cn.tianji.town.storage.commerce;
 import cn.tianji.town.core.consumption.BuffDefinition;
 import cn.tianji.town.core.consumption.BuffDurationOption;
 import cn.tianji.town.core.consumption.BuffStackingRule;
-import cn.tianji.town.core.consumption.ResourceDefinition;
 import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.storage.database.DatabaseConfig;
 import cn.tianji.town.storage.database.DatabaseGate;
@@ -18,12 +17,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -32,7 +29,7 @@ class CommerceRepositorySqliteTest {
     Path temporaryDirectory;
 
     @Test
-    void keepsBuffPurchasesAndResourceClaimsIdempotent() throws Exception {
+    void keepsBuffPurchasesAndCompensatingRefundsIdempotent() throws Exception {
         String url = "jdbc:sqlite:" + temporaryDirectory.resolve("phase4.db");
         try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
@@ -70,33 +67,6 @@ class CommerceRepositorySqliteTest {
                             "buff:test:3", now.plusSeconds(2)));
             assertEquals(1, repository.activeBuffsForPlayer(memberId, now).size());
 
-            ResourceDefinition resource = new ResourceDefinition("iron", "铁锭补给",
-                    "minecraft:iron_ingot", new BigDecimal("5.00"), 64, 80,
-                    List.of(16, 32, 64), Set.of(MemberRole.MAYOR));
-            Instant dayEnd = now.plus(Duration.ofDays(1));
-            CommerceRepository.ResourceOrder order = repository.createOrder(mayorId, "Mayor",
-                    resource, 32, 2, now, dayEnd, "resource:test:1");
-            assertEquals(order.orderId(), repository.createOrder(mayorId, "Mayor", resource,
-                    32, 2, now, dayEnd, "resource:test:1").orderId());
-            assertEquals(1, repository.pendingOrderCount(mayorId));
-            CommerceRepository.ResourceOrder claiming = repository.reserveClaim(order.orderId(),
-                    mayorId, now.plusSeconds(3));
-            assertNotNull(claiming.claimToken());
-            assertEquals(claiming.claimToken(), repository.reserveClaim(order.orderId(), mayorId,
-                    now.plusSeconds(4)).claimToken());
-            CommerceRepository.ResourceOrder claimed = repository.completeClaim(order.orderId(),
-                    mayorId, claiming.claimToken(), now.plusSeconds(5));
-            assertEquals("CLAIMED", claimed.status());
-            assertEquals("CLAIMED", repository.completeClaim(order.orderId(), mayorId,
-                    claiming.claimToken(), now.plusSeconds(6)).status());
-
-            CommerceRepository.ResourceOrder refundable = repository.createOrder(mayorId,
-                    "Mayor", resource, 16, 2, now, dayEnd, "resource:test:2");
-            assertEquals("REFUNDED", repository.refundOrder(refundable.orderId(), mayorId,
-                    "Mayor", "测试退款").status());
-            assertEquals(1, repository.ordersForPlayer(mayorId, 0, 45).stream()
-                    .filter(value -> value.status().equals("CLAIMED")).count());
-
             CommerceRepository.BuffPurchase refundedBuff = repository.refundActiveBuff(
                     second.buff().buffId(), mayorId, "Mayor", "效果应用失败测试");
             assertEquals("CANCELLED", refundedBuff.buff().status());
@@ -104,6 +74,7 @@ class CommerceRepositorySqliteTest {
                     () -> repository.refundActiveBuff(second.buff().buffId(), mayorId, "Mayor",
                             "重复退款测试"));
             assertEquals(refundedBuff.balanceAfterMinor(), accountBalance(gate, townId));
+            assertEquals(90_000, refundedBuff.balanceAfterMinor());
             assertEquals(1, ledgerCount(gate, townId, "BUFF_REFUND"));
             assertEquals(1, repository.activeBuffsForPlayer(memberId, now).getFirst().level());
         }

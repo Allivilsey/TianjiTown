@@ -3,7 +3,6 @@ package cn.tianji.town.paper;
 import cn.tianji.town.core.consumption.BuffDefinition;
 import cn.tianji.town.core.consumption.BuffDurationOption;
 import cn.tianji.town.storage.commerce.CommerceRepository;
-import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 import org.bukkit.attribute.AttributeInstance;
@@ -11,27 +10,16 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
-import org.bukkit.event.player.PlayerSwapHandItemsEvent;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -46,8 +34,6 @@ final class BuffRuntime implements Listener {
     private final TownRuntime host;
     private final CommerceRepository repository;
     private final BuffSettings settings;
-    private final NamespacedKey orderKey;
-    private final NamespacedKey claimKey;
     private final NamespacedKey potionKeysKey;
     private final Map<UUID, AppliedEffects> appliedEffects = new HashMap<>();
 
@@ -57,8 +43,6 @@ final class BuffRuntime implements Listener {
         this.host = Objects.requireNonNull(host, "host");
         this.repository = Objects.requireNonNull(repository, "repository");
         this.settings = Objects.requireNonNull(settings, "settings");
-        this.orderKey = new NamespacedKey(plugin, "resource_order");
-        this.claimKey = new NamespacedKey(plugin, "resource_claim");
         this.potionKeysKey = new NamespacedKey(plugin, "buff_potion_keys");
         validateEffects();
     }
@@ -134,10 +118,7 @@ final class BuffRuntime implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
-            recoverTaggedClaims(player);
-            refreshPlayer(player);
-        });
+        plugin.getServer().getScheduler().runTask(plugin, () -> refreshPlayer(player));
     }
 
     @EventHandler
@@ -154,67 +135,6 @@ final class BuffRuntime implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         clearManagedEffects(event.getPlayer());
         appliedEffects.remove(event.getPlayer().getUniqueId());
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onDrop(PlayerDropItemEvent event) {
-        if (isProtected(event.getItemDrop().getItemStack())) {
-            event.setCancelled(true);
-            event.getPlayer().sendMessage("§c该物品正在确认资源订单，暂时不能丢弃。");
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onInventoryClick(InventoryClickEvent event) {
-        if (isProtected(event.getCurrentItem()) || isProtected(event.getCursor())
-                || event.getHotbarButton() >= 0 && isProtected(
-                event.getWhoClicked().getInventory().getItem(event.getHotbarButton()))) {
-            event.setCancelled(true);
-            if (event.getWhoClicked() instanceof Player player) {
-                player.sendMessage("§c该物品正在确认资源订单，暂时不能移动。");
-            }
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onInventoryDrag(InventoryDragEvent event) {
-        if (isProtected(event.getOldCursor())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onInteract(PlayerInteractEvent event) {
-        if (isProtected(event.getItem())) {
-            event.setCancelled(true);
-            event.getPlayer().sendMessage("§c该物品正在确认资源订单，暂时不能使用。");
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onConsume(PlayerItemConsumeEvent event) {
-        if (isProtected(event.getItem())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onSwap(PlayerSwapHandItemsEvent event) {
-        if (isProtected(event.getMainHandItem()) || isProtected(event.getOffHandItem())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onDeath(PlayerDeathEvent event) {
-        boolean protectedItems = java.util.Arrays.stream(event.getPlayer().getInventory()
-                .getStorageContents()).anyMatch(this::isProtected);
-        if (protectedItems) {
-            // 订单确认窗口内优先保护所有背包内容，避免已扣款物品因死亡丢失。
-            event.setKeepInventory(true);
-            event.getDrops().clear();
-            event.getPlayer().sendMessage("§e资源订单正在确认，本次死亡已临时保留背包。");
-        }
     }
 
     private void verifyBuffPurchase(Player player, CommerceRepository.BuffPurchase purchase,
@@ -239,83 +159,6 @@ final class BuffRuntime implements Listener {
                 }, failure);
             }
         }, failure);
-    }
-
-    private void deliverReservedOrder(Player player, CommerceRepository.ResourceOrder order,
-                                      Material material) {
-        List<ItemStack> stacks = taggedStacks(material, order.quantity(), order.orderId(),
-                Objects.requireNonNull(order.claimToken(), "claimToken"));
-        Map<Integer, ItemStack> leftovers = player.getInventory()
-                .addItem(stacks.toArray(ItemStack[]::new));
-        if (!leftovers.isEmpty()) {
-            clearTaggedItems(player, order.orderId(), order.claimToken());
-            releaseClaim(player, order, "交付时背包容量发生变化");
-            player.sendMessage("§c交付时背包容量发生变化，订单仍保持待领取状态。");
-            return;
-        }
-        host.write(player, () -> repository.completeClaim(order.orderId(), player.getUniqueId(),
-                order.claimToken(), Instant.now()), completed -> {
-            clearTaggedItems(player, completed.orderId(), completed.claimToken());
-            player.sendMessage("§a已领取 " + completed.resourceName() + " x"
-                    + completed.quantity() + "。");
-        });
-    }
-
-    private void recoverTaggedClaims(Player player) {
-        Map<ClaimMarker, Integer> marked = new HashMap<>();
-        for (ItemStack item : player.getInventory().getStorageContents()) {
-            ClaimMarker marker = marker(item);
-            if (marker != null) {
-                marked.merge(marker, item.getAmount(), Math::addExact);
-            }
-        }
-        for (Map.Entry<ClaimMarker, Integer> entry : marked.entrySet()) {
-            ClaimMarker marker = entry.getKey();
-            host.write(player, () -> repository.reserveClaim(marker.orderId(),
-                    player.getUniqueId(), Instant.now()), order -> {
-                if (!Objects.equals(order.claimToken(), marker.claimToken())) {
-                    player.sendMessage("§c订单恢复标记不匹配，物品保持锁定，请联系管理员。order="
-                            + order.orderId());
-                    return;
-                }
-                if (order.status().equals("CLAIMED")) {
-                    clearTaggedItems(player, marker.orderId(), marker.claimToken());
-                    return;
-                }
-                if (entry.getValue() != order.quantity()) {
-                    player.sendMessage("§c订单恢复数量异常，物品保持锁定，请联系管理员。order="
-                            + order.orderId());
-                    return;
-                }
-                completeMarkedClaim(player, order);
-            });
-        }
-    }
-
-    private void completeMarkedClaim(Player player, CommerceRepository.ResourceOrder order) {
-        host.write(player, () -> repository.completeClaim(order.orderId(), player.getUniqueId(),
-                order.claimToken(), Instant.now()), completed -> {
-            clearTaggedItems(player, completed.orderId(), completed.claimToken());
-            player.sendMessage("§a已恢复并确认资源订单 " + completed.orderId() + "。");
-        });
-    }
-
-    private void releaseClaim(Player player, CommerceRepository.ResourceOrder order,
-                              String error) {
-        host.write(player, () -> repository.releaseClaim(order.orderId(), player.getUniqueId(),
-                order.claimToken(), error), ignored -> {
-        });
-    }
-
-    private void markRefundRequired(Player player, CommerceRepository.ResourceOrder order,
-                                    String error) {
-        host.write(player, () -> {
-            if (order.status().equals("CLAIMING")) {
-                repository.releaseClaim(order.orderId(), player.getUniqueId(), order.claimToken(),
-                        error);
-            }
-            return repository.requireOrderRefund(order.orderId(), error);
-        }, ignored -> player.sendMessage("§c订单无法交付，已标记为待管理员退款: " + error));
     }
 
     private void applyBuffs(Player player, List<CommerceRepository.ActiveBuff> buffs) {
@@ -446,97 +289,10 @@ final class BuffRuntime implements Listener {
         return new NamespacedKey(plugin, "buff_" + buffKey);
     }
 
-    private boolean hasCapacity(Player player, Material material, int quantity) {
-        int needed = (quantity + material.getMaxStackSize() - 1) / material.getMaxStackSize();
-        int empty = 0;
-        for (ItemStack item : player.getInventory().getStorageContents()) {
-            if (item == null || item.getType().isAir()) {
-                empty++;
-            }
-        }
-        return empty >= needed;
-    }
-
-    private List<ItemStack> taggedStacks(Material material, int quantity, UUID orderId,
-                                         UUID claimToken) {
-        List<ItemStack> result = new ArrayList<>();
-        int remaining = quantity;
-        while (remaining > 0) {
-            int amount = Math.min(remaining, material.getMaxStackSize());
-            ItemStack item = new ItemStack(material, amount);
-            ItemMeta meta = item.getItemMeta();
-            meta.getPersistentDataContainer().set(orderKey, PersistentDataType.STRING,
-                    orderId.toString());
-            meta.getPersistentDataContainer().set(claimKey, PersistentDataType.STRING,
-                    claimToken.toString());
-            item.setItemMeta(meta);
-            result.add(item);
-            remaining -= amount;
-        }
-        return result;
-    }
-
-    private void clearTaggedItems(Player player, UUID orderId, UUID claimToken) {
-        if (claimToken == null) {
-            return;
-        }
-        for (ItemStack item : player.getInventory().getStorageContents()) {
-            ClaimMarker marker = marker(item);
-            if (marker == null || !marker.orderId().equals(orderId)
-                    || !marker.claimToken().equals(claimToken)) {
-                continue;
-            }
-            ItemMeta meta = item.getItemMeta();
-            meta.getPersistentDataContainer().remove(orderKey);
-            meta.getPersistentDataContainer().remove(claimKey);
-            item.setItemMeta(meta);
-        }
-    }
-
-    private int taggedAmount(Player player, UUID orderId, UUID claimToken) {
-        if (claimToken == null) {
-            return 0;
-        }
-        int amount = 0;
-        for (ItemStack item : player.getInventory().getStorageContents()) {
-            ClaimMarker marker = marker(item);
-            if (marker != null && marker.orderId().equals(orderId)
-                    && marker.claimToken().equals(claimToken)) {
-                amount = Math.addExact(amount, item.getAmount());
-            }
-        }
-        return amount;
-    }
-
-    private boolean isProtected(ItemStack item) {
-        return marker(item) != null;
-    }
-
-    private ClaimMarker marker(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) {
-            return null;
-        }
-        String order = item.getItemMeta().getPersistentDataContainer()
-                .get(orderKey, PersistentDataType.STRING);
-        String claim = item.getItemMeta().getPersistentDataContainer()
-                .get(claimKey, PersistentDataType.STRING);
-        if (order == null || claim == null) {
-            return null;
-        }
-        try {
-            return new ClaimMarker(UUID.fromString(order), UUID.fromString(claim));
-        } catch (IllegalArgumentException ignored) {
-            return null;
-        }
-    }
-
     private static String safeMessage(Throwable throwable) {
         String message = throwable.getMessage();
         return message == null || message.isBlank()
                 ? throwable.getClass().getSimpleName() : message;
-    }
-
-    private record ClaimMarker(UUID orderId, UUID claimToken) {
     }
 
     private record AttributeKey(Attribute attribute, NamespacedKey modifierKey) {

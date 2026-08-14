@@ -11,7 +11,7 @@
 - [ ] DailyTaxEconomy：确认 `taxer-vault`、非玩家账户和清理规则不会再次征收或清理 TianjiTown 清算账户。
 - [ ] Paper/Java：插件启动、异步数据库门禁、Beacon 自定义范围/Potion Effect、BlockPlace/BlockMultiPlace 和区块卸载清理均通过。
 - [ ] WorldGuard：服务区附近外部区域碰撞检查保持正确；未安装时只按文档降级边界检查。
-- [ ] 完整执行申请 → 治理 → 税收/账本 → 扩张 → Buff/订单 → 领地加成玩家路径。
+- [ ] 完整执行申请 → 治理 → 税收/账本 → 扩张 → Buff → 领地加成玩家路径，并核对历史资源数据未变化。
 - [ ] 执行 `/townadmin diagnose 7` 与 `/townadmin backup`，报告无新增差异并完成隔离恢复。
 - [ ] 保留旧依赖/JAR 和整套备份，明确回滚负责人、窗口与判定条件。
 

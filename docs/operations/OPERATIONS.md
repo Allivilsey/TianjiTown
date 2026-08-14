@@ -4,8 +4,7 @@
 
 1. `/townadmin status`：必须为 `READY`，SQLite 为 `READY`，查看最近诊断与备份时间/路径。
 2. `/townadmin money reconcile`：清算账户不得短款；出现锁定时先停止消费并核对外部账户。
-3. `/townadmin order list 100`：处理 `REFUND_REQUIRED` 与长时间 `CLAIMING` 订单。
-4. 检查控制台中的 `SEVERE`、`WRITE_LOCKED`、`DIFFERENCE`、`INCOMPLETE` 和 `COMPENSATION_REQUIRED`。
+3. 检查控制台中的 `SEVERE`、`WRITE_LOCKED`、`DIFFERENCE`、`INCOMPLETE` 和 `COMPENSATION_REQUIRED`。
 
 ## 常用运维命令
 
