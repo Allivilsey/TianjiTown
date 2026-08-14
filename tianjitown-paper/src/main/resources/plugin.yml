@@ -19,16 +19,12 @@ permissions:
     description: TianjiTown 全部管理权限
     default: op
     children:
-      tianjitown.admin.phase0: true
       tianjitown.admin.money: true
       tianjitown.admin.tax: true
       tianjitown.admin.ledger: true
       tianjitown.admin.expand: true
       tianjitown.admin.buff: true
       tianjitown.admin.operations: true
-  tianjitown.admin.phase0:
-    description: 执行第0阶段预发验证
-    default: op
   tianjitown.admin.money:
     description: 查询、调整和对账小镇公共资金
     default: op

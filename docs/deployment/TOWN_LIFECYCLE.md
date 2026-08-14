@@ -20,7 +20,7 @@
 3. 替换插件 JAR，保留并人工合并现有 `config.yml`，然后启动服务器。
 4. Flyway 会保留安装门禁记录，再创建 `1.x` 建镇与成员业务表。禁止手工修改 Flyway history。
 5. 执行 `/townadmin status`。只有状态为 `READY` 时才开放服务台。
-6. 在专用空区块执行 `/townadmin phase0 residence-smoke <world> <chunkX> <chunkZ> <memberUuid>`，再点击聊天栏确认按钮，完成 Residence 预发验证闭环。
+6. 在隔离环境批准一个测试小镇，确认 Residence 创建、边界读取和成员 `build` 权限正确，再通过管理员删除流程验证投影清理。
 7. 用 `/townadmin station create|info|list|remove` 创建、核对并移除服务台；用 `/townadmin handbook <player>` 做手册发放测试。
 
 从早期含 YAML 镜像的版本升级时，原 `plugins/TianjiTown/towns` 文件不会再被读取或改写。确认 SQLite 资料完整并保留一次备份后，可由管理员另行归档这些旧文件。`town_profile_sync` 表为停用遗留表，运行代码不再访问；不要手工改写 Flyway history。旧 MySQL 数据不会自动导入，必须在隔离环境另行转换。

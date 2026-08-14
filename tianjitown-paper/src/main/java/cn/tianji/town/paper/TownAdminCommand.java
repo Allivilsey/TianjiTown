@@ -11,7 +11,6 @@ import cn.tianji.town.core.governance.VoteType;
 import cn.tianji.town.core.ports.LandProtectionService;
 import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.core.town.TownStatus;
-import cn.tianji.town.integrations.residence.ResidenceSmokeTest;
 import cn.tianji.town.storage.town.ApplicationSnapshot;
 import cn.tianji.town.storage.town.AuditSnapshot;
 import cn.tianji.town.storage.town.TownSnapshot;
@@ -38,12 +37,10 @@ import java.util.UUID;
 final class TownAdminCommand implements CommandExecutor {
     private static final UUID CONSOLE_ID = new UUID(0, 0);
     private final TianjiTownPlugin plugin;
-    private final PreflightCommand preflightCommand;
     private final CommandConfirmationManager confirmations = new CommandConfirmationManager();
 
     TownAdminCommand(TianjiTownPlugin plugin) {
         this.plugin = plugin;
-        this.preflightCommand = new PreflightCommand(plugin, new ResidenceSmokeTest());
     }
 
     @Override
@@ -85,9 +82,6 @@ final class TownAdminCommand implements CommandExecutor {
             }
             if (root.equals("maintenance")) {
                 return maintenance(sender, args);
-            }
-            if (root.equals("phase0")) {
-                return preflight(sender, command, label, args);
             }
             TownRuntime runtime = requireRuntime(sender);
             if (runtime == null) {
@@ -195,23 +189,6 @@ final class TownAdminCommand implements CommandExecutor {
                 ? "§e维护模式已开启；服务台、手册、玩家 GUI 和表单提交现已暂停。"
                 : "§a维护模式已关闭；玩家入口已恢复。");
         return true;
-    }
-
-    private boolean preflight(CommandSender sender, Command command, String label, String[] args) {
-        if (args.length >= 2 && args[1].equalsIgnoreCase("status")) {
-            return preflightCommand.onCommand(sender, command, label, args);
-        }
-        if (args.length >= 2 && args[1].equalsIgnoreCase("residence-smoke")) {
-            if (preflightCommand.validateResidenceSmoke(sender, args)) {
-                String description = "在预发世界 " + args[2] + " 的区块 " + args[3] + ","
-                        + args[4] + " 执行 Residence 冒烟测试";
-                String[] confirmedArgs = args.clone();
-                requestConfirmation(sender, description,
-                        () -> preflightCommand.runResidenceSmoke(sender, confirmedArgs));
-            }
-            return true;
-        }
-        return preflightCommand.onCommand(sender, command, label, args);
     }
 
     private boolean confirm(CommandSender sender, String[] args) {
@@ -1021,10 +998,6 @@ final class TownAdminCommand implements CommandExecutor {
                     TownAdminPermissions.OPERATIONS)) {
                 sender.sendMessage("§esystem §7统一诊断、在线备份、状态与维护");
             }
-            if (TownAdminPermissions.has(sender::hasPermission,
-                    TownAdminPermissions.PREFLIGHT)) {
-                sender.sendMessage("§ephase0 §7预发环境验证");
-            }
             sender.sendMessage("§8Tab 补全中的 <原因> 是位置提示，请替换为实际内容。");
             return;
         }
@@ -1042,7 +1015,6 @@ final class TownAdminCommand implements CommandExecutor {
             case "land" -> landHelp(sender);
             case "money", "tax", "ledger", "expand" -> economyHelp(sender, topic);
             case "buff" -> buffsHelp(sender);
-            case "phase0" -> preflightHelp(sender);
             default -> {
                 sender.sendMessage("§c未知帮助分类：" + topic);
                 help(sender, null);
@@ -1114,18 +1086,6 @@ final class TownAdminCommand implements CommandExecutor {
         sender.sendMessage("§e/townadmin land preview <小镇全名> §7在游戏内显示边界");
         sender.sendMessage("§e/townadmin land reconcile <小镇全名|all> [repair]");
         sender.sendMessage("§e/townadmin land rebuild <小镇全名|all> §7随后点击聊天确认按钮");
-    }
-
-    private static void preflightHelp(CommandSender sender) {
-        if (!TownAdminPermissions.has(sender::hasPermission,
-                TownAdminPermissions.PREFLIGHT)) {
-            sender.sendMessage("§c没有预发验证权限。");
-            return;
-        }
-        sender.sendMessage("§6安装门禁与预发验证");
-        sender.sendMessage("§e/townadmin phase0 status");
-        sender.sendMessage("§e/townadmin phase0 residence-smoke <world> <chunkX> <chunkZ>"
-                + " <memberUuid> §7随后点击聊天确认按钮");
     }
 
     private record ApplicationRequest(ApplicationSnapshot application, String reason) {

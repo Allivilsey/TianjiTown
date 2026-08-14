@@ -4,7 +4,6 @@ import cn.tianji.town.storage.town.ApplicationSnapshot;
 import cn.tianji.town.storage.town.TownSnapshot;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
@@ -134,17 +133,8 @@ final class TownAdminTabCompleter implements TabCompleter {
                                 playerId, offline.getName(), false));
                     });
         }
-        Integer chunkX = null;
-        Integer chunkZ = null;
-        if (sender instanceof Player player) {
-            chunkX = player.getChunk().getX();
-            chunkZ = player.getChunk().getZ();
-        }
         return new TownAdminCompletionEngine.Dynamic(List.copyOf(players.values()),
-                plugin.getServer().getWorlds().stream().map(World::getName).toList(),
-                chunkX, chunkZ, sender instanceof Player,
-                TownAdminPermissions.has(sender::hasPermission,
-                        TownAdminPermissions.PREFLIGHT));
+                sender instanceof Player);
     }
 
     private static String safeMessage(Throwable throwable) {

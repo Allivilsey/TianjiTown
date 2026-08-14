@@ -31,13 +31,12 @@ class TownAdminCompletionEngineTest {
             Map.of(town, List.of(member)));
     private final TownAdminCompletionEngine.Dynamic dynamic = new TownAdminCompletionEngine.Dynamic(
             List.of(new TownAdminCompletionEngine.PlayerCandidate(member, "MemberOne", true)),
-            List.of("world", "resource"), 12, -8, true, true);
+            true);
 
     @Test
     void filtersRootCommandsAndIncludesContextualCommands() {
         List<String> result = engine.complete(new String[]{"st"}, snapshot, dynamic);
         assertEquals(List.of("station", "status"), result);
-        assertTrue(engine.complete(new String[]{"phase"}, snapshot, dynamic).contains("phase0"));
         assertTrue(engine.complete(new String[]{"main"}, snapshot, dynamic).contains("maintenance"));
         assertFalse(engine.complete(new String[]{""}, snapshot, dynamic).contains("data"));
         assertEquals(List.of("application"), engine.complete(
@@ -91,16 +90,6 @@ class TownAdminCompletionEngineTest {
     }
 
     @Test
-    void completesPreflightWorldCoordinatesWithoutConfirmationFlags() {
-        assertEquals(List.of("world"), engine.complete(
-                new String[]{"phase0", "residence-smoke", "wo"}, snapshot, dynamic));
-        assertEquals(List.of("12"), engine.complete(
-                new String[]{"phase0", "residence-smoke", "world", ""}, snapshot, dynamic));
-        assertEquals(List.of(), engine.complete(new String[]{"phase0", "residence-smoke",
-                "world", "12", "-8", member.toString(), ""}, snapshot, dynamic));
-    }
-
-    @Test
     void completesBuffManagementCommands() {
         assertEquals(List.of("grant", "list"), engine.complete(
                 new String[]{"buff", ""}, snapshot, dynamic));
@@ -112,12 +101,11 @@ class TownAdminCompletionEngineTest {
     }
 
     @Test
-    void limitsPlayerOnlyActionsAndPreflightRootsWhenUnavailable() {
+    void limitsPlayerOnlyActionsForConsole() {
         TownAdminCompletionEngine.Dynamic console = new TownAdminCompletionEngine.Dynamic(
-                List.of(), List.of("world"), null, null, false, false);
+                List.of(), false);
         List<String> roots = engine.complete(new String[]{""}, snapshot, console);
         assertTrue(roots.contains("station"));
-        assertFalse(roots.contains("phase0"));
         assertFalse(roots.contains("confirm"));
         assertFalse(roots.contains("cancel"));
         assertEquals(List.of("list"), engine.complete(

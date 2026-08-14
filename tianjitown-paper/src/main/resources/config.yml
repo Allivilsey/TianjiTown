@@ -10,11 +10,6 @@ database:
 test-command:
   enabled: false
 
-phase0:
-  # 必须只在预发服临时开启。生产服保持 false。
-  allow-residence-smoke: false
-  residence-smoke-world: '__SET_PREPRODUCTION_WORLD__'
-
 phase1:
   # 可通过 /townadmin maintenance on|off 即时切换；开启时玩家 UI 和表单全部暂停。
   maintenance-mode: false

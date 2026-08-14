@@ -30,20 +30,15 @@ final class TownAdminCompletionEngine {
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(dynamic, "dynamic");
         if (args.length <= 1) {
-            List<String> roots = new ArrayList<>(ROOTS);
-            if (dynamic.preflightAllowed()) {
-                roots.add("phase0");
-            }
-            return filter(roots, current(args));
+            return filter(ROOTS, current(args));
         }
         return switch (args[0].toLowerCase(Locale.ROOT)) {
             case "help" -> args.length == 2
-                    ? filter(helpTopics(dynamic), args[1]) : List.of();
+                    ? filter(helpTopics(), args[1]) : List.of();
             case "audit" -> args.length == 2
                     ? filter(List.of("10", "20", "50", "100", "200"), args[1]) : List.of();
             case "diagnose" -> args.length == 2
                     ? filter(List.of("1", "7", "14", "30", "90", "180"), args[1]) : List.of();
-            case "phase0" -> preflight(args, dynamic);
             case "station" -> args.length == 2
                     ? filter(dynamic.playerSender()
                     ? List.of("create", "info", "list", "remove") : List.of("list"), args[1])
@@ -64,40 +59,13 @@ final class TownAdminCompletionEngine {
         };
     }
 
-    private List<String> helpTopics(Dynamic dynamic) {
+    private List<String> helpTopics() {
         List<String> topics = new ArrayList<>(List.of(
                 "application", "land", "member", "station", "system", "town"));
         topics.add("vote");
         topics.addAll(List.of("money", "tax", "ledger", "expand"));
         topics.add("buff");
-        if (dynamic.preflightAllowed()) {
-            topics.add("phase0");
-        }
         return topics;
-    }
-
-    private List<String> preflight(String[] args, Dynamic dynamic) {
-        if (!dynamic.preflightAllowed()) {
-            return List.of();
-        }
-        if (args.length == 2) {
-            return filter(List.of("status", "residence-smoke"), args[1]);
-        }
-        if (!args[1].equalsIgnoreCase("residence-smoke")) {
-            return List.of();
-        }
-        return switch (args.length) {
-            case 3 -> filter(dynamic.worldNames(), args[2]);
-            case 4 -> dynamic.currentChunkX() == null ? List.of()
-                    : filter(List.of(dynamic.currentChunkX().toString()), args[3]);
-            case 5 -> dynamic.currentChunkZ() == null ? List.of()
-                    : filter(List.of(dynamic.currentChunkZ().toString()), args[4]);
-            case 6 -> {
-                List<String> ids = dynamic.onlinePlayerIds().stream().map(UUID::toString).toList();
-                yield filter(ids.isEmpty() ? List.of("<成员UUID>") : ids, args[5]);
-            }
-            default -> List.of();
-        };
     }
 
     private List<String> application(String[] args, Snapshot snapshot) {
@@ -438,19 +406,13 @@ final class TownAdminCompletionEngine {
         }
     }
 
-    record Dynamic(List<PlayerCandidate> players, List<String> worldNames, Integer currentChunkX,
-                   Integer currentChunkZ, boolean playerSender, boolean preflightAllowed) {
+    record Dynamic(List<PlayerCandidate> players, boolean playerSender) {
         Dynamic {
             players = List.copyOf(players);
-            worldNames = List.copyOf(worldNames);
         }
 
         List<String> onlinePlayerNames() {
             return players.stream().filter(PlayerCandidate::online).map(PlayerCandidate::label).toList();
-        }
-
-        List<UUID> onlinePlayerIds() {
-            return players.stream().filter(PlayerCandidate::online).map(PlayerCandidate::id).toList();
         }
 
         String playerLabel(UUID playerId) {

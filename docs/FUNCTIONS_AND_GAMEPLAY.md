@@ -419,7 +419,6 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 | 权限 | 作用 |
 |---|---|
 | `tianjitown.admin` | 全部管理功能，默认 OP |
-| `tianjitown.admin.phase0` | 预发 Residence 冒烟验证 |
 | `tianjitown.admin.money` | 公共资金查询、调账和对账 |
 | `tianjitown.admin.tax` | 强制设置税率 |
 | `tianjitown.admin.ledger` | 查询公共账本 |

@@ -38,7 +38,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 ## 管理员帮助
 
-`/townadmin` 或 `/townadmin help` 显示精简分类。使用 `/townadmin help <分类>` 查看完整语法，可用分类为 `system`、`station`、`application`、`town`、`member`、`vote`、`land`、`money`、`tax`、`ledger`、`expand`、`buff` 和 `phase0`。命令参数支持 Tab 自动补全；补全列表中的 `<原因>` 等尖括号内容只是当前位置的参数提示，必须替换为实际内容，不能原样提交。
+`/townadmin` 或 `/townadmin help` 显示精简分类。使用 `/townadmin help <分类>` 查看完整语法，可用分类为 `system`、`station`、`application`、`town`、`member`、`vote`、`land`、`money`、`tax`、`ledger`、`expand` 和 `buff`。命令参数支持 Tab 自动补全；补全列表中的 `<原因>` 等尖括号内容只是当前位置的参数提示，必须替换为实际内容，不能原样提交。
 
 ### 系统与运维
 
@@ -130,15 +130,6 @@ Buff 目录位于 `config.yml` 的 `phase4` 配置节。公共 Buff 不受世界
 ### 领地加成
 
 建筑返还与领地信标位于 `config.yml` 的 `phase5` 配置节。建筑返还以 25% 概率处理生存模式成员在本镇有效 Residence 内放置的安全单方块，成功时只播放拾取音效，不展示内部额度。镇长或副镇长切换信标效果时，系统记录数据库中尚未存在或等级更高的效果，不再扫描区块中的信标。
-
-### 安装门禁与预发验证
-
-```text
-/townadmin phase0 status
-/townadmin phase0 residence-smoke <world> <chunkX> <chunkZ> <memberUuid>
-```
-
-冒烟验证必须拥有 `tianjitown.admin.phase0` 权限，并且只能在配置中允许的专用预发世界执行。命令通过前置检查后会显示聊天栏确认按钮，点击确认才会执行写入测试。
 
 ## 玩家入口
 
