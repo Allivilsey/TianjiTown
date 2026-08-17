@@ -38,7 +38,7 @@ permissions:
     description: 查询和代办小镇领地扩张
     default: op
   tianjitown.admin.buff:
-    description: 查询、代购和退款取消公共 Buff
+    description: 查询和代购公共 Buff
     default: op
   tianjitown.admin.operations:
     description: 执行统一诊断与在线备份

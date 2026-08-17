@@ -49,6 +49,17 @@ class PluginDescriptorTest {
     }
 
     @Test
+    void buffPermissionDescriptionMatchesNonRefundablePolicy() throws IOException {
+        String descriptor = descriptor();
+        String buffPermission = descriptor.substring(
+                descriptor.lastIndexOf("\n  tianjitown.admin.buff:"),
+                descriptor.lastIndexOf("\n  tianjitown.admin.operations:"));
+
+        assertTrue(buffPermission.contains("description: 查询和代购公共 Buff"));
+        assertFalse(buffPermission.contains("退款取消"));
+    }
+
+    @Test
     void testCommandUsesDedicatedPermissionWithoutCommandLevelInterception() throws IOException {
         String descriptor = descriptor();
         String commandSection = descriptor.substring(descriptor.indexOf("commands:"),

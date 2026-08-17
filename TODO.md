@@ -1,0 +1,1 @@
+1. 将gui切换为Dialog

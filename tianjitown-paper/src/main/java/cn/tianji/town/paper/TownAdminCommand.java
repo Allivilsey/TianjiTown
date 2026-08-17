@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 final class TownAdminCommand implements CommandExecutor {
     private static final UUID CONSOLE_ID = new UUID(0, 0);
@@ -970,34 +971,7 @@ final class TownAdminCommand implements CommandExecutor {
         if (topic == null || topic.isBlank()) {
             sender.sendMessage("§6TianjiTown " + plugin.getPluginMeta().getVersion() + " 管理帮助");
             sender.sendMessage("§7用法: §f/townadmin help <分类>");
-            if (sender.hasPermission(TownAdminPermissions.ROOT)) {
-                sender.sendMessage("§esystem §7状态、重载、维护与审计");
-                sender.sendMessage("§estation §7服务台与小镇手册");
-                sender.sendMessage("§eapplication §7申请审批");
-                sender.sendMessage("§etown §7小镇查看与删除");
-                sender.sendMessage("§emember §7成员与镇长管理");
-                sender.sendMessage("§evote §7治理投票代办与结算");
-                sender.sendMessage("§eland §7领地预览与对账");
-            }
-            if (TownAdminPermissions.has(sender::hasPermission, TownAdminPermissions.MONEY)) {
-                sender.sendMessage("§emoney §7公共资金查询、调整与对账");
-            }
-            if (TownAdminPermissions.has(sender::hasPermission, TownAdminPermissions.TAX)) {
-                sender.sendMessage("§etax §7QuickShop 税率调整");
-            }
-            if (TownAdminPermissions.has(sender::hasPermission, TownAdminPermissions.LEDGER)) {
-                sender.sendMessage("§eledger §7公共资金账本查询");
-            }
-            if (TownAdminPermissions.has(sender::hasPermission, TownAdminPermissions.EXPAND)) {
-                sender.sendMessage("§eexpand §7领地扩张查询与预览");
-            }
-            if (TownAdminPermissions.has(sender::hasPermission, TownAdminPermissions.BUFF)) {
-                sender.sendMessage("§ebuff §7公共 Buff 查询、代购与退款取消");
-            }
-            if (TownAdminPermissions.has(sender::hasPermission,
-                    TownAdminPermissions.OPERATIONS)) {
-                sender.sendMessage("§esystem §7统一诊断、在线备份、状态与维护");
-            }
+            rootHelpEntries(sender::hasPermission).forEach(sender::sendMessage);
             sender.sendMessage("§8Tab 补全中的 <原因> 是位置提示，请替换为实际内容。");
             return;
         }
@@ -1020,6 +994,37 @@ final class TownAdminCommand implements CommandExecutor {
                 help(sender, null);
             }
         }
+    }
+
+    static List<String> rootHelpEntries(Predicate<String> hasPermission) {
+        List<String> entries = new ArrayList<>();
+        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.OPERATIONS)) {
+            entries.add("§esystem §7状态、重载、维护、审计、统一诊断与在线备份");
+        }
+        if (hasPermission.test(TownAdminPermissions.ROOT)) {
+            entries.add("§estation §7服务台与小镇手册");
+            entries.add("§eapplication §7申请审批");
+            entries.add("§etown §7小镇查看与删除");
+            entries.add("§emember §7成员与镇长管理");
+            entries.add("§evote §7治理投票代办与结算");
+            entries.add("§eland §7领地预览与对账");
+        }
+        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.MONEY)) {
+            entries.add("§emoney §7公共资金查询、调整与对账");
+        }
+        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.TAX)) {
+            entries.add("§etax §7QuickShop 税率调整");
+        }
+        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.LEDGER)) {
+            entries.add("§eledger §7公共资金账本查询");
+        }
+        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.EXPAND)) {
+            entries.add("§eexpand §7领地扩张查询与预览");
+        }
+        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.BUFF)) {
+            entries.add("§ebuff §7公共 Buff 查询与代购");
+        }
+        return List.copyOf(entries);
     }
 
     private static void systemHelp(CommandSender sender) {
