@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * GUI 与测试命令共享的稳定业务结果。玩家文案由各入口自行负责。
+ * 玩家界面与测试命令共享的稳定业务结果。玩家文案由各入口自行负责。
  */
 record TownActionResult(boolean success, String action, String reason,
                         Map<String, String> data) {

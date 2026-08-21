@@ -187,7 +187,7 @@ final class TownAdminCommand implements CommandExecutor {
         plugin.getConfig().set("phase1.maintenance-mode", enabled);
         plugin.saveConfig();
         sender.sendMessage(enabled
-                ? "§e维护模式已开启；服务台、手册、玩家 GUI 和表单提交现已暂停。"
+                ? "§e维护模式已开启；服务台、手册、玩家界面和表单提交现已暂停。"
                 : "§a维护模式已关闭；玩家入口已恢复。");
         return true;
     }

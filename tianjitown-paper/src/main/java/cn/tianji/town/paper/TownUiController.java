@@ -19,7 +19,12 @@ import cn.tianji.town.storage.governance.TransferSnapshot;
 import cn.tianji.town.storage.governance.VoteSnapshot;
 import cn.tianji.town.storage.economy.EconomyRepository;
 import cn.tianji.town.storage.commerce.CommerceRepository;
+import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.event.player.AsyncChatEvent;
+import io.papermc.paper.registry.data.dialog.ActionButton;
+import io.papermc.paper.registry.data.dialog.DialogBase;
+import io.papermc.paper.registry.data.dialog.action.DialogAction;
+import io.papermc.paper.registry.data.dialog.type.DialogType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -77,6 +82,7 @@ final class TownUiController implements Listener {
     private final TownRuntime runtime;
     private final TownActions actions;
     private final SitePolicy sitePolicy;
+    private final TownUiMode uiMode;
     private final NamespacedKey stationKey;
     private final NamespacedKey handbookKey;
     private final NamespacedKey actionKey;
@@ -94,6 +100,7 @@ final class TownUiController implements Listener {
         this.runtime = runtime;
         this.actions = actions;
         this.sitePolicy = runtime.sitePolicy();
+        this.uiMode = TownUiMode.load(plugin.getConfig());
         this.stationKey = new NamespacedKey(plugin, "service_station");
         this.handbookKey = new NamespacedKey(plugin, "handbook");
         this.actionKey = new NamespacedKey(plugin, "gui_action");
@@ -1350,14 +1357,14 @@ final class TownUiController implements Listener {
 
     private void handleAction(Player player, String action, String target) {
         if (maintenanceMode()) {
-            player.closeInventory();
+            closeUi(player);
             player.sendMessage("§c小镇系统已进入维护模式，本次操作未执行。");
             return;
         }
         try {
             switch (action) {
                 case "MAIN" -> openMain(player);
-                case "CLOSE" -> player.closeInventory();
+                case "CLOSE" -> closeUi(player);
                 case "GIVE_HANDBOOK" -> {
                     giveHandbook(player);
                     openMain(player);
@@ -1764,7 +1771,7 @@ final class TownUiController implements Listener {
                     ? "phase1:retry:" + application.id() + ":" + UUID.randomUUID()
                     : "phase1:approve:" + application.id();
             runtime.provision(admin, application.id(), admin.getUniqueId(), admin.getName(),
-                    "管理员通过 GUI 批准申请", idempotencyKey, approved -> {
+                    "管理员通过玩家界面批准申请", idempotencyKey, approved -> {
                         notifyApplicationDecision(approved);
                         playSound(admin, approved.status() == ApplicationStatus.ACTIVE
                                 ? Sound.ENTITY_PLAYER_LEVELUP : Sound.BLOCK_NOTE_BLOCK_BASS);
@@ -1782,7 +1789,7 @@ final class TownUiController implements Listener {
         chatInputs.remove(admin.getUniqueId());
         reviewReasonInputs.put(admin.getUniqueId(),
                 new ReviewReasonSession(applicationId, requestChanges));
-        admin.closeInventory();
+        closeUi(admin);
         admin.sendMessage(requestChanges
                 ? "§e请在聊天栏输入具体修改要求；输入“取消”放弃，本次操作不会改变申请状态。"
                 : "§e请在聊天栏输入拒绝原因；输入“取消”放弃，本次操作不会改变申请状态。");
@@ -1831,7 +1838,7 @@ final class TownUiController implements Listener {
                 admin.sendMessage("§c该申请尚未选址。");
                 return;
             }
-            admin.closeInventory();
+            closeUi(admin);
             sitePolicy.teleportAndPreview(admin, application.territory());
         });
     }
@@ -1881,7 +1888,7 @@ final class TownUiController implements Listener {
                         normalizedMemberNames(initialMemberNames)));
         chatInputs.remove(player.getUniqueId());
         reviewReasonInputs.remove(player.getUniqueId());
-        player.closeInventory();
+        closeUi(player);
         renderApplicationForm(player, formId);
     }
 
@@ -1963,7 +1970,7 @@ final class TownUiController implements Listener {
             player.sendMessage("§c新资金写入当前已暂停。");
             return;
         }
-        player.closeInventory();
+        closeUi(player);
         chatInputs.remove(player.getUniqueId());
         reviewReasonInputs.remove(player.getUniqueId());
         donationInputs.add(player.getUniqueId());
@@ -2249,7 +2256,7 @@ final class TownUiController implements Listener {
         book.setItemMeta(meta);
         Map<Integer, ItemStack> leftovers = player.getInventory().addItem(book);
         leftovers.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
-        player.closeInventory();
+        closeUi(player);
         player.sendMessage("§e请编辑书本第 3、4 页的简介和规则，然后签名提交；签名书名可任意填写，名称、简称与领地名称修改会被忽略。");
     }
 
@@ -2332,6 +2339,24 @@ final class TownUiController implements Listener {
 
     private UUID openMenu(Player player, int size, String title, List<MenuItem> items) {
         UUID session = UUID.randomUUID();
+        menuSessions.put(player.getUniqueId(), session);
+        if (uiMode == TownUiMode.DIALOG) {
+            openDialog(player, title, items, session);
+        } else {
+            openLegacyMenu(player, size, title, items, session);
+        }
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (isCurrent(player, session)) {
+                menuSessions.remove(player.getUniqueId());
+                closeUi(player);
+                player.sendMessage("§7小镇菜单会话已超时，请重新打开。");
+            }
+        }, MENU_TIMEOUT_TICKS);
+        return session;
+    }
+
+    private void openLegacyMenu(Player player, int size, String title, List<MenuItem> items,
+                                UUID session) {
         MenuHolder holder = new MenuHolder(session);
         Inventory inventory = Bukkit.createInventory(holder, size, title);
         holder.inventory = inventory;
@@ -2353,16 +2378,85 @@ final class TownUiController implements Listener {
             }
             inventory.setItem(item.slot(), item.item());
         }
-        menuSessions.put(player.getUniqueId(), session);
         player.openInventory(inventory);
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (isCurrent(player, session)) {
-                menuSessions.remove(player.getUniqueId());
-                player.closeInventory();
-                player.sendMessage("§7小镇菜单会话已超时，请重新打开。");
+    }
+
+    private void openDialog(Player player, String title, List<MenuItem> items, UUID session) {
+        List<ActionButton> buttons = items.stream()
+                .sorted(java.util.Comparator.comparingInt(MenuItem::slot))
+                .map(item -> dialogButton(player, item.item(), session))
+                .toList();
+        ActionButton exit = ActionButton.create(
+                Component.text("关闭", NamedTextColor.RED),
+                Component.text("关闭当前界面", NamedTextColor.GRAY), 120,
+                dialogAction(player, session, "CLOSE", null));
+        int columns = buttons.size() >= 8 ? 3 : buttons.size() >= 4 ? 2 : 1;
+        Dialog dialog = Dialog.create(factory -> factory.empty()
+                .base(DialogBase.builder(Component.text(title, NamedTextColor.GOLD))
+                        .externalTitle(Component.text(title))
+                        .canCloseWithEscape(true)
+                        .pause(false)
+                        .afterAction(DialogBase.DialogAfterAction.CLOSE)
+                        .build())
+                .type(DialogType.multiAction(buttons)
+                        .exitAction(exit)
+                        .columns(columns)
+                        .build()));
+        player.showDialog(dialog);
+    }
+
+    private ActionButton dialogButton(Player player, ItemStack item, UUID session) {
+        ItemMeta meta = item.getItemMeta();
+        Component label = meta != null && meta.hasDisplayName() && meta.displayName() != null
+                ? meta.displayName() : Component.text(item.getType().name());
+        Component tooltip = dialogTooltip(meta);
+        String action = itemAction(item);
+        String target = meta == null ? null : meta.getPersistentDataContainer()
+                .get(targetKey, PersistentDataType.STRING);
+        return ActionButton.create(label, tooltip, 180,
+                action == null ? null : dialogAction(player, session, action, target));
+    }
+
+    private Component dialogTooltip(ItemMeta meta) {
+        if (meta == null || !meta.hasLore() || meta.lore() == null || meta.lore().isEmpty()) {
+            return null;
+        }
+        Component tooltip = Component.empty();
+        List<Component> lore = meta.lore();
+        for (int index = 0; index < lore.size(); index++) {
+            if (index > 0) {
+                tooltip = tooltip.append(Component.newline());
             }
-        }, MENU_TIMEOUT_TICKS);
-        return session;
+            tooltip = tooltip.append(lore.get(index));
+        }
+        return tooltip;
+    }
+
+    private DialogAction dialogAction(Player recipient, UUID session, String action,
+                                      String target) {
+        return DialogAction.customClick((response, audience) -> {
+            if (!(audience instanceof Player clicked)
+                    || !clicked.getUniqueId().equals(recipient.getUniqueId())) {
+                return;
+            }
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (!clicked.isOnline() || !isCurrent(clicked, session)) {
+                    return;
+                }
+                // 首次有效响应立即消耗会话，避免重复数据包产生两个业务幂等键。
+                menuSessions.remove(clicked.getUniqueId(), session);
+                handleAction(clicked, action, target);
+            });
+        }, ClickCallback.Options.builder().uses(1)
+                .lifetime(Duration.ofMinutes(1)).build());
+    }
+
+    private void closeUi(Player player) {
+        if (uiMode == TownUiMode.DIALOG) {
+            player.closeDialog();
+        } else {
+            player.closeInventory();
+        }
     }
 
     private int findBottomRowSlot(int size, List<MenuItem> items) {

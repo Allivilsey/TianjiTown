@@ -1,7 +1,7 @@
 # TestCommand 自动化接口
 
-`/testcommand` 仅用于隔离的自动化测试服务器。它与 `/townadmin` 分离，也不会被 GUI
-通过命令转发调用。GUI 和 TestCommand 都直接调用 `TownActions`。
+`/testcommand` 仅用于隔离的自动化测试服务器。它与 `/townadmin` 分离，也不会被玩家界面
+通过命令转发调用。玩家 Dialog（或可选旧箱子界面）和 TestCommand 都直接调用 `TownActions`。
 
 ## 启用条件
 
@@ -15,7 +15,7 @@
 
 ## 命令格式
 
-`actor` 可以是在线玩家名或 UUID。业务校验始终使用该玩家身份，与其从 GUI 点击时一致。
+`actor` 可以是在线玩家名或 UUID。业务校验始终使用该玩家身份，与其从玩家界面点击时一致。
 
 ```text
 /testcommand query <actor>

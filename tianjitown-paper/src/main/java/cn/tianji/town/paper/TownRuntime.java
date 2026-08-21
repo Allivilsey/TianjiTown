@@ -1,7 +1,7 @@
 package cn.tianji.town.paper;
 
 import cn.tianji.town.core.ports.LandProtectionService;
-import cn.tianji.town.core.ports.RegionBoundaryService;
+import cn.tianji.town.core.ports.WorldBoundaryService;
 import cn.tianji.town.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
 import cn.tianji.town.integrations.jobs.JobsIncomeTaxAdapter;
 import cn.tianji.town.core.land.ExpansionDirection;
@@ -57,11 +57,11 @@ final class TownRuntime {
 
     TownRuntime(TianjiTownPlugin plugin, DatabaseGate database,
                     LandProtectionService landProtection,
-                    RegionBoundaryService regionBoundaries) {
+                    WorldBoundaryService worldBoundaries) {
         this.plugin = plugin;
         this.database = database;
         this.landProtection = landProtection;
-        this.sitePolicy = new SitePolicy(plugin, landProtection, regionBoundaries);
+        this.sitePolicy = new SitePolicy(plugin, landProtection, worldBoundaries);
         this.repository = new TownRepository(database.dataSource(),
                 plugin.getServer()::isPrimaryThread);
         this.governance = new GovernanceRepository(database.dataSource(),

@@ -12,11 +12,11 @@
 mvn -B clean verify
 ```
 
-唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.4.0.jar`。Paper API、Residence、Vault 与必需的 WorldGuard API 使用 `provided` scope，不会打入插件 JAR；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
+唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.4.0.jar`。Paper API、Residence 与 Vault API 使用 `provided` scope，不会打入插件 JAR；WorldBorder 通过运行时公开能力接入，同样不会被打入；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
 
 ## 安装与 SQLite
 
-1. 安装并启用 Residence、Vault、XConomy、WorldGuard、QuickShop-Hikari（版本必须严格高于 `6.3.0.0`）、Jobs 和 GlobalMarketPlus，确保 Vault 已注册可用的 `Economy` 服务。选址会检查初始 3×3 区块领地及其缓冲范围是否接触 WorldGuard 区域；必需依赖未启用时写功能会保持锁定。
+1. 安装并启用 Residence、Vault、XConomy、WorldBorder、QuickShop-Hikari（版本必须严格高于 `6.3.0.0`）、Jobs 和 GlobalMarketPlus，确保 Vault 已注册可用的 `Economy` 服务，并使用 `/wb` 为每个允许建镇的世界配置边界。选址会要求初始 3×3 区块领地及其缓冲范围完整位于 WorldBorder 内；依赖未启用或目标世界未配置边界时会安全失败。
 2. 将 JAR 放入 `plugins`，首次启动会自动创建 `plugins/TianjiTown/tianjitown.db` 并执行 Flyway 迁移。
 3. 如需更改位置，在 `config.yml` 中设置相对或绝对文件路径：
 
@@ -29,12 +29,19 @@ database:
 
 4. 按实际地图修改 `phase1.site.blacklist`，重启后执行 `/townadmin status`。状态为 `READY` 时才开放服务台。
 
+玩家界面默认使用 Paper Dialog。如需临时兼容旧客户端交互，可修改配置并重启：
+
+```yaml
+ui:
+  mode: LEGACY # DIALOG（默认）或 LEGACY（旧箱子界面）
+```
+
 SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无需额外数据库服务。数据库文件位置和超时参数只在插件重启后生效。
 
 > 此 SQLite 版不会自动导入旧 MySQL 数据。已经在 MySQL 中运行的服务器应先保留完整备份，在隔离环境完成数据转换和验收后再切换；不要把旧 MySQL Flyway history 复制到 SQLite。
 
 领地加成的升级、验收与回滚流程见 [`docs/deployment/TERRITORY_BONUSES.md`](docs/deployment/TERRITORY_BONUSES.md)，日常运维见 [`docs/operations/OPERATIONS.md`](docs/operations/OPERATIONS.md)。
-隔离测试服务器的 GUI 业务自动化接口见 [`docs/test-command.md`](docs/test-command.md)；该接口默认关闭且使用独立权限，不属于玩家或管理员正式功能。
+隔离测试服务器的界面业务自动化接口见 [`docs/test-command.md`](docs/test-command.md)；该接口默认关闭且使用独立权限，不属于玩家或管理员正式功能。
 
 ## 管理员帮助
 
@@ -51,7 +58,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin backup
 ```
 
-`reload` 只重读可热更新的配置；SQLite 文件和超时参数需重启。维护模式会暂停服务台、手册、玩家 GUI 和表单提交，不会移除现有 Residence 保护。`diagnose` 生成 SQLite、Residence、Vault 与 QuickShop 历史统一报告；`backup` 创建 SQLite 在线一致性备份、配置快照与 SHA-256。
+`reload` 只重读可热更新的配置；SQLite 文件、超时参数和 `ui.mode` 需重启。维护模式会暂停服务台、手册、玩家界面和表单提交，不会移除现有 Residence 保护。`diagnose` 生成 SQLite、Residence、Vault 与 QuickShop 历史统一报告；`backup` 创建 SQLite 在线一致性备份、配置快照与 SHA-256。
 
 ### 服务台与手册
 
@@ -93,7 +100,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin vote cancel <voteId> <原因>
 ```
 
-普通治理通过玩家 GUI 完成。投票创建时冻结活跃选民快照；踢人要求赞成票严格超过 50%，强制更换镇长要求达到 2/3。到期投票由后台任务幂等结算。
+普通治理通过玩家 Dialog 完成。投票创建时冻结活跃选民快照；踢人要求赞成票严格超过 50%，强制更换镇长要求达到 2/3。到期投票由后台任务幂等结算。
 
 ### 领地
 
@@ -133,7 +140,7 @@ Buff 目录位于 `config.yml` 的 `phase4` 配置节。公共 Buff 不受世界
 
 ## 玩家入口
 
-插件不注册任何玩家命令。玩家通过讲台服务台、小镇手册、箱子 GUI 和可点击聊天表单操作；点击捐款按钮后可直接在聊天栏输入自定义金额。入镇采用申请制：玩家同时最多申请 3 个小镇，申请 48 小时有效；被拒绝后 24 小时内不能再次申请同一小镇，主动退出后 24 小时内不能申请新镇。每镇最多 1 名镇长、3 名副镇长，镇员不限；镇长和副镇长拥有相同管理权限，但解散小镇、领地扩张及副镇长任免仅限镇长。所有成员可查看完整公共资金流水和公共 Buff。规则或税率变更后，成员会在下次登录或打开主菜单时收到说明。
+插件不注册任何玩家命令。玩家通过讲台服务台、小镇手册、Dialog 和可点击聊天表单操作；`ui.mode: LEGACY` 时才使用旧箱子界面。点击捐款按钮后可直接在聊天栏输入自定义金额。入镇采用申请制：玩家同时最多申请 3 个小镇，申请 48 小时有效；被拒绝后 24 小时内不能再次申请同一小镇，主动退出后 24 小时内不能申请新镇。每镇最多 1 名镇长、3 名副镇长，镇员不限；镇长和副镇长拥有相同管理权限，但解散小镇、领地扩张及副镇长任免仅限镇长。所有成员可查看完整公共资金流水和公共 Buff。规则或税率变更后，成员会在下次登录或打开主菜单时收到说明。
 
 Buff 在登录、重生、跨世界、成员关系变化和到期清理时重新计算，Attribute Modifier 使用稳定 namespaced key。
 

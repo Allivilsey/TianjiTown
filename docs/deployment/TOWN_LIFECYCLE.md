@@ -10,7 +10,7 @@
 2. 在生产所用 Leaf/Paper 与 Java 组合上验证 Paper API 编译产物；插件不再执行固定版本匹配。
 3. 确认 Vault 已注册可用的 XConomy `Economy` 服务，Residence、Vault、XConomy 和 QuickShop-Hikari 均已启用。
 4. 确认 `database.file` 指向 TianjiTown 专用的空 SQLite 文件，其父目录对服务器进程可写。
-5. 按实际地图修改 `phase1.site.blacklist` 和 `minimum-buffer-chunks`。所有已加载世界均可选址，WorldGuard 区域、地图黑名单、世界边界和领地缓冲仍会被严格检查。
+5. 使用 `/wb` 为允许建镇的世界配置 WorldBorder，再按实际地图修改 `phase1.site.blacklist` 和 `minimum-buffer-chunks`。只有已加载且已配置 WorldBorder 的世界可选址；地图黑名单、边界和领地缓冲会被严格检查。
 6. 使用 `scripts/backup_plugins.sh` 备份 Residence、QuickShop H2、XConomy/清算账户，并用 `scripts/backup_sqlite.sh` 备份 TianjiTown SQLite，完成一次隔离恢复演练。
 
 ## 安装或升级
@@ -33,7 +33,7 @@
 2. 玩家在聊天栏申请表中依次点击并填写小镇名称、简称、领地名称、简介和规则；检查每个项目的悬浮要求，选择当前区块，看到 3×3 三维粒子边界并确认提交。
 3. 管理员依次验证 `application list/approve/reject/change <小镇全名>`，并验证管理员主菜单中的审核按钮会随待办状态改变外观。
 4. 批准后同时核对 SQLite、镇长成员记录和 Residence；领地名称只允许 `1..12` 个英文字母并直接按小写生成，例如 `SKY` 生成 `sky`。建议使用三个字母，不添加任何前后缀，也不接受小镇 UUID 或旧格式。
-5. 镇长从 GUI 邀请两名玩家；验证被邀请者会收到带音效的可点击聊天提示，再分别完成接受与拒绝，接受者最后主动退出。
+5. 镇长从玩家 Dialog 邀请两名玩家；验证被邀请者会收到带音效的可点击聊天提示，再分别完成接受与拒绝，接受者最后主动退出。
 6. 检查成员列表分页入口、镇长修改简介/规则，以及 `/townadmin audit` 审计记录。
 7. 确认玩家没有 `/town` 等命令，菜单和 `/townadmin help` 中也没有 money、tax、buff、order、vote 或 expand。
 
@@ -52,7 +52,7 @@
 - 查询：`/townadmin maintenance status` 或 `/townadmin status`
 - 关闭：`/townadmin maintenance off`
 
-开启维护模式会暂停服务台、手册、玩家 GUI 和表单提交，但不会停用管理员命令或现有 Residence 保护。状态会写回 `config.yml`，重启后保持不变。
+开启维护模式会暂停服务台、手册、玩家界面和表单提交，但不会停用管理员命令或现有 Residence 保护。状态会写回 `config.yml`，重启后保持不变。
 
 ## 管理员常用操作
 

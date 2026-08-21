@@ -3,12 +3,11 @@ package cn.tianji.town.paper;
 import cn.tianji.town.core.land.ChunkPosition;
 import cn.tianji.town.core.land.InitialTerritory;
 import cn.tianji.town.core.ports.LandProtectionService;
-import cn.tianji.town.core.ports.RegionBoundaryService;
+import cn.tianji.town.core.ports.WorldBoundaryService;
 import org.bukkit.HeightMap;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
-import org.bukkit.WorldBorder;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
@@ -22,14 +21,14 @@ import java.util.UUID;
 final class SitePolicy {
     private final TianjiTownPlugin plugin;
     private final LandProtectionService landProtection;
-    private final RegionBoundaryService regionBoundaries;
+    private final WorldBoundaryService worldBoundaries;
     private final Map<UUID, BukkitTask> previews = new HashMap<>();
 
     SitePolicy(TianjiTownPlugin plugin, LandProtectionService landProtection,
-               RegionBoundaryService regionBoundaries) {
+               WorldBoundaryService worldBoundaries) {
         this.plugin = plugin;
         this.landProtection = landProtection;
-        this.regionBoundaries = regionBoundaries;
+        this.worldBoundaries = worldBoundaries;
     }
 
     Validation validate(Player player) {
@@ -81,20 +80,23 @@ final class SitePolicy {
         if (world == null) {
             return Validation.failure("目标世界当前未加载");
         }
-        if (!insideWorldBorder(world, territory)) {
-            return Validation.failure("3×3 区块会超出世界边界");
-        }
         if (rectangles("phase1.site.blacklist", world.getName()).stream()
                 .anyMatch(area -> area.overlaps(territory))) {
             return Validation.failure("3×3 区块与出生点、活动区或管理黑名单重叠");
         }
         int bufferChunks = Math.max(0,
                 plugin.getConfig().getInt("phase1.site.minimum-buffer-chunks", 1));
-        RegionBoundaryService.Collision region = regionBoundaries.findCollision(
-                territory, bufferChunks);
-        if (region.occupied()) {
-            return Validation.failure("3×3 区块或其缓冲范围与 WorldGuard 区域冲突: "
-                    + region.regionName());
+        WorldBoundaryService.Check boundary;
+        try {
+            boundary = worldBoundaries.check(territory, bufferChunks);
+        } catch (RuntimeException | LinkageError exception) {
+            return Validation.failure("WorldBorder 边界检查不可用: " + safeMessage(exception));
+        }
+        if (!boundary.configured()) {
+            return Validation.failure("WorldBorder 未配置目标世界的边界");
+        }
+        if (!boundary.inside()) {
+            return Validation.failure("3×3 区块或其缓冲范围会超出 WorldBorder 边界");
         }
         return Validation.success(territory);
     }
@@ -187,16 +189,6 @@ final class SitePolicy {
 
     private static void particle(Player player, double x, double y, double z) {
         player.spawnParticle(Particle.FLAME, x, y, z, 1, 0, 0, 0, 0);
-    }
-
-    private boolean insideWorldBorder(World world, InitialTerritory territory) {
-        WorldBorder border = world.getWorldBorder();
-        int minimumBlockX = Math.multiplyExact(territory.minimumChunkX(), 16);
-        int minimumBlockZ = Math.multiplyExact(territory.minimumChunkZ(), 16);
-        int maximumBlockX = Math.addExact(Math.multiplyExact(territory.maximumChunkX(), 16), 15);
-        int maximumBlockZ = Math.addExact(Math.multiplyExact(territory.maximumChunkZ(), 16), 15);
-        return border.isInside(new Location(world, minimumBlockX, world.getMinHeight(), minimumBlockZ))
-                && border.isInside(new Location(world, maximumBlockX, world.getMinHeight(), maximumBlockZ));
     }
 
     private List<Rectangle> rectangles(String path, String world) {

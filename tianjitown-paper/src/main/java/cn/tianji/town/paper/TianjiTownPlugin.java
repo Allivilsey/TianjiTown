@@ -1,6 +1,6 @@
 package cn.tianji.town.paper;
 
-import cn.tianji.town.core.ports.RegionBoundaryService;
+import cn.tianji.town.core.ports.WorldBoundaryService;
 import cn.tianji.town.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
 import cn.tianji.town.integrations.jobs.JobsIncomeTaxAdapter;
 import cn.tianji.town.integrations.residence.ResidenceCommandGuard;
@@ -8,7 +8,7 @@ import cn.tianji.town.integrations.residence.ResidenceDeletionGuard;
 import cn.tianji.town.integrations.residence.ResidenceLandProtectionService;
 import cn.tianji.town.integrations.quickshop.QuickShopTaxAdapter;
 import cn.tianji.town.integrations.vault.VaultEconomyProbe;
-import cn.tianji.town.integrations.worldguard.WorldGuardRegionBoundaryService;
+import cn.tianji.town.integrations.worldborder.WorldBorderBoundaryService;
 import cn.tianji.town.storage.database.DatabaseConfig;
 import cn.tianji.town.storage.database.DatabaseGate;
 import org.bukkit.configuration.ConfigurationSection;
@@ -103,7 +103,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         details.add("INFO Minecraft " + getServer().getMinecraftVersion()
                 + " / Java " + Runtime.version().feature());
         for (String name : List.of("Residence", "Vault", "XConomy", "QuickShop-Hikari",
-                "Jobs", "GlobalMarketPlus", "WorldGuard")) {
+                "Jobs", "GlobalMarketPlus", "WorldBorder")) {
             Plugin dependency = getServer().getPluginManager().getPlugin(name);
             if (dependency == null) {
                 details.add("FAIL " + name + " 未安装");
@@ -231,21 +231,25 @@ public final class TianjiTownPlugin extends JavaPlugin {
         }
         Set<String> managedResidenceNames = ConcurrentHashMap.newKeySet();
         TownRuntime runtime;
+        TownActions actions;
+        TownUiController ui;
         ResidenceLandProtectionService residenceProtection =
                 new ResidenceLandProtectionService(getServer(), managedResidenceNames);
         try {
             runtime = new TownRuntime(this, candidate,
                     residenceProtection,
-                    regionBoundaryService());
+                    worldBoundaryService());
             cn.tianji.town.integrations.vault.VaultSettlementService.Result settlement =
                     runtime.settlement().ensureAccount();
             if (!settlement.success()) {
                 throw new IllegalStateException(settlement.message());
             }
+            actions = new TownActions(this, runtime);
+            ui = new TownUiController(this, runtime, actions);
         } catch (RuntimeException exception) {
             candidate.close();
             List<String> details = new ArrayList<>(previousDetails);
-            details.add("FAIL 治理、经济、Buff 或领地加成配置/清算账户: "
+            details.add("FAIL 业务配置、WorldBorder、玩家界面或清算账户: "
                     + exception.getMessage());
             lock("业务运行时门禁未通过", details);
             return;
@@ -269,8 +273,6 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 new GlobalMarketPlusIncomeTaxAdapter(this, globalMarketPlus,
                         runtime::taxEnabled,
                         runtime::acceptGlobalMarketPlusIncomeTax).register();
-        TownActions actions = new TownActions(this, runtime);
-        TownUiController ui = new TownUiController(this, runtime, actions);
         townRuntime = runtime;
         townActions = actions;
         townUi = ui;
@@ -330,16 +332,20 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 + jobsCapability.detail());
         details.add((globalMarketCapability.available() ? "OK " : "WARN ")
                 + globalMarketCapability.detail());
+        details.add("OK WorldBorder 边界 API 已接入");
+        details.add("OK 玩家界面=" + TownUiMode.load(getConfig()));
         details.add("OK 建筑返还、信标增强、统一诊断与定时备份已启用");
         gateStatus.set(new GateStatus(GateStatus.State.READY, details));
         getLogger().info("业务运行时启动完成；玩家入口仅限服务台和小镇手册。");
     }
 
-    private RegionBoundaryService regionBoundaryService() {
+    private WorldBoundaryService worldBoundaryService() {
         try {
-            return new WorldGuardRegionBoundaryService(getServer());
+            Plugin worldBorder = java.util.Objects.requireNonNull(
+                    getServer().getPluginManager().getPlugin("WorldBorder"), "WorldBorder");
+            return new WorldBorderBoundaryService(getServer(), worldBorder);
         } catch (LinkageError error) {
-            throw new IllegalStateException("WorldGuard API 无法加载", error);
+            throw new IllegalStateException("WorldBorder API 无法加载", error);
         }
     }
 

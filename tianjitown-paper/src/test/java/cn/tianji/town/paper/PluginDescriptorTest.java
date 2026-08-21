@@ -13,14 +13,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PluginDescriptorTest {
     @Test
-    void declaresWorldGuardAsRequiredAndOtherIntegrationsAsSoftDependencies() throws IOException {
+    void declaresWorldBorderAsRequiredAndOtherIntegrationsAsSoftDependencies() throws IOException {
         String descriptor = descriptor();
 
         String dependencies = descriptor.lines().map(String::strip)
                 .filter(line -> line.startsWith("depend:"))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("plugin.yml 缺少 depend"));
-        assertTrue(dependencies.contains("WorldGuard"), "WorldGuard 必须声明为硬依赖");
+        assertTrue(dependencies.contains("WorldBorder"), "WorldBorder 必须声明为硬依赖");
         String softDependencies = descriptor.lines().map(String::strip)
                 .filter(line -> line.startsWith("softdepend:"))
                 .findFirst()
@@ -29,7 +29,7 @@ class PluginDescriptorTest {
                 "Jobs", "GlobalMarketPlus")) {
             assertTrue(softDependencies.contains(plugin), plugin + " 必须声明为软依赖");
         }
-        assertFalse(softDependencies.contains("WorldGuard"));
+        assertFalse(softDependencies.contains("WorldBorder"));
     }
 
     @Test
