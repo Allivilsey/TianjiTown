@@ -36,7 +36,7 @@
 
 ### 0.4 AUTO/CMD 执行准备度
 
-本轮已完成清单中的全部 AUTO/CMD 项；执行结果、故障修复及证据位置见 [AUTO/CMD 全量收口报告](reports/2026-08-22-auto-cmd-closure.md)与[最终运维发布报告](reports/2026-08-22-final-ops-release.md)。
+本轮已完成清单中的全部 AUTO/CMD 项；执行结果、故障修复及证据位置见 [AUTO/CMD 全量收口报告](reports/2026-08-22_16-39-56_auto-cmd-closure.md)与[最终运维发布报告](reports/2026-08-22_16-39-56_final-ops-release.md)。
 
 ## 1. 构建、自动化测试与发布包
 
@@ -275,6 +275,7 @@
 
 ```text
 测试轮次：
+报告标记时间：YYYY-MM-DD HH:MM:SS（Asia/Shanghai）
 分支 / 提交：
 项目版本 / JAR SHA-256：
 配置 schema / Flyway schema：
@@ -301,16 +302,16 @@ MinecraftConsoleClient / 自动化脚本版本：
 
 ### 15.1 历史测试报告索引
 
-- [2026-08-15 本地隔离服完整执行轮次](reports/2026-08-15-local-isolated-full.md)
-- [2026-08-21 三次测试合并报告](reports/2026-08-21-merged-three-rounds.md)
-- [2026-08-21 补充自动化与真实客户端边界轮次](reports/2026-08-21-supplemental-boundary.md)
-- [2026-08-21 清单补全与并发边界轮次](reports/2026-08-21-checklist-and-concurrency.md)
-- [2026-08-21 配置、迁移与在线备份续测轮次](reports/2026-08-21-config-migration-backup.md)
-- [2026-08-21～2026-08-22 WorldBorder、运维保留与业务边界续测轮次](reports/2026-08-21-to-22-worldborder-ops.md)
-- [2026-08-22 测试类型与执行状态整理](reports/2026-08-22-status-cleanup.md)
-- [2026-08-22 遗留证据复核与状态补录](reports/2026-08-22-evidence-review.md)
-- [2026-08-22 AUTO/CMD 全量收口与历史缺陷复测](reports/2026-08-22-auto-cmd-closure.md)
-- [2026-08-22 运维故障矩阵、最终候选与发布结论](reports/2026-08-22-final-ops-release.md)
+- [2026-08-15 02:23:00 本地隔离服完整执行轮次](reports/2026-08-15_02-23-00_local-isolated-full.md)
+- [2026-08-21 15:37:01 三次测试合并报告（推测）](reports/2026-08-21_15-37-01_merged-three-rounds.md)
+- [2026-08-21 19:12:00 补充自动化与真实客户端边界轮次](reports/2026-08-21_19-12-00_supplemental-boundary.md)
+- [2026-08-21 20:45:00 清单补全与并发边界轮次](reports/2026-08-21_20-45-00_checklist-and-concurrency.md)
+- [2026-08-21 22:52:00 配置、迁移与在线备份续测轮次](reports/2026-08-21_22-52-00_config-migration-backup.md)
+- [2026-08-22 00:03:00 WorldBorder、运维保留与业务边界续测轮次](reports/2026-08-22_00-03-00_worldborder-ops.md)
+- [2026-08-22 16:00:00 测试类型与执行状态整理（推测）](reports/2026-08-22_16-00-00_status-cleanup.md)
+- [2026-08-22 16:20:00 遗留证据复核与状态补录（推测）](reports/2026-08-22_16-20-00_evidence-review.md)
+- [2026-08-22 16:39:56 AUTO/CMD 全量收口与历史缺陷复测](reports/2026-08-22_16-39-56_auto-cmd-closure.md)
+- [2026-08-22 16:39:56 运维故障矩阵、最终候选与发布结论](reports/2026-08-22_16-39-56_final-ops-release.md)
 
 
 ## 16. 最小发布阻断检查

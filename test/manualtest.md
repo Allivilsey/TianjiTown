@@ -178,6 +178,7 @@
 
 ```text
 测试轮次：
+报告标记时间：YYYY-MM-DD HH:MM:SS（Asia/Shanghai）
 分支 / 提交：
 项目版本 / JAR SHA-256：
 配置 schema / Flyway schema：
@@ -199,9 +200,9 @@ MinecraftConsoleClient / 自动化脚本版本：
 
 以下历史轮次沿用拆分前的完整清单统计口径，统一存放于 `reports` 目录：
 
-- [2026-08-15 本地隔离服完整执行轮次](reports/2026-08-15-local-isolated-full.md)
-- [2026-08-21 三次测试合并报告](reports/2026-08-21-merged-three-rounds.md)
-- [2026-08-21 补充自动化与真实客户端边界轮次](reports/2026-08-21-supplemental-boundary.md)
+- [2026-08-15 02:23:00 本地隔离服完整执行轮次](reports/2026-08-15_02-23-00_local-isolated-full.md)
+- [2026-08-21 15:37:01 三次测试合并报告（推测）](reports/2026-08-21_15-37-01_merged-three-rounds.md)
+- [2026-08-21 19:12:00 补充自动化与真实客户端边界轮次](reports/2026-08-21_19-12-00_supplemental-boundary.md)
 
 
 ## 16. 最小发布阻断检查
