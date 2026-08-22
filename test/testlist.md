@@ -36,7 +36,7 @@
 
 ### 0.4 AUTO/CMD 执行准备度
 
-本轮已完成清单中的全部 AUTO/CMD 项；执行结果、故障修复及证据位置见 15.9～15.10。
+本轮已完成清单中的全部 AUTO/CMD 项；执行结果、故障修复及证据位置见 [AUTO/CMD 全量收口报告](reports/2026-08-22-auto-cmd-closure.md)与[最终运维发布报告](reports/2026-08-22-final-ops-release.md)。
 
 ## 1. 构建、自动化测试与发布包
 
@@ -267,9 +267,9 @@
 | [!] | REL-13 | P0/OPS | 发布决策 | 汇总所有用例、缺陷、风险接受、执行/复核人和证据链接。 | 所有 P0 通过且未关闭 P0 缺陷为 0；未通过 P1 有负责人、风险说明和书面批准。 |
 | [-] | REL-14 | P0/OPS | 发布后观察 | 生产启动后检查 status、diagnose、SQLite、依赖、清算、ACTIVE 投影，并观察至少一个完整周期。 | 无新 P0/P1 异常；资金/领地/投票/Buff/信标/诊断/备份正常；停止条件未触发。 |
 
-## 15. 测试轮次记录模板
+## 15. 测试轮次记录模板与报告索引
 
-> 注：以下历史轮次及发布门槛沿用拆分前的完整清单统计口径，需结合 `manualtest.md` 一并查看。
+> 注：历史报告已独立存放于 `reports` 目录；其中早期轮次及发布门槛沿用拆分前的完整清单统计口径，需结合 `manualtest.md` 一并查看。
 
 复制以下模板，每轮单独填写，不要直接用勾选代替证据：
 
@@ -287,374 +287,31 @@ MinecraftConsoleClient / 自动化脚本版本：
 执行人 / 复核人：
 开始 / 结束时间：
 通过 / 失败 / 阻塞 / 未执行：
+未完成项目追踪：见本轮报告末尾追踪表；所有 `[ ]` 项逐项填写，不允许只写汇总原因。
 缺陷列表：
 日志、截图、SQL、余额与投影证据位置：
 最终结论：
 ```
 
-### 15.1 2026-08-15 本地隔离服完整执行轮次
+每轮报告在结论前附上以下追踪表；没有未完成项时填写“无”，不得删除表头：
+
+| 项目 | 未完成原因 | 完成建议 |
+|---|---|---|
+| `<ID 或无>` | `<缺少的步骤、证据、环境或故障注入>` | `<下一轮可执行步骤、所需前置条件及改为 [x] 的验收依据>` |
+
+### 15.1 历史测试报告索引
+
+- [2026-08-15 本地隔离服完整执行轮次](reports/2026-08-15-local-isolated-full.md)
+- [2026-08-21 三次测试合并报告](reports/2026-08-21-merged-three-rounds.md)
+- [2026-08-21 补充自动化与真实客户端边界轮次](reports/2026-08-21-supplemental-boundary.md)
+- [2026-08-21 清单补全与并发边界轮次](reports/2026-08-21-checklist-and-concurrency.md)
+- [2026-08-21 配置、迁移与在线备份续测轮次](reports/2026-08-21-config-migration-backup.md)
+- [2026-08-21～2026-08-22 WorldBorder、运维保留与业务边界续测轮次](reports/2026-08-21-to-22-worldborder-ops.md)
+- [2026-08-22 测试类型与执行状态整理](reports/2026-08-22-status-cleanup.md)
+- [2026-08-22 遗留证据复核与状态补录](reports/2026-08-22-evidence-review.md)
+- [2026-08-22 AUTO/CMD 全量收口与历史缺陷复测](reports/2026-08-22-auto-cmd-closure.md)
+- [2026-08-22 运维故障矩阵、最终候选与发布结论](reports/2026-08-22-final-ops-release.md)
 
-```text
-测试轮次：testlist-20260815-complete
-分支 / 提交：main / 2101313d5b98ac3e4fe92d99bad785f0a2c41d76
-项目版本 / JAR SHA-256：1.4.0 / 5E2C037B0D28193C01DEA99ABA3F55BD9DFB07D294956F7580F47F34685DC8AF
-配置 schema / Flyway schema：7 / 7.0
-Maven / Paper / Java：3.9.12 / 26.2-84 / 25.0.4 LTS
-Residence / Vault / XConomy / WorldBorder：6.0.2.4 / 1.7.3-b131 / 2.26.3 / 目标部署版本
-QuickShop-Hikari / Jobs / GlobalMarketPlus：6.3.0.0 / 5.2.6.6 / 1.4.1.4
-测试服务器 / 时区：LocalTestServer 隔离副本 / Asia/Shanghai
-数据副本或快照编号：pre-test-snapshot、fresh schema-7、database-final-inspection
-执行人 / 复核人：Codex / 待复核
-开始 / 结束时间：2026-08-15 00:50 / 2026-08-15 02:23
-通过 / 失败 / 阻塞 / 未执行：43 / 2 / 10 / 186
-缺陷列表：TT-TEST-20260815-01 已复测关闭；新增 TT-TEST-20260815-02（MEM-12：玩家资料修改可改小镇全名，锁定字段未受保护）、TT-TEST-20260815-03（BUFF-09：已有 Buff 的小镇接纳在线新成员后未刷新 speed 效果）。阻塞项为 CFG-05、OPS-09、REL-05、REL-07～REL-12、REL-14，原因分别是缺少替代依赖版本、同时间点第三方备份、24～72 小时窗口、生产数据/旧包/生产环境。
-日志、截图、SQL、余额与投影证据位置：LocalTestServer/validation/testlist-20260815-complete
-最终结论：NO-GO；候选包可稳定 READY，构建与 43 项完整用例通过，但存在 2 个未关闭 P1 产品缺陷、P0 阻塞项和 186 项未完整执行，不能据此批准生产发布。
-```
-
-### 15.2 2026-08-21 三次测试合并报告
-
-```text
-共同测试基线
-分支 / 提交：main / 751943099b134d46144465d2c492c307e3fb0582
-项目版本 / JAR SHA-256：1.4.0 / 4BCA0EBA8D20001E820C404D1685D14B8C47D0B955E8E53FB50336A96FF82A7F
-配置 schema / Flyway schema：7 / 7.0
-Maven / Paper / Java：3.9.12 / 26.2-84 / 25.0.4 LTS
-Residence / Vault / XConomy / WorldBorder：6.0.2.4 / 1.7.3-b131 / 2.26.3 / 1.19
-QuickShop-Hikari / Jobs / GlobalMarketPlus：6.3.0.0 / 5.2.6.6 / 1.4.1.4
-测试服务器 / 时区：15.2 使用 LocalTestServer 隔离副本；15.3～15.4 使用 LocalTestServer/codex-fresh-20260821 / Asia/Shanghai
-数据副本或快照：codex-fresh-20260821；启动时迁移至 schema-7；15.3 使用 ActiveTown，15.4 使用新建 CovTownF；未执行恢复演练
-执行人 / 复核人：Codex / 待复核
-
-三轮测试范围与结果演进
-一｜testlist-20260821-build-paper-smoke｜2026-08-21 11:20～11:25
-范围：Maven clean verify、包内容检查、Paper 启动与迁移冒烟；未驱动 MinecraftConsoleClient 玩家客户端。
-结果：完成 BLD-01～BLD-12、CFG-01、CFG-02，14 / 0 / 0 / 229（通过 / 失败 / 阻塞 / 未执行）；未发现新缺陷。证据：LocalTestServer/validation/codex-maven-verify-second.log；LocalTestServer/validation/codex-fresh-20260821-113149.out.log；LocalTestServer/validation/codex-fresh-20260821-113149.err.log；各模块 target/surefire-reports。
-
-二｜testlist-20260821-mccc-command-coverage｜2026-08-21 13:16～13:40
-范围：MinecraftConsoleClient build 505 驱动 TestBot、MemberBot、MemberTwo、OutsiderBot、JoinerBot、ApplicantBot、CandidateOne、CandidateTwo，覆盖真实登录、查询、权限拒绝、参数校验、建镇、WorldBorder 选址、申请/审批、角色、规则、税率、捐款、扩张、Buff、转让和投票快照。
-结果：累计 19 / 2 / 0 / 222；发现 TT-TEST-20260821-01（MEM-12：town profile 合法路径需要 13 个参数，但校验要求 11，返回 INVALID_ARGUMENT）和 TT-TEST-20260821-02（GOV-10：达到 required_yes 后投票仍为 OPEN，SQLite 快照字段语义疑似错位）。完整用例未满足的项目保持未勾选。证据：LocalTestServer/validation/mccc-testbot.log；LocalTestServer/validation/mccc-testbot-run2.log；LocalTestServer/validation/mccc-memberbot-final.log；LocalTestServer/validation/mccc-outsiderbot-final.log；LocalTestServer/validation/mccc-joinerbot.log；LocalTestServer/validation/mccc-joinerbot-reconnect.log；LocalTestServer/validation/mccc-applicantbot.log；LocalTestServer/validation/mcc-paper-20260821-132036.out.log；LocalTestServer/validation/mccc-20260821-summary.md。
-
-三｜testlist-20260821-mccc-expanded-coverage｜2026-08-21
-范围：Maven verify、SQLite PRAGMA/Flyway、税率五档及边界、多角色捐款与非法金额、入镇申请/审批、副镇长上限与越权任免、四方向扩张、speed/health LEVEL_UP 上限、投票快照/唯一票/即时结算、转让、成员退出、镇长退出拒绝、多人/单人/陈旧版本解散及测试接口关闭门禁；测试身份为 OtherM4、OtherA5、OtherA6、JoinCov、GuestCov、MemberCov、FreeCov、CandCov、DeputyCov。
-结果：新增通过 DB-01、GOV-07、GOV-10、BUFF-04、MEM-17，累计 24 / 1 / 0 / 218。CovTownF 的 DONATION=5 条、合计 1400 minor units；治理投票最终为 PASSED，15.3 的 GOV-10 OPEN 现象本轮未复现，保留历史证据待根因复核，不再作为当前 CMD 失败项。证据：LocalTestServer/validation/maven-auto-20260821.log；各模块 target/surefire-reports；LocalTestServer/validation/mccc-coverage-*.log；LocalTestServer/validation/mccc-coverage-followup-mayor.log；LocalTestServer/validation/mccc-coverage-governance-create.log；LocalTestServer/validation/mccc-coverage-vote-*.log；LocalTestServer/validation/mccc-coverage-transfer-*.log；LocalTestServer/validation/mccc-coverage-disband-*.log；LocalTestServer/validation/mccc-coverage-tc01-disabled.log。
-
-合并后的最终状态
-当前清单累计：通过 24 / 失败 1 / 阻塞 0 / 未执行 218
-当前缺陷：TT-TEST-20260821-01（MEM-12：town profile 合法 13 参数仍被要求 11，资料修改无法完成）。TT-TEST-20260821-02 仅作为 15.3 历史观察保留，待根因复核。
-仍未执行：多镇并发、故障注入、24/48 小时及长期窗口、依赖版本矩阵、迁移/恢复、WorldBorder 全边界以及 GUI/人工项目。
-环境收尾：测试服务器、客户端和 Paper 进程均已停止；15.2 的临时全新服务器目录因运行环境禁止递归删除而保留，未被任何进程占用。
-最终结论：三次测试已合并记录，覆盖范围逐轮扩展，但因 MEM-12 仍未修复且大量发布阻断项目未执行，继续保持 NO-GO，不能批准生产发布。
-```
-
-### 15.3 2026-08-21 补充自动化与真实客户端边界轮次
-
-```text
-测试轮次：testlist-20260821-supplemental-boundary
-分支 / 提交：main / 751943099b134d46144465d2c492c307e3fb0582（工作区仅新增测试与本清单记录）
-项目版本 / JAR SHA-256：1.4.0 / 4BCA0EBA8D20001E820C404D1685D14B8C47D0B955E8E53FB50336A96FF82A7F
-配置 schema / Flyway schema：7 / 7.0
-Maven / Paper / Java：3.9.12 / 26.2-84 / 25.0.4 LTS
-Residence / Vault / XConomy / WorldBorder：6.0.2.4 / 1.7.3-b131 / 2.26.3 / 1.19
-QuickShop-Hikari / Jobs / GlobalMarketPlus：6.3.0.0 / 5.2.6.6 / 1.4.1.4
-测试服务器 / 时区：LocalTestServer/codex-fresh-20260821 隔离副本 / Asia/Shanghai
-MinecraftConsoleClient / 自动化脚本版本：build 505 / 交互式隔离实例（SessionCache/ProfileKeyCache 均关闭）
-数据副本或快照编号：backups/testlist-20260821-current/tianjitown-before.db、tianjitown-after.db
-执行人 / 复核人：Codex / 待复核
-开始 / 结束时间：2026-08-21 18:59 / 2026-08-21 19:12
-通过 / 失败 / 阻塞 / 未执行：29 / 1 / 0 / 213
-新增通过：APP-02、DB-13、BUFF-03、BUFF-05、SEC-01。
-自动化结果：37 个测试类、94 个测试全部通过，失败/错误/跳过均为 0；两次未改源码的干净构建 JAR 哈希一致，新增测试不进入候选包且候选 JAR 哈希保持不变。
-运行结果：TianjiTown READY，依赖与 WorldBorder 能力正常；SQLite quick_check=ok、外键违规 0、Flyway 10 条迁移有效、账户/账本差异 0；在线备份成功。统一诊断因 QuickShop-Hikari 6.3.0.0 不满足严格高于 6.3.0.0 的历史适配要求而按设计报告 INCOMPLETE。
-MEM-12 复核：旧报告所称“合法 13 参数被要求 11”不成立，文档与实现的合法命令长度均为 11，简介/规则更新成功且旧版本被拒绝；但当前版本允许同一入口修改小镇全名和简称，违反锁定字段要求。测试后已通过业务入口恢复名称，并最终恢复测试前 SQLite/config 哈希。
-部分执行但未勾选：APP-03 的格式码、MiniMessage 与简介格式注入稳定返回 VALIDATION_FAILED；超长聊天命令被 MinecraftConsoleClient 截断后返回 INVALID_ARGUMENT，未完成控制字符、换行与全部长度项，因此保持未执行状态。
-缺陷列表：TT-TEST-20260821-01（更正描述：MEM-12 玩家资料入口可修改锁定的全名和简称）；未新增其他产品缺陷。
-日志、截图、SQL、余额与投影证据位置：各模块 target/surefire-reports；backups/testlist-20260821-current/paper-latest.log、tianjitown-before.db、tianjitown-after.db；LocalTestServer/validation/mccc-20260821-current-*.log。
-环境收尾：Paper、全部 MinecraftConsoleClient 与监听端口均已停止；SQLite 与 config.yml 已恢复为测试前 SHA-256；测试前后数据库均通过 quick_check 和外键检查。
-最终结论：NO-GO；新增 5 项完整通过，但 MEM-12 仍失败，且 213 项（含人工界面、依赖矩阵、故障注入、迁移/恢复、长时间及生产发布项目）尚未完整执行。
-```
-
-### 15.4 2026-08-21 清单补全与并发边界轮次
-
-```text
-测试轮次：testlist-20260821-completion
-分支 / 提交：main / 751943099b134d46144465d2c492c307e3fb0582（保留测试前已有工作区改动；本轮仅修改本清单并新增忽略的本地驱动脚本与证据）
-项目版本 / JAR SHA-256：1.4.0 / 4BCA0EBA8D20001E820C404D1685D14B8C47D0B955E8E53FB50336A96FF82A7F
-配置 schema / Flyway schema：7 / 7.0（10 条成功迁移）
-Maven / Paper / Java：3.9.12 / 26.2-84 / 25.0.4 LTS
-MinecraftConsoleClient：build 505；全部实例关闭 SessionCache/ProfileKeyCache
-测试服务器 / 时区：LocalTestServer/codex-fresh-20260821 隔离副本 / Asia/Shanghai
-执行人 / 复核人：Codex / 待复核
-开始 / 结束时间：2026-08-21 19:39 / 2026-08-21 20:45
-
-自动化构建结果
-Maven clean verify 四模块全部成功；Core 17、Storage 18、Integrations 11、Paper 48，共 37 个测试类、94 个测试，失败/错误/跳过均为 0。候选 JAR 与既有基线哈希一致。
-
-本轮新增完整通过（26 项）
-APP-10、APP-11、APP-19；MEM-02、MEM-04、MEM-05、MEM-09、MEM-10、MEM-11；GOV-02、GOV-03、GOV-04、GOV-05、GOV-06；ECO-01、ECO-02、ECO-04、ECO-05；LAND-01、LAND-02；BUFF-01、BUFF-02；TC-01、TC-05、TC-07、TC-11。
-
-本轮失败（3 项）
-APP-04：大小写混合 Residence 名 AbCdEf 被接受，town_applications.residence_name 仍按原大小写持久化，未满足“小写存储”。
-GOV-01：副镇长可发起 REPLACE_MAYOR，但现任镇长失败并返回“你当前不在本次投票的活跃选民范围内”；实现先从快照排除现任镇长，再要求发起人在快照中，使镇长路径不可达。
-LAND-03（P0）：核心规则声明 5×5、grid=-2～2，但 Storage prepareExpansion 仍按 abs(grid)>1 拒绝，V3 表约束也仍限定 -1～1；实际扩张至 -2 返回“目标超出 3×3 扩张网格”。
-
-当前缺陷
-TT-TEST-20260821-01：MEM-12 玩家资料入口可修改锁定的全名和简称。
-TT-TEST-20260821-03：APP-04 Residence 名未以小写持久化。
-TT-TEST-20260821-04：GOV-01 现任镇长无法发起 REPLACE_MAYOR。
-TT-TEST-20260821-05（P0）：LAND-03 核心 5×5 规则与 Storage/迁移 3×3 约束不一致。
-
-重要运行证据
-MEM-02：第 4 份待处理入镇申请被拒；撤回后可申请第 4 镇；超过 48 小时的申请不计入名额且不能审批。
-GOV-03：同镇两个身份并发创建不同类型投票时恰好一个成功；另一镇同时创建成功。GOV-04 冻结快照只包含 30 天活跃窗口内且入镇满 7 天的 3 个 UUID；窗口外、从未活动和未满 7 天成员均被排除。GOV-06 中新成员不能投，已离镇的原快照成员仍可投，eligible_voters/required_yes 不变。
-ECO-01：三笔有效捐款分别为 101/202/303 minor units，Vault、清算账户、小镇余额和三条唯一 business_key 流水等额变化；ECO-02 的非法金额、余额不足、非成员与 long 边界均无余额或账本副作用。
-APP-19：SITE_SELECTED 预留在撤回后写入 released_at；24 小时边界前拒绝、边界后恢复创建。BUFF-02 覆盖归档镇、商店关闭、消费关闭、账户锁定、余额不足及数据库不可用，均未扣款或创建效果。TC-01 三种门禁依次得到 TEST_INTERFACE_DISABLED、PERMISSION_DENIED、SYSTEM_NOT_READY。
-
-部分执行但保持未勾选
-APP-03：格式码、MiniMessage、空/51 条规则均稳定拒绝；MCCC 256 字符协议不能可靠发送全部超长、控制字符与嵌入换行输入。
-APP-05：大小写和 NFC 等价的 Å/Å 并发最多一份成功；空格差异受 TestCommand 参数模型限制。兼容形式 ATown/ＡTown 均可创建，因清单未明确要求 NFKC，本轮记录为规范澄清项而不判产品失败。
-MEM-01：数据库状态与重复申请已验证，但领导通知未取得独立客户端证据。LAND-04 仅验证第 2～4 单元价格公式。TC-06 已确认 UI 与 TestCommand 共用 TownActions，但未完成同一业务的 UI 结果逐项对照。
-
-证据位置
-各模块 target/surefire-reports；LocalTestServer/validation/mccc-completion-*.log；backups/testlist-20260821-completion/paper-completion-main.log、paper-system-not-ready.log、tianjitown-before.db、config-before.yml、res-world-before.yml。
-
-环境收尾与状态统计
-Paper、MinecraftConsoleClient 和 25565 监听均已停止。TianjiTown SQLite、config.yml、Residence res_world.yml 已恢复为测试前 SHA-256：42A68EF84F5260B04BD2761622DE50469FE851C3D89291290759DF1E51769963、DCAD09006304093911E93FCE4B76DB6425D1DC3985EC669675BBAD34D5F37455、30EA6F7707375D1F752C3ADA990A77AD93B65EEC7DA0671B723F6E108B5B1949；quick_check=ok、外键违规 0。数据库不可用测试产生的临时库已移入本轮备份目录，未留在服务器运行目录。
-testlist.md 当前：通过 54 / 失败 4 / 阻塞 0 / 未执行 100。与 manualtest.md 合计：通过 55 / 失败 4 / 阻塞 0 / 未执行 184。
-最终结论：NO-GO。构建和本轮 26 项完整用例通过，但 LAND-03 为未关闭 P0，另有 APP-04、MEM-12、GOV-01 三项失败，且迁移恢复、故障注入、依赖矩阵和人工界面项目尚未完成，不能批准生产发布。
-```
-
-### 15.5 2026-08-21 配置、迁移与在线备份续测轮次
-
-```text
-测试轮次：testlist-20260821-config-migration-ops
-分支 / 提交：main / 751943099b134d46144465d2c492c307e3fb0582（保留测试前已有工作区改动；本轮仅修改本清单并新增忽略的本地测试驱动与证据）
-项目版本 / JAR SHA-256：1.4.0 / 4BCA0EBA8D20001E820C404D1685D14B8C47D0B955E8E53FB50336A96FF82A7F
-配置 schema / Flyway schema：7 / 7.0（10 条成功迁移）
-Maven / Paper / Java：3.9.12 / 26.2-84 / 25.0.4 LTS
-Residence / Vault / XConomy / WorldBorder：6.0.2.4 / 1.7.3-b131 / 2.26.3 / 1.19
-QuickShop-Hikari / Jobs / GlobalMarketPlus：6.3.0.0（能力矩阵临时构造 6.3.0.1）/ 5.2.6.6 / 1.4.1.4
-MinecraftConsoleClient：build 505；全部实例关闭 SessionCache/ProfileKeyCache
-测试服务器 / 时区：LocalTestServer/codex-fresh-20260821 隔离副本 / Asia/Shanghai
-数据副本：backups/testlist-20260821-continuation；所有配置、迁移、备份和锁竞争场景使用独立 SQLite 副本
-执行人 / 复核人：Codex / 待复核
-开始 / 结束时间：2026-08-21 22:04 / 2026-08-21 22:52
-
-自动化构建结果
-最终 Maven clean verify 四模块全部成功；Core 17、Storage 18、Integrations 11、Paper 48，共 37 个测试类、94 个测试，失败/错误/跳过均为 0。重新构建 JAR、服务器候选 JAR与 15.4 基线 SHA-256 完全一致。
-
-本轮新增完整通过（17 项）
-CFG-04、CFG-05、CFG-09、CFG-11、CFG-12、CFG-13、CFG-17；DB-02、DB-03、DB-04、DB-05、DB-06、DB-07、DB-08、DB-12；OPS-06、OPS-10。
-
-本轮失败（5 项）
-CFG-03（P0）：缺少 Residence、Vault、XConomy、QuickShop、Jobs 或 GMP 时均进入可诊断 LOCKED；但缺少 WorldBorder 时 Paper 因 plugin.yml 硬依赖直接拒绝加载 TianjiTown，无法进入清单要求的 LOCKED 状态或提供 /townadmin status。
-CFG-07（P0）：目录、父路径文件、非法 Windows 路径和损坏库均正确锁定；但只读 SQLite 在启动恢复写入报 SQLITE_READONLY 后仍进入 READY，开放了不可写运行时。
-CFG-08（P0）：零、负数和极大 timeout 均锁定；connection-timeout-ms/busy-timeout-ms 使用字符串错误类型时静默回退为 5000 ms 并进入 READY。
-CFG-10（P0）：YAML 语法、NaN、非法枚举/材料/时区和 ui.mode 均能锁定；但 phase1/phase2 数值使用字符串错误类型时静默回退并 READY，未加载世界 missing_world 也被 allowed-worlds 接受并 READY。
-OPS-07（P0）：相对 ../ 逃逸由单元测试拒绝，但绝对目录可越出 plugins/TianjiTown；本轮实际向 backups/testlist-20260821-continuation 写入在线备份，违反清单“仅允许目标插件范围内”的要求。
-
-当前新增缺陷
-TT-TEST-20260821-06（P0）：CFG-03 缺少 WorldBorder 时插件不加载，无法保持可诊断 LOCKED。
-TT-TEST-20260821-07（P0）：CFG-07 只读 SQLite 发生启动写失败后仍误报 READY。
-TT-TEST-20260821-08（P0）：CFG-08 SQLite timeout 错误类型被静默替换为默认值。
-TT-TEST-20260821-09（P0）：CFG-10 phase1/phase2 错误类型及未加载世界未被严格配置校验阻断。
-TT-TEST-20260821-10（P0）：OPS-07 允许在线备份绝对路径写出插件数据目录。
-
-重要通过证据
-CFG-05：6.3.0.0 保持 READY 并明确关闭动态税；临时 6.3.0.1 的完整 API 开启动态税；移除 ShopEnhancedTaxEvent 后仅该能力 WARN，三种场景的 Jobs/GMP 均保持 OK。CFG-12：维护、tax、consumption、Buff 商店、建筑返还、信标开关经 reload 即时切换；关闭态四个玩家写动作均返回 FEATURE_DISABLED，重新开启后税率和 Buff 动作成功；运行中把 ui.mode 改为 LEGACY、SQLite 路径改为不存在路径后，实际界面仍为 DIALOG、原数据源仍可写，命令明确提示这些项目需重启。
-CFG-13：全新配置和发布包默认 test-command.enabled=false；schema 6 且缺失该节的配置升级到 7 后补为 false，TestCommand 返回 TEST_INTERFACE_DISABLED。CFG-17 覆盖缺失、空白、大小写 DIALOG/LEGACY、非法 CHEST 及修正后恢复 READY。
-DB-02～DB-08：空库及 V0.1、V1.0、V1.1、V2.0、V2.1、V3.0、V4.0、V5.0、V6.0 全部顺序升级至 7.0；代表性 V6 数据验证税率、申请确认、既有领地/区块/扩张、旧账本和信标约束；checksum 漂移、99.0 未来迁移、失败 history、预先存在部分 V7 DDL 均拒绝就绪且失败迁移回滚。DB-12 在 250 ms busy timeout 下于 257 ms 有界失败，释放写锁后新请求成功一次，旧失败请求未重放。
-OPS-06：718 次并发 SQLite 写入期间，同秒手动备份生成两个唯一文件，随后定时任务再生成一份；三份数据库、配置快照和 SHA-256 配套齐全，均通过 quick_check、外键检查、10 条 Flyway validate 和哈希复算。OPS-10 的命令、配置注释、README/运维文档及实际产物均明确内置备份只覆盖 TianjiTown SQLite/config，不宣称覆盖依赖数据。
-
-部分执行但保持未勾选
-CFG-06：已覆盖禁用 WorldBorder，但尚未构造经典 API 缺失、单世界无边界及查询抛 RuntimeException/LinkageError。OPS-01 已覆盖 READY、LOCKED、维护态和 QuickShop WARN，但 SQLite 运行时中断及消费锁状态组合未全部完成。OPS-08 已验证同秒并发备份不重名，尚未生成超过 retention-count 的完整保留轮次。
-
-证据位置
-LocalTestServer/validation/continuation-cfg03-*.log、continuation-cfg05-*.log、continuation-cfg07-*.log～continuation-cfg13-*.log、continuation-cfg17-*.log、continuation-runtime-ops.log、continuation-cfg12-*-memberbot.log、continuation-maven-verify.log；backups/testlist-20260821-continuation/migration-20260821-223741/results.txt、lock-competition-20260821-2248/lock-competition-results.txt、runtime-ops-backups-20260821-224602/inspection-results.txt 及对应数据库/配置/哈希副本。
-
-环境收尾与状态统计
-Paper、MinecraftConsoleClient 和 25565 监听均已停止。服务器 TianjiTown SQLite、config.yml、Residence res_world.yml 已恢复为 15.4 后基线 SHA-256：42A68EF84F5260B04BD2761622DE50469FE851C3D89291290759DF1E51769963、DCAD09006304093911E93FCE4B76DB6425D1DC3985EC669675BBAD34D5F37455、30EA6F7707375D1F752C3ADA990A77AD93B65EEC7DA0671B723F6E108B5B1949；QuickShop 测试包已恢复，候选 JAR 未变化。
-testlist.md 当前：通过 71 / 失败 9 / 阻塞 0 / 未执行 78（按用户要求不统计 manualtest.md）。
-最终结论：NO-GO。迁移与在线备份主链路通过，但新增 5 个 P0 失败，加上既有 LAND-03 P0 及其他未关闭缺陷，仍不满足发布门槛。
-```
-
-### 15.6 2026-08-21～2026-08-22 WorldBorder、运维保留与业务边界续测轮次
-
-```text
-测试轮次：testlist-20260821-remaining-continuation
-分支 / 提交：main / 751943099b134d46144465d2c492c307e3fb0582（保留测试前已有工作区改动；本轮仅修改本清单并新增忽略的本地测试驱动与证据）
-项目版本 / JAR SHA-256：1.4.0 / 4BCA0EBA8D20001E820C404D1685D14B8C47D0B955E8E53FB50336A96FF82A7F
-配置 schema / Flyway schema：7 / 7.0（10 条成功迁移）
-Maven / Paper / Java：3.9.12 / 26.2-84 / 25.0.4 LTS
-Residence / Vault / XConomy / WorldBorder：6.0.2.4 / 1.7.3-b131 / 2.26.3 / 1.19
-QuickShop-Hikari / Jobs / GlobalMarketPlus：6.3.0.0（健康能力矩阵临时构造 6.3.0.1）/ 5.2.6.6 / 1.4.1.4
-MinecraftConsoleClient：build 505；测试账号实例均关闭 SessionCache/ProfileKeyCache
-测试服务器 / 时区：LocalTestServer 本地服及独立场景副本 / Asia/Shanghai
-数据副本：backups/testlist-20260821-cfg06-worldborder、ops-healthy、ops-retention、buff10、land04-land05、mem01、mem14；每个变更场景均使用独立 SQLite 和配置副本
-执行人 / 复核人：Codex / 待复核
-开始 / 结束时间：2026-08-21 23:20 / 2026-08-22 00:03
-
-自动化构建结果
-最终 Maven clean verify 四模块全部成功；Core 17、Storage 18、Integrations 11、Paper 48，共 37 个测试类、94 个测试，失败/错误/跳过均为 0。重新构建 JAR、服务器候选 JAR与 15.5 基线 SHA-256 完全一致。
-
-本轮新增完整通过（6 项）
-CFG-06、MEM-14、LAND-05、BUFF-10、OPS-02、OPS-08。
-
-本轮失败（1 项）
-BUFF-14（P1）：非法 effect key、operation、零价格、256 级效果、非法角色和重复 YAML key 均会阻止就绪并指出原因；但 base-price: '1E1000000' 可进入 READY 且 Buff 商店保持 OPEN。该价格远超 long 次级货币单位可表达范围，配置阶段未阻止潜在的运行时金额转换或算术异常。
-
-当前新增缺陷
-TT-TEST-20260822-11（P1）：BUFF-14 允许远超 long 次级货币单位范围的 Buff 基础价格进入 READY。
-
-重要通过证据
-CFG-06：缺少经典 WorldBorder API 时保持 LOCKED；目标世界无边界、边界查询抛出 RuntimeException 或 LinkageError 时，真实 MCCC 玩家执行选址和扩张均安全拒绝，错误明确指向 WorldBorder，后续查询仍可用。MEM-14：普通成员和副镇长均可成为候选；自己、外镇成员、不存在玩家及重复请求均不写入；两份有效请求有效期均精确为 86400000 ms。
-LAND-05：价格 100 时，余额 99 零占位且零扣款；余额 100 和 101 各仅成功一次，扣款后分别为 0 和 1。BUFF-10：已购 Buff 在热关闭商店后继续生效，新购买返回 FEATURE_DISABLED；到期后数据库转为 EXPIRED，实体效果清理。
-OPS-02：全新健康库的 diagnose 1/7/180 天报告均为 HEALTHY，quick_check=ok、外键违规 0、schema=7，Residence、Vault 和临时完整 QuickShop 6.3.0.1 能力矩阵均健康。OPS-08：结合 15.5 已完成的同秒并发唯一命名，本轮生成超过 retention-count 的备份后仅保留 2 套数据库、配置和校验文件；无 pending 残留，全部哈希有效，非插件标记文件未删除，status 引用文件存在。
-
-部分执行但保持未勾选
-LAND-04：自定义 1.001 + 0.001×(k-1) 在第 2 次扩张按次级单位向上取整为 101 且扣款一致；默认第 2～7 次价格依次为 150000、200000、250000、300000、350000、400000。第 8 次被既有 LAND-03 的 5×5 外圈硬编码限制阻断，无法完成默认前 8 次闭环。
-MEM-01：合格玩家只生成一条 PENDING；重复申请、已有镇籍、归档镇和已有建镇申请者均被拒绝且不写记录。TestCommand 共用动作未取得领导客户端通知的独立证据，因此仍不勾选。
-OPS-05：连续生成 31 份以上诊断后只保留最新 30 份，非诊断标记文件未删除；两个并发手动请求也只运行一个。尚未实际触发定时入口与手动入口并发，因此仍不勾选。
-
-证据位置
-LocalTestServer/validation/continuation-cfg06-*.log、continuation-mem14-*.log、continuation-buff10*.log、continuation-buff14-*.log、continuation-ops-healthy.log、continuation-ops-retention.log；backups/testlist-20260821-cfg06-worldborder/inspection-results.txt、ops-healthy/inspection-results.txt、ops-retention/inspection-results.txt、buff10/inspection-results.txt、land04-land05/inspection-results.txt、mem01/inspection-results.txt、mem14/inspection-results.txt 及对应场景数据库和配置副本。
-
-环境收尾与状态统计
-Paper、MinecraftConsoleClient 和 25565 监听均已停止。服务器 TianjiTown SQLite、config.yml、Residence res_world.yml 已恢复为 15.5 基线 SHA-256：42A68EF84F5260B04BD2761622DE50469FE851C3D89291290759DF1E51769963、DCAD09006304093911E93FCE4B76DB6425D1DC3985EC669675BBAD34D5F37455、30EA6F7707375D1F752C3ADA990A77AD93B65EEC7DA0671B723F6E108B5B1949；WorldBorder 和 QuickShop 测试包也已恢复，当前数据库 quick_check=ok、外键违规 0，候选 JAR 未变化。
-testlist.md 当前：通过 77 / 失败 10 / 阻塞 0 / 未执行 71（按用户要求不统计 manualtest.md）。
-最终结论：NO-GO。新增完成 6 项，但 BUFF-14 新增 1 个 P1 失败；既有 LAND-03 等 P0 缺陷和其余未执行项目仍未关闭，不能批准生产发布。
-```
-
-### 15.7 2026-08-22 测试类型与执行状态整理
-
-```text
-整理范围：仅调整清单粒度、目标测试机制和状态表达；未重新运行 Maven、Paper 或 MinecraftConsoleClient，未修改候选 JAR、服务器数据或历史轮次记录。
-
-按既有证据归档通过（3 项）
-APP-03：正式服务器同样存在命令/协议字符限制，因此只验收协议可达输入；15.3～15.4 已验证格式码、MiniMessage、空规则和 51 条规则稳定拒绝。超出正式协议长度或协议无法提交的控制字符、嵌入换行不再作为插件入口用例，玩家可见渲染和日志防伪继续由 SEC-02 验收。
-APP-26：从原 APP-05 拆出的真实入口冒烟；15.4 已验证大小写和 Unicode NFC 等价名称并发时最多一份成功。
-LAND-04：调整为既有证据已完整覆盖的默认第 2～7 次及自定义精度价格公式。
-
-新增阻塞项（1 项）
-LAND-19：原 LAND-04 的默认第 8 次扩张资金闭环单列；当前被 LAND-03/TT-TEST-20260821-05 的 5×5 网格缺陷阻塞，修复后再执行。
-
-类型与粒度调整
-APP-05：CMD 改为 AUTO，业务层/Repository 负责规范化、唯一约束和并发判重；真实入口代表性场景由 APP-26 覆盖。NFKC 兼容字符规则尚需明确，不以人工测试替代。
-BUFF-06：CMD 改为 AUTO，聚焦可控故障点下的事务、补偿和幂等性；真实 Vault/SQLite/效果投影故障拆为 BUFF-15（OPS）。
-TC-06：继续为 AUTO，明确要求以架构约束和结果契约测试固化共用 TownActions，不要求人工点击界面。
-TC-09：保留 CMD 并只覆盖维护模式；SQLite 运行时中断与恢复拆为 TC-12（OPS）。
-0.1/0.4：明确 [ ] 同时包含未执行、测试实现未完成和部分执行，并为所有未完成或阻塞的 AUTO/CMD 项记录执行准备度。
-
-整理后状态统计
-testlist.md 当前：通过 80 / 失败 10 / 阻塞 1 / 未完成 71（不统计 manualtest.md）。
-其中 AUTO：通过 10 / 未完成 6；CMD：通过 40 / 失败 4 / 阻塞 1 / 未完成 9；OPS：通过 30 / 失败 6 / 未完成 56。
-
-最终结论：NO-GO 不变。分类整理不豁免任何 P0 要求；LAND-03 等既有 P0 缺陷及其余未完成项目仍须关闭。
-```
-
-### 15.8 2026-08-22 遗留证据复核与状态补录
-
-```text
-复核范围：检查 15.1～15.6 引用的 LocalTestServer/validation 与 backups/testlist-* 证据目录，并将现存日志中的 PASS 标记、客户端 RESULT、数据库/Residence 终态与当前未完成项目交叉核对。未重新启动服务器、未执行新测试、未修改候选 JAR 或测试数据。
-
-证据留存情况
-主要证据目录仍在，包括 testlist-20260821-current、completion、continuation、cfg06-worldborder、ops-healthy、ops-retention、buff10、land04-land05、mem01、mem14，以及 testlist-20260815-complete 的完整旧轮次。先前记录中的 ops-healthy 等路径实际带有 testlist-20260821- 前缀，文件并未丢失。
-
-由遗留证据补录通过（3 项）
-MEM-07：testlist-20260815-complete/secondary-town-roles.log 明确记录两个镇长通过 Promise.all 同时批准 CrossJoin 的两份申请，恰好一份 success=true，另一份 INVALID_STATE，随后 QUERY_ACTOR 仅显示成功镇成员身份。Residence 最终快照中该 UUID 只存在于成功镇 codextown，不存在于失败镇 alttown。对 2101313→7519430 的生产代码差异复核显示成员 Repository/并发约束未变化，TownActions 仅修改相关注释，当前工作区也没有生产成员代码改动，因此继承该项通过证据。
-TC-08：testlist-20260815-current/current-command-smoke-v2.log 记录 test-command 关闭时 action domain 补全为空、开启时只返回九个受支持业务域；TestCommand 补全实现未在增量基线中变化。原大项拆分后，此部分归档通过，权限、在线 actor 和 verb 上下文矩阵保留为 TC-13。
-OPS-05：continuation-ops-retention.log 记录两个手动诊断请求竞争时只有一个实际运行，随后连续生成 31+ 份报告；留存目录实查为 30 份 diagnostic-*.txt，keep-me.txt 仍在。原大项拆分后，手动并发与保留归档通过，定时/手动入口竞争保留为 OPS-11。
-
-补充部分执行状态但不勾选
-APP-18：既有客户端时间线覆盖草稿、选址、确认门禁、提交、编辑和撤回，但没有形成 UNDER_REVIEW、NEED_CHANGES、全部终态及各角色非法动作的完整矩阵。
-MEM-01：continuation-mem01-memberbot.log 和数据库快照证明只有合格玩家产生一条 PENDING，重复、已有镇籍、归档镇和有建镇申请均被拒绝。inspection-results.txt 的 ILLEGAL_CASES_REJECTED=False 是检查脚本仍匹配旧提示文字造成的假阴性，实际 RESULT 均为失败；领导客户端日志仍没有收到申请通知，因此保持未完成。
-MEM-15：当前基线的 mccc-coverage-transfer-*.log 与 Paper 日志覆盖候选拒绝、接受、重复决定、新候选成为 MAYOR；未覆盖非候选决定、24 小时到期边界及原镇长最终 MEMBER 的独立查询，因此保持未完成。
-TC-09：旧轮次只证明维护模式下捐款返回 MAINTENANCE_MODE，当前 continuation-runtime-ops.log 证明维护状态可开关；没有遍历全部写 action，保持未完成。
-OPS-11、TC-13：遗留证据没有覆盖其拆出后的剩余要求，保持未完成。
-
-未发现可支持其他状态提升的证据
-对现存 log/txt/md 中 PASS <ID> 标记与当前未完成项目做交集，除 MEM-07、TC-08、OPS-05 外没有其他完整候选。WorldBorder 精确边界、多镇预留竞争、故障注入、长时间窗口、恢复演练和生产发布项目仍缺少完整闭环证据。
-
-复核后状态统计
-testlist.md 当前：通过 83 / 失败 10 / 阻塞 1 / 未完成 70（不统计 manualtest.md）。
-其中 AUTO：通过 10 / 未完成 6；CMD：通过 42 / 失败 4 / 阻塞 1 / 未完成 8；OPS：通过 31 / 失败 6 / 未完成 56。
-
-最终结论：NO-GO 不变。遗留证据减少了重复测试，但没有关闭 LAND-03 等 P0 缺陷，也没有满足最小发布阻断检查。
-```
-
-### 15.9 2026-08-22 AUTO/CMD 全量收口与历史缺陷复测
-
-```text
-测试轮次：testlist-20260822-final-pass-auto-cmd
-分支 / 提交：main / 751943099b134d46144465d2c492c307e3fb0582（保留测试前已有工作区改动）
-项目版本 / 候选 JAR SHA-256：1.4.0 / 2367B65F32665E6134BC49885BC3122C194C6B7FC97901018DEC245FC7A8302D
-配置 schema / Flyway schema：7 / 7.0（10 条成功迁移）
-Maven / Paper / Java：3.9.12 / 26.2-84 / 25.0.4 LTS
-测试服务器 / 时区：LocalTestServer/codex-fresh-20260821 及逐场景隔离副本 / Asia/Shanghai
-执行人 / 复核人：Codex / 待复核
-
-最终自动化构建
-连续两次 mvn clean verify 均成功，四模块共 39 个测试类、115 个测试：Core 17、Storage 34、Integrations 11、Paper 53；失败、错误、跳过均为 0。两次构建的候选 JAR SHA-256 完全一致。JAR 内含 plugin.yml、config.yml 和 V0_1～V7_0 共 10 条迁移，不含测试类。
-
-本轮完成全部剩余 AUTO/CMD（14 项）
-DB-09～DB-11、APP-05、APP-14、APP-16、APP-18、MEM-01、MEM-15、LAND-07、BUFF-06、TC-06、TC-09、TC-13。
-
-关键真实命令结果
-APP-14、LAND-07：矩形/椭圆 WorldBorder 的正负坐标、贴线、内侧和单角越界矩阵均符合四角加缓冲判定。
-APP-16：两个真实在线客户端竞争同一预留时恰好一个成功；重选原子替换并释放旧预留。
-APP-18：覆盖全部申请状态的合法、非法及跨 actor 动作矩阵。
-MEM-01：合格玩家仅产生一条 PENDING，领导客户端收到通知；非法申请零写入。
-MEM-15：候选接受、拒绝、非候选、重复决定、到期边界及最终角色全部符合契约。
-TC-09：维护模式下 24 个写 action 全部拒绝且数据库无副作用，关闭维护后只有新请求成功。
-TC-13：真实 Paper 补全覆盖权限、在线 actor、domain/verb 和上下文隔离。
-
-历史失败复测关闭（10 项）
-CFG-03、CFG-07、CFG-08、CFG-10、APP-04、MEM-12、GOV-01、LAND-03、BUFF-14、OPS-07 均在修复后通过；LAND-19 的原阻塞随 5×5 网格修复解除，第 8 次默认扩张资金与领地闭环通过。
-
-证据位置
-LocalTestServer/validation/retest20260822-*.log、LocalTestServer/validation/retest20260822-final-maven-verify.log、LocalTestServer/validation/retest20260822-final-maven-verify-repeat.log；backups/testlist-20260822-final-pass/command-*.db、command-*-results.txt、worldborder-*.db 及对应 Residence 快照。
-```
-
-### 15.10 2026-08-22 运维故障矩阵、最终候选与发布结论
-
-```text
-测试轮次：testlist-20260822-final-pass-ops
-隔离场景：LocalTestServer/validation/retest20260822-ops-matrix-v4
-依赖：Residence 6.0.2.4、Vault 1.7.3-b131、XConomy 2.26.3、WorldBorder 1.19、QuickShop-Hikari 6.3.0.0、Jobs 5.2.6.6、GlobalMarketPlus 1.4.1.4
-
-本轮新增完整通过（16 项）
-APP-17、MEM-03、MEM-16、GOV-11～GOV-13、ECO-17、ECO-21～ECO-23、LAND-16、BUFF-13、BONUS-07、TC-10、REL-06、REL-12。
-
-关键运维结果
-ECO-21：健康对账前后外部清算余额、内部账户、流水、锁和操作计数完全不变。
-ECO-22：外部余额为零时 6 个账户全部锁定；扩张被拒绝，但捐款、查询与对账仍可用；补足后 6 个锁全部解除。
-ECO-23：长款不被擅自分配；Vault 查询异常不改变余额、不写流水且不误解锁；离线清算身份和金额精度保持稳定。
-ECO-17：热关闭消费后捐款、扩张和 Buff 购买均返回 FEATURE_DISABLED；重新开启后新捐款成功且三方金额一致。
-TC-10：生产配置关闭测试命令时，真实 OP 与管理员父权限均不能继承测试接口；直接调用稳定返回 TEST_INTERFACE_DISABLED。
-
-故障注入发现并修复
-外部 SQLite 写锁暴露出回滚异常会掩盖原始 SQLITE_BUSY，并污染后续事务。五类 Repository 已统一为显式 BEGIN IMMEDIATE/COMMIT；BEGIN 失败时不执行伪回滚。定向回归及 Storage 34/34 证明原始忙锁原因保留，释放外部锁后新操作恢复成功，旧失败操作不重放。
-同时修复了 TestCommand 入镇成功不通知领导、过期镇长转让状态被异常回滚、踢人投票结算目标已缺失仍可能通过，以及生产关闭 TestCommand 时 OP/父权限仍可能看见命令的问题。
-
-失败（2 项）
-ECO-03（TT-TEST-20260822-17，P0）：常规退款故障点能保持玩家、清算、内部账户和流水不变；但外部退款本身失败时，操作进入 COMPENSATION_REQUIRED 并锁定消费，玩家余额未自动恢复到原值，不满足清单“全成或恢复原余额”。
-REL-13（P0）：因 ECO-03 未通过、P0 环境阻塞及 29 项运维/安全/负载项目尚未执行完整，发布门槛不成立。
-
-环境阻塞（9 项）
-ECO-15：当前 QuickShop-Hikari 6.3.0.0 不提供项目要求的动态税事件能力，无法制造真实“税已发生、SQLite 暂不可写”链路；ECO-16 的三类税开关矩阵因此只完成消费开关与热重载部分，继续保持未完成。
-OPS-09：缺少 Residence、QuickShop、XConomy 同一时间点的可恢复备份集。
-REL-05：本轮不具备连续 24～72 小时窗口。
-REL-07～REL-11：缺少目标新旧依赖版本、真实商业事件、生产数据副本或可兼容旧候选包。
-REL-14：无生产环境与发布后观察窗口。
-
-最终环境收尾
-测试服活动目录只保留候选 TianjiTown.jar；测试桥接插件已移至 backups/testlist-20260822-final-pass/local-test-bridges，可恢复。25565、25575 均关闭。配置、SQLite、Residence 基线 SHA-256 分别恢复为 DCAD09006304093911E93FCE4B76DB6425D1DC3985EC669675BBAD34D5F37455、42A68EF84F5260B04BD2761622DE50469FE851C3D89291290759DF1E51769963、30EA6F7707375D1F752C3ADA990A77AD93B65EEC7DA0671B723F6E108B5B1949；数据库 quick_check=ok、外键违规 0、schema=7.0。测试服与构建候选 JAR 哈希均为 2367B65F32665E6134BC49885BC3122C194C6B7FC97901018DEC245FC7A8302D。
-
-最终状态统计
-testlist.md：通过 124 / 失败 2 / 环境阻塞 9 / 未完成 29，共 164 项；AUTO/CMD 已全部完成，剩余项目均为 OPS。
-
-最终结论：NO-GO。候选构建、命令业务和大部分数据边界已收口，但 ECO-03 的资金补偿 P0 失败及多个 P0 恢复/兼容/安全项目仍未关闭，不得进入生产发布。
-```
 
 ## 16. 最小发布阻断检查
 

@@ -170,9 +170,9 @@
 | [ ] | SEC-02 | P0/MANUAL | 特殊文字不能伪造按钮或服务器日志 | 在名称、简介、规则和原因中输入颜色格式、富文本格式标签（MiniMessage）、可点击文字、换行和不可见控制字符，再查看菜单、聊天和服务器日志。 | 危险内容会被拒绝或只作为普通文字安全显示；不能凭输入创建可点击按钮、伪造一条新日志或遮住真实操作记录。 |
 | [ ] | SEC-03 | P0/MANUAL | 修改客户端消息不能越权操作 | 使用测试工具篡改菜单或书本发回服务器的数据，包括他人的业务编号、旧菜单标记、假的客户端时间和重复发送同一请求。 | 服务器不相信客户端自报内容，会重新检查是谁在操作、当前状态、数据版本、等待期和金额；伪造请求不能改动数据或获得别人的权限。 |
 
-## 15. 测试轮次记录模板
+## 15. 测试轮次记录模板与报告索引
 
-> 注：以下历史轮次及发布门槛沿用拆分前的完整清单统计口径，需结合 `testlist.md` 一并查看。
+> 注：历史报告已独立存放于 `reports` 目录；其中早期轮次及发布门槛沿用拆分前的完整清单统计口径，需结合 `testlist.md` 一并查看。
 
 复制以下模板，每轮单独填写，不要直接用勾选代替证据：
 
@@ -195,87 +195,14 @@ MinecraftConsoleClient / 自动化脚本版本：
 最终结论：
 ```
 
-### 15.1 2026-08-15 本地隔离服完整执行轮次
+### 15.1 历史测试报告索引
 
-```text
-测试轮次：testlist-20260815-complete
-分支 / 提交：main / 2101313d5b98ac3e4fe92d99bad785f0a2c41d76
-项目版本 / JAR SHA-256：1.4.0 / 5E2C037B0D28193C01DEA99ABA3F55BD9DFB07D294956F7580F47F34685DC8AF
-配置 schema / Flyway schema：7 / 7.0
-Maven / Paper / Java：3.9.12 / 26.2-84 / 25.0.4 LTS
-Residence / Vault / XConomy / WorldBorder：6.0.2.4 / 1.7.3-b131 / 2.26.3 / 目标部署版本
-QuickShop-Hikari / Jobs / GlobalMarketPlus：6.3.0.0 / 5.2.6.6 / 1.4.1.4
-测试服务器 / 时区：LocalTestServer 隔离副本 / Asia/Shanghai
-数据副本或快照编号：pre-test-snapshot、fresh schema-7、database-final-inspection
-执行人 / 复核人：Codex / 待复核
-开始 / 结束时间：2026-08-15 00:50 / 2026-08-15 02:23
-通过 / 失败 / 阻塞 / 未执行：43 / 2 / 10 / 186
-缺陷列表：TT-TEST-20260815-01 已复测关闭；新增 TT-TEST-20260815-02（MEM-12：玩家资料修改可改小镇全名，锁定字段未受保护）、TT-TEST-20260815-03（BUFF-09：已有 Buff 的小镇接纳在线新成员后未刷新 speed 效果）。阻塞项为 CFG-05、OPS-09、REL-05、REL-07～REL-12、REL-14，原因分别是缺少替代依赖版本、同时间点第三方备份、24～72 小时窗口、生产数据/旧包/生产环境。
-日志、截图、SQL、余额与投影证据位置：LocalTestServer/validation/testlist-20260815-complete
-最终结论：NO-GO；候选包可稳定 READY，构建与 43 项完整用例通过，但存在 2 个未关闭 P1 产品缺陷、P0 阻塞项和 186 项未完整执行，不能据此批准生产发布。
-```
+以下历史轮次沿用拆分前的完整清单统计口径，统一存放于 `reports` 目录：
 
-### 15.2 2026-08-21 三次测试合并报告
+- [2026-08-15 本地隔离服完整执行轮次](reports/2026-08-15-local-isolated-full.md)
+- [2026-08-21 三次测试合并报告](reports/2026-08-21-merged-three-rounds.md)
+- [2026-08-21 补充自动化与真实客户端边界轮次](reports/2026-08-21-supplemental-boundary.md)
 
-```text
-共同测试基线
-分支 / 提交：main / 751943099b134d46144465d2c492c307e3fb0582
-项目版本 / JAR SHA-256：1.4.0 / 4BCA0EBA8D20001E820C404D1685D14B8C47D0B955E8E53FB50336A96FF82A7F
-配置 schema / Flyway schema：7 / 7.0
-Maven / Paper / Java：3.9.12 / 26.2-84 / 25.0.4 LTS
-Residence / Vault / XConomy / WorldBorder：6.0.2.4 / 1.7.3-b131 / 2.26.3 / 1.19
-QuickShop-Hikari / Jobs / GlobalMarketPlus：6.3.0.0 / 5.2.6.6 / 1.4.1.4
-测试服务器 / 时区：15.2 使用 LocalTestServer 隔离副本；15.3～15.4 使用 LocalTestServer/codex-fresh-20260821 / Asia/Shanghai
-数据副本或快照：codex-fresh-20260821；启动时迁移至 schema-7；15.3 使用 ActiveTown，15.4 使用新建 CovTownF；未执行恢复演练
-执行人 / 复核人：Codex / 待复核
-
-三轮测试范围与结果演进
-一｜testlist-20260821-build-paper-smoke｜2026-08-21 11:20～11:25
-范围：Maven clean verify、包内容检查、Paper 启动与迁移冒烟；未驱动 MinecraftConsoleClient 玩家客户端。
-结果：完成 BLD-01～BLD-12、CFG-01、CFG-02，14 / 0 / 0 / 229（通过 / 失败 / 阻塞 / 未执行）；未发现新缺陷。证据：LocalTestServer/validation/codex-maven-verify-second.log；LocalTestServer/validation/codex-fresh-20260821-113149.out.log；LocalTestServer/validation/codex-fresh-20260821-113149.err.log；各模块 target/surefire-reports。
-
-二｜testlist-20260821-mccc-command-coverage｜2026-08-21 13:16～13:40
-范围：MinecraftConsoleClient build 505 驱动 TestBot、MemberBot、MemberTwo、OutsiderBot、JoinerBot、ApplicantBot、CandidateOne、CandidateTwo，覆盖真实登录、查询、权限拒绝、参数校验、建镇、WorldBorder 选址、申请/审批、角色、规则、税率、捐款、扩张、Buff、转让和投票快照。
-结果：累计 19 / 2 / 0 / 222；发现 TT-TEST-20260821-01（MEM-12：town profile 合法路径需要 13 个参数，但校验要求 11，返回 INVALID_ARGUMENT）和 TT-TEST-20260821-02（GOV-10：达到 required_yes 后投票仍为 OPEN，SQLite 快照字段语义疑似错位）。完整用例未满足的项目保持未勾选。证据：LocalTestServer/validation/mccc-testbot.log；LocalTestServer/validation/mccc-testbot-run2.log；LocalTestServer/validation/mccc-memberbot-final.log；LocalTestServer/validation/mccc-outsiderbot-final.log；LocalTestServer/validation/mccc-joinerbot.log；LocalTestServer/validation/mccc-joinerbot-reconnect.log；LocalTestServer/validation/mccc-applicantbot.log；LocalTestServer/validation/mcc-paper-20260821-132036.out.log；LocalTestServer/validation/mccc-20260821-summary.md。
-
-三｜testlist-20260821-mccc-expanded-coverage｜2026-08-21
-范围：Maven verify、SQLite PRAGMA/Flyway、税率五档及边界、多角色捐款与非法金额、入镇申请/审批、副镇长上限与越权任免、四方向扩张、speed/health LEVEL_UP 上限、投票快照/唯一票/即时结算、转让、成员退出、镇长退出拒绝、多人/单人/陈旧版本解散及测试接口关闭门禁；测试身份为 OtherM4、OtherA5、OtherA6、JoinCov、GuestCov、MemberCov、FreeCov、CandCov、DeputyCov。
-结果：新增通过 DB-01、GOV-07、GOV-10、BUFF-04、MEM-17，累计 24 / 1 / 0 / 218。CovTownF 的 DONATION=5 条、合计 1400 minor units；治理投票最终为 PASSED，15.3 的 GOV-10 OPEN 现象本轮未复现，保留历史证据待根因复核，不再作为当前 CMD 失败项。证据：LocalTestServer/validation/maven-auto-20260821.log；各模块 target/surefire-reports；LocalTestServer/validation/mccc-coverage-*.log；LocalTestServer/validation/mccc-coverage-followup-mayor.log；LocalTestServer/validation/mccc-coverage-governance-create.log；LocalTestServer/validation/mccc-coverage-vote-*.log；LocalTestServer/validation/mccc-coverage-transfer-*.log；LocalTestServer/validation/mccc-coverage-disband-*.log；LocalTestServer/validation/mccc-coverage-tc01-disabled.log。
-
-合并后的最终状态
-当前清单累计：通过 24 / 失败 1 / 阻塞 0 / 未执行 218
-当前缺陷：TT-TEST-20260821-01（MEM-12：town profile 合法 13 参数仍被要求 11，资料修改无法完成）。TT-TEST-20260821-02 仅作为 15.3 历史观察保留，待根因复核。
-仍未执行：多镇并发、故障注入、24/48 小时及长期窗口、依赖版本矩阵、迁移/恢复、WorldBorder 全边界以及 GUI/人工项目。
-环境收尾：测试服务器、客户端和 Paper 进程均已停止；15.2 的临时全新服务器目录因运行环境禁止递归删除而保留，未被任何进程占用。
-最终结论：三次测试已合并记录，覆盖范围逐轮扩展，但因 MEM-12 仍未修复且大量发布阻断项目未执行，继续保持 NO-GO，不能批准生产发布。
-```
-
-### 15.3 2026-08-21 补充自动化与真实客户端边界轮次
-
-```text
-测试轮次：testlist-20260821-supplemental-boundary
-分支 / 提交：main / 751943099b134d46144465d2c492c307e3fb0582（工作区仅新增测试与本清单记录）
-项目版本 / JAR SHA-256：1.4.0 / 4BCA0EBA8D20001E820C404D1685D14B8C47D0B955E8E53FB50336A96FF82A7F
-配置 schema / Flyway schema：7 / 7.0
-Maven / Paper / Java：3.9.12 / 26.2-84 / 25.0.4 LTS
-Residence / Vault / XConomy / WorldBorder：6.0.2.4 / 1.7.3-b131 / 2.26.3 / 1.19
-QuickShop-Hikari / Jobs / GlobalMarketPlus：6.3.0.0 / 5.2.6.6 / 1.4.1.4
-测试服务器 / 时区：LocalTestServer/codex-fresh-20260821 隔离副本 / Asia/Shanghai
-MinecraftConsoleClient / 自动化脚本版本：build 505 / 交互式隔离实例（SessionCache/ProfileKeyCache 均关闭）
-数据副本或快照编号：backups/testlist-20260821-current/tianjitown-before.db、tianjitown-after.db
-执行人 / 复核人：Codex / 待复核
-开始 / 结束时间：2026-08-21 18:59 / 2026-08-21 19:12
-通过 / 失败 / 阻塞 / 未执行：29 / 1 / 0 / 213
-新增通过：APP-02、DB-13、BUFF-03、BUFF-05、SEC-01。
-自动化结果：37 个测试类、94 个测试全部通过，失败/错误/跳过均为 0；两次未改源码的干净构建 JAR 哈希一致，新增测试不进入候选包且候选 JAR 哈希保持不变。
-运行结果：TianjiTown READY，依赖与 WorldBorder 能力正常；SQLite quick_check=ok、外键违规 0、Flyway 10 条迁移有效、账户/账本差异 0；在线备份成功。统一诊断因 QuickShop-Hikari 6.3.0.0 不满足严格高于 6.3.0.0 的历史适配要求而按设计报告 INCOMPLETE。
-MEM-12 复核：旧报告所称“合法 13 参数被要求 11”不成立，文档与实现的合法命令长度均为 11，简介/规则更新成功且旧版本被拒绝；但当前版本允许同一入口修改小镇全名和简称，违反锁定字段要求。测试后已通过业务入口恢复名称，并最终恢复测试前 SQLite/config 哈希。
-部分执行但未勾选：APP-03 的格式码、MiniMessage 与简介格式注入稳定返回 VALIDATION_FAILED；超长聊天命令被 MinecraftConsoleClient 截断后返回 INVALID_ARGUMENT，未完成控制字符、换行与全部长度项，因此保持未执行状态。
-缺陷列表：TT-TEST-20260821-01（更正描述：MEM-12 玩家资料入口可修改锁定的全名和简称）；未新增其他产品缺陷。
-日志、截图、SQL、余额与投影证据位置：各模块 target/surefire-reports；backups/testlist-20260821-current/paper-latest.log、tianjitown-before.db、tianjitown-after.db；LocalTestServer/validation/mccc-20260821-current-*.log。
-环境收尾：Paper、全部 MinecraftConsoleClient 与监听端口均已停止；SQLite 与 config.yml 已恢复为测试前 SHA-256；测试前后数据库均通过 quick_check 和外键检查。
-最终结论：NO-GO；新增 5 项完整通过，但 MEM-12 仍失败，且 213 项（含人工界面、依赖矩阵、故障注入、迁移/恢复、长时间及生产发布项目）尚未完整执行。
-```
 
 ## 16. 最小发布阻断检查
 

@@ -41,7 +41,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 > 此 SQLite 版不会自动导入旧 MySQL 数据。已经在 MySQL 中运行的服务器应先保留完整备份，在隔离环境完成数据转换和验收后再切换；不要把旧 MySQL Flyway history 复制到 SQLite。
 
 领地加成的升级、验收与回滚流程见 [`docs/deployment/TERRITORY_BONUSES.md`](docs/deployment/TERRITORY_BONUSES.md)，日常运维见 [`docs/operations/OPERATIONS.md`](docs/operations/OPERATIONS.md)。
-隔离测试服务器的界面业务自动化接口见 [`docs/test-command.md`](docs/test-command.md)；该接口默认关闭且使用独立权限，不属于玩家或管理员正式功能。
+测试清单、历史报告与隔离测试接口统一见 [`test/README.md`](test/README.md)；测试接口默认关闭且使用独立权限，不属于玩家或管理员正式功能。
 
 ## 管理员帮助
 
