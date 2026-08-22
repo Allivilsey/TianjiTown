@@ -74,7 +74,7 @@ final class TownRuntime {
         this.buffs = new BuffRuntime(plugin, this,
                 new CommerceRepository(database.dataSource(),
                         plugin.getServer()::isPrimaryThread),
-                BuffSettings.load(plugin.getConfig()));
+                BuffSettings.load(plugin.getConfig(), settlement.scale()));
         this.bonuses = new TownBonusRuntime(plugin, this,
                 new TownBonusRepository(database.dataSource(),
                         plugin.getServer()::isPrimaryThread),

@@ -1203,22 +1203,28 @@ public final class TownRepository {
         profile.requireValid();
         return transaction(connection -> {
             requireManager(connection, townId, actorId);
-            ensureTownNameAvailable(connection, profile, townId);
+            TownSnapshot current = requireTown(connection, townId);
+            if (!current.profile().name().equals(profile.name())
+                    || !current.profile().shortName().equals(profile.shortName())
+                    || !current.profile().normalizedResidenceName()
+                    .equals(profile.normalizedResidenceName())) {
+                throw new ConflictException("玩家资料入口不能修改小镇名称、简称或领地名称");
+            }
             try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE towns SET name = ?, normalized_name = ?, short_name = ?,
-                        normalized_short_name = ?, description = ?, rules_text = ?,
+                    UPDATE towns SET description = ?, rules_text = ?,
                         rules_revision = rules_revision + CASE WHEN rules_text <> ? THEN 1 ELSE 0 END,
                         version = version + 1
                      WHERE town_id = ? AND version = ? AND status <> 'ARCHIVED'
                     """)) {
-                setTownText(statement, 1, profile);
-                statement.setString(7, String.join(RULE_SEPARATOR, profile.rules()));
-                statement.setBytes(8, uuid(townId));
-                statement.setLong(9, expectedVersion);
+                statement.setString(1, profile.description());
+                statement.setString(2, String.join(RULE_SEPARATOR, profile.rules()));
+                statement.setString(3, String.join(RULE_SEPARATOR, profile.rules()));
+                statement.setBytes(4, uuid(townId));
+                statement.setLong(5, expectedVersion);
                 requireUpdated(statement, "小镇资料已被其他操作修改，请重新读取后再试");
             }
             audit(connection, null, actorId, actorName, "PROFILE_UPDATE", "TOWN", townId.toString(),
-                    reason, profile.name());
+                    reason, current.profile().name());
             return requireTown(connection, townId);
         });
     }
@@ -2038,7 +2044,7 @@ public final class TownRepository {
         statement.setString(start + 1, text.normalizedName());
         statement.setString(start + 2, text.shortName());
         statement.setString(start + 3, text.normalizedShortName());
-        statement.setString(start + 4, text.residenceName());
+        statement.setString(start + 4, text.normalizedResidenceName());
         statement.setString(start + 5, text.description());
         statement.setString(start + 6, String.join(RULE_SEPARATOR, text.rules()));
     }
@@ -2130,20 +2136,38 @@ public final class TownRepository {
 
     private <T> T transaction(SqlWork<T> work) {
         try (Connection connection = dataSource.getConnection()) {
-            boolean autoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
+            boolean begun = false;
             try {
+                executeTransactionCommand(connection, "BEGIN IMMEDIATE");
+                begun = true;
                 T result = work.run(connection);
-                connection.commit();
+                executeTransactionCommand(connection, "COMMIT");
+                begun = false;
                 return result;
             } catch (SQLException | RuntimeException exception) {
-                connection.rollback();
+                rollback(connection, begun, exception);
                 throw exception;
-            } finally {
-                connection.setAutoCommit(autoCommit);
             }
         } catch (SQLException exception) {
             throw translate(exception);
+        }
+    }
+
+    private static void rollback(Connection connection, boolean begun, Throwable failure) {
+        if (!begun) {
+            return;
+        }
+        try {
+            executeTransactionCommand(connection, "ROLLBACK");
+        } catch (SQLException rollbackFailure) {
+            failure.addSuppressed(rollbackFailure);
+        }
+    }
+
+    private static void executeTransactionCommand(Connection connection, String command)
+            throws SQLException {
+        try (java.sql.Statement statement = connection.createStatement()) {
+            statement.execute(command);
         }
     }
 

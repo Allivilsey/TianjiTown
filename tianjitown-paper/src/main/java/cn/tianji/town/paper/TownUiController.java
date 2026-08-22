@@ -1723,7 +1723,7 @@ final class TownUiController implements Listener {
         }));
     }
 
-    private void notifyMayorJoinApplication(JoinApplicationSnapshot application) {
+    void notifyMayorJoinApplication(JoinApplicationSnapshot application) {
         runtime.read(Bukkit.getConsoleSender(), () -> new ManagerNotification(
                 runtime.repository().findTown(application.townId()).orElse(null),
                 runtime.governance().listManagerIds(application.townId())), notification -> {

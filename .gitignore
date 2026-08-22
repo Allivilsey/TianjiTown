@@ -42,6 +42,7 @@ reports/
 hs_err_pid*
 replay_pid*
 /LocalTestServer/
+/MinecraftConsoleClient/
 TODO.md
 
 # 第 0 阶段回滚备份包含生产配置和数据库快照，禁止提交。
@@ -54,5 +55,3 @@ backups/*
 !.env.example
 *.local.yml
 *.local.yaml
-/TestList.md
-/ManualTest.md

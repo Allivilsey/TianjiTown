@@ -13,23 +13,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PluginDescriptorTest {
     @Test
-    void declaresWorldBorderAsRequiredAndOtherIntegrationsAsSoftDependencies() throws IOException {
+    void declaresAllRuntimeIntegrationsAsSoftDependenciesForDiagnosableLocking()
+            throws IOException {
         String descriptor = descriptor();
 
-        String dependencies = descriptor.lines().map(String::strip)
-                .filter(line -> line.startsWith("depend:"))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("plugin.yml 缺少 depend"));
-        assertTrue(dependencies.contains("WorldBorder"), "WorldBorder 必须声明为硬依赖");
         String softDependencies = descriptor.lines().map(String::strip)
                 .filter(line -> line.startsWith("softdepend:"))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("plugin.yml 缺少 softdepend"));
         for (String plugin : List.of("Vault", "Residence", "QuickShop-Hikari", "XConomy",
-                "Jobs", "GlobalMarketPlus")) {
+                "Jobs", "GlobalMarketPlus", "WorldBorder")) {
             assertTrue(softDependencies.contains(plugin), plugin + " 必须声明为软依赖");
         }
-        assertFalse(softDependencies.contains("WorldBorder"));
+        assertFalse(descriptor.lines().map(String::strip)
+                .anyMatch(line -> line.startsWith("depend:")),
+                "硬依赖会让 Paper 在插件门禁运行前直接拒绝加载");
     }
 
     @Test

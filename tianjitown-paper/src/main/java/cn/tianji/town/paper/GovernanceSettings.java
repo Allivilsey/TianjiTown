@@ -19,10 +19,14 @@ record GovernanceSettings(Duration transferConfirmation, Duration activeMemberWi
     static GovernanceSettings load(ConfigurationSection config) {
         Objects.requireNonNull(config, "config");
         return new GovernanceSettings(
-                hours(TRANSFER_CONFIRMATION, config.getLong(TRANSFER_CONFIRMATION, 24), false),
-                days(ACTIVE_MEMBER_WINDOW, config.getLong(ACTIVE_MEMBER_WINDOW, 30), true),
-                days(MINIMUM_MEMBERSHIP, config.getLong(MINIMUM_MEMBERSHIP, 0), true),
-                hours(VOTE_DURATION, config.getLong(VOTE_DURATION, 72), false));
+                hours(TRANSFER_CONFIRMATION,
+                        ConfigurationValues.longInteger(config, TRANSFER_CONFIRMATION, 24), false),
+                days(ACTIVE_MEMBER_WINDOW,
+                        ConfigurationValues.longInteger(config, ACTIVE_MEMBER_WINDOW, 30), true),
+                days(MINIMUM_MEMBERSHIP,
+                        ConfigurationValues.longInteger(config, MINIMUM_MEMBERSHIP, 0), true),
+                hours(VOTE_DURATION,
+                        ConfigurationValues.longInteger(config, VOTE_DURATION, 72), false));
     }
 
     private static Duration hours(String path, long value, boolean allowZero) {

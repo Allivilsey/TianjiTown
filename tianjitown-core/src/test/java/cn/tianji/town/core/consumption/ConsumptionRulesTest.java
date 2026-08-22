@@ -27,4 +27,28 @@ class ConsumptionRulesTest {
         assertThrows(IllegalArgumentException.class,
                 () -> BuffPricing.next(definition, 3, 3));
     }
+
+    @Test
+    void appliesEveryDurationDiscountWithDeterministicRounding() {
+        BuffDefinition definition = new BuffDefinition("duration", "时长测试",
+                BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                new BigDecimal("100.00"), 1, BuffStackingRule.LEVEL_UP, 1,
+                Set.of(MemberRole.MAYOR));
+
+        assertEquals(10_000, BuffPricing.price(definition, BuffDurationOption.ONE_HOUR,
+                1, 2).minorUnits());
+        assertEquals(216_000, BuffPricing.price(definition, BuffDurationOption.ONE_DAY,
+                1, 2).minorUnits());
+        assertEquals(1_344_000, BuffPricing.price(definition, BuffDurationOption.ONE_WEEK,
+                1, 2).minorUnits());
+        assertEquals(5_040_000, BuffPricing.price(definition, BuffDurationOption.ONE_MONTH,
+                1, 2).minorUnits());
+
+        BuffDefinition fractional = new BuffDefinition("fractional", "舍入测试",
+                BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                new BigDecimal("0.01"), 1, BuffStackingRule.LEVEL_UP, 1,
+                Set.of(MemberRole.MAYOR));
+        assertEquals(135, BuffPricing.price(fractional, BuffDurationOption.ONE_WEEK,
+                1, 2).minorUnits());
+    }
 }

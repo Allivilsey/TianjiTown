@@ -77,6 +77,127 @@ class CommerceRepositorySqliteTest {
             assertEquals(90_000, refundedBuff.balanceAfterMinor());
             assertEquals(1, ledgerCount(gate, townId, "BUFF_REFUND"));
             assertEquals(1, repository.activeBuffsForPlayer(memberId, now).getFirst().level());
+
+            BuffDefinition extend = new BuffDefinition("extend", "延长测试",
+                    BuffDefinition.EffectKind.POTION, "minecraft:haste", "AMPLIFIER",
+                    new BigDecimal("10.00"), 2, BuffStackingRule.EXTEND, 1,
+                    Set.of(MemberRole.MAYOR));
+            CommerceRepository.BuffPurchase extendFirst = repository.purchaseBuff(mayorId,
+                    "Mayor", extend, BuffDurationOption.ONE_HOUR, 2, "buff:extend:1", now);
+            CommerceRepository.BuffPurchase extendSecond = repository.purchaseBuff(mayorId,
+                    "Mayor", extend, BuffDurationOption.ONE_HOUR, 2, "buff:extend:2",
+                    now.plusSeconds(60));
+            assertEquals(1, extendSecond.buff().level());
+            assertEquals(2, extendSecond.buff().stackCount());
+            assertEquals(1_000, extendSecond.buff().priceMinor());
+            assertEquals(extendFirst.buff().expiresAt().plusSeconds(3_600).toEpochMilli(),
+                    extendSecond.buff().expiresAt().toEpochMilli());
+            assertThrows(IllegalArgumentException.class,
+                    () -> repository.purchaseBuff(mayorId, "Mayor", extend,
+                            BuffDurationOption.ONE_HOUR, 2, "buff:extend:3",
+                            now.plusSeconds(120)));
+
+            BuffDefinition refresh = new BuffDefinition("refresh", "刷新测试",
+                    BuffDefinition.EffectKind.POTION, "minecraft:luck", "AMPLIFIER",
+                    new BigDecimal("10.00"), 2, BuffStackingRule.REFRESH, 1,
+                    Set.of(MemberRole.MAYOR));
+            CommerceRepository.BuffPurchase refreshFirst = repository.purchaseBuff(mayorId,
+                    "Mayor", refresh, BuffDurationOption.ONE_HOUR, 2, "buff:refresh:1", now);
+            Instant refreshAt = now.plusSeconds(60);
+            CommerceRepository.BuffPurchase refreshSecond = repository.purchaseBuff(mayorId,
+                    "Mayor", refresh, BuffDurationOption.ONE_HOUR, 2, "buff:refresh:2",
+                    refreshAt);
+            assertEquals(1, refreshSecond.buff().level());
+            assertEquals(1, refreshSecond.buff().stackCount());
+            assertEquals(1_000, refreshSecond.buff().priceMinor());
+            assertEquals(refreshAt.plusSeconds(3_600).toEpochMilli(),
+                    refreshSecond.buff().expiresAt().toEpochMilli());
+            assertTrue(refreshSecond.buff().expiresAt().isAfter(refreshFirst.buff().expiresAt()));
+        }
+    }
+
+    @Test
+    void rollsBackBuffPurchaseAndRefundWhenLateAuditWriteFails() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("buff-rollback.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID townId = UUID.randomUUID();
+            UUID mayorId = UUID.randomUUID();
+            UUID memberId = UUID.randomUUID();
+            insertTown(gate, townId, mayorId, memberId);
+            CommerceRepository repository = new CommerceRepository(gate.dataSource(),
+                    () -> false);
+            BuffDefinition buff = new BuffDefinition("rollback", "事务测试",
+                    BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                    new BigDecimal("100.00"), 2, BuffStackingRule.LEVEL_UP, 1,
+                    Set.of(MemberRole.MAYOR));
+            Instant now = Instant.now();
+
+            installAuditFailure(gate, "fail_buff_purchase", "BUFF_PURCHASE");
+            assertThrows(CommerceRepository.ConflictException.class,
+                    () -> repository.purchaseBuff(mayorId, "Mayor", buff,
+                            BuffDurationOption.ONE_HOUR, 2, "buff:rollback:purchase", now));
+            assertEquals(100_000, accountBalance(gate, townId));
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM ledger_entries "
+                    + "WHERE business_key = 'buff:rollback:purchase'"));
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM active_buffs "
+                    + "WHERE business_key = 'buff:rollback:purchase'"));
+            execute(gate, "DROP TRIGGER fail_buff_purchase");
+
+            CommerceRepository.BuffPurchase purchased = repository.purchaseBuff(mayorId,
+                    "Mayor", buff, BuffDurationOption.ONE_HOUR, 2,
+                    "buff:rollback:success", now);
+            installAuditFailure(gate, "fail_buff_refund", "BUFF_REFUND");
+            assertThrows(CommerceRepository.ConflictException.class,
+                    () -> repository.refundActiveBuff(purchased.buff().buffId(), mayorId,
+                            "Mayor", "退款注入失败"));
+            assertEquals(90_000, accountBalance(gate, townId));
+            assertEquals("ACTIVE", scalarText(gate, "SELECT status FROM active_buffs "
+                    + "WHERE business_key = 'buff:rollback:success'"));
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM ledger_entries "
+                    + "WHERE business_key LIKE 'buff-refund:%'"));
+        }
+    }
+
+    @Test
+    void restoresUnexpiredBuffsAndExpiresBoundaryRecordsAcrossRestart() throws Exception {
+        Path database = temporaryDirectory.resolve("buff-restart.db");
+        String url = "jdbc:sqlite:" + database;
+        UUID townId = UUID.randomUUID();
+        UUID mayorId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        Instant purchasedAt = Instant.parse("2026-08-22T00:00:00Z");
+        Instant expiresAt;
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            insertTown(gate, townId, mayorId, memberId);
+            CommerceRepository repository = new CommerceRepository(gate.dataSource(),
+                    () -> false);
+            BuffDefinition buff = new BuffDefinition("restart", "重启测试",
+                    BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                    new BigDecimal("10.00"), 2, BuffStackingRule.LEVEL_UP, 1,
+                    Set.of(MemberRole.MAYOR));
+            expiresAt = repository.purchaseBuff(mayorId, "Mayor", buff,
+                    BuffDurationOption.ONE_HOUR, 2, "buff:restart:once", purchasedAt)
+                    .buff().expiresAt();
+        }
+
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            CommerceRepository repository = new CommerceRepository(gate.dataSource(),
+                    () -> false);
+            assertEquals(1, repository.activeBuffsForPlayer(memberId,
+                    expiresAt.minusMillis(1)).size());
+            assertTrue(repository.expireBuffs(expiresAt.minusMillis(1)).isEmpty());
+            assertEquals(Set.of(townId), repository.expireBuffs(expiresAt));
+            assertTrue(repository.activeBuffsForPlayer(memberId, expiresAt).isEmpty());
+            assertEquals(1, scalar(gate, "SELECT COUNT(*) FROM ledger_entries "
+                    + "WHERE business_key='buff:restart:once'"));
+            assertEquals("EXPIRED", scalarText(gate, "SELECT status FROM active_buffs "
+                    + "WHERE business_key='buff:restart:once'"));
         }
     }
 
@@ -141,5 +262,37 @@ class CommerceRepositorySqliteTest {
     private static byte[] uuid(UUID value) {
         return ByteBuffer.allocate(16).putLong(value.getMostSignificantBits())
                 .putLong(value.getLeastSignificantBits()).array();
+    }
+
+    private static void installAuditFailure(DatabaseGate gate, String triggerName, String action)
+            throws Exception {
+        execute(gate, "CREATE TRIGGER " + triggerName + " BEFORE INSERT ON audit_logs "
+                + "WHEN NEW.action = '" + action + "' BEGIN "
+                + "SELECT RAISE(ABORT, 'injected audit failure'); END");
+    }
+
+    private static void execute(DatabaseGate gate, String sql) throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             var statement = connection.createStatement()) {
+            statement.execute(sql);
+        }
+    }
+
+    private static long scalar(DatabaseGate gate, String sql) throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             var statement = connection.createStatement();
+             ResultSet rows = statement.executeQuery(sql)) {
+            assertTrue(rows.next());
+            return rows.getLong(1);
+        }
+    }
+
+    private static String scalarText(DatabaseGate gate, String sql) throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             var statement = connection.createStatement();
+             ResultSet rows = statement.executeQuery(sql)) {
+            assertTrue(rows.next());
+            return rows.getString(1);
+        }
     }
 }

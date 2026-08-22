@@ -451,20 +451,38 @@ public final class CommerceRepository {
 
     private <T> T transaction(SqlWork<T> work) {
         try (Connection connection = dataSource.getConnection()) {
-            boolean autoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
+            boolean begun = false;
             try {
+                executeTransactionCommand(connection, "BEGIN IMMEDIATE");
+                begun = true;
                 T result = work.run(connection);
-                connection.commit();
+                executeTransactionCommand(connection, "COMMIT");
+                begun = false;
                 return result;
             } catch (SQLException | RuntimeException exception) {
-                connection.rollback();
+                rollback(connection, begun, exception);
                 throw exception;
-            } finally {
-                connection.setAutoCommit(autoCommit);
             }
         } catch (SQLException exception) {
             throw translate(exception);
+        }
+    }
+
+    private static void rollback(Connection connection, boolean begun, Throwable failure) {
+        if (!begun) {
+            return;
+        }
+        try {
+            executeTransactionCommand(connection, "ROLLBACK");
+        } catch (SQLException rollbackFailure) {
+            failure.addSuppressed(rollbackFailure);
+        }
+    }
+
+    private static void executeTransactionCommand(Connection connection, String command)
+            throws SQLException {
+        try (java.sql.Statement statement = connection.createStatement()) {
+            statement.execute(command);
         }
     }
 

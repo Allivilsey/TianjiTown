@@ -145,6 +145,7 @@ phase5:
     diagnostics-interval-minutes: 60
     backup:
       # 在线备份只覆盖 TianjiTown SQLite 与 config.yml；依赖插件需按阶段5手册统一备份。
+      # 目录必须是 plugins/TianjiTown 下的相对路径，禁止绝对路径或 ../ 逃逸。
       enabled: true
       interval-hours: 6
       retention-count: 14

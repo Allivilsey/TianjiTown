@@ -24,7 +24,7 @@ import java.util.function.Consumer;
  * 仅供隔离测试服务器使用的玩家业务接口，不复用管理员越权命令。
  */
 final class TestCommand implements CommandExecutor, TabCompleter {
-    private static final String PERMISSION = "tianjitown.testcommand";
+    static final String PERMISSION = "tianjitown.testcommand";
     private final TianjiTownPlugin plugin;
 
     TestCommand(TianjiTownPlugin plugin) {
@@ -101,7 +101,15 @@ final class TestCommand implements CommandExecutor, TabCompleter {
             }
             case "join:apply" -> {
                 requireLength(args, 5);
-                actions.applyToTown(actor, uuid(args[4]), output(sender));
+                actions.applyToTown(actor, uuid(args[4]), outcome -> {
+                    sender.sendMessage(outcome.result().machineLine());
+                    if (outcome.result().success() && outcome.value() != null) {
+                        TownUiController ui = plugin.townUi();
+                        if (ui != null) {
+                            ui.notifyMayorJoinApplication(outcome.value());
+                        }
+                    }
+                });
                 yield true;
             }
             case "join:cancel" -> {

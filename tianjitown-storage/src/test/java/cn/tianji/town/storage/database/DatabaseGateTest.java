@@ -265,6 +265,28 @@ class DatabaseGateTest {
     }
 
     @Test
+    void rejectsReadOnlyDatabaseBeforeReportingHealthy() {
+        Path database = temporaryDirectory.resolve("read-only.db").toAbsolutePath();
+        initializeDatabase("jdbc:sqlite:" + database);
+        String readOnlyUrl = "jdbc:sqlite:file:"
+                + database.toString().replace('\\', '/') + "?mode=ro";
+
+        boolean rejected = false;
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(readOnlyUrl,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            DatabaseGate.HealthResult health = gate.verifyAndMigrate();
+            rejected = !health.healthy();
+            if (!health.healthy()) {
+                assertTrue(health.detail().toLowerCase(java.util.Locale.ROOT)
+                        .matches(".*(不可写|readonly|read-only).*"), health.detail());
+            }
+        } catch (RuntimeException exception) {
+            rejected = true;
+        }
+        assertTrue(rejected, "只读 SQLite 不能通过启动门禁");
+    }
+
+    @Test
     void rejectsMigrationNewerThanSupportedSchema() throws Exception {
         String url = "jdbc:sqlite:" + temporaryDirectory.resolve("future-migration.db");
         initializeDatabase(url);

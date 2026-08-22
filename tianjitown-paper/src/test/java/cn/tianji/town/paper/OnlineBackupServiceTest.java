@@ -31,12 +31,22 @@ class OnlineBackupServiceTest {
     }
 
     @Test
-    void preservesExplicitAbsoluteBackupDirectory() {
+    void rejectsExplicitAbsoluteBackupDirectory() {
         Path dataDirectory = temporaryDirectory.resolve("plugins").resolve("TianjiTown");
         Path externalDirectory = temporaryDirectory.resolve("external-backups").toAbsolutePath();
 
-        assertEquals(externalDirectory.normalize(),
-                OnlineBackupService.resolveDirectory(dataDirectory, externalDirectory));
+        assertThrows(IllegalArgumentException.class,
+                () -> OnlineBackupService.resolveDirectory(dataDirectory, externalDirectory));
+    }
+
+    @Test
+    void rejectsExistingFileAsBackupDirectory() throws Exception {
+        Path dataDirectory = temporaryDirectory.resolve("plugins").resolve("TianjiTown");
+        Files.createDirectories(dataDirectory);
+        Files.writeString(dataDirectory.resolve("backups"), "不是目录");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> OnlineBackupService.resolveDirectory(dataDirectory, Path.of("backups")));
     }
 
     @Test

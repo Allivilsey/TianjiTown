@@ -13,7 +13,10 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -109,6 +112,20 @@ class EconomyRepositorySqliteTest {
             assertEquals(1, repository.territoryUnits(townId).size());
             assertEquals(5, repository.ledger(townId, 0, 45).size());
 
+            EconomyRepository.ExpansionOperation inner = repository.prepareExpansion(
+                    new EconomyRepository.ExpansionRequest(townId, east, "SKY", "unit_p1_p0",
+                            200, mayorId, "Mayor", "expansion:grid-inner"));
+            TerritoryUnit outerEast = TerritoryRules.next(repository.territoryUnits(townId)
+                    .stream().map(EconomyRepository.TerritoryUnitSnapshot::unit).toList(),
+                    ExpansionDirection.EAST);
+            assertEquals(2, outerEast.gridX());
+            EconomyRepository.ExpansionOperation outer = repository.prepareExpansion(
+                    new EconomyRepository.ExpansionRequest(townId, outerEast, "SKY", "unit_p2_p0",
+                            200, mayorId, "Mayor", "expansion:grid-outer"));
+            repository.refundExpansion(outer.expansionId(), "外圈测试回滚");
+            repository.refundExpansion(inner.expansionId(), "内圈测试回滚");
+            assertEquals(2_000, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
+
             assertThrows(IllegalArgumentException.class,
                     () -> repository.changeTaxRate(townId, mayorId,
                             750, "Mayor", "非法税率测试"));
@@ -145,6 +162,128 @@ class EconomyRepositorySqliteTest {
                     .toList();
             assertTrue(recentEntryTypes.contains("JOBS_TAX"));
             assertTrue(recentEntryTypes.contains("SERVER_TAX_SUBSIDY"));
+        }
+    }
+
+    @Test
+    void rollsBackDonationTaxExpansionAndRefundAtLateFailurePoints() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("economy-rollback.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID townId = UUID.randomUUID();
+            UUID mayorId = UUID.randomUUID();
+            UUID worldId = UUID.randomUUID();
+            insertTown(gate, townId, mayorId, worldId);
+            EconomyRepository repository = new EconomyRepository(gate.dataSource(), () -> false);
+            repository.initializeAccounts();
+            EconomyRepository.EconomyOperation seed = repository.prepareOperation(townId,
+                    "DONATION", 1_000, mayorId, "Mayor", "rollback:seed", "初始资金");
+            repository.markOperationExternalApplied(seed.operationId());
+            repository.completeOperation(seed.operationId());
+
+            EconomyRepository.EconomyOperation donation = repository.prepareOperation(townId,
+                    "DONATION", 300, mayorId, "Mayor", "rollback:donation", "捐款回滚");
+            repository.markOperationExternalApplied(donation.operationId());
+            execute(gate, """
+                    CREATE TRIGGER fail_donation_complete
+                    BEFORE UPDATE ON economy_operations
+                    WHEN NEW.status = 'COMPLETED' AND NEW.business_key = 'rollback:donation'
+                    BEGIN SELECT RAISE(ABORT, 'injected donation failure'); END
+                    """);
+            assertThrows(EconomyRepository.ConflictException.class,
+                    () -> repository.completeOperation(donation.operationId()));
+            assertEquals(1_000, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM ledger_entries "
+                    + "WHERE business_key = 'rollback:donation'"));
+            assertEquals("EXTERNAL_APPLIED", scalarText(gate, "SELECT status FROM "
+                    + "economy_operations WHERE business_key = 'rollback:donation'"));
+            execute(gate, "DROP TRIGGER fail_donation_complete");
+
+            execute(gate, """
+                    CREATE TRIGGER fail_tax_subsidy
+                    BEFORE INSERT ON ledger_entries
+                    WHEN NEW.business_key = 'rollback:tax:subsidy'
+                    BEGIN SELECT RAISE(ABORT, 'injected tax failure'); END
+                    """);
+            EconomyRepository.ExternalIncomeTax tax = new EconomyRepository.ExternalIncomeTax(
+                    townId, "rollback:tax", "JOBS", mayorId, "Mayor", 10_000, 500, 500);
+            assertThrows(EconomyRepository.ConflictException.class,
+                    () -> repository.recordExternalIncomeTax(tax));
+            assertEquals(1_000, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM external_income_tax_records "
+                    + "WHERE business_key = 'rollback:tax'"));
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM ledger_entries "
+                    + "WHERE business_key LIKE 'rollback:tax%'"));
+            execute(gate, "DROP TRIGGER fail_tax_subsidy");
+
+            TerritoryUnit origin = repository.territoryUnits(townId).getFirst().unit();
+            TerritoryUnit east = TerritoryRules.next(List.of(origin), ExpansionDirection.EAST);
+            EconomyRepository.ExpansionRequest failedExpansion =
+                    new EconomyRepository.ExpansionRequest(townId, east, "SKY", "unit_p1_p0",
+                            200, mayorId, "Mayor", "rollback:expansion");
+            execute(gate, """
+                    CREATE TRIGGER fail_expansion_ledger
+                    BEFORE INSERT ON ledger_entries
+                    WHEN NEW.business_key = 'rollback:expansion'
+                    BEGIN SELECT RAISE(ABORT, 'injected expansion failure'); END
+                    """);
+            assertThrows(EconomyRepository.ConflictException.class,
+                    () -> repository.prepareExpansion(failedExpansion));
+            assertEquals(1, repository.territoryUnits(townId).size());
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM territory_expansions "
+                    + "WHERE business_key = 'rollback:expansion'"));
+            assertEquals(1_000, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
+            execute(gate, "DROP TRIGGER fail_expansion_ledger");
+
+            EconomyRepository.ExpansionOperation prepared = repository.prepareExpansion(
+                    new EconomyRepository.ExpansionRequest(townId, east, "SKY", "unit_p1_p0",
+                            200, mayorId, "Mayor", "rollback:refund"));
+            execute(gate, """
+                    CREATE TRIGGER fail_expansion_refund
+                    BEFORE DELETE ON territory_units
+                    BEGIN SELECT RAISE(ABORT, 'injected refund failure'); END
+                    """);
+            assertThrows(EconomyRepository.ConflictException.class,
+                    () -> repository.refundExpansion(prepared.expansionId(), "注入失败"));
+            assertEquals(800, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
+            assertEquals(2, repository.territoryUnits(townId).size());
+            assertEquals(1, repository.pendingExpansions().size());
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM ledger_entries "
+                    + "WHERE business_key = 'rollback:refund:refund'"));
+        }
+    }
+
+    @Test
+    void preservesOriginalBusyFailureWhenRollbackHasNoActiveTransaction() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("busy-rollback.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(2), Duration.ofMillis(100)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID townId = UUID.randomUUID();
+            insertTown(gate, townId, UUID.randomUUID(), UUID.randomUUID());
+            EconomyRepository repository = new EconomyRepository(gate.dataSource(), () -> false);
+            repository.initializeAccounts();
+
+            try (Connection blocker = DriverManager.getConnection(url);
+                 Statement statement = blocker.createStatement()) {
+                statement.execute("PRAGMA busy_timeout=100");
+                statement.execute("BEGIN IMMEDIATE");
+
+                EconomyRepository.StorageUnavailableException failure = assertThrows(
+                        EconomyRepository.StorageUnavailableException.class,
+                        () -> repository.reconcileSettlement(0));
+                String message = failure.getMessage().toLowerCase(java.util.Locale.ROOT);
+                assertTrue(message.contains("busy") || message.contains("locked"),
+                        failure.getMessage());
+                assertFalse(message.contains("cannot rollback"), failure.getMessage());
+                statement.execute("ROLLBACK");
+            }
+
+            EconomyRepository.EconomyOperation recovered = repository.prepareOperation(townId,
+                    "DONATION", 100, UUID.randomUUID(), "Recovery",
+                    "busy-recovery", "写锁恢复测试");
+            assertEquals("PREPARED", recovered.status());
         }
     }
 
@@ -214,5 +353,30 @@ class EconomyRepositorySqliteTest {
     private static byte[] uuid(UUID value) {
         return ByteBuffer.allocate(16).putLong(value.getMostSignificantBits())
                 .putLong(value.getLeastSignificantBits()).array();
+    }
+
+    private static void execute(DatabaseGate gate, String sql) throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             var statement = connection.createStatement()) {
+            statement.execute(sql);
+        }
+    }
+
+    private static long scalar(DatabaseGate gate, String sql) throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             var statement = connection.createStatement();
+             ResultSet rows = statement.executeQuery(sql)) {
+            assertTrue(rows.next());
+            return rows.getLong(1);
+        }
+    }
+
+    private static String scalarText(DatabaseGate gate, String sql) throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             var statement = connection.createStatement();
+             ResultSet rows = statement.executeQuery(sql)) {
+            assertTrue(rows.next());
+            return rows.getString(1);
+        }
     }
 }

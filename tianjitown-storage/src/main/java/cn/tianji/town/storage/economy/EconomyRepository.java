@@ -515,8 +515,9 @@ public final class EconomyRepository {
             List<TerritoryUnit> withCandidate = new ArrayList<>(units);
             withCandidate.add(request.unit());
             TerritoryRules.requireConnected(withCandidate);
-            if (Math.abs(request.unit().gridX()) > 1 || Math.abs(request.unit().gridZ()) > 1) {
-                throw new ConflictException("目标超出 3×3 扩张网格");
+            if (Math.abs((long) request.unit().gridX()) > TerritoryRules.GRID_RADIUS
+                    || Math.abs((long) request.unit().gridZ()) > TerritoryRules.GRID_RADIUS) {
+                throw new ConflictException("目标超出 5×5 扩张网格");
             }
             UUID unitId = UUID.randomUUID();
             UUID expansionId = UUID.randomUUID();
@@ -960,20 +961,38 @@ public final class EconomyRepository {
 
     private <T> T transaction(SqlWork<T> work) {
         try (Connection connection = dataSource.getConnection()) {
-            boolean autoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
+            boolean begun = false;
             try {
+                executeTransactionCommand(connection, "BEGIN IMMEDIATE");
+                begun = true;
                 T result = work.run(connection);
-                connection.commit();
+                executeTransactionCommand(connection, "COMMIT");
+                begun = false;
                 return result;
             } catch (SQLException | RuntimeException exception) {
-                connection.rollback();
+                rollback(connection, begun, exception);
                 throw exception;
-            } finally {
-                connection.setAutoCommit(autoCommit);
             }
         } catch (SQLException exception) {
             throw translate(exception);
+        }
+    }
+
+    private static void rollback(Connection connection, boolean begun, Throwable failure) {
+        if (!begun) {
+            return;
+        }
+        try {
+            executeTransactionCommand(connection, "ROLLBACK");
+        } catch (SQLException rollbackFailure) {
+            failure.addSuppressed(rollbackFailure);
+        }
+    }
+
+    private static void executeTransactionCommand(Connection connection, String command)
+            throws SQLException {
+        try (java.sql.Statement statement = connection.createStatement()) {
+            statement.execute(command);
         }
     }
 

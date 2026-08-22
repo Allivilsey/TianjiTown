@@ -49,10 +49,21 @@ public final class TianjiTownPlugin extends JavaPlugin {
         TestCommand testExecutor = new TestCommand(this);
         testCommand.setExecutor(testExecutor);
         testCommand.setTabCompleter(testExecutor);
+        configureTestCommandVisibility();
 
         List<String> synchronousChecks = new ArrayList<>();
         if (!prepareConfigSchema(synchronousChecks)) {
             lock("配置 schema 门禁未通过", synchronousChecks);
+            return;
+        }
+        RuntimeConfigurationValidator.DatabaseSettings databaseSettings;
+        try {
+            databaseSettings = RuntimeConfigurationValidator.validate(getConfig(),
+                    world -> getServer().getWorld(world) != null);
+            synchronousChecks.add("OK 配置类型、范围与世界引用校验通过");
+        } catch (RuntimeException exception) {
+            synchronousChecks.add("FAIL 配置校验: " + exception.getMessage());
+            lock("业务配置门禁未通过", synchronousChecks);
             return;
         }
         boolean dependenciesHealthy = checkDependencies(synchronousChecks);
@@ -62,7 +73,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
             lock("同步门禁未通过", synchronousChecks);
             return;
         }
-        getServer().getScheduler().runTaskAsynchronously(this, () -> checkDatabase(synchronousChecks));
+        getServer().getScheduler().runTaskAsynchronously(this,
+                () -> checkDatabase(synchronousChecks, databaseSettings));
     }
 
     @Override
@@ -98,6 +110,14 @@ public final class TianjiTownPlugin extends JavaPlugin {
         return townActions;
     }
 
+    void configureTestCommandVisibility() {
+        org.bukkit.command.PluginCommand command = getCommand("testcommand");
+        if (command != null) {
+            command.setPermission(getConfig().getBoolean("test-command.enabled", false)
+                    ? null : TestCommand.PERMISSION);
+        }
+    }
+
     private boolean checkDependencies(List<String> details) {
         boolean healthy = true;
         details.add("INFO Minecraft " + getServer().getMinecraftVersion()
@@ -128,13 +148,14 @@ public final class TianjiTownPlugin extends JavaPlugin {
         return healthy && economyHealthy;
     }
 
-    private void checkDatabase(List<String> previousChecks) {
+    private void checkDatabase(List<String> previousChecks,
+                               RuntimeConfigurationValidator.DatabaseSettings settings) {
         List<String> details = new ArrayList<>(previousChecks);
         try {
             DatabaseConfig config = new DatabaseConfig(
                     resolveDatabaseUrl(),
-                    Duration.ofMillis(getConfig().getLong("database.connection-timeout-ms", 5000)),
-                    Duration.ofMillis(getConfig().getLong("database.busy-timeout-ms", 5000)));
+                    Duration.ofMillis(settings.connectionTimeoutMillis()),
+                    Duration.ofMillis(settings.busyTimeoutMillis()));
             DatabaseGate candidate = new DatabaseGate(config);
             DatabaseGate.HealthResult result = candidate.verifyAndMigrate();
             if (!result.healthy()) {
@@ -202,8 +223,9 @@ public final class TianjiTownPlugin extends JavaPlugin {
     }
 
     private String resolveDatabaseUrl() {
-        String configured = getConfig().getString("database.file", "tianjitown.db");
-        if (configured == null || configured.isBlank()) {
+        String configured = ConfigurationValues.text(getConfig(), "database.file",
+                "tianjitown.db");
+        if (configured.isBlank()) {
             throw new IllegalArgumentException("database.file 不能为空");
         }
         Path databaseFile = Path.of(configured);

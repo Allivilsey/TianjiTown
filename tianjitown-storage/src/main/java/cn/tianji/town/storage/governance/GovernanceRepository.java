@@ -211,8 +211,11 @@ public final class GovernanceRepository {
 
     public TransferSnapshot decideMayorTransfer(UUID transferId, UUID candidateId, boolean accept) {
         requireWorkerThread();
-        return transaction(connection -> {
+        transaction(connection -> {
             expireTransfers(connection);
+            return null;
+        });
+        return transaction(connection -> {
             TransferSnapshot transfer = requireTransfer(connection, transferId);
             if (!"PENDING".equals(transfer.status()) || !candidateId.equals(transfer.candidateId())) {
                 throw new ConflictException("转让请求已失效或不属于你");
@@ -286,7 +289,9 @@ public final class GovernanceRepository {
             if (voters.isEmpty()) {
                 throw new ConflictException("没有满足活跃和入镇时长要求的有效选民");
             }
-            if (!adminBypass && !voters.contains(creatorId)) {
+            boolean mayorCreatingReplacement = type == VoteType.REPLACE_MAYOR
+                    && mayorId.equals(creatorId);
+            if (!adminBypass && !voters.contains(creatorId) && !mayorCreatingReplacement) {
                 throw new ConflictException("你当前不在本次投票的活跃选民范围内");
             }
             UUID voteId = UUID.randomUUID();
@@ -471,7 +476,9 @@ public final class GovernanceRepository {
         boolean passed = GovernanceRules.passed(vote.type(), vote.eligibleVoters(), vote.yesVotes());
         if (passed) {
             if (vote.type() == VoteType.KICK_MEMBER) {
-                if (memberExists(connection, vote.townId(), vote.subjectId())) {
+                if (!memberExists(connection, vote.townId(), vote.subjectId())) {
+                    passed = false;
+                } else {
                     if (memberRole(connection, vote.townId(), vote.subjectId()) == MemberRole.MAYOR) {
                         passed = false;
                     } else {
@@ -871,20 +878,38 @@ public final class GovernanceRepository {
 
     private <T> T transaction(SqlWork<T> work) {
         try (Connection connection = dataSource.getConnection()) {
-            boolean autoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
+            boolean begun = false;
             try {
+                executeTransactionCommand(connection, "BEGIN IMMEDIATE");
+                begun = true;
                 T result = work.run(connection);
-                connection.commit();
+                executeTransactionCommand(connection, "COMMIT");
+                begun = false;
                 return result;
             } catch (SQLException | RuntimeException exception) {
-                connection.rollback();
+                rollback(connection, begun, exception);
                 throw exception;
-            } finally {
-                connection.setAutoCommit(autoCommit);
             }
         } catch (SQLException exception) {
             throw translate(exception);
+        }
+    }
+
+    private static void rollback(Connection connection, boolean begun, Throwable failure) {
+        if (!begun) {
+            return;
+        }
+        try {
+            executeTransactionCommand(connection, "ROLLBACK");
+        } catch (SQLException rollbackFailure) {
+            failure.addSuppressed(rollbackFailure);
+        }
+    }
+
+    private static void executeTransactionCommand(Connection connection, String command)
+            throws SQLException {
+        try (java.sql.Statement statement = connection.createStatement()) {
+            statement.execute(command);
         }
     }
 

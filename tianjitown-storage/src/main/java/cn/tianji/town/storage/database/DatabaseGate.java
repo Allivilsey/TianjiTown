@@ -35,6 +35,7 @@ public final class DatabaseGate implements AutoCloseable {
         hikari.addDataSourceProperty("foreign_keys", true);
         hikari.addDataSourceProperty("journal_mode", "WAL");
         hikari.addDataSourceProperty("synchronous", "NORMAL");
+        hikari.addDataSourceProperty("transaction_mode", "IMMEDIATE");
         hikari.addDataSourceProperty("date_class", "INTEGER");
         hikari.addDataSourceProperty("date_precision", "MILLISECONDS");
         hikari.addDataSourceProperty("recursive_triggers", false);
@@ -70,6 +71,7 @@ public final class DatabaseGate implements AutoCloseable {
                 return HealthResult.failure("Flyway schema 版本不受支持: 当前="
                         + current.getVersion() + "，支持=" + SUPPORTED_SCHEMA_VERSION);
             }
+            verifyWritable();
             return HealthResult.success(current.getVersion().toString());
         } catch (RuntimeException exception) {
             return HealthResult.failure(exception.getClass().getSimpleName() + ": " + exception.getMessage());
@@ -87,6 +89,26 @@ public final class DatabaseGate implements AutoCloseable {
                 throw new IllegalStateException("检测到高于当前插件支持范围的 Flyway 迁移: version="
                         + version + "，支持=" + SUPPORTED_SCHEMA_VERSION);
             }
+        }
+    }
+
+    private void verifyWritable() {
+        String probeTable = "__tianjitown_write_probe_"
+                + java.util.UUID.randomUUID().toString().replace("-", "");
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            connection.setAutoCommit(false);
+            try {
+                statement.executeUpdate("CREATE TABLE " + probeTable
+                        + " (probe_value INTEGER NOT NULL)");
+                statement.executeUpdate("DROP TABLE " + probeTable);
+            } finally {
+                connection.rollback();
+                connection.setAutoCommit(true);
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("SQLite 文件不可写: " + exception.getMessage(),
+                    exception);
         }
     }
 

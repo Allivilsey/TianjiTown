@@ -9,7 +9,7 @@ enum TownUiMode {
     LEGACY;
 
     static TownUiMode load(ConfigurationSection config) {
-        String configured = config.getString("ui.mode", DIALOG.name());
+        String configured = ConfigurationValues.text(config, "ui.mode", DIALOG.name());
         if (configured == null || configured.isBlank()) {
             return DIALOG;
         }

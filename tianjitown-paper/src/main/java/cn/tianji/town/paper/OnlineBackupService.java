@@ -48,6 +48,7 @@ final class OnlineBackupService {
         try {
             Path directory = resolveDirectory();
             Files.createDirectories(directory);
+            directory = resolveDirectory();
             BackupPaths paths = reserveBackupPaths(directory, startedAt);
             databaseFile = paths.databaseFile();
             configFile = paths.configFile();
@@ -85,13 +86,38 @@ final class OnlineBackupService {
     static Path resolveDirectory(Path dataDirectory, Path configured) {
         Path normalizedDataDirectory = dataDirectory.toAbsolutePath().normalize();
         if (configured.isAbsolute()) {
-            return configured.toAbsolutePath().normalize();
+            throw new IllegalArgumentException("备份目录必须位于插件数据目录内，不能使用绝对路径: "
+                    + configured);
         }
         Path directory = normalizedDataDirectory.resolve(configured).normalize();
         if (!directory.startsWith(normalizedDataDirectory)) {
             throw new IllegalArgumentException("相对备份目录不能超出插件数据目录: " + configured);
         }
+        verifyRealPathContained(normalizedDataDirectory, directory);
         return directory;
+    }
+
+    private static void verifyRealPathContained(Path dataDirectory, Path directory) {
+        if (!Files.exists(dataDirectory)) {
+            return;
+        }
+        try {
+            Path realDataDirectory = dataDirectory.toRealPath();
+            Path existing = directory;
+            while (existing != null && !Files.exists(existing)) {
+                existing = existing.getParent();
+            }
+            if (existing == null || !existing.toRealPath().startsWith(realDataDirectory)) {
+                throw new IllegalArgumentException("备份目录通过符号链接或联接超出插件数据目录: "
+                        + directory);
+            }
+            if (Files.exists(directory) && !Files.isDirectory(directory)) {
+                throw new IllegalArgumentException("备份目录指向文件: " + directory);
+            }
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("无法验证备份目录真实路径: " + directory,
+                    exception);
+        }
     }
 
     static BackupPaths reserveBackupPaths(Path directory, Instant startedAt) throws IOException {

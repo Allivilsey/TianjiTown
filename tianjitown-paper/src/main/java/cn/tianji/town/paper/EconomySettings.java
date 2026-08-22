@@ -1,8 +1,10 @@
 package cn.tianji.town.paper;
 
+import cn.tianji.town.core.economy.MoneyAmount;
 import org.bukkit.configuration.ConfigurationSection;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Objects;
 
 record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, String settlementAccount,
@@ -15,11 +17,13 @@ record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, String se
 
     static EconomySettings load(ConfigurationSection config) {
         Objects.requireNonNull(config, "config");
-        String account = config.getString("phase3.settlement-account", "tax");
-        int scale = config.getInt("phase3.money-scale", 2);
+        String account = ConfigurationValues.text(config, "phase3.settlement-account", "tax");
+        int scale = ConfigurationValues.integer(config, "phase3.money-scale", 2);
         int maximumTaxBps = 2500;
-        BigDecimal base = decimal(config, "phase3.expansion.base-cost", "1000.00");
-        BigDecimal increase = decimal(config, "phase3.expansion.per-unit-increase", "500.00");
+        BigDecimal base = ConfigurationValues.decimalText(config,
+                "phase3.expansion.base-cost", "1000.00");
+        BigDecimal increase = ConfigurationValues.decimalText(config,
+                "phase3.expansion.per-unit-increase", "500.00");
         int maximumUnits = cn.tianji.town.core.land.TerritoryRules.MAXIMUM_UNITS;
         if (account == null || account.isBlank()) {
             throw new IllegalArgumentException("phase3.settlement-account 不能为空");
@@ -33,18 +37,19 @@ record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, String se
         if (increase.signum() < 0) {
             throw new IllegalArgumentException("phase3.expansion.per-unit-increase 不能小于 0");
         }
-        return new EconomySettings(config.getBoolean("phase3.tax.enabled", true),
-                config.getBoolean("phase3.consumption.enabled", true), account.strip(), scale,
-                maximumTaxBps, base, increase, maximumUnits);
-    }
-
-    private static BigDecimal decimal(ConfigurationSection config, String path,
-                                      String defaultValue) {
-        String value = config.getString(path, defaultValue);
         try {
-            return new BigDecimal(value);
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException(path + " 必须为十进制数", exception);
+            BigDecimal maximumPrice = base.add(increase.multiply(
+                    BigDecimal.valueOf(maximumUnits - 1L)));
+            if (maximumPrice.compareTo(BigDecimal.valueOf(Long.MAX_VALUE, scale)) > 0) {
+                throw new ArithmeticException("金额超过 long 次级单位上限");
+            }
+            MoneyAmount.rounded(maximumPrice, scale, RoundingMode.CEILING);
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException("phase3.expansion 价格超出次级货币单位范围",
+                    exception);
         }
+        return new EconomySettings(ConfigurationValues.bool(config, "phase3.tax.enabled", true),
+                ConfigurationValues.bool(config, "phase3.consumption.enabled", true),
+                account.strip(), scale, maximumTaxBps, base, increase, maximumUnits);
     }
 }

@@ -1,6 +1,8 @@
 package cn.tianji.town.paper;
 
 import cn.tianji.town.core.consumption.BuffDefinition;
+import cn.tianji.town.core.consumption.BuffDurationOption;
+import cn.tianji.town.core.consumption.BuffPricing;
 import cn.tianji.town.core.consumption.BuffStackingRule;
 import cn.tianji.town.core.town.MemberRole;
 import org.bukkit.configuration.ConfigurationSection;
@@ -27,19 +29,25 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs) 
     }
 
     static BuffSettings load(ConfigurationSection config) {
+        return load(config, 2);
+    }
+
+    static BuffSettings load(ConfigurationSection config, int moneyScale) {
         Objects.requireNonNull(config, "config");
-        Map<String, BuffDefinition> buffs = loadBuffs(config.getConfigurationSection(
-                "phase4.buffs.catalog"));
+        Map<String, BuffDefinition> buffs = loadBuffs(
+                config.getConfigurationSection("phase4.buffs.catalog"), moneyScale);
         if (buffs.isEmpty()) {
             throw new IllegalArgumentException("phase4.buffs.catalog 至少需要一个 Buff");
         }
         if (buffs.size() > 36) {
             throw new IllegalArgumentException("phase4.buffs.catalog 最多支持 36 个 Buff");
         }
-        return new BuffSettings(config.getBoolean("phase4.buffs.shop-enabled", true), buffs);
+        return new BuffSettings(ConfigurationValues.bool(config,
+                "phase4.buffs.shop-enabled", true), buffs);
     }
 
-    private static Map<String, BuffDefinition> loadBuffs(ConfigurationSection catalog) {
+    private static Map<String, BuffDefinition> loadBuffs(ConfigurationSection catalog,
+                                                         int moneyScale) {
         if (catalog == null) {
             return Map.of();
         }
@@ -51,13 +59,14 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs) 
                     enumValue(BuffDefinition.EffectKind.class,
                             text(section, "effect-kind"), key + ".effect-kind"),
                     text(section, "effect-key"),
-                    section.getString("operation", "AMPLIFIER"),
-                    decimal(section, "base-price"),
-                    section.getInt("maximum-level"),
+                    ConfigurationValues.text(section, "operation", "AMPLIFIER"),
+                    ConfigurationValues.decimalText(section, "base-price"),
+                    ConfigurationValues.integer(section, "maximum-level"),
                     enumValue(BuffStackingRule.class, text(section, "stacking"),
                     key + ".stacking"),
-                    section.getDouble("amount-per-level"),
+                    ConfigurationValues.decimalNumber(section, "amount-per-level"),
                     roles(section, "purchasing-roles"));
+            validatePriceRange(section, definition, moneyScale);
             if (result.putIfAbsent(key, definition) != null) {
                 throw new IllegalArgumentException("重复 Buff key: " + key);
             }
@@ -66,7 +75,7 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs) 
     }
 
     private static Set<MemberRole> roles(ConfigurationSection section, String path) {
-        List<String> values = section.getStringList(path);
+        List<String> values = ConfigurationValues.stringList(section, path);
         if (values.isEmpty()) {
             throw new IllegalArgumentException(section.getCurrentPath() + "." + path
                     + " 至少需要一个角色");
@@ -85,20 +94,31 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs) 
     }
 
     private static String text(ConfigurationSection section, String path) {
-        String value = section.getString(path);
+        String value = ConfigurationValues.text(section, path);
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(section.getCurrentPath() + "." + path + " 不能为空");
         }
         return value.strip();
     }
 
-    private static BigDecimal decimal(ConfigurationSection section, String path) {
-        String value = section.getString(path);
+    private static void validatePriceRange(ConfigurationSection section,
+                                           BuffDefinition definition, int moneyScale) {
+        int maximumPricedLevel = definition.stackingRule() == BuffStackingRule.LEVEL_UP
+                ? definition.maximumLevel() : 1;
         try {
-            return new BigDecimal(value);
-        } catch (NullPointerException | NumberFormatException exception) {
-            throw new IllegalArgumentException(section.getCurrentPath() + "." + path
-                    + " 必须为十进制数", exception);
+            for (BuffDurationOption duration : BuffDurationOption.values()) {
+                BigDecimal price = definition.basePrice()
+                        .multiply(BigDecimal.valueOf(duration.hours()))
+                        .multiply(BigDecimal.valueOf(duration.discountBasisPoints(), 4))
+                        .multiply(BigDecimal.valueOf(maximumPricedLevel));
+                if (price.compareTo(BigDecimal.valueOf(Long.MAX_VALUE, moneyScale)) > 0) {
+                    throw new ArithmeticException("金额超过 long 次级单位上限");
+                }
+                BuffPricing.price(definition, duration, maximumPricedLevel, moneyScale);
+            }
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException(section.getCurrentPath()
+                    + ".base-price 产生的价格超出次级货币单位范围", exception);
         }
     }
 

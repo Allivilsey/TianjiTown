@@ -17,6 +17,13 @@ class ApplicationTextTest {
         assertEquals("tj", text.normalizedShortName());
         assertEquals("sky", text.normalizedResidenceName());
         assertTrue(text.validate().isEmpty());
+
+        assertEquals(ApplicationText.normalizeNameKey("Å 镇"),
+                ApplicationText.normalizeNameKey("A\u030A镇"));
+        assertEquals(ApplicationText.normalizeNameKey("天  际镇"),
+                ApplicationText.normalizeNameKey(" 天际 镇 "));
+        assertEquals("atown", ApplicationText.normalizeNameKey("ATown"));
+        assertEquals("ａtown", ApplicationText.normalizeNameKey("ＡTown"));
     }
 
     @Test

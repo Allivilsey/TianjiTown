@@ -73,6 +73,35 @@ class TownBonusRepositorySqliteTest {
         }
     }
 
+    @Test
+    void separatesWeeklyCountersAndCleansOnlyRecordsOlderThanRetentionBoundary()
+            throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("refund-retention.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID townId = UUID.randomUUID();
+            UUID playerId = UUID.randomUUID();
+            UUID worldId = UUID.randomUUID();
+            insertTownAndTerritory(gate, townId, playerId, worldId);
+            TownBonusRepository repository = new TownBonusRepository(gate.dataSource(),
+                    () -> false);
+            LocalDate firstMonday = LocalDate.of(2026, 5, 18);
+            for (int week = 0; week < 14; week++) {
+                LocalDate weekStart = firstMonday.plusWeeks(week);
+                assertTrue(repository.reserveBuildingRefund(townId, playerId, worldId,
+                        10, 20, weekStart, "minecraft:stone", 2).granted());
+                assertEquals(2, repository.reserveBuildingRefund(townId, playerId, worldId,
+                        10, 20, weekStart, "minecraft:stone", 2).used());
+            }
+
+            LocalDate currentWeek = firstMonday.plusWeeks(13);
+            assertEquals(1, repository.cleanupRefundCounters(currentWeek.minusWeeks(12)));
+            assertEquals(13, countRows(gate, "building_refund_weekly"));
+            assertEquals(0, repository.cleanupRefundCounters(currentWeek.minusWeeks(12)));
+        }
+    }
+
     private static void failTownProjection(DatabaseGate gate, UUID townId) throws Exception {
         try (Connection connection = gate.dataSource().getConnection();
              PreparedStatement statement = connection.prepareStatement("""
@@ -157,5 +186,14 @@ class TownBonusRepositorySqliteTest {
     private static byte[] uuid(UUID value) {
         return ByteBuffer.allocate(16).putLong(value.getMostSignificantBits())
                 .putLong(value.getLeastSignificantBits()).array();
+    }
+
+    private static int countRows(DatabaseGate gate, String table) throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             var statement = connection.createStatement();
+             var rows = statement.executeQuery("SELECT COUNT(*) FROM " + table)) {
+            assertTrue(rows.next());
+            return rows.getInt(1);
+        }
     }
 }
