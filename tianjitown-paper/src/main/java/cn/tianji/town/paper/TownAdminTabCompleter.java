@@ -42,7 +42,7 @@ final class TownAdminTabCompleter implements TabCompleter {
         requestRefresh();
         if (!started) {
             started = true;
-            plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, this::refresh,
+            plugin.getServer().getScheduler().runTaskTimer(plugin, this::requestRefresh,
                     REFRESH_INTERVAL_TICKS, REFRESH_INTERVAL_TICKS);
         }
     }
@@ -79,14 +79,7 @@ final class TownAdminTabCompleter implements TabCompleter {
         if (runtime == null || !plugin.isEnabled() || !refreshing.compareAndSet(false, true)) {
             return;
         }
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, this::refreshClaimed);
-    }
-
-    private void refresh() {
-        if (runtime == null || !plugin.isEnabled() || !refreshing.compareAndSet(false, true)) {
-            return;
-        }
-        refreshClaimed();
+        plugin.runAsync(this::refreshClaimed);
     }
 
     private void refreshClaimed() {

@@ -662,7 +662,7 @@ public final class EconomyRepository {
                            u.center_chunk_x, u.center_chunk_z, u.residence_name, u.residence_area_name
                       FROM territory_expansions e JOIN territory_units u ON u.unit_id = e.unit_id
                      WHERE e.status IN ('PREPARED', 'COMPENSATION_REQUIRED')
-                     ORDER BY e.created_at
+                     ORDER BY e.created_at, e.expansion_id
                     """); ResultSet rows = statement.executeQuery()) {
                 while (rows.next()) {
                     result.add(readExpansion(rows));

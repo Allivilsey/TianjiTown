@@ -384,7 +384,7 @@ public final class GovernanceRepository {
             List<UUID> due = new ArrayList<>();
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT vote_id FROM governance_votes
-                     WHERE status = 'OPEN' AND ends_at <= ? ORDER BY ends_at
+                     WHERE status = 'OPEN' AND ends_at <= ? ORDER BY ends_at, vote_id
                     """)) {
                 statement.setLong(1, Instant.now().toEpochMilli());
                 try (ResultSet result = statement.executeQuery()) {
@@ -455,7 +455,7 @@ public final class GovernanceRepository {
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT player_uuid FROM town_members
                      WHERE town_id = ? AND role IN ('MAYOR', 'DEPUTY_MAYOR')
-                     ORDER BY CASE role WHEN 'MAYOR' THEN 0 ELSE 1 END, joined_at
+                     ORDER BY CASE role WHEN 'MAYOR' THEN 0 ELSE 1 END, joined_at, player_uuid
                     """)) {
                 statement.setBytes(1, uuid(townId));
                 try (ResultSet result = statement.executeQuery()) {
@@ -658,7 +658,7 @@ public final class GovernanceRepository {
                                WHERE b.vote_id = v.vote_id AND b.player_uuid = ?) AS viewer_voted
                   FROM governance_votes v WHERE v.town_id = ?
                 """ + (onlyOpen ? " AND v.status = 'OPEN'" : "")
-                + " ORDER BY v.created_at DESC LIMIT 100";
+                + " ORDER BY v.created_at DESC, v.vote_id LIMIT 100";
         List<VoteSnapshot> votes = new ArrayList<>();
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             byte[] viewer = viewerId == null ? uuid(new UUID(0, 0)) : uuid(viewerId);

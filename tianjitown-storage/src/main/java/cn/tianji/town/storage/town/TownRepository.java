@@ -459,7 +459,7 @@ public final class TownRepository {
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT application_id FROM town_applications
                      WHERE status IN ('SUBMITTED', 'UNDER_REVIEW', 'PROVISION_FAILED')
-                     ORDER BY submitted_at, created_at LIMIT ?
+                     ORDER BY submitted_at, created_at, application_id LIMIT ?
                     """)) {
                 statement.setInt(1, safeLimit);
                 try (ResultSet result = statement.executeQuery()) {
@@ -481,7 +481,7 @@ public final class TownRepository {
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT application_id FROM town_applications
                      WHERE status IN ('SUBMITTED', 'UNDER_REVIEW', 'PROVISION_FAILED')
-                     ORDER BY updated_at DESC LIMIT ?
+                     ORDER BY updated_at DESC, application_id LIMIT ?
                     """)) {
                 statement.setInt(1, safeLimit);
                 try (ResultSet result = statement.executeQuery()) {
@@ -561,9 +561,10 @@ public final class TownRepository {
             List<TownSnapshot> towns = new ArrayList<>();
             String sql = includeArchived ? """
                     SELECT town_id FROM towns
-                     ORDER BY (status = 'ARCHIVED'), reuse_blocked DESC, created_at DESC
+                     ORDER BY (status = 'ARCHIVED'), reuse_blocked DESC, created_at DESC, town_id
                     """
-                    : "SELECT town_id FROM towns WHERE status <> 'ARCHIVED' ORDER BY created_at";
+                    : "SELECT town_id FROM towns WHERE status <> 'ARCHIVED' "
+                    + "ORDER BY created_at, town_id";
             try (PreparedStatement statement = connection.prepareStatement(sql);
                  ResultSet result = statement.executeQuery()) {
                 while (result.next()) {
@@ -608,7 +609,8 @@ public final class TownRepository {
         return query(connection -> {
             List<UUID> members = new ArrayList<>();
             try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT player_uuid FROM town_members WHERE town_id = ? ORDER BY joined_at")) {
+                    "SELECT player_uuid FROM town_members WHERE town_id = ? "
+                            + "ORDER BY joined_at, player_uuid")) {
                 statement.setBytes(1, uuid(townId));
                 try (ResultSet result = statement.executeQuery()) {
                     while (result.next()) {
@@ -625,7 +627,8 @@ public final class TownRepository {
         return query(connection -> {
             Map<UUID, List<UUID>> mutable = new java.util.LinkedHashMap<>();
             try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT town_id, player_uuid FROM town_members ORDER BY town_id, joined_at
+                    SELECT town_id, player_uuid FROM town_members
+                     ORDER BY town_id, joined_at, player_uuid
                     """);
                  ResultSet result = statement.executeQuery()) {
                 while (result.next()) {
@@ -871,7 +874,7 @@ public final class TownRepository {
                      WHERE i.player_uuid = ? AND i.accepted_at IS NULL AND i.revoked_at IS NULL
                        AND i.expires_at > CAST(unixepoch('subsec') * 1000 AS INTEGER)
                        AND t.status = 'ACTIVE'
-                     ORDER BY i.created_at DESC
+                     ORDER BY i.created_at DESC, i.invitation_id
                     """)) {
                 statement.setBytes(1, uuid(playerId));
                 try (ResultSet result = statement.executeQuery()) {
@@ -1309,7 +1312,7 @@ public final class TownRepository {
                  WHERE j.applicant_uuid = ? AND j.status = 'PENDING'
                    AND j.expires_at > CAST(unixepoch('subsec') * 1000 AS INTEGER)
                    AND t.status = 'ACTIVE'
-                 ORDER BY j.created_at DESC
+                 ORDER BY j.created_at DESC, j.join_application_id
                 """)) {
             statement.setBytes(1, uuid(applicantId));
             try (ResultSet result = statement.executeQuery()) {
@@ -1331,7 +1334,7 @@ public final class TownRepository {
                  WHERE j.town_id = ? AND j.status = 'PENDING'
                    AND j.expires_at > CAST(unixepoch('subsec') * 1000 AS INTEGER)
                    AND t.status = 'ACTIVE'
-                 ORDER BY j.created_at
+                 ORDER BY j.created_at, j.join_application_id
                 """)) {
             statement.setBytes(1, uuid(townId));
             try (ResultSet result = statement.executeQuery()) {

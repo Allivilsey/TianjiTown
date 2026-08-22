@@ -85,7 +85,7 @@ final class TownRuntime {
         this.pendingTaxes = new RetryingWorkQueue<>(new RetryingWorkQueue.Scheduler() {
             @Override
             public void executeAsync(Runnable task) {
-                plugin.getServer().getScheduler().runTaskAsynchronously(plugin, task);
+                plugin.runAsync(task);
             }
 
             @Override
@@ -96,7 +96,7 @@ final class TownRuntime {
         this.pendingIncomeTaxes = new RetryingWorkQueue<>(new RetryingWorkQueue.Scheduler() {
             @Override
             public void executeAsync(Runnable task) {
-                plugin.getServer().getScheduler().runTaskAsynchronously(plugin, task);
+                plugin.runAsync(task);
             }
 
             @Override
@@ -117,7 +117,7 @@ final class TownRuntime {
 
             @Override
             public void runAsync(Runnable task) {
-                plugin.getServer().getScheduler().runTaskAsynchronously(plugin, task);
+                plugin.runAsync(task);
             }
         }, (playerId, amountMinor) -> settlement.refundDebitedPlayer(
                 plugin.getServer().getOfflinePlayer(playerId), amountMinor),
@@ -167,7 +167,7 @@ final class TownRuntime {
                         + operation.operationId() + ", error=" + safeMessage(exception));
                 return;
             }
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            plugin.runAsync(() -> {
                 try {
                     EconomyRepository.Reconciliation reconciliation =
                             finance.reconcileSettlement(externalBalance);
@@ -252,7 +252,7 @@ final class TownRuntime {
     }
 
     void checkRecovery() {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             boolean healthy = database.ping();
             if (healthy) {
                 try {
@@ -273,7 +273,7 @@ final class TownRuntime {
     }
 
     void recoverStartupState() {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 finance.initializeAccounts();
                 refreshTaxPolicies();
@@ -300,7 +300,7 @@ final class TownRuntime {
     }
 
     void reconcileAll() {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 List<TownMembers> states = repository.listTowns(false).stream()
                         .filter(town -> town.status() == TownStatus.ACTIVE)
@@ -346,7 +346,7 @@ final class TownRuntime {
     }
 
     void settleDueVotes() {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 List<VoteSnapshot> settled = governance.settleDueVotes();
                 List<TownMembers> changedMemberships = settled.stream()
@@ -381,7 +381,7 @@ final class TownRuntime {
     private void archiveMissingProjection(TownSnapshot town, String detail) {
         plugin.getLogger().severe("ACTIVE 小镇缺少 Residence 投影 " + town.id() + "/"
                 + town.residenceName() + ": " + detail + "；正在执行安全归档并保留复用锁。");
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 boolean archived = repository.archiveTownForMissingProjection(town.id(), detail);
                 databaseAvailable.set(true);
@@ -418,7 +418,7 @@ final class TownRuntime {
             sender.sendMessage("§e该申请正在执行建镇流程，本次重复请求已合并。");
             return;
         }
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 ApplicationSnapshot application = repository.findApplication(applicationId)
                         .orElseThrow(() -> new IllegalArgumentException("申请不存在"));
@@ -451,7 +451,7 @@ final class TownRuntime {
                 return;
             }
         }
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 TownRepository.Provisioning provisioning = repository.beginProvision(
                         application.id(), reviewerId, reviewerName, reason, idempotencyKey,
@@ -494,8 +494,7 @@ final class TownRuntime {
                     provisioning.town().territory(),
                     provisioning.members())
                     : LandProtectionService.Result.failure("批准时选址复核失败: " + validation.error());
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin,
-                    () -> finishProvision(sender, applicationId, land, completion));
+            plugin.runAsync(() -> finishProvision(sender, applicationId, land, completion));
         } catch (RuntimeException exception) {
             provisions.finish(applicationId);
             handleFailure(sender, exception);
@@ -536,7 +535,7 @@ final class TownRuntime {
     void reconcileAction(CommandSender sender, TownSnapshot town, List<UUID> members,
                          boolean repair, Consumer<LandProtectionService.Result> success,
                          Consumer<RuntimeException> failure) {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 List<LandProtectionService.Area> areas = finance.territoryUnits(town.id()).stream()
                         .filter(unit -> unit.projectionStatus().equals("ACTIVE"))
@@ -563,7 +562,7 @@ final class TownRuntime {
 
     private void recordLandAudit(UUID actorId, String actorName, UUID townId, boolean repair,
                                  LandProtectionService.Result result) {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 repository.recordAudit(actorId, actorName,
                         repair ? "LAND_RECONCILE_REPAIR" : "LAND_RECONCILE_CHECK", "TOWN",
@@ -701,7 +700,7 @@ final class TownRuntime {
             plugin.getLogger().severe("读取 Vault 清算账户失败: " + safeMessage(exception));
             return;
         }
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 EconomyRepository.Reconciliation result = finance.reconcileSettlement(external);
                 if (!result.healthy()) {
@@ -823,7 +822,7 @@ final class TownRuntime {
                         "扩张环境复核失败: " + validation.error()));
                 return;
             }
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            plugin.runAsync(() -> {
                 try {
                     EconomyRepository.ExpansionOperation operation = finance.prepareExpansion(
                             new EconomyRepository.ExpansionRequest(preview.account().townId(),
@@ -862,7 +861,7 @@ final class TownRuntime {
                                   EconomyRepository.ExpansionOperation operation,
                                   Consumer<EconomyRepository.ExpansionOperation> success,
                                   Consumer<RuntimeException> failure) {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 List<UUID> loaded = repository.listMemberIds(operation.townId());
                 plugin.getServer().getScheduler().runTask(plugin,
@@ -888,7 +887,7 @@ final class TownRuntime {
                     "Residence API 不可用: " + safeMessage(exception));
         }
         LandProtectionService.Result result = attempted;
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 if (result.success()) {
                     finance.completeExpansion(operation.expansionId());
@@ -911,7 +910,7 @@ final class TownRuntime {
 
     private void recoverExpansions(List<EconomyRepository.ExpansionOperation> expansions) {
         for (EconomyRepository.ExpansionOperation expansion : expansions) {
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            plugin.runAsync(() -> {
                 try {
                     List<UUID> members = repository.listMemberIds(expansion.townId());
                     plugin.getServer().getScheduler().runTask(plugin,
@@ -950,7 +949,7 @@ final class TownRuntime {
                     "SQLite 当前不可用，资金操作已锁定", null));
             return;
         }
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 EconomyRepository.EconomyOperation operation = prepare.get();
                 plugin.getServer().getScheduler().runTask(plugin,
@@ -980,7 +979,7 @@ final class TownRuntime {
             finishFailedExternalOperation(sender, operation, availability, failure);
             return;
         }
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 finance.markOperationExternalApplied(operation.operationId());
                 plugin.getServer().getScheduler().runTask(plugin,
@@ -1011,7 +1010,7 @@ final class TownRuntime {
             finishFailedExternalOperation(sender, operation, result, failure);
             return;
         }
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 EconomyRepository.LedgerMutation mutation =
                         finance.completeOperation(operation.operationId());
@@ -1026,7 +1025,7 @@ final class TownRuntime {
                                                EconomyRepository.EconomyOperation operation,
                                                VaultSettlementService.Result result,
                                                Consumer<RuntimeException> failure) {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 if (result.compensationRequired()) {
                     finance.requireCompensation(operation.operationId(), result.message());
@@ -1094,7 +1093,7 @@ final class TownRuntime {
             sender.sendMessage("§cSQLite 当前不可用，写操作已锁定；现有 Residence 保护不受影响。");
             return;
         }
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 T result = operation.get();
                 databaseAvailable.set(true);
@@ -1112,7 +1111,7 @@ final class TownRuntime {
                     "SQLite 当前不可用，写操作已锁定", null));
             return;
         }
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 T result = operation.get();
                 databaseAvailable.set(true);

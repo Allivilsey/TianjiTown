@@ -55,25 +55,7 @@ public final class QuickShopHistoryProbe {
             if (!(raw instanceof List<?> records)) {
                 return Result.unavailable("QuickShop 交易历史返回类型异常");
             }
-            long successfulTaxRecords = 0;
-            long taxMinor = 0;
-            for (Object record : records) {
-                UUID taxAccount = (UUID) call(record, "getTaxAccount");
-                String error = (String) call(record, "getError");
-                if (!settlementAccountId.equals(taxAccount)
-                        || error != null && !error.isBlank()) {
-                    continue;
-                }
-                double value = ((Number) call(record, "getTaxAmount")).doubleValue();
-                if (!Double.isFinite(value) || value <= 0) {
-                    continue;
-                }
-                successfulTaxRecords++;
-                taxMinor = Math.addExact(taxMinor, MoneyAmount.rounded(BigDecimal.valueOf(value),
-                        moneyScale, RoundingMode.HALF_UP).minorUnits());
-            }
-            return Result.available(successfulTaxRecords, taxMinor, records.size() >= 1_000,
-                    "已读取 QuickShop transaction metric 历史");
+            return summarize(records, settlementAccountId, moneyScale);
         } catch (ReflectiveOperationException | LinkageError | RuntimeException exception) {
             Throwable cause = exception instanceof InvocationTargetException invocation
                     && invocation.getCause() != null ? invocation.getCause() : exception;
@@ -91,6 +73,31 @@ public final class QuickShopHistoryProbe {
                     + apiType.getName());
         }
         return apiType.getMethod(name).invoke(target);
+    }
+
+    static Result summarize(List<?> records, UUID settlementAccountId, int moneyScale)
+            throws ReflectiveOperationException {
+        Objects.requireNonNull(records, "records");
+        Objects.requireNonNull(settlementAccountId, "settlementAccountId");
+        long successfulTaxRecords = 0;
+        long taxMinor = 0;
+        for (Object record : records) {
+            UUID taxAccount = (UUID) call(record, "getTaxAccount");
+            String error = (String) call(record, "getError");
+            if (!settlementAccountId.equals(taxAccount)
+                    || error != null && !error.isBlank()) {
+                continue;
+            }
+            double value = ((Number) call(record, "getTaxAmount")).doubleValue();
+            if (!Double.isFinite(value) || value <= 0) {
+                continue;
+            }
+            successfulTaxRecords++;
+            taxMinor = Math.addExact(taxMinor, MoneyAmount.rounded(BigDecimal.valueOf(value),
+                    moneyScale, RoundingMode.HALF_UP).minorUnits());
+        }
+        return Result.available(successfulTaxRecords, taxMinor, records.size() >= 1_000,
+                "已读取 QuickShop transaction metric 历史");
     }
 
     private static Object call(Object target, String name) throws ReflectiveOperationException {

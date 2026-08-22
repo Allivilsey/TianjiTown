@@ -23,13 +23,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class TianjiTownPlugin extends JavaPlugin {
     private static final int CONFIG_SCHEMA = 7;
     private final AtomicReference<GateStatus> gateStatus = new AtomicReference<>(
             new GateStatus(GateStatus.State.CHECKING, List.of("尚未开始")));
+    private final AtomicLong lifecycleGeneration = new AtomicLong();
+    private final AsyncTaskTracker asyncTasks = new AsyncTaskTracker();
     private volatile DatabaseGate databaseGate;
+    private volatile ExecutorService asyncExecutor;
     private volatile TownRuntime townRuntime;
     private volatile TownActions townActions;
     private volatile TownUiController townUi;
@@ -37,6 +44,10 @@ public final class TianjiTownPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        long generation = lifecycleGeneration.incrementAndGet();
+        asyncTasks.startAccepting();
+        asyncExecutor = Executors.newFixedThreadPool(4,
+                Thread.ofPlatform().daemon(true).name("TianjiTown-Async-", 0).factory());
         saveDefaultConfig();
         org.bukkit.command.PluginCommand adminCommand = java.util.Objects.requireNonNull(
                 getCommand("townadmin"), "plugin.yml 缺少 townadmin");
@@ -73,12 +84,26 @@ public final class TianjiTownPlugin extends JavaPlugin {
             lock("同步门禁未通过", synchronousChecks);
             return;
         }
-        getServer().getScheduler().runTaskAsynchronously(this,
-                () -> checkDatabase(synchronousChecks, databaseSettings));
+        runAsync(() -> checkDatabase(synchronousChecks, databaseSettings, generation));
     }
 
     @Override
     public void onDisable() {
+        lifecycleGeneration.incrementAndGet();
+        asyncTasks.stopAccepting();
+        ExecutorService executor = asyncExecutor;
+        if (executor != null) {
+            executor.shutdown();
+        }
+        if (!asyncTasks.awaitQuiescence(Duration.ofSeconds(30))) {
+            getLogger().severe("等待异步任务结束超时，仍有 " + asyncTasks.active()
+                    + " 个任务；将继续关闭数据源。请检查阻塞的第三方 API。");
+        }
+        if (executor != null) {
+            executor.shutdownNow();
+        }
+        asyncExecutor = null;
+        getServer().getScheduler().cancelTasks(this);
         TownRuntime runtime = townRuntime;
         if (runtime != null) {
             runtime.bonuses().clearAll();
@@ -108,6 +133,31 @@ public final class TianjiTownPlugin extends JavaPlugin {
 
     TownActions townActions() {
         return townActions;
+    }
+
+    void runAsync(Runnable task) {
+        ExecutorService executor = asyncExecutor;
+        if (executor == null) {
+            return;
+        }
+        try {
+            executor.execute(() -> {
+                if (!asyncTasks.begin()) {
+                    return;
+                }
+                try {
+                    if (isEnabled()) {
+                        task.run();
+                    }
+                } finally {
+                    asyncTasks.complete();
+                }
+            });
+        } catch (RejectedExecutionException exception) {
+            if (!executor.isShutdown()) {
+                throw exception;
+            }
+        }
     }
 
     void configureTestCommandVisibility() {
@@ -149,7 +199,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
     }
 
     private void checkDatabase(List<String> previousChecks,
-                               RuntimeConfigurationValidator.DatabaseSettings settings) {
+                               RuntimeConfigurationValidator.DatabaseSettings settings,
+                               long generation) {
         List<String> details = new ArrayList<>(previousChecks);
         try {
             DatabaseConfig config = new DatabaseConfig(
@@ -160,17 +211,23 @@ public final class TianjiTownPlugin extends JavaPlugin {
             DatabaseGate.HealthResult result = candidate.verifyAndMigrate();
             if (!result.healthy()) {
                 candidate.close();
+                if (!isCurrentLifecycle(generation)) {
+                    return;
+                }
                 details.add("FAIL SQLite/Flyway: " + result.detail());
                 lock("数据库门禁未通过", details);
                 return;
             }
-            if (!isEnabled()) {
+            if (!isCurrentLifecycle(generation)) {
                 candidate.close();
                 return;
             }
             getServer().getScheduler().runTask(this, () -> activateRuntime(candidate, details,
-                    result.detail()));
+                    result.detail(), generation));
         } catch (RuntimeException exception) {
+            if (!isCurrentLifecycle(generation)) {
+                return;
+            }
             details.add("FAIL SQLite config: " + exception.getMessage());
             lock("数据库配置无效", details);
         }
@@ -246,8 +303,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
     }
 
     private void activateRuntime(DatabaseGate candidate, List<String> previousDetails,
-                                 String databaseDetail) {
-        if (!isEnabled()) {
+                                 String databaseDetail, long generation) {
+        if (!isCurrentLifecycle(generation)) {
             candidate.close();
             return;
         }
@@ -310,7 +367,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ResidenceDeletionGuard(this,
                 managedResidenceNames::contains, residenceProtection::internalMutation,
                 runtime::reconcileAll), this);
-        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+        runAsync(() -> {
             try {
                 runtime.repository().listTowns(true).stream().map(town -> town.residenceName())
                         .forEach(managedResidenceNames::add);
@@ -359,6 +416,10 @@ public final class TianjiTownPlugin extends JavaPlugin {
         details.add("OK 建筑返还、信标增强、统一诊断与定时备份已启用");
         gateStatus.set(new GateStatus(GateStatus.State.READY, details));
         getLogger().info("业务运行时启动完成；玩家入口仅限服务台和小镇手册。");
+    }
+
+    private boolean isCurrentLifecycle(long generation) {
+        return isEnabled() && lifecycleGeneration.get() == generation;
     }
 
     private WorldBoundaryService worldBoundaryService() {

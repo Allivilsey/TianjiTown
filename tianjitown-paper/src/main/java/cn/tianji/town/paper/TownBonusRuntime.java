@@ -106,7 +106,7 @@ final class TownBonusRuntime implements Listener {
         if (!plugin.isEnabled() || !indexRefreshRunning.compareAndSet(false, true)) {
             return;
         }
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 index.set(repository.loadBonusIndex());
             } catch (RuntimeException exception) {
@@ -119,7 +119,7 @@ final class TownBonusRuntime implements Listener {
     }
 
     void cleanupCounters() {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 repository.cleanupRefundCounters(LocalDate.now(settings.buildingRefund().resetZone())
                         .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
@@ -136,7 +136,7 @@ final class TownBonusRuntime implements Listener {
             return;
         }
         sender.sendMessage("§e正在创建 SQLite 在线备份与配置快照……");
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             OnlineBackupService.Result result = backups.create();
             plugin.getServer().getScheduler().runTask(plugin, () -> sender.sendMessage(
                     (result.success() ? "§a" : "§c") + result.detail()
@@ -149,7 +149,7 @@ final class TownBonusRuntime implements Listener {
         if (!settings.operations().backup().enabled()) {
             return;
         }
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             OnlineBackupService.Result result = backups.create();
             if (result.success()) {
                 plugin.getLogger().info(result.detail() + "；文件=" + result.databaseFile());
@@ -176,7 +176,7 @@ final class TownBonusRuntime implements Listener {
         sender.sendMessage("§e正在检查 SQLite、Residence、Vault 与 QuickShop 历史……");
         long capturedExternal = externalBalance;
         Instant since = Instant.now().minus(java.time.Duration.ofDays(days));
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 TownBonusRepository.DiagnosticSnapshot database = repository.diagnose(since);
                 String schemaVersion = host.database().schemaVersion();
@@ -471,7 +471,7 @@ final class TownBonusRuntime implements Listener {
     }
 
     private void writeDiagnosticReport(List<String> lines, DiagnosticResult base) {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             Path directory = plugin.getDataFolder().toPath().resolve("diagnostics")
                     .toAbsolutePath().normalize();
             Path report = directory.resolve("diagnostic-" + REPORT_STAMP.format(base.completedAt())
