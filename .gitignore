@@ -32,7 +32,6 @@ Desktop.ini
 
 # 本地运行、诊断与临时文件
 logs/
-reports/
 *.log
 *.pid
 *.jfr
