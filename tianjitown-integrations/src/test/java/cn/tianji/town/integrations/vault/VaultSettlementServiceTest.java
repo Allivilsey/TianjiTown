@@ -15,6 +15,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static net.milkbowl.vault.economy.EconomyResponse.ResponseType.FAILURE;
 import static net.milkbowl.vault.economy.EconomyResponse.ResponseType.SUCCESS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -22,6 +23,50 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VaultSettlementServiceTest {
+    @Test
+    void exposesRecoverablePlayerDebitAndRestoresItAfterProviderRecovery() {
+        AtomicReference<String> mode = new AtomicReference<>("compfail");
+        AtomicReference<Double> playerBalance = new AtomicReference<>(10.0D);
+        UUID settlementId = UUID.randomUUID();
+        UUID playerId = UUID.randomUUID();
+        OfflinePlayer settlementAccount = offlinePlayer(settlementId, "Tax");
+        OfflinePlayer player = offlinePlayer(playerId, "Player");
+        Economy economy = proxy(Economy.class, (ignored, method, arguments) -> switch (
+                method.getName()) {
+            case "isEnabled", "hasAccount" -> true;
+            case "fractionalDigits" -> 2;
+            case "withdrawPlayer" -> {
+                assertSame(player, arguments[0]);
+                playerBalance.updateAndGet(balance -> balance - (double) arguments[1]);
+                yield response((double) arguments[1], SUCCESS, "");
+            }
+            case "depositPlayer" -> {
+                OfflinePlayer target = (OfflinePlayer) arguments[0];
+                double amount = (double) arguments[1];
+                if (target.getUniqueId().equals(settlementId)
+                        || mode.get().equals("compfail")) {
+                    yield response(amount, FAILURE, "INJECTED_" + mode.get());
+                }
+                assertSame(player, target);
+                playerBalance.updateAndGet(balance -> balance + amount);
+                yield response(amount, SUCCESS, "");
+            }
+            default -> defaultValue(method.getReturnType());
+        });
+        VaultSettlementService settlement = settlement(economy, settlementAccount);
+
+        VaultSettlementService.Result failed = settlement.transferFromPlayer(player, 100);
+
+        assertFalse(failed.success());
+        assertTrue(failed.compensationRequired());
+        assertTrue(failed.playerRefundRequired());
+        assertEquals(9.0D, playerBalance.get());
+
+        mode.set("normal");
+        assertTrue(settlement.refundDebitedPlayer(player, 100).success());
+        assertEquals(10.0D, playerBalance.get());
+    }
+
     @Test
     void usesOneStableOfflineIdentityForCreationAndAdjustments() {
         AtomicBoolean accountCreated = new AtomicBoolean();
@@ -128,6 +173,40 @@ class VaultSettlementServiceTest {
         assertFalse(adjustment.success());
         assertTrue(adjustment.message().contains("provider 不可用"));
         assertFalse(depositCalled.get());
+    }
+
+    private static VaultSettlementService settlement(Economy economy,
+                                                       OfflinePlayer settlementAccount) {
+        Plugin provider = proxy(Plugin.class,
+                (ignored, method, arguments) -> defaultValue(method.getReturnType()));
+        RegisteredServiceProvider<Economy> registration = new RegisteredServiceProvider<>(
+                Economy.class, economy, ServicePriority.Normal, provider);
+        ServicesManager services = proxy(ServicesManager.class,
+                (ignored, method, arguments) -> method.getName().equals("getRegistration")
+                        ? registration : defaultValue(method.getReturnType()));
+        Server server = proxy(Server.class, (ignored, method, arguments) -> switch (
+                method.getName()) {
+            case "getServicesManager" -> services;
+            case "getOfflinePlayer" -> settlementAccount;
+            case "isPrimaryThread" -> true;
+            default -> defaultValue(method.getReturnType());
+        });
+        return new VaultSettlementService(server, "tax", 2);
+    }
+
+    private static OfflinePlayer offlinePlayer(UUID playerId, String playerName) {
+        return proxy(OfflinePlayer.class, (ignored, method, arguments) -> switch (
+                method.getName()) {
+            case "getUniqueId" -> playerId;
+            case "getName" -> playerName;
+            default -> defaultValue(method.getReturnType());
+        });
+    }
+
+    private static EconomyResponse response(double amount,
+                                             EconomyResponse.ResponseType type,
+                                             String error) {
+        return new EconomyResponse(amount, 0.0D, type, error);
     }
 
     @SuppressWarnings("unchecked")

@@ -364,6 +364,37 @@ public final class EconomyRepository {
         });
     }
 
+    public EconomyOperation resolveCompensation(UUID operationId, String detail) {
+        requireWorkerThread();
+        return transaction(connection -> {
+            EconomyOperation current = requireOperation(connection, operationId);
+            if (current.status().equals("CANCELLED")) {
+                return current;
+            }
+            if (!current.status().equals("COMPENSATION_REQUIRED")) {
+                throw new ConflictException("只有待补偿操作可以完成自动补偿");
+            }
+            setOperationStatus(connection, operationId, "CANCELLED", safe(detail));
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE town_accounts
+                       SET locked = 1, lock_reason = ?, version = version + 1
+                     WHERE town_id = ? AND lock_reason LIKE ?
+                       AND NOT EXISTS (
+                           SELECT 1 FROM economy_operations
+                            WHERE town_id = ? AND status = 'COMPENSATION_REQUIRED'
+                       )
+                    """)) {
+                statement.setString(1, RECONCILIATION_LOCK
+                        + " 自动补偿完成，等待清算余额复核");
+                statement.setBytes(2, uuid(current.townId()));
+                statement.setString(3, COMPENSATION_LOCK + "%");
+                statement.setBytes(4, uuid(current.townId()));
+                statement.executeUpdate();
+            }
+            return requireOperation(connection, operationId);
+        });
+    }
+
     public List<EconomyOperation> pendingOperations() {
         requireWorkerThread();
         return query(connection -> {

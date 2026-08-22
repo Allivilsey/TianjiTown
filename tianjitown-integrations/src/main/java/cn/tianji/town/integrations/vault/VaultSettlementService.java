@@ -87,8 +87,28 @@ public final class VaultSettlementService {
         }
         EconomyResponse compensation = economy.depositPlayer(player, amount);
         boolean compensated = compensation.transactionSuccess();
-        return Result.failure("清算账户入账失败: " + deposited.errorMessage,
-                compensated, !compensated);
+        return compensated
+                ? Result.failure("清算账户入账失败: " + deposited.errorMessage, true, false)
+                : Result.playerRefundRequired("清算账户入账失败: "
+                + deposited.errorMessage);
+    }
+
+    public Result refundDebitedPlayer(OfflinePlayer player, long amountMinor) {
+        requireMainThread();
+        if (amountMinor <= 0) {
+            throw new IllegalArgumentException("补偿金额必须大于 0");
+        }
+        Economy economy;
+        try {
+            economy = readyEconomy();
+        } catch (AvailabilityException exception) {
+            return Result.failure(exception.getMessage(), false, false);
+        }
+        EconomyResponse refunded = economy.depositPlayer(player, decimal(amountMinor));
+        return refunded.transactionSuccess()
+                ? Result.success("玩家扣款已自动补偿")
+                : Result.failure("玩家自动补偿失败: " + refunded.errorMessage,
+                false, false);
     }
 
     public Result transferToPlayer(OfflinePlayer player, long amountMinor) {
@@ -193,14 +213,18 @@ public final class VaultSettlementService {
     }
 
     public record Result(boolean success, String message, boolean compensated,
-                         boolean compensationRequired) {
+                         boolean compensationRequired, boolean playerRefundRequired) {
         public static Result success(String message) {
-            return new Result(true, message, false, false);
+            return new Result(true, message, false, false, false);
         }
 
         public static Result failure(String message, boolean compensated,
                                      boolean compensationRequired) {
-            return new Result(false, message, compensated, compensationRequired);
+            return new Result(false, message, compensated, compensationRequired, false);
+        }
+
+        private static Result playerRefundRequired(String message) {
+            return new Result(false, message, false, true, true);
         }
     }
 

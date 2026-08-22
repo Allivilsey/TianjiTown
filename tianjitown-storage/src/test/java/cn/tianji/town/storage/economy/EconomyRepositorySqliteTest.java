@@ -152,6 +152,18 @@ class EconomyRepositorySqliteTest {
             assertTrue(repository.findFinanceByTown(townId).orElseThrow().lockReason()
                     .startsWith("ECONOMY_COMPENSATION:"));
 
+            EconomyRepository.EconomyOperation resolved = repository.resolveCompensation(
+                    uncertain.operationId(), "玩家余额已自动恢复");
+            assertEquals("CANCELLED", resolved.status());
+            assertEquals("玩家余额已自动恢复", resolved.lastError());
+            assertTrue(repository.findFinanceByTown(townId).orElseThrow().locked());
+            assertTrue(repository.findFinanceByTown(townId).orElseThrow().lockReason()
+                    .startsWith("SETTLEMENT_RECONCILIATION:"));
+            assertEquals(resolved, repository.resolveCompensation(uncertain.operationId(),
+                    "重复收尾不应改写结果"));
+            assertTrue(repository.reconcileSettlement(2_000).healthy());
+            assertFalse(repository.findFinanceByTown(townId).orElseThrow().locked());
+
             EconomyRepository.ExternalIncomeTax jobsTax =
                     new EconomyRepository.ExternalIncomeTax(townId, "jobs:test:1", "JOBS",
                             mayorId, "Mayor", 2_000, 1_000, 200);

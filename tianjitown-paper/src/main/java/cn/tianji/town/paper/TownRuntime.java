@@ -51,6 +51,7 @@ final class TownRuntime {
     private final Map<UUID, QuickShopTaxAdapter.TaxPolicy> taxPolicies = new ConcurrentHashMap<>();
     private final RetryingWorkQueue<QuickShopTaxAdapter.SuccessfulTax> pendingTaxes;
     private final RetryingWorkQueue<EconomyRepository.ExternalIncomeTax> pendingIncomeTaxes;
+    private final DonationCompensationCoordinator donationCompensations;
     private final AtomicBoolean databaseAvailable = new AtomicBoolean(true);
     private final AtomicBoolean quickShopTaxAvailable = new AtomicBoolean(false);
     private final ProvisionCoordinator provisions = new ProvisionCoordinator();
@@ -104,6 +105,84 @@ final class TownRuntime {
             }
         }, 20L * 5, 20L * 30, this::recordExternalIncomeTax,
                 this::handleExternalIncomeTaxFailure);
+        this.donationCompensations = createDonationCompensationCoordinator();
+    }
+
+    private DonationCompensationCoordinator createDonationCompensationCoordinator() {
+        return new DonationCompensationCoordinator(new DonationCompensationCoordinator.Scheduler() {
+            @Override
+            public void runMainLater(Runnable task, long delayTicks) {
+                plugin.getServer().getScheduler().runTaskLater(plugin, task, delayTicks);
+            }
+
+            @Override
+            public void runAsync(Runnable task) {
+                plugin.getServer().getScheduler().runTaskAsynchronously(plugin, task);
+            }
+        }, (playerId, amountMinor) -> settlement.refundDebitedPlayer(
+                plugin.getServer().getOfflinePlayer(playerId), amountMinor),
+                (operationId, detail) -> finance.resolveCompensation(operationId, detail),
+                new DonationCompensationCoordinator.Listener() {
+                    @Override
+                    public void retryFailed(EconomyRepository.EconomyOperation operation,
+                                            int attempt, String detail) {
+                        plugin.getLogger().warning("捐款自动补偿第 " + attempt
+                                + " 次尝试失败: operation=" + operation.operationId()
+                                + ", error=" + detail);
+                    }
+
+                    @Override
+                    public void finalizationFailed(EconomyRepository.EconomyOperation operation,
+                                                   int attempt, String detail) {
+                        plugin.getLogger().warning("捐款外部余额已恢复，但第 " + attempt
+                                + " 次 SQLite 收尾失败: operation=" + operation.operationId()
+                                + ", error=" + detail);
+                    }
+
+                    @Override
+                    public void recovered(EconomyRepository.EconomyOperation operation,
+                                          int attempts) {
+                        plugin.getLogger().info("捐款自动补偿已恢复玩家余额，正在复核消费锁: operation="
+                                + operation.operationId() + ", attempts=" + attempts);
+                        reconcileSettlementAfterCompensation(operation);
+                    }
+
+                    @Override
+                    public void exhausted(EconomyRepository.EconomyOperation operation,
+                                          String detail) {
+                        plugin.getLogger().severe("捐款自动补偿达到重试上限，消费锁保持不变: operation="
+                                + operation.operationId() + ", error=" + detail);
+                    }
+                });
+    }
+
+    private void reconcileSettlementAfterCompensation(
+            EconomyRepository.EconomyOperation operation) {
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            long externalBalance;
+            try {
+                externalBalance = settlement.balanceMinor();
+            } catch (RuntimeException exception) {
+                plugin.getLogger().severe("自动补偿后的清算余额读取失败，消费锁保持不变: operation="
+                        + operation.operationId() + ", error=" + safeMessage(exception));
+                return;
+            }
+            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+                try {
+                    EconomyRepository.Reconciliation reconciliation =
+                            finance.reconcileSettlement(externalBalance);
+                    if (!reconciliation.healthy()) {
+                        plugin.getLogger().severe("自动补偿完成但清算仍有短款，消费锁保持不变: operation="
+                                + operation.operationId() + ", external="
+                                + reconciliation.externalBalanceMinor() + ", required="
+                                + reconciliation.requiredMinor());
+                    }
+                } catch (RuntimeException exception) {
+                    plugin.getLogger().severe("自动补偿后的清算复核失败，消费锁保持不变: operation="
+                            + operation.operationId() + ", error=" + safeMessage(exception));
+                }
+            });
+        });
     }
 
     TownRepository repository() {
@@ -951,19 +1030,40 @@ final class TownRuntime {
             try {
                 if (result.compensationRequired()) {
                     finance.requireCompensation(operation.operationId(), result.message());
-                    plugin.getLogger().severe("资金操作需要人工补偿，已锁定小镇消费: operation="
-                            + operation.operationId() + ", town=" + operation.townId()
-                            + ", error=" + result.message());
+                    boolean automaticRefund = result.playerRefundRequired()
+                            && operation.operationType().equals("DONATION")
+                            && operation.actorId() != null;
+                    if (automaticRefund) {
+                        donationCompensations.submit(operation);
+                        plugin.getLogger().warning("捐款退款暂时失败，已锁定小镇消费并启动自动补偿: "
+                                + "operation=" + operation.operationId() + ", town="
+                                + operation.townId() + ", error=" + result.message());
+                    } else {
+                        plugin.getLogger().severe("资金操作需要人工补偿，已锁定小镇消费: operation="
+                                + operation.operationId() + ", town=" + operation.townId()
+                                + ", error=" + result.message());
+                    }
                 } else {
                     finance.cancelOperation(operation.operationId(), result.message());
                 }
                 plugin.getServer().getScheduler().runTask(plugin, () -> failure.accept(
                         new IllegalStateException(result.message()
-                                + (result.compensationRequired() ? "；该镇消费已锁定，需人工补偿" : ""))));
+                                + compensationHint(operation, result))));
             } catch (RuntimeException exception) {
                 reportActionFailure(exception, failure);
             }
         });
+    }
+
+    private static String compensationHint(EconomyRepository.EconomyOperation operation,
+                                           VaultSettlementService.Result result) {
+        if (!result.compensationRequired()) {
+            return "";
+        }
+        return result.playerRefundRequired() && operation.operationType().equals("DONATION")
+                && operation.actorId() != null
+                ? "；该镇消费已临时锁定，系统正在自动补偿"
+                : "；该镇消费已锁定，需人工补偿";
     }
 
     void refreshTaxPolicies() {
