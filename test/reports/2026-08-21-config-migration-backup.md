@@ -1,0 +1,55 @@
+# 15.5 2026-08-21 配置、迁移与在线备份续测轮次
+
+```text
+测试轮次：testlist-20260821-config-migration-ops
+分支 / 提交：main / 751943099b134d46144465d2c492c307e3fb0582（保留测试前已有工作区改动；本轮仅修改本清单并新增忽略的本地测试驱动与证据）
+项目版本 / JAR SHA-256：1.4.0 / 4BCA0EBA8D20001E820C404D1685D14B8C47D0B955E8E53FB50336A96FF82A7F
+配置 schema / Flyway schema：7 / 7.0（10 条成功迁移）
+Maven / Paper / Java：3.9.12 / 26.2-84 / 25.0.4 LTS
+Residence / Vault / XConomy / WorldBorder：6.0.2.4 / 1.7.3-b131 / 2.26.3 / 1.19
+QuickShop-Hikari / Jobs / GlobalMarketPlus：6.3.0.0（能力矩阵临时构造 6.3.0.1）/ 5.2.6.6 / 1.4.1.4
+MinecraftConsoleClient：build 505；全部实例关闭 SessionCache/ProfileKeyCache
+测试服务器 / 时区：LocalTestServer/codex-fresh-20260821 隔离副本 / Asia/Shanghai
+数据副本：backups/testlist-20260821-continuation；所有配置、迁移、备份和锁竞争场景使用独立 SQLite 副本
+执行人 / 复核人：Codex / 待复核
+开始 / 结束时间：2026-08-21 22:04 / 2026-08-21 22:52
+
+自动化构建结果
+最终 Maven clean verify 四模块全部成功；Core 17、Storage 18、Integrations 11、Paper 48，共 37 个测试类、94 个测试，失败/错误/跳过均为 0。重新构建 JAR、服务器候选 JAR与 15.4 基线 SHA-256 完全一致。
+
+本轮新增完整通过（17 项）
+CFG-04、CFG-05、CFG-09、CFG-11、CFG-12、CFG-13、CFG-17；DB-02、DB-03、DB-04、DB-05、DB-06、DB-07、DB-08、DB-12；OPS-06、OPS-10。
+
+本轮失败（5 项）
+CFG-03（P0）：缺少 Residence、Vault、XConomy、QuickShop、Jobs 或 GMP 时均进入可诊断 LOCKED；但缺少 WorldBorder 时 Paper 因 plugin.yml 硬依赖直接拒绝加载 TianjiTown，无法进入清单要求的 LOCKED 状态或提供 /townadmin status。
+CFG-07（P0）：目录、父路径文件、非法 Windows 路径和损坏库均正确锁定；但只读 SQLite 在启动恢复写入报 SQLITE_READONLY 后仍进入 READY，开放了不可写运行时。
+CFG-08（P0）：零、负数和极大 timeout 均锁定；connection-timeout-ms/busy-timeout-ms 使用字符串错误类型时静默回退为 5000 ms 并进入 READY。
+CFG-10（P0）：YAML 语法、NaN、非法枚举/材料/时区和 ui.mode 均能锁定；但 phase1/phase2 数值使用字符串错误类型时静默回退并 READY，未加载世界 missing_world 也被 allowed-worlds 接受并 READY。
+OPS-07（P0）：相对 ../ 逃逸由单元测试拒绝，但绝对目录可越出 plugins/TianjiTown；本轮实际向 backups/testlist-20260821-continuation 写入在线备份，违反清单“仅允许目标插件范围内”的要求。
+
+当前新增缺陷
+TT-TEST-20260821-06（P0）：CFG-03 缺少 WorldBorder 时插件不加载，无法保持可诊断 LOCKED。
+TT-TEST-20260821-07（P0）：CFG-07 只读 SQLite 发生启动写失败后仍误报 READY。
+TT-TEST-20260821-08（P0）：CFG-08 SQLite timeout 错误类型被静默替换为默认值。
+TT-TEST-20260821-09（P0）：CFG-10 phase1/phase2 错误类型及未加载世界未被严格配置校验阻断。
+TT-TEST-20260821-10（P0）：OPS-07 允许在线备份绝对路径写出插件数据目录。
+
+重要通过证据
+CFG-05：6.3.0.0 保持 READY 并明确关闭动态税；临时 6.3.0.1 的完整 API 开启动态税；移除 ShopEnhancedTaxEvent 后仅该能力 WARN，三种场景的 Jobs/GMP 均保持 OK。CFG-12：维护、tax、consumption、Buff 商店、建筑返还、信标开关经 reload 即时切换；关闭态四个玩家写动作均返回 FEATURE_DISABLED，重新开启后税率和 Buff 动作成功；运行中把 ui.mode 改为 LEGACY、SQLite 路径改为不存在路径后，实际界面仍为 DIALOG、原数据源仍可写，命令明确提示这些项目需重启。
+CFG-13：全新配置和发布包默认 test-command.enabled=false；schema 6 且缺失该节的配置升级到 7 后补为 false，TestCommand 返回 TEST_INTERFACE_DISABLED。CFG-17 覆盖缺失、空白、大小写 DIALOG/LEGACY、非法 CHEST 及修正后恢复 READY。
+DB-02～DB-08：空库及 V0.1、V1.0、V1.1、V2.0、V2.1、V3.0、V4.0、V5.0、V6.0 全部顺序升级至 7.0；代表性 V6 数据验证税率、申请确认、既有领地/区块/扩张、旧账本和信标约束；checksum 漂移、99.0 未来迁移、失败 history、预先存在部分 V7 DDL 均拒绝就绪且失败迁移回滚。DB-12 在 250 ms busy timeout 下于 257 ms 有界失败，释放写锁后新请求成功一次，旧失败请求未重放。
+OPS-06：718 次并发 SQLite 写入期间，同秒手动备份生成两个唯一文件，随后定时任务再生成一份；三份数据库、配置快照和 SHA-256 配套齐全，均通过 quick_check、外键检查、10 条 Flyway validate 和哈希复算。OPS-10 的命令、配置注释、README/运维文档及实际产物均明确内置备份只覆盖 TianjiTown SQLite/config，不宣称覆盖依赖数据。
+
+部分执行但保持未勾选
+CFG-06：已覆盖禁用 WorldBorder，但尚未构造经典 API 缺失、单世界无边界及查询抛 RuntimeException/LinkageError。OPS-01 已覆盖 READY、LOCKED、维护态和 QuickShop WARN，但 SQLite 运行时中断及消费锁状态组合未全部完成。OPS-08 已验证同秒并发备份不重名，尚未生成超过 retention-count 的完整保留轮次。
+
+证据位置
+LocalTestServer/validation/continuation-cfg03-*.log、continuation-cfg05-*.log、continuation-cfg07-*.log～continuation-cfg13-*.log、continuation-cfg17-*.log、continuation-runtime-ops.log、continuation-cfg12-*-memberbot.log、continuation-maven-verify.log；backups/testlist-20260821-continuation/migration-20260821-223741/results.txt、lock-competition-20260821-2248/lock-competition-results.txt、runtime-ops-backups-20260821-224602/inspection-results.txt 及对应数据库/配置/哈希副本。
+
+环境收尾与状态统计
+Paper、MinecraftConsoleClient 和 25565 监听均已停止。服务器 TianjiTown SQLite、config.yml、Residence res_world.yml 已恢复为 15.4 后基线 SHA-256：42A68EF84F5260B04BD2761622DE50469FE851C3D89291290759DF1E51769963、DCAD09006304093911E93FCE4B76DB6425D1DC3985EC669675BBAD34D5F37455、30EA6F7707375D1F752C3ADA990A77AD93B65EEC7DA0671B723F6E108B5B1949；QuickShop 测试包已恢复，候选 JAR 未变化。
+testlist.md 当前：通过 71 / 失败 9 / 阻塞 0 / 未执行 78（按用户要求不统计 manualtest.md）。
+最终结论：NO-GO。迁移与在线备份主链路通过，但新增 5 个 P0 失败，加上既有 LAND-03 P0 及其他未关闭缺陷，仍不满足发布门槛。
+```
+
+> 本报告从 [自动化、命令与运维测试列表](../testlist.md) 分离，证据路径均相对于项目根目录。

@@ -1,0 +1,28 @@
+# 15.3 2026-08-21 补充自动化与真实客户端边界轮次
+
+```text
+测试轮次：testlist-20260821-supplemental-boundary
+分支 / 提交：main / 751943099b134d46144465d2c492c307e3fb0582（工作区仅新增测试与本清单记录）
+项目版本 / JAR SHA-256：1.4.0 / 4BCA0EBA8D20001E820C404D1685D14B8C47D0B955E8E53FB50336A96FF82A7F
+配置 schema / Flyway schema：7 / 7.0
+Maven / Paper / Java：3.9.12 / 26.2-84 / 25.0.4 LTS
+Residence / Vault / XConomy / WorldBorder：6.0.2.4 / 1.7.3-b131 / 2.26.3 / 1.19
+QuickShop-Hikari / Jobs / GlobalMarketPlus：6.3.0.0 / 5.2.6.6 / 1.4.1.4
+测试服务器 / 时区：LocalTestServer/codex-fresh-20260821 隔离副本 / Asia/Shanghai
+MinecraftConsoleClient / 自动化脚本版本：build 505 / 交互式隔离实例（SessionCache/ProfileKeyCache 均关闭）
+数据副本或快照编号：backups/testlist-20260821-current/tianjitown-before.db、tianjitown-after.db
+执行人 / 复核人：Codex / 待复核
+开始 / 结束时间：2026-08-21 18:59 / 2026-08-21 19:12
+通过 / 失败 / 阻塞 / 未执行：29 / 1 / 0 / 213
+新增通过：APP-02、DB-13、BUFF-03、BUFF-05、SEC-01。
+自动化结果：37 个测试类、94 个测试全部通过，失败/错误/跳过均为 0；两次未改源码的干净构建 JAR 哈希一致，新增测试不进入候选包且候选 JAR 哈希保持不变。
+运行结果：TianjiTown READY，依赖与 WorldBorder 能力正常；SQLite quick_check=ok、外键违规 0、Flyway 10 条迁移有效、账户/账本差异 0；在线备份成功。统一诊断因 QuickShop-Hikari 6.3.0.0 不满足严格高于 6.3.0.0 的历史适配要求而按设计报告 INCOMPLETE。
+MEM-12 复核：旧报告所称“合法 13 参数被要求 11”不成立，文档与实现的合法命令长度均为 11，简介/规则更新成功且旧版本被拒绝；但当前版本允许同一入口修改小镇全名和简称，违反锁定字段要求。测试后已通过业务入口恢复名称，并最终恢复测试前 SQLite/config 哈希。
+部分执行但未勾选：APP-03 的格式码、MiniMessage 与简介格式注入稳定返回 VALIDATION_FAILED；超长聊天命令被 MinecraftConsoleClient 截断后返回 INVALID_ARGUMENT，未完成控制字符、换行与全部长度项，因此保持未执行状态。
+缺陷列表：TT-TEST-20260821-01（更正描述：MEM-12 玩家资料入口可修改锁定的全名和简称）；未新增其他产品缺陷。
+日志、截图、SQL、余额与投影证据位置：各模块 target/surefire-reports；backups/testlist-20260821-current/paper-latest.log、tianjitown-before.db、tianjitown-after.db；LocalTestServer/validation/mccc-20260821-current-*.log。
+环境收尾：Paper、全部 MinecraftConsoleClient 与监听端口均已停止；SQLite 与 config.yml 已恢复为测试前 SHA-256；测试前后数据库均通过 quick_check 和外键检查。
+最终结论：NO-GO；新增 5 项完整通过，但 MEM-12 仍失败，且 213 项（含人工界面、依赖矩阵、故障注入、迁移/恢复、长时间及生产发布项目）尚未完整执行。
+```
+
+> 本报告从 [自动化、命令与运维测试列表](../testlist.md) 分离，证据路径均相对于项目根目录。
