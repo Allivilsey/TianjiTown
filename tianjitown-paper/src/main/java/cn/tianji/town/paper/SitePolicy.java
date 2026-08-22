@@ -130,7 +130,8 @@ final class SitePolicy {
             player.sendMessage("§c预览领地不在当前世界。");
             return;
         }
-        stopPreview(player.getUniqueId());
+        UUID playerId = player.getUniqueId();
+        stopPreview(playerId);
         int durationSeconds = Math.max(5,
                 plugin.getConfig().getInt("phase1.site.preview-duration-seconds", 15));
         int intervalTicks = Math.max(5,
@@ -141,17 +142,35 @@ final class SitePolicy {
 
             @Override
             public void run() {
-                if (!player.isOnline() || !player.getWorld().getUID()
-                        .equals(territory.center().worldId()) || remaining-- <= 0) {
-                    previews.remove(player.getUniqueId());
-                    cancel();
-                    return;
+                try {
+                    if (!player.isOnline() || !player.getWorld().getUID()
+                            .equals(territory.center().worldId()) || remaining-- <= 0) {
+                        previews.remove(playerId);
+                        cancel();
+                        return;
+                    }
+                    renderPreview(player, territory);
+                } catch (RuntimeException | LinkageError exception) {
+                    // 玩家、世界或插件在周期回调前失效时立即结束本次预览。
+                    previews.remove(playerId);
+                    try {
+                        cancel();
+                    } catch (RuntimeException | LinkageError ignored) {
+                        exception.addSuppressed(ignored);
+                    }
+                    try {
+                        if (plugin.isEnabled()) {
+                            plugin.getLogger().warning("领地预览对象已失效，任务已结束: "
+                                    + safeMessage(exception));
+                        }
+                    } catch (RuntimeException | LinkageError ignored) {
+                        // 插件关闭阶段记录器失效时不再向事件循环抛出异常。
+                    }
                 }
-                renderPreview(player, territory);
             }
         };
         BukkitTask task = runnable.runTaskTimer(plugin, 0L, intervalTicks);
-        previews.put(player.getUniqueId(), task);
+        previews.put(playerId, task);
         player.sendMessage("§e已显示 3×3 区块三维边界，粒子将持续约 " + durationSeconds
                 + " 秒；中心区块为 " + territory.center().x() + ", "
                 + territory.center().z() + "。");
@@ -162,6 +181,24 @@ final class SitePolicy {
         if (task != null) {
             task.cancel();
         }
+    }
+
+    void clearPreviews() {
+        for (BukkitTask task : List.copyOf(previews.values())) {
+            try {
+                task.cancel();
+            } catch (RuntimeException | LinkageError exception) {
+                try {
+                    if (plugin.isEnabled()) {
+                        plugin.getLogger().warning("取消领地预览任务失败: "
+                                + safeMessage(exception));
+                    }
+                } catch (RuntimeException | LinkageError ignored) {
+                    // 插件关闭阶段记录器失效时继续清理预览索引。
+                }
+            }
+        }
+        previews.clear();
     }
 
     private void renderPreview(Player player, InitialTerritory territory) {

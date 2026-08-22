@@ -24,11 +24,20 @@ public final class VaultSettlementService {
         if (accountName == null || accountName.isBlank()) {
             throw new IllegalArgumentException("清算账户名不能为空");
         }
-        this.account = server.getOfflinePlayer(accountName);
-        this.accountId = account.getUniqueId();
-        this.accountName = account.getName() == null ? accountName : account.getName();
+        try {
+            this.account = server.getOfflinePlayer(accountName);
+            this.accountId = account.getUniqueId();
+            this.accountName = account.getName() == null ? accountName : account.getName();
+        } catch (RuntimeException | LinkageError exception) {
+            throw unavailable("无法解析 Vault 离线清算账户", exception);
+        }
         Economy economy = economy();
-        int providerScale = economy.fractionalDigits();
+        int providerScale;
+        try {
+            providerScale = economy.fractionalDigits();
+        } catch (RuntimeException | LinkageError exception) {
+            throw unavailable("无法读取 Vault 金额精度", exception);
+        }
         this.scale = providerScale >= 0 ? Math.min(providerScale, 8) : configuredScale;
         if (scale < 0 || scale > 8) {
             throw new IllegalArgumentException("Vault 金额精度必须在 0~8 之间");
@@ -37,22 +46,33 @@ public final class VaultSettlementService {
 
     public Result ensureAccount() {
         requireMainThread();
-        Economy economy = economy();
-        if (economy.hasAccount(account)) {
-            return Result.success("清算账户已就绪");
+        try {
+            Economy economy = economy();
+            if (economy.hasAccount(account)) {
+                return Result.success("清算账户已就绪");
+            }
+            if (economy.createPlayerAccount(account) && economy.hasAccount(account)) {
+                return Result.success("清算账户已就绪");
+            }
+            return Result.failure("Vault provider 无法创建或重新读取离线清算账户 "
+                    + accountName, false, false);
+        } catch (AvailabilityException exception) {
+            return Result.failure(exception.getMessage(), false, false);
+        } catch (RuntimeException | LinkageError exception) {
+            return Result.failure("Vault 清算账户初始化异常: " + safeMessage(exception),
+                    false, false);
         }
-        if (economy.createPlayerAccount(account) && economy.hasAccount(account)) {
-            return Result.success("清算账户已就绪");
-        }
-        return Result.failure("Vault provider 无法创建或重新读取离线清算账户 "
-                + accountName, false, false);
     }
 
     public long balanceMinor() {
         requireMainThread();
         Economy economy = readyEconomy();
-        double balance = economy.getBalance(account);
-        return amount(balance).minorUnits();
+        try {
+            double balance = economy.getBalance(account);
+            return amount(balance).minorUnits();
+        } catch (RuntimeException | LinkageError exception) {
+            throw unavailable("Vault 清算余额读取异常", exception);
+        }
     }
 
     public Result checkAvailability() {
@@ -60,8 +80,9 @@ public final class VaultSettlementService {
         try {
             readyEconomy();
             return Result.success("Vault 清算账户可用");
-        } catch (AvailabilityException exception) {
-            return Result.failure(exception.getMessage(), false, false);
+        } catch (RuntimeException | LinkageError exception) {
+            return Result.failure("Vault 清算账户不可用: " + safeMessage(exception),
+                    false, false);
         }
     }
 
@@ -77,15 +98,39 @@ public final class VaultSettlementService {
             return Result.failure(exception.getMessage(), false, false);
         }
         double amount = decimal(amountMinor);
-        EconomyResponse withdrawn = economy.withdrawPlayer(player, amount);
+        EconomyResponse withdrawn;
+        try {
+            withdrawn = economy.withdrawPlayer(player, amount);
+        } catch (RuntimeException | LinkageError exception) {
+            return ambiguousFailure("玩家扣款", exception);
+        }
+        if (withdrawn == null) {
+            return ambiguousFailure("玩家扣款", new IllegalStateException("返回结果为空"));
+        }
         if (!withdrawn.transactionSuccess()) {
             return Result.failure("玩家扣款失败: " + withdrawn.errorMessage, false, false);
         }
-        EconomyResponse deposited = economy.depositPlayer(account, amount);
+        EconomyResponse deposited;
+        try {
+            deposited = economy.depositPlayer(account, amount);
+        } catch (RuntimeException | LinkageError exception) {
+            return ambiguousFailure("清算账户入账", exception);
+        }
+        if (deposited == null) {
+            return ambiguousFailure("清算账户入账", new IllegalStateException("返回结果为空"));
+        }
         if (deposited.transactionSuccess()) {
             return Result.success("资金已转入清算账户");
         }
-        EconomyResponse compensation = economy.depositPlayer(player, amount);
+        EconomyResponse compensation;
+        try {
+            compensation = economy.depositPlayer(player, amount);
+        } catch (RuntimeException | LinkageError exception) {
+            return ambiguousFailure("玩家自动补偿", exception);
+        }
+        if (compensation == null) {
+            return ambiguousFailure("玩家自动补偿", new IllegalStateException("返回结果为空"));
+        }
         boolean compensated = compensation.transactionSuccess();
         return compensated
                 ? Result.failure("清算账户入账失败: " + deposited.errorMessage, true, false)
@@ -104,7 +149,15 @@ public final class VaultSettlementService {
         } catch (AvailabilityException exception) {
             return Result.failure(exception.getMessage(), false, false);
         }
-        EconomyResponse refunded = economy.depositPlayer(player, decimal(amountMinor));
+        EconomyResponse refunded;
+        try {
+            refunded = economy.depositPlayer(player, decimal(amountMinor));
+        } catch (RuntimeException | LinkageError exception) {
+            return ambiguousFailure("玩家退款", exception);
+        }
+        if (refunded == null) {
+            return ambiguousFailure("玩家退款", new IllegalStateException("返回结果为空"));
+        }
         return refunded.transactionSuccess()
                 ? Result.success("玩家扣款已自动补偿")
                 : Result.failure("玩家自动补偿失败: " + refunded.errorMessage,
@@ -123,15 +176,39 @@ public final class VaultSettlementService {
             return Result.failure(exception.getMessage(), false, false);
         }
         double amount = decimal(amountMinor);
-        EconomyResponse withdrawn = economy.withdrawPlayer(account, amount);
+        EconomyResponse withdrawn;
+        try {
+            withdrawn = economy.withdrawPlayer(account, amount);
+        } catch (RuntimeException | LinkageError exception) {
+            return ambiguousFailure("清算账户扣款", exception);
+        }
+        if (withdrawn == null) {
+            return ambiguousFailure("清算账户扣款", new IllegalStateException("返回结果为空"));
+        }
         if (!withdrawn.transactionSuccess()) {
             return Result.failure("清算账户扣款失败: " + withdrawn.errorMessage, false, false);
         }
-        EconomyResponse deposited = economy.depositPlayer(player, amount);
+        EconomyResponse deposited;
+        try {
+            deposited = economy.depositPlayer(player, amount);
+        } catch (RuntimeException | LinkageError exception) {
+            return ambiguousFailure("玩家返还入账", exception);
+        }
+        if (deposited == null) {
+            return ambiguousFailure("玩家返还入账", new IllegalStateException("返回结果为空"));
+        }
         if (deposited.transactionSuccess()) {
             return Result.success("资金已返还玩家");
         }
-        EconomyResponse compensation = economy.depositPlayer(account, amount);
+        EconomyResponse compensation;
+        try {
+            compensation = economy.depositPlayer(account, amount);
+        } catch (RuntimeException | LinkageError exception) {
+            return ambiguousFailure("清算账户自动补偿", exception);
+        }
+        if (compensation == null) {
+            return ambiguousFailure("清算账户自动补偿", new IllegalStateException("返回结果为空"));
+        }
         boolean compensated = compensation.transactionSuccess();
         return Result.failure("玩家返还入账失败: " + deposited.errorMessage,
                 compensated, !compensated);
@@ -149,9 +226,17 @@ public final class VaultSettlementService {
             return Result.failure(exception.getMessage(), false, false);
         }
         double amount = decimal(Math.abs(amountMinor));
-        EconomyResponse response = amountMinor > 0
-                ? economy.depositPlayer(account, amount)
-                : economy.withdrawPlayer(account, amount);
+        EconomyResponse response;
+        try {
+            response = amountMinor > 0
+                    ? economy.depositPlayer(account, amount)
+                    : economy.withdrawPlayer(account, amount);
+        } catch (RuntimeException | LinkageError exception) {
+            return ambiguousFailure("清算账户调整", exception);
+        }
+        if (response == null) {
+            return ambiguousFailure("清算账户调整", new IllegalStateException("返回结果为空"));
+        }
         return response.transactionSuccess() ? Result.success("清算账户调整完成")
                 : Result.failure("清算账户调整失败: " + response.errorMessage, false, false);
     }
@@ -174,13 +259,19 @@ public final class VaultSettlementService {
     }
 
     private Economy economy() {
-        RegisteredServiceProvider<Economy> registration =
-                server.getServicesManager().getRegistration(Economy.class);
-        if (registration == null || registration.getProvider() == null
-                || !registration.getProvider().isEnabled()) {
-            throw new AvailabilityException("Vault Economy provider 不可用");
+        try {
+            RegisteredServiceProvider<Economy> registration =
+                    server.getServicesManager().getRegistration(Economy.class);
+            if (registration == null || registration.getProvider() == null
+                    || !registration.getProvider().isEnabled()) {
+                throw new AvailabilityException("Vault Economy provider 不可用");
+            }
+            return registration.getProvider();
+        } catch (AvailabilityException exception) {
+            throw exception;
+        } catch (RuntimeException | LinkageError exception) {
+            throw unavailable("Vault Economy provider 探测异常", exception);
         }
-        return registration.getProvider();
     }
 
     private Economy readyEconomy() {
@@ -197,8 +288,14 @@ public final class VaultSettlementService {
     }
 
     private void requireAccount(Economy economy) {
-        if (!economy.hasAccount(account)) {
-            throw new AvailabilityException("Vault 离线清算账户不可用: " + accountName);
+        try {
+            if (!economy.hasAccount(account)) {
+                throw new AvailabilityException("Vault 离线清算账户不可用: " + accountName);
+            }
+        } catch (AvailabilityException exception) {
+            throw exception;
+        } catch (RuntimeException | LinkageError exception) {
+            throw unavailable("Vault 离线清算账户检查异常", exception);
         }
     }
 
@@ -210,6 +307,21 @@ public final class VaultSettlementService {
         if (!server.isPrimaryThread()) {
             throw new IllegalStateException("Vault Economy API 必须在 Paper 主线程调用");
         }
+    }
+
+    private static Result ambiguousFailure(String operation, Throwable throwable) {
+        return Result.failure("Vault " + operation + "调用异常，资金结果需要人工复核: "
+                + safeMessage(throwable), false, true);
+    }
+
+    private static AvailabilityException unavailable(String operation, Throwable throwable) {
+        return new AvailabilityException(operation + ": " + safeMessage(throwable), throwable);
+    }
+
+    private static String safeMessage(Throwable throwable) {
+        String message = throwable.getMessage();
+        return message == null || message.isBlank()
+                ? throwable.getClass().getSimpleName() : message;
     }
 
     public record Result(boolean success, String message, boolean compensated,
@@ -231,6 +343,10 @@ public final class VaultSettlementService {
     private static final class AvailabilityException extends IllegalStateException {
         private AvailabilityException(String message) {
             super(message);
+        }
+
+        private AvailabilityException(String message, Throwable cause) {
+            super(message, cause);
         }
     }
 }

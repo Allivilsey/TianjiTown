@@ -44,9 +44,9 @@ final class RetryingWorkQueue<T> {
         }
         try {
             scheduler.executeAsync(this::drain);
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException | LinkageError exception) {
             draining.set(false);
-            throw exception;
+            throw asRuntimeException(exception);
         }
     }
 
@@ -62,14 +62,15 @@ final class RetryingWorkQueue<T> {
             while ((item = pending.pollFirst()) != null) {
                 try {
                     worker.accept(item);
-                } catch (RuntimeException exception) {
+                } catch (RuntimeException | LinkageError exception) {
                     pending.addFirst(item);
                     failed = true;
+                    RuntimeException failure = asRuntimeException(exception);
                     try {
-                        failureHandler.onFailure(item, exception);
-                    } catch (RuntimeException handlerException) {
-                        exception.addSuppressed(handlerException);
-                        notificationFailure = handlerException;
+                        failureHandler.onFailure(item, failure);
+                    } catch (RuntimeException | LinkageError handlerException) {
+                        failure.addSuppressed(handlerException);
+                        notificationFailure = asRuntimeException(handlerException);
                     }
                     break;
                 }
@@ -103,10 +104,16 @@ final class RetryingWorkQueue<T> {
                 retryScheduled.set(false);
                 flush();
             }, delayTicks);
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException | LinkageError exception) {
             retryScheduled.set(false);
-            throw exception;
+            throw asRuntimeException(exception);
         }
+    }
+
+    private static RuntimeException asRuntimeException(Throwable throwable) {
+        return throwable instanceof RuntimeException exception
+                ? exception
+                : new IllegalStateException("可选依赖链接异常", throwable);
     }
 
     private long retryDelayTicks(int failures) {

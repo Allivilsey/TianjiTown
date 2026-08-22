@@ -12,6 +12,7 @@ import org.bukkit.plugin.Plugin;
 
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 
@@ -20,6 +21,7 @@ public final class ResidenceDeletionGuard implements Listener {
     private final Predicate<String> managedName;
     private final BooleanSupplier internalMutation;
     private final Runnable recovery;
+    private final AtomicBoolean failureLogged = new AtomicBoolean();
 
     public ResidenceDeletionGuard(Plugin owner, Predicate<String> managedName,
                                   BooleanSupplier internalMutation, Runnable recovery) {
@@ -31,12 +33,20 @@ public final class ResidenceDeletionGuard implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onResidenceDelete(ResidenceDeleteEvent event) {
-        protect(event.getResidence(), event.getPlayer(), event::setCancelled);
+        try {
+            protect(event.getResidence(), event.getPlayer(), event::setCancelled);
+        } catch (RuntimeException | LinkageError exception) {
+            failClosed(event::setCancelled, exception);
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onAreaDelete(ResidenceAreaDeleteEvent event) {
-        protect(event.getResidence(), event.getPlayer(), event::setCancelled);
+        try {
+            protect(event.getResidence(), event.getPlayer(), event::setCancelled);
+        } catch (RuntimeException | LinkageError exception) {
+            failClosed(event::setCancelled, exception);
+        }
     }
 
     private void protect(ClaimedResidence residence, Player source,
@@ -53,6 +63,44 @@ public final class ResidenceDeletionGuard implements Listener {
             owner.getLogger().warning(message + " 来源=非玩家，领地=" + residence.getName());
         }
         Server server = owner.getServer();
-        server.getScheduler().runTask(owner, recovery);
+        if (owner.isEnabled()) {
+            server.getScheduler().runTask(owner, () -> {
+                if (!owner.isEnabled()) {
+                    return;
+                }
+                try {
+                    recovery.run();
+                } catch (RuntimeException | LinkageError exception) {
+                    logFailure("Residence 删除后的对账恢复失败", exception);
+                }
+            });
+        }
+    }
+
+    private void failClosed(java.util.function.Consumer<Boolean> cancellation,
+                            Throwable throwable) {
+        try {
+            cancellation.accept(true);
+        } catch (RuntimeException | LinkageError cancellationFailure) {
+            throwable.addSuppressed(cancellationFailure);
+        }
+        logFailure("Residence 删除保护异常，已按失败关闭策略取消删除", throwable);
+    }
+
+    private void logFailure(String context, Throwable throwable) {
+        if (failureLogged.compareAndSet(false, true)) {
+            try {
+                owner.getLogger().severe(context + ": " + safeMessage(throwable)
+                        + "；同类后续错误将被抑制");
+            } catch (RuntimeException | LinkageError ignored) {
+                // 故障记录器失效时仍不能污染 Paper 事件循环。
+            }
+        }
+    }
+
+    private static String safeMessage(Throwable throwable) {
+        String message = throwable.getMessage();
+        return message == null || message.isBlank()
+                ? throwable.getClass().getSimpleName() : message;
     }
 }

@@ -28,11 +28,11 @@ public final class QuickShopHistoryProbe {
 
     public Result inspect(Instant since) {
         Objects.requireNonNull(since, "since");
-        if (!QuickShopTaxAdapter.isNewerThanMinimum(
-                quickShop.getPluginMeta().getVersion())) {
-            return Result.unavailable("QuickShop 版本未通过交易历史适配器验证");
-        }
         try {
+            if (!QuickShopTaxAdapter.isNewerThanMinimum(
+                    quickShop.getPluginMeta().getVersion())) {
+                return Result.unavailable("QuickShop 版本未通过交易历史适配器验证");
+            }
             ClassLoader loader = quickShop.getClass().getClassLoader();
             Class<?> entryPointType = Class.forName(
                     "com.ghostchu.quickshop.QuickShopBukkit", false, loader);

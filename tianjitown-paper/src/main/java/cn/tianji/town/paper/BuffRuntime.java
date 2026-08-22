@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 final class BuffRuntime implements Listener {
@@ -36,6 +37,7 @@ final class BuffRuntime implements Listener {
     private final BuffSettings settings;
     private final NamespacedKey potionKeysKey;
     private final Map<UUID, AppliedEffects> appliedEffects = new HashMap<>();
+    private final AtomicBoolean cleanupFailureLogged = new AtomicBoolean();
 
     BuffRuntime(TianjiTownPlugin plugin, TownRuntime host,
                      CommerceRepository repository, BuffSettings settings) {
@@ -99,8 +101,8 @@ final class BuffRuntime implements Listener {
             if (player.isOnline()) {
                 try {
                     applyBuffs(player, buffs);
-                } catch (RuntimeException exception) {
-                    clearManagedEffects(player);
+                } catch (RuntimeException | LinkageError exception) {
+                    tryClearManagedEffects(player);
                     plugin.getLogger().severe("刷新玩家公共 Buff 失败 " + player.getUniqueId()
                             + ": " + safeMessage(exception));
                 }
@@ -110,7 +112,7 @@ final class BuffRuntime implements Listener {
 
     void clearAll() {
         for (Player player : plugin.getServer().getOnlinePlayers()) {
-            clearManagedEffects(player);
+            tryClearManagedEffects(player);
         }
         appliedEffects.clear();
     }
@@ -118,12 +120,12 @@ final class BuffRuntime implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        plugin.getServer().getScheduler().runTask(plugin, () -> refreshPlayer(player));
+        plugin.runMain(() -> refreshPlayer(player));
     }
 
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
-        plugin.getServer().getScheduler().runTask(plugin, () -> refreshPlayer(event.getPlayer()));
+        plugin.runMain(() -> refreshPlayer(event.getPlayer()));
     }
 
     @EventHandler
@@ -133,7 +135,7 @@ final class BuffRuntime implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        clearManagedEffects(event.getPlayer());
+        tryClearManagedEffects(event.getPlayer());
         appliedEffects.remove(event.getPlayer().getUniqueId());
     }
 
@@ -146,8 +148,8 @@ final class BuffRuntime implements Listener {
                 applyBuffs(player, buffs);
                 refreshAllPlayers();
                 success.accept(purchase);
-            } catch (RuntimeException exception) {
-                clearManagedEffects(player);
+            } catch (RuntimeException | LinkageError exception) {
+                tryClearManagedEffects(player);
                 host.writeAction(player,
                         () -> repository.refundActiveBuff(purchase.buff().buffId(), null,
                                 "SYSTEM", "Buff 应用失败自动补偿: " + safeMessage(exception)),
@@ -237,6 +239,21 @@ final class BuffRuntime implements Listener {
                         definition.effectKey()));
                 if (instance != null) {
                     instance.removeModifier(modifierKey(definition.key()));
+                }
+            }
+        }
+    }
+
+    private void tryClearManagedEffects(Player player) {
+        try {
+            clearManagedEffects(player);
+        } catch (RuntimeException | LinkageError exception) {
+            if (cleanupFailureLogged.compareAndSet(false, true)) {
+                try {
+                    plugin.getLogger().warning("清理玩家公共 Buff 时对象已失效: "
+                            + safeMessage(exception) + "；同类后续错误将被抑制");
+                } catch (RuntimeException | LinkageError ignored) {
+                    // 停服期间记录器失效时继续完成其余清理。
                 }
             }
         }

@@ -61,6 +61,30 @@ class RetryingWorkQueueTest {
         assertEquals(0, reference[0].pendingCount());
     }
 
+    @Test
+    void requeuesWorkAfterLinkageError() {
+        TestScheduler scheduler = new TestScheduler();
+        AtomicInteger attempts = new AtomicInteger();
+        AtomicInteger failures = new AtomicInteger();
+        List<String> completed = new ArrayList<>();
+        RetryingWorkQueue<String> queue = new RetryingWorkQueue<>(scheduler, 5, 30,
+                item -> {
+                    if (attempts.incrementAndGet() == 1) {
+                        throw new NoSuchMethodError("INJECTED");
+                    }
+                    completed.add(item);
+                }, (item, exception) -> failures.incrementAndGet());
+
+        queue.submit("jobs-income-1");
+        assertEquals(1, queue.pendingCount());
+        scheduler.runNextDelayed();
+
+        assertEquals(List.of("jobs-income-1"), completed);
+        assertEquals(2, attempts.get());
+        assertEquals(1, failures.get());
+        assertEquals(0, queue.pendingCount());
+    }
+
     private static final class TestScheduler implements RetryingWorkQueue.Scheduler {
         private final Queue<Runnable> delayed = new ArrayDeque<>();
         private final List<Long> scheduledDelays = new ArrayList<>();

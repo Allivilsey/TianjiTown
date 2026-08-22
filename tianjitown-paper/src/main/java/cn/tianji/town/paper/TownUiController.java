@@ -74,6 +74,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 final class TownUiController implements Listener {
@@ -94,6 +95,7 @@ final class TownUiController implements Listener {
     private final Map<UUID, ChatInputSession> chatInputs = new ConcurrentHashMap<>();
     private final Map<UUID, ReviewReasonSession> reviewReasonInputs = new ConcurrentHashMap<>();
     private final Set<UUID> donationInputs = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean active = new AtomicBoolean(true);
 
     TownUiController(TianjiTownPlugin plugin, TownRuntime runtime, TownActions actions) {
         this.plugin = plugin;
@@ -106,6 +108,30 @@ final class TownUiController implements Listener {
         this.actionKey = new NamespacedKey(plugin, "gui_action");
         this.sessionKey = new NamespacedKey(plugin, "session_id");
         this.targetKey = new NamespacedKey(plugin, "target_id");
+    }
+
+    void close() {
+        if (!active.compareAndSet(true, false)) {
+            return;
+        }
+        List<UUID> viewers = List.copyOf(menuSessions.keySet());
+        menuSessions.clear();
+        formSessions.clear();
+        applicationForms.clear();
+        chatInputs.clear();
+        reviewReasonInputs.clear();
+        donationInputs.clear();
+        for (UUID viewerId : viewers) {
+            try {
+                Player viewer = plugin.getServer().getPlayer(viewerId);
+                if (viewer != null && viewer.isOnline()) {
+                    closeUi(viewer);
+                }
+            } catch (RuntimeException | LinkageError exception) {
+                plugin.getLogger().warning("关闭玩家小镇界面失败 " + viewerId + ": "
+                        + safeMessage(exception));
+            }
+        }
     }
 
     boolean createStation(Player player) {
@@ -445,7 +471,7 @@ final class TownUiController implements Listener {
             event.setUseItemInHand(Event.Result.DENY);
             event.setUseInteractedBlock(Event.Result.DENY);
             // 客户端会在本次交互结束时尝试打开成书，下一刻再打开菜单以覆盖该界面。
-            plugin.getServer().getScheduler().runTask(plugin, () -> openMain(player));
+            plugin.runMain(() -> openMain(player));
             return;
         }
         if (event.isCancelled()) {
@@ -524,13 +550,13 @@ final class TownUiController implements Listener {
         event.setCancelled(true);
         String value = PlainTextComponentSerializer.plainText().serialize(event.message()).strip();
         if (input != null) {
-            plugin.getServer().getScheduler().runTask(plugin,
+            plugin.runMain(
                     () -> applyChatInput(player, input, value));
         } else if (review != null) {
-            plugin.getServer().getScheduler().runTask(plugin,
+            plugin.runMain(
                     () -> applyReviewReason(player, review, value));
         } else {
-            plugin.getServer().getScheduler().runTask(plugin,
+            plugin.runMain(
                     () -> applyDonationInput(player, value));
         }
     }
@@ -2338,6 +2364,9 @@ final class TownUiController implements Listener {
     }
 
     private UUID openMenu(Player player, int size, String title, List<MenuItem> items) {
+        if (!active.get()) {
+            throw new IllegalStateException("玩家界面已经关闭");
+        }
         UUID session = UUID.randomUUID();
         menuSessions.put(player.getUniqueId(), session);
         if (uiMode == TownUiMode.DIALOG) {
@@ -2345,7 +2374,7 @@ final class TownUiController implements Listener {
         } else {
             openLegacyMenu(player, size, title, items, session);
         }
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+        plugin.runMainLater(() -> {
             if (isCurrent(player, session)) {
                 menuSessions.remove(player.getUniqueId());
                 closeUi(player);
@@ -2435,11 +2464,11 @@ final class TownUiController implements Listener {
     private DialogAction dialogAction(Player recipient, UUID session, String action,
                                       String target) {
         return DialogAction.customClick((response, audience) -> {
-            if (!(audience instanceof Player clicked)
+            if (!active.get() || !(audience instanceof Player clicked)
                     || !clicked.getUniqueId().equals(recipient.getUniqueId())) {
                 return;
             }
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            plugin.runMain(() -> {
                 if (!clicked.isOnline() || !isCurrent(clicked, session)) {
                     return;
                 }
@@ -2497,11 +2526,11 @@ final class TownUiController implements Listener {
 
     private ClickEvent callbackEvent(Player recipient, Runnable action) {
         return ClickEvent.callback(audience -> {
-            if (!(audience instanceof Player clicked)
+            if (!active.get() || !(audience instanceof Player clicked)
                     || !clicked.getUniqueId().equals(recipient.getUniqueId())) {
                 return;
             }
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            plugin.runMain(() -> {
                 if (!clicked.isOnline()) {
                     return;
                 }
@@ -2537,6 +2566,12 @@ final class TownUiController implements Listener {
 
     private boolean maintenanceMode() {
         return plugin.getConfig().getBoolean("phase1.maintenance-mode", false);
+    }
+
+    private static String safeMessage(Throwable throwable) {
+        String message = throwable.getMessage();
+        return message == null || message.isBlank()
+                ? throwable.getClass().getSimpleName() : message;
     }
 
     private record MenuItem(int slot, ItemStack item) {

@@ -175,6 +175,37 @@ class VaultSettlementServiceTest {
         assertFalse(depositCalled.get());
     }
 
+    @Test
+    void isolatesProviderLinkageErrorsAndMarksMutatingCallsAmbiguous() {
+        OfflinePlayer settlementAccount = offlinePlayer(UUID.randomUUID(), "Tax");
+        OfflinePlayer player = offlinePlayer(UUID.randomUUID(), "Player");
+        AtomicReference<String> failingMethod = new AtomicReference<>("hasAccount");
+        Economy economy = proxy(Economy.class, (ignored, method, arguments) -> {
+            if (method.getName().equals(failingMethod.get())) {
+                throw new NoSuchMethodError("INJECTED_" + method.getName());
+            }
+            return switch (method.getName()) {
+                case "isEnabled", "hasAccount" -> true;
+                case "fractionalDigits" -> 2;
+                default -> defaultValue(method.getReturnType());
+            };
+        });
+        VaultSettlementService settlement = settlement(economy, settlementAccount);
+
+        VaultSettlementService.Result availability = settlement.checkAvailability();
+
+        assertFalse(availability.success());
+        assertTrue(availability.message().contains("hasAccount"));
+
+        failingMethod.set("withdrawPlayer");
+        VaultSettlementService.Result mutation = settlement.transferFromPlayer(player, 100);
+
+        assertFalse(mutation.success());
+        assertTrue(mutation.compensationRequired());
+        assertFalse(mutation.playerRefundRequired());
+        assertTrue(mutation.message().contains("人工复核"));
+    }
+
     private static VaultSettlementService settlement(Economy economy,
                                                        OfflinePlayer settlementAccount) {
         Plugin provider = proxy(Plugin.class,

@@ -12,6 +12,7 @@ import cn.tianji.town.integrations.worldborder.WorldBorderBoundaryService;
 import cn.tianji.town.storage.database.DatabaseConfig;
 import cn.tianji.town.storage.database.DatabaseGate;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -35,6 +36,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
             new GateStatus(GateStatus.State.CHECKING, List.of("尚未开始")));
     private final AtomicLong lifecycleGeneration = new AtomicLong();
     private final AsyncTaskTracker asyncTasks = new AsyncTaskTracker();
+    private final ThreadLocal<Long> asyncGeneration = new ThreadLocal<>();
+    private final Set<String> periodicFailures = ConcurrentHashMap.newKeySet();
     private volatile DatabaseGate databaseGate;
     private volatile ExecutorService asyncExecutor;
     private volatile TownRuntime townRuntime;
@@ -45,6 +48,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         long generation = lifecycleGeneration.incrementAndGet();
+        periodicFailures.clear();
+        gateStatus.set(new GateStatus(GateStatus.State.CHECKING, List.of("正在执行启动门禁")));
         asyncTasks.startAccepting();
         asyncExecutor = Executors.newFixedThreadPool(4,
                 Thread.ofPlatform().daemon(true).name("TianjiTown-Async-", 0).factory());
@@ -91,6 +96,18 @@ public final class TianjiTownPlugin extends JavaPlugin {
     public void onDisable() {
         lifecycleGeneration.incrementAndGet();
         asyncTasks.stopAccepting();
+        TownUiController ui = townUi;
+        if (ui != null) {
+            try {
+                ui.close();
+            } catch (RuntimeException | LinkageError exception) {
+                getLogger().warning("停服关闭玩家界面失败: " + safeMessage(exception));
+            }
+        }
+        TownAdminTabCompleter completer = townAdminTabCompleter;
+        if (completer != null) {
+            completer.stop();
+        }
         ExecutorService executor = asyncExecutor;
         if (executor != null) {
             executor.shutdown();
@@ -106,12 +123,27 @@ public final class TianjiTownPlugin extends JavaPlugin {
         getServer().getScheduler().cancelTasks(this);
         TownRuntime runtime = townRuntime;
         if (runtime != null) {
-            runtime.bonuses().clearAll();
-            runtime.buffs().clearAll();
+            runtime.sitePolicy().clearPreviews();
+            try {
+                runtime.bonuses().clearAll();
+            } catch (RuntimeException | LinkageError exception) {
+                getLogger().warning("停服清理信标效果失败: " + safeMessage(exception));
+            }
+            try {
+                runtime.buffs().clearAll();
+            } catch (RuntimeException | LinkageError exception) {
+                getLogger().warning("停服清理公共 Buff 失败: " + safeMessage(exception));
+            }
         }
-        if (databaseGate != null) {
-            databaseGate.close();
-            databaseGate = null;
+        DatabaseGate gate = databaseGate;
+        if (gate != null) {
+            try {
+                gate.close();
+            } catch (RuntimeException exception) {
+                getLogger().warning("关闭 SQLite 数据源失败: " + safeMessage(exception));
+            } finally {
+                databaseGate = null;
+            }
         }
         townRuntime = null;
         townActions = null;
@@ -135,28 +167,84 @@ public final class TianjiTownPlugin extends JavaPlugin {
         return townActions;
     }
 
-    void runAsync(Runnable task) {
+    boolean runAsync(Runnable task) {
+        java.util.Objects.requireNonNull(task, "task");
         ExecutorService executor = asyncExecutor;
-        if (executor == null) {
-            return;
+        long generation = lifecycleGeneration.get();
+        if (executor == null || !isCurrentLifecycle(generation)) {
+            return false;
         }
         try {
             executor.execute(() -> {
                 if (!asyncTasks.begin()) {
                     return;
                 }
+                asyncGeneration.set(generation);
                 try {
-                    if (isEnabled()) {
+                    if (isCurrentLifecycle(generation)) {
                         task.run();
                     }
+                } catch (RuntimeException | LinkageError exception) {
+                    if (isCurrentLifecycle(generation)) {
+                        getLogger().severe("异步任务异常，已在插件边界隔离: "
+                                + safeMessage(exception));
+                    }
                 } finally {
+                    asyncGeneration.remove();
                     asyncTasks.complete();
                 }
             });
+            return true;
         } catch (RejectedExecutionException exception) {
             if (!executor.isShutdown()) {
                 throw exception;
             }
+            return false;
+        }
+    }
+
+    boolean runMain(Runnable task) {
+        return scheduleMain(task, 0L);
+    }
+
+    boolean runMainLater(Runnable task, long delayTicks) {
+        if (delayTicks < 0) {
+            throw new IllegalArgumentException("delayTicks 不能为负数");
+        }
+        return scheduleMain(task, delayTicks);
+    }
+
+    private boolean scheduleMain(Runnable task, long delayTicks) {
+        java.util.Objects.requireNonNull(task, "task");
+        Long inheritedGeneration = asyncGeneration.get();
+        long generation = inheritedGeneration == null
+                ? lifecycleGeneration.get() : inheritedGeneration;
+        if (!isCurrentLifecycle(generation)) {
+            return false;
+        }
+        Runnable guarded = () -> {
+            if (!isCurrentLifecycle(generation)) {
+                return;
+            }
+            try {
+                task.run();
+            } catch (RuntimeException | LinkageError exception) {
+                getLogger().severe("主线程回调异常，已在插件边界隔离: "
+                        + safeMessage(exception));
+            }
+        };
+        try {
+            if (delayTicks == 0L) {
+                getServer().getScheduler().runTask(this, guarded);
+            } else {
+                getServer().getScheduler().runTaskLater(this, guarded, delayTicks);
+            }
+            return true;
+        } catch (RuntimeException exception) {
+            if (isCurrentLifecycle(generation)) {
+                getLogger().warning("主线程回调提交失败: " + safeMessage(exception));
+            }
+            return false;
         }
     }
 
@@ -174,16 +262,21 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 + " / Java " + Runtime.version().feature());
         for (String name : List.of("Residence", "Vault", "XConomy", "QuickShop-Hikari",
                 "Jobs", "GlobalMarketPlus", "WorldBorder")) {
-            Plugin dependency = getServer().getPluginManager().getPlugin(name);
-            if (dependency == null) {
-                details.add("FAIL " + name + " 未安装");
+            try {
+                Plugin dependency = getServer().getPluginManager().getPlugin(name);
+                if (dependency == null) {
+                    details.add("FAIL " + name + " 未安装");
+                    healthy = false;
+                } else if (!dependency.isEnabled()) {
+                    details.add("FAIL " + name + " " + dependency.getPluginMeta().getVersion()
+                            + "（未启用）");
+                    healthy = false;
+                } else {
+                    details.add("OK " + name + " " + dependency.getPluginMeta().getVersion());
+                }
+            } catch (RuntimeException | LinkageError exception) {
+                details.add("FAIL " + name + " 依赖探测异常: " + safeMessage(exception));
                 healthy = false;
-            } else if (!dependency.isEnabled()) {
-                details.add("FAIL " + name + " " + dependency.getPluginMeta().getVersion()
-                        + "（未启用）");
-                healthy = false;
-            } else {
-                details.add("OK " + name + " " + dependency.getPluginMeta().getVersion());
             }
         }
         boolean economyHealthy = false;
@@ -222,9 +315,10 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 candidate.close();
                 return;
             }
-            getServer().getScheduler().runTask(this, () -> activateRuntime(candidate, details,
-                    result.detail(), generation));
-        } catch (RuntimeException exception) {
+            if (!runMain(() -> activateRuntime(candidate, details, result.detail(), generation))) {
+                candidate.close();
+            }
+        } catch (RuntimeException | LinkageError exception) {
             if (!isCurrentLifecycle(generation)) {
                 return;
             }
@@ -304,6 +398,41 @@ public final class TianjiTownPlugin extends JavaPlugin {
 
     private void activateRuntime(DatabaseGate candidate, List<String> previousDetails,
                                  String databaseDetail, long generation) {
+        try {
+            activateRuntimeChecked(candidate, previousDetails, databaseDetail, generation);
+        } catch (RuntimeException | LinkageError exception) {
+            HandlerList.unregisterAll(this);
+            getServer().getScheduler().cancelTasks(this);
+            TownRuntime runtime = townRuntime;
+            if (runtime != null) {
+                runtime.sitePolicy().clearPreviews();
+                try {
+                    runtime.bonuses().clearAll();
+                } catch (RuntimeException | LinkageError cleanupFailure) {
+                    exception.addSuppressed(cleanupFailure);
+                }
+                try {
+                    runtime.buffs().clearAll();
+                } catch (RuntimeException | LinkageError cleanupFailure) {
+                    exception.addSuppressed(cleanupFailure);
+                }
+            }
+            townRuntime = null;
+            townActions = null;
+            townUi = null;
+            TownAdminTabCompleter completer = townAdminTabCompleter;
+            if (completer != null) {
+                completer.stop();
+            }
+            candidate.close();
+            List<String> details = new ArrayList<>(previousDetails);
+            details.add("FAIL 业务运行时激活异常: " + safeMessage(exception));
+            lock("业务运行时门禁未通过", details);
+        }
+    }
+
+    private void activateRuntimeChecked(DatabaseGate candidate, List<String> previousDetails,
+                                        String databaseDetail, long generation) {
         if (!isCurrentLifecycle(generation)) {
             candidate.close();
             return;
@@ -325,7 +454,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
             }
             actions = new TownActions(this, runtime);
             ui = new TownUiController(this, runtime, actions);
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException | LinkageError exception) {
             candidate.close();
             List<String> details = new ArrayList<>(previousDetails);
             details.add("FAIL 业务配置、WorldBorder、玩家界面或清算账户: "
@@ -363,7 +492,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(runtime.buffs(), this);
         getServer().getPluginManager().registerEvents(runtime.bonuses(), this);
         getServer().getPluginManager().registerEvents(
-                new ResidenceCommandGuard(managedResidenceNames::contains), this);
+                new ResidenceCommandGuard(this, managedResidenceNames::contains), this);
         getServer().getPluginManager().registerEvents(new ResidenceDeletionGuard(this,
                 managedResidenceNames::contains, residenceProtection::internalMutation,
                 runtime::reconcileAll), this);
@@ -378,28 +507,39 @@ public final class TianjiTownPlugin extends JavaPlugin {
         runtime.recoverStartupState();
         runtime.bonuses().recoverTaggedBeacons();
         runtime.bonuses().refreshIndex();
-        getServer().getScheduler().runTaskTimer(this, runtime::checkRecovery, 20L * 30, 20L * 30);
-        getServer().getScheduler().runTaskTimer(this, runtime::reconcileAll, 20L * 10,
+        getServer().getScheduler().runTaskTimer(this,
+                () -> runPeriodic("SQLite 恢复检查", runtime::checkRecovery),
+                20L * 30, 20L * 30);
+        getServer().getScheduler().runTaskTimer(this,
+                () -> runPeriodic("Residence 对账", runtime::reconcileAll), 20L * 10,
                 20L * 60 * 60);
-        getServer().getScheduler().runTaskTimer(this, runtime::settleDueVotes, 20L * 30,
+        getServer().getScheduler().runTaskTimer(this,
+                () -> runPeriodic("投票结算", runtime::settleDueVotes), 20L * 30,
                 20L * 60);
-        getServer().getScheduler().runTaskTimer(this, runtime::reconcileSettlement, 20L * 20,
+        getServer().getScheduler().runTaskTimer(this,
+                () -> runPeriodic("清算对账", runtime::reconcileSettlement), 20L * 20,
                 20L * 60 * Math.max(1,
                         getConfig().getLong("phase3.reconciliation-interval-minutes", 5)));
-        getServer().getScheduler().runTaskTimer(this, runtime.buffs()::cleanupExpired,
+        getServer().getScheduler().runTaskTimer(this,
+                () -> runPeriodic("Buff 清理", runtime.buffs()::cleanupExpired),
                 20L * 30, 20L * 60);
-        getServer().getScheduler().runTaskTimer(this, runtime.bonuses()::refreshIndex,
+        getServer().getScheduler().runTaskTimer(this,
+                () -> runPeriodic("领地加成索引刷新", runtime.bonuses()::refreshIndex),
                 20L * 15, 20L * 30);
-        getServer().getScheduler().runTaskTimer(this, runtime.bonuses()::refreshBeaconEffects,
+        getServer().getScheduler().runTaskTimer(this,
+                () -> runPeriodic("信标效果刷新", runtime.bonuses()::refreshBeaconEffects),
                 20L * 10, runtime.bonuses().settings().beacon().refreshIntervalTicks());
-        getServer().getScheduler().runTaskTimer(this, runtime.bonuses()::cleanupCounters,
+        getServer().getScheduler().runTaskTimer(this,
+                () -> runPeriodic("返还计数清理", runtime.bonuses()::cleanupCounters),
                 20L * 60, 20L * 60 * 60);
-        getServer().getScheduler().runTaskTimer(this, runtime.bonuses()::diagnoseScheduled,
+        getServer().getScheduler().runTaskTimer(this,
+                () -> runPeriodic("定时诊断", runtime.bonuses()::diagnoseScheduled),
                 20L * 60 * 5, 20L * 60
                         * runtime.bonuses().settings().operations().diagnosticsInterval().toMinutes());
         if (runtime.bonuses().settings().operations().backup().enabled()) {
             getServer().getScheduler().runTaskTimer(this,
-                    runtime.bonuses()::createScheduledBackup, 20L * 60,
+                    () -> runPeriodic("定时备份", runtime.bonuses()::createScheduledBackup),
+                    20L * 60,
                     20L * 60 * 60 * runtime.bonuses().settings().operations()
                             .backup().interval().toHours());
         }
@@ -422,6 +562,19 @@ public final class TianjiTownPlugin extends JavaPlugin {
         return isEnabled() && lifecycleGeneration.get() == generation;
     }
 
+    private void runPeriodic(String name, Runnable task) {
+        try {
+            task.run();
+            periodicFailures.remove(name);
+        } catch (RuntimeException | LinkageError exception) {
+            // 同一周期任务持续失败时只记录首次，避免依赖故障造成日志洪泛。
+            if (periodicFailures.add(name)) {
+                getLogger().severe(name + "失败，后续周期仍会继续尝试: "
+                        + safeMessage(exception));
+            }
+        }
+    }
+
     private WorldBoundaryService worldBoundaryService() {
         try {
             Plugin worldBorder = java.util.Objects.requireNonNull(
@@ -437,5 +590,11 @@ public final class TianjiTownPlugin extends JavaPlugin {
         copy.add("LOCKED " + reason);
         gateStatus.set(new GateStatus(GateStatus.State.LOCKED, copy));
         getLogger().severe(reason + "；TianjiTown 所有写功能保持锁定。使用 /townadmin status 查看详情。");
+    }
+
+    private static String safeMessage(Throwable throwable) {
+        String message = throwable.getMessage();
+        return message == null || message.isBlank()
+                ? throwable.getClass().getSimpleName() : message;
     }
 }

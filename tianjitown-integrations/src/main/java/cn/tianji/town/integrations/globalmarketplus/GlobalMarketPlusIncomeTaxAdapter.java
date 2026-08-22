@@ -1,8 +1,8 @@
 package cn.tianji.town.integrations.globalmarketplus;
 
+import cn.tianji.town.integrations.ThirdPartyEventExecutor;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.event.Event;
-import org.bukkit.event.EventException;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.EventExecutor;
@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -32,6 +33,7 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
             Collections.synchronizedMap(new WeakHashMap<>()));
     private final UUID startupId = UUID.randomUUID();
     private final AtomicLong sequence = new AtomicLong();
+    private final AtomicBoolean eventFailureLogged = new AtomicBoolean();
 
     public GlobalMarketPlusIncomeTaxAdapter(Plugin owner, Plugin globalMarketPlus,
                                             BooleanSupplier taxEnabled,
@@ -53,15 +55,15 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
             Listener listener = new Listener() {
             };
             owner.getServer().getPluginManager().registerEvent(transactionEvent, listener,
-                    EventPriority.MONITOR, filteredExecutor(transactionEvent,
+                    EventPriority.MONITOR, safeExecutor(transactionEvent,
                             this::onTransaction), owner, true);
             owner.getServer().getPluginManager().registerEvent(auctionEvent, listener,
-                    EventPriority.MONITOR, filteredExecutor(auctionEvent, this::onAuction), owner,
+                    EventPriority.MONITOR, safeExecutor(auctionEvent, this::onAuction), owner,
                     true);
             return Capability.success("GlobalMarketPlus "
                     + globalMarketPlus.getPluginMeta().getVersion()
                     + " 成交与拍卖结果事件已通过能力检查");
-        } catch (ReflectiveOperationException | LinkageError exception) {
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             return Capability.failure("GlobalMarketPlus 收入税 API 能力检查失败: "
                     + message(exception));
         }
@@ -92,9 +94,8 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
             long merchandiseId = ((Number) call(merchandise, "getMerchandiseUID")).longValue();
             dispatch(receiver, ((Number) call(result, "getPrice")).doubleValue(),
                     "transaction:" + merchandiseId);
-        } catch (ReflectiveOperationException | RuntimeException exception) {
-            owner.getLogger().severe("GlobalMarketPlus 成交收入税处理失败: "
-                    + message(exception));
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
+            logEventFailure("成交收入税处理失败", exception);
         }
     }
 
@@ -115,9 +116,8 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
             long merchandiseId = ((Number) call(auction, "getMerchandiseUID")).longValue();
             dispatch(receiver, ((Number) call(result, "getPrice")).doubleValue(),
                     "auction:" + merchandiseId);
-        } catch (ReflectiveOperationException | RuntimeException exception) {
-            owner.getLogger().severe("GlobalMarketPlus 拍卖收入税处理失败: "
-                    + message(exception));
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
+            logEventFailure("拍卖收入税处理失败", exception);
         }
     }
 
@@ -137,8 +137,19 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
         OfflinePlayer player = owner.getServer().getOfflinePlayer(receiverId);
         String businessKey = "globalmarketplus:" + startupId + ":"
                 + sequence.incrementAndGet() + ":" + sourceKey;
-        Runnable task = () -> processor.accept(new Earning(player, receiverName, gross,
-                businessKey));
+        Runnable task = () -> {
+            if (!owner.isEnabled()) {
+                return;
+            }
+            try {
+                processor.accept(new Earning(player, receiverName, gross, businessKey));
+            } catch (RuntimeException | LinkageError exception) {
+                logEventFailure("主线程收入税处理失败", exception);
+            }
+        };
+        if (!owner.isEnabled()) {
+            return;
+        }
         if (owner.getServer().isPrimaryThread()) {
             task.run();
         } else {
@@ -175,18 +186,17 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
         currency.getMethod("getName");
     }
 
-    private static EventExecutor filteredExecutor(Class<? extends Event> expectedType,
-                                                   Consumer<Event> consumer) {
-        return (listener, event) -> {
-            if (!expectedType.isInstance(event)) {
-                return;
-            }
-            try {
-                consumer.accept(event);
-            } catch (RuntimeException exception) {
-                throw new EventException(exception);
-            }
-        };
+    private EventExecutor safeExecutor(Class<? extends Event> expectedType,
+                                       Consumer<Event> consumer) {
+        return ThirdPartyEventExecutor.filtered(expectedType, consumer,
+                exception -> logEventFailure("事件边界捕获异常", exception));
+    }
+
+    private void logEventFailure(String context, Throwable throwable) {
+        if (eventFailureLogged.compareAndSet(false, true)) {
+            owner.getLogger().severe("GlobalMarketPlus " + context + ": " + message(throwable)
+                    + "；同类后续错误将被抑制");
+        }
     }
 
     @SuppressWarnings("unchecked")

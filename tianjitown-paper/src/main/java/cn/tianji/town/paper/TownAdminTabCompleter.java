@@ -47,6 +47,14 @@ final class TownAdminTabCompleter implements TabCompleter {
         }
     }
 
+    void stop() {
+        runtime = null;
+        started = false;
+        refreshing.set(false);
+        snapshot.set(TownAdminCompletionEngine.Snapshot.empty());
+        refreshedAt.set(0L);
+    }
+
     @Override
     public @NotNull List<String> onTabComplete(@NotNull CommandSender sender,
                                                @NotNull Command command,
@@ -79,7 +87,9 @@ final class TownAdminTabCompleter implements TabCompleter {
         if (runtime == null || !plugin.isEnabled() || !refreshing.compareAndSet(false, true)) {
             return;
         }
-        plugin.runAsync(this::refreshClaimed);
+        if (!plugin.runAsync(this::refreshClaimed)) {
+            refreshing.set(false);
+        }
     }
 
     private void refreshClaimed() {

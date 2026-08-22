@@ -65,6 +65,8 @@ final class TownBonusRuntime implements Listener {
     private final Map<PlayerEffectKey, ManagedEffect> managedEffects = new HashMap<>();
     private final AtomicBoolean indexRefreshRunning = new AtomicBoolean();
     private final AtomicBoolean diagnosticRunning = new AtomicBoolean();
+    private final AtomicBoolean beaconPlayerFailureLogged = new AtomicBoolean();
+    private final AtomicBoolean beaconCleanupFailureLogged = new AtomicBoolean();
     private final AtomicReference<DiagnosticResult> lastDiagnostic = new AtomicReference<>(
             new DiagnosticResult(false, null, "尚未执行", null));
 
@@ -106,7 +108,7 @@ final class TownBonusRuntime implements Listener {
         if (!plugin.isEnabled() || !indexRefreshRunning.compareAndSet(false, true)) {
             return;
         }
-        plugin.runAsync(() -> {
+        boolean submitted = plugin.runAsync(() -> {
             try {
                 index.set(repository.loadBonusIndex());
             } catch (RuntimeException exception) {
@@ -116,6 +118,9 @@ final class TownBonusRuntime implements Listener {
                 indexRefreshRunning.set(false);
             }
         });
+        if (!submitted) {
+            indexRefreshRunning.set(false);
+        }
     }
 
     void cleanupCounters() {
@@ -138,7 +143,7 @@ final class TownBonusRuntime implements Listener {
         sender.sendMessage("§e正在创建 SQLite 在线备份与配置快照……");
         plugin.runAsync(() -> {
             OnlineBackupService.Result result = backups.create();
-            plugin.getServer().getScheduler().runTask(plugin, () -> sender.sendMessage(
+            plugin.runMain(() -> sender.sendMessage(
                     (result.success() ? "§a" : "§c") + result.detail()
                             + (result.databaseFile() == null ? ""
                             : "；文件=" + result.databaseFile())));
@@ -176,25 +181,28 @@ final class TownBonusRuntime implements Listener {
         sender.sendMessage("§e正在检查 SQLite、Residence、Vault 与 QuickShop 历史……");
         long capturedExternal = externalBalance;
         Instant since = Instant.now().minus(java.time.Duration.ofDays(days));
-        plugin.runAsync(() -> {
+        boolean submitted = plugin.runAsync(() -> {
             try {
                 TownBonusRepository.DiagnosticSnapshot database = repository.diagnose(since);
                 String schemaVersion = host.database().schemaVersion();
                 EconomyRepository.Reconciliation settlement = capturedExternal < 0 ? null
                         : host.finance().inspectSettlement(capturedExternal);
                 QuickShopHistoryProbe.Result history = quickShopHistory.inspect(since);
-                plugin.getServer().getScheduler().runTask(plugin,
+                plugin.runMain(
                         () -> finishDiagnostic(sender, days, database, schemaVersion, settlement,
                                 history));
-            } catch (RuntimeException exception) {
+            } catch (RuntimeException | LinkageError exception) {
                 diagnosticRunning.set(false);
                 DiagnosticResult failed = new DiagnosticResult(false, Instant.now(),
                         "统一诊断失败: " + safeMessage(exception), null);
                 lastDiagnostic.set(failed);
-                plugin.getServer().getScheduler().runTask(plugin,
+                plugin.runMain(
                         () -> sender.sendMessage("§c" + failed.detail()));
             }
         });
+        if (!submitted) {
+            diagnosticRunning.set(false);
+        }
     }
 
     void diagnoseScheduled() {
@@ -212,32 +220,54 @@ final class TownBonusRuntime implements Listener {
         TownBonusSettings.BeaconEnhancement config = settings.beacon();
         TownBonusRepository.BonusIndex snapshot = index.get();
         Map<PlayerEffectKey, Integer> desiredEffects = new HashMap<>();
+        boolean playerFailure = false;
         for (Player player : plugin.getServer().getOnlinePlayers()) {
-            World world = player.getWorld();
-            if (!config.allowsWorld(world.getName())) {
-                continue;
-            }
-            UUID townId = snapshot.territories().get(new TownBonusRepository.ChunkKey(
-                    world.getUID(), player.getChunk().getX(), player.getChunk().getZ()));
-            String residenceName = townId == null ? null : snapshot.residenceNames().get(townId);
-            Map<String, Integer> effects = townId == null ? null
-                    : snapshot.beaconEffects().get(townId);
-            Location location = player.getLocation();
-            if (residenceName == null || effects == null || !host.landProtection().contains(
-                    residenceName, world.getUID(), location.getBlockX(), location.getBlockY(),
-                    location.getBlockZ())) {
-                continue;
-            }
-            for (Map.Entry<String, Integer> effect : effects.entrySet()) {
-                PotionEffectType type = PotionEffectType.getByKey(
-                        org.bukkit.NamespacedKey.fromString(effect.getKey()));
-                if (type != null) {
-                    desiredEffects.merge(new PlayerEffectKey(player.getUniqueId(), type),
-                            effect.getValue(), Math::max);
+            try {
+                collectDesiredEffects(player, config, snapshot, desiredEffects);
+            } catch (RuntimeException | LinkageError exception) {
+                playerFailure = true;
+                if (beaconPlayerFailureLogged.compareAndSet(false, true)) {
+                    plugin.getLogger().warning("信标刷新遇到已失效的玩家、世界或依赖对象，"
+                            + "已跳过该对象: " + safeMessage(exception));
                 }
             }
         }
+        if (!playerFailure) {
+            beaconPlayerFailureLogged.set(false);
+        }
         applyManagedEffects(desiredEffects, config);
+    }
+
+    private void collectDesiredEffects(Player player,
+                                       TownBonusSettings.BeaconEnhancement config,
+                                       TownBonusRepository.BonusIndex snapshot,
+                                       Map<PlayerEffectKey, Integer> desiredEffects) {
+        if (!player.isOnline()) {
+            return;
+        }
+        World world = player.getWorld();
+        if (!config.allowsWorld(world.getName())) {
+            return;
+        }
+        UUID townId = snapshot.territories().get(new TownBonusRepository.ChunkKey(
+                world.getUID(), player.getChunk().getX(), player.getChunk().getZ()));
+        String residenceName = townId == null ? null : snapshot.residenceNames().get(townId);
+        Map<String, Integer> effects = townId == null ? null
+                : snapshot.beaconEffects().get(townId);
+        Location location = player.getLocation();
+        if (residenceName == null || effects == null || !host.landProtection().contains(
+                residenceName, world.getUID(), location.getBlockX(), location.getBlockY(),
+                location.getBlockZ())) {
+            return;
+        }
+        for (Map.Entry<String, Integer> effect : effects.entrySet()) {
+            PotionEffectType type = PotionEffectType.getByKey(
+                    org.bukkit.NamespacedKey.fromString(effect.getKey()));
+            if (type != null) {
+                desiredEffects.merge(new PlayerEffectKey(player.getUniqueId(), type),
+                        effect.getValue(), Math::max);
+            }
+        }
     }
 
     void clearAll() {
@@ -331,10 +361,19 @@ final class TownBonusRuntime implements Listener {
                 || !(inventory.getHolder() instanceof Beacon beacon)) {
             return;
         }
-        plugin.getServer().getScheduler().runTask(plugin, () -> recordBeaconEffects(beacon));
+        plugin.runMain(() -> recordBeaconEffects(beacon));
     }
 
     private void recordBeaconEffects(Beacon beacon) {
+        try {
+            recordBeaconEffectsChecked(beacon);
+        } catch (RuntimeException | LinkageError exception) {
+            plugin.getLogger().warning("信标对象在延迟回调前已失效，已跳过记录: "
+                    + safeMessage(exception));
+        }
+    }
+
+    private void recordBeaconEffectsChecked(Beacon beacon) {
         Block block = beacon.getBlock();
         TownBonusRepository.BonusIndex snapshot = index.get();
         UUID townId = snapshot.territories().get(new TownBonusRepository.ChunkKey(
@@ -382,7 +421,22 @@ final class TownBonusRuntime implements Listener {
     }
 
     private void clearManagedEffects() {
-        managedEffects.forEach(this::removeManagedEffect);
+        boolean failed = false;
+        for (Map.Entry<PlayerEffectKey, ManagedEffect> entry
+                : List.copyOf(managedEffects.entrySet())) {
+            try {
+                removeManagedEffect(entry.getKey(), entry.getValue());
+            } catch (RuntimeException | LinkageError exception) {
+                if (!failed && beaconCleanupFailureLogged.compareAndSet(false, true)) {
+                    plugin.getLogger().warning("清理托管信标效果时对象已失效: "
+                            + safeMessage(exception));
+                }
+                failed = true;
+            }
+        }
+        if (!failed) {
+            beaconCleanupFailureLogged.set(false);
+        }
         managedEffects.clear();
     }
 

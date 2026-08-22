@@ -85,23 +85,35 @@ final class TownRuntime {
         this.pendingTaxes = new RetryingWorkQueue<>(new RetryingWorkQueue.Scheduler() {
             @Override
             public void executeAsync(Runnable task) {
-                plugin.runAsync(task);
+                if (!plugin.runAsync(task)) {
+                    throw new java.util.concurrent.RejectedExecutionException(
+                            "插件生命周期已停止");
+                }
             }
 
             @Override
             public void schedule(Runnable task, long delayTicks) {
-                plugin.getServer().getScheduler().runTaskLater(plugin, task, delayTicks);
+                if (!plugin.runMainLater(task, delayTicks)) {
+                    throw new java.util.concurrent.RejectedExecutionException(
+                            "插件生命周期已停止");
+                }
             }
         }, 20L * 5, 20L * 30, this::recordQuickShopTax, this::handleQuickShopTaxFailure);
         this.pendingIncomeTaxes = new RetryingWorkQueue<>(new RetryingWorkQueue.Scheduler() {
             @Override
             public void executeAsync(Runnable task) {
-                plugin.runAsync(task);
+                if (!plugin.runAsync(task)) {
+                    throw new java.util.concurrent.RejectedExecutionException(
+                            "插件生命周期已停止");
+                }
             }
 
             @Override
             public void schedule(Runnable task, long delayTicks) {
-                plugin.getServer().getScheduler().runTaskLater(plugin, task, delayTicks);
+                if (!plugin.runMainLater(task, delayTicks)) {
+                    throw new java.util.concurrent.RejectedExecutionException(
+                            "插件生命周期已停止");
+                }
             }
         }, 20L * 5, 20L * 30, this::recordExternalIncomeTax,
                 this::handleExternalIncomeTaxFailure);
@@ -112,7 +124,7 @@ final class TownRuntime {
         return new DonationCompensationCoordinator(new DonationCompensationCoordinator.Scheduler() {
             @Override
             public void runMainLater(Runnable task, long delayTicks) {
-                plugin.getServer().getScheduler().runTaskLater(plugin, task, delayTicks);
+                plugin.runMainLater(task, delayTicks);
             }
 
             @Override
@@ -158,7 +170,7 @@ final class TownRuntime {
 
     private void reconcileSettlementAfterCompensation(
             EconomyRepository.EconomyOperation operation) {
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        plugin.runMain(() -> {
             long externalBalance;
             try {
                 externalBalance = settlement.balanceMinor();
@@ -287,7 +299,7 @@ final class TownRuntime {
                 List<EconomyRepository.ExpansionOperation> expansions =
                         finance.pendingExpansions();
                 if (!expansions.isEmpty()) {
-                    plugin.getServer().getScheduler().runTask(plugin,
+                    plugin.runMain(
                             () -> recoverExpansions(expansions));
                 }
             } catch (RuntimeException exception) {
@@ -307,7 +319,7 @@ final class TownRuntime {
                         .map(town -> new TownMembers(town, repository.listMemberIds(town.id()),
                                 finance.territoryUnits(town.id())))
                         .toList();
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                plugin.runMain(() -> {
                     for (TownMembers state : states) {
                         List<LandProtectionService.Area> areas = state.units().stream()
                                 .filter(unit -> unit.projectionStatus().equals("ACTIVE"))
@@ -361,7 +373,7 @@ final class TownRuntime {
                         .toList();
                 databaseAvailable.set(true);
                 if (!changedMemberships.isEmpty()) {
-                    plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    plugin.runMain(() -> {
                         for (TownMembers state : changedMemberships) {
                             reconcile(org.bukkit.Bukkit.getConsoleSender(), state.town(),
                                     state.members(), true);
@@ -426,7 +438,7 @@ final class TownRuntime {
                         ? application.applicationFeeMinor()
                         : APPLICATION_FEE.movePointRight(settlement.scale())
                         .longValueExact();
-                plugin.getServer().getScheduler().runTask(plugin, () -> chargeAndBeginProvision(
+                plugin.runMain(() -> chargeAndBeginProvision(
                         sender, application, reviewerId, reviewerName, reason, idempotencyKey,
                         feeMinor, completion));
             } catch (RuntimeException exception) {
@@ -457,10 +469,10 @@ final class TownRuntime {
                         application.id(), reviewerId, reviewerName, reason, idempotencyKey,
                         feeMinor);
                 databaseAvailable.set(true);
-                plugin.getServer().getScheduler().runTask(plugin,
+                plugin.runMain(
                         () -> projectProvision(sender, application.id(), provisioning, completion));
             } catch (RuntimeException exception) {
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                plugin.runMain(() -> {
                     if (needsCharge) {
                         VaultSettlementService.Result refund = settlement.transferToPlayer(
                                 plugin.getServer().getOfflinePlayer(application.applicantId()),
@@ -513,7 +525,7 @@ final class TownRuntime {
                 refreshTaxPolicies();
             }
             databaseAvailable.set(true);
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            plugin.runMain(() -> {
                 sender.sendMessage(completed ? "§a小镇已批准并完成 3×3 领地投影。"
                         : "§c自动创建失败，申请已进入 PROVISION_FAILED: " + completedDetail);
                 completion.accept(application);
@@ -542,7 +554,7 @@ final class TownRuntime {
                         .map(unit -> new LandProtectionService.Area(unit.residenceAreaName(),
                                 unit.unit().territory())).toList();
                 refreshTaxPolicies();
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                plugin.runMain(() -> {
                     LandProtectionService.Result result;
                     try {
                         result = landProtection.reconcile(town.residenceName(), areas, members,
@@ -829,7 +841,7 @@ final class TownRuntime {
                                     preview.candidate(), preview.residenceName(), preview.areaName(),
                                     preview.priceMinor(), mayor.getUniqueId(), mayor.getName(),
                                     "expansion:" + UUID.randomUUID()));
-                    plugin.getServer().getScheduler().runTask(plugin,
+                    plugin.runMain(
                             () -> projectExpansion(mayor, operation, success, failure));
                 } catch (RuntimeException exception) {
                     reportActionFailure(exception, failure);
@@ -864,7 +876,7 @@ final class TownRuntime {
         plugin.runAsync(() -> {
             try {
                 List<UUID> loaded = repository.listMemberIds(operation.townId());
-                plugin.getServer().getScheduler().runTask(plugin,
+                plugin.runMain(
                         () -> addExpansionArea(sender, operation, loaded, success, failure));
             } catch (RuntimeException exception) {
                 reportActionFailure(exception, failure);
@@ -894,7 +906,7 @@ final class TownRuntime {
                 } else {
                     finance.refundExpansion(operation.expansionId(), result.message());
                 }
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                plugin.runMain(() -> {
                     if (result.success()) {
                         success.accept(operation);
                     } else {
@@ -913,7 +925,7 @@ final class TownRuntime {
             plugin.runAsync(() -> {
                 try {
                     List<UUID> members = repository.listMemberIds(expansion.townId());
-                    plugin.getServer().getScheduler().runTask(plugin,
+                    plugin.runMain(
                             () -> addExpansionArea(org.bukkit.Bukkit.getConsoleSender(),
                                     expansion, members,
                                     ignored -> plugin.getLogger().info(
@@ -952,7 +964,7 @@ final class TownRuntime {
         plugin.runAsync(() -> {
             try {
                 EconomyRepository.EconomyOperation operation = prepare.get();
-                plugin.getServer().getScheduler().runTask(plugin,
+                plugin.runMain(
                         () -> preflightExternalOperation(sender, operation, external, success,
                                 failure));
             } catch (RuntimeException exception) {
@@ -982,7 +994,7 @@ final class TownRuntime {
         plugin.runAsync(() -> {
             try {
                 finance.markOperationExternalApplied(operation.operationId());
-                plugin.getServer().getScheduler().runTask(plugin,
+                plugin.runMain(
                         () -> applyExternalOperation(sender, operation, external, success,
                                 failure));
             } catch (RuntimeException exception) {
@@ -1014,7 +1026,7 @@ final class TownRuntime {
             try {
                 EconomyRepository.LedgerMutation mutation =
                         finance.completeOperation(operation.operationId());
-                plugin.getServer().getScheduler().runTask(plugin, () -> success.accept(mutation));
+                plugin.runMain(() -> success.accept(mutation));
             } catch (RuntimeException exception) {
                 reportActionFailure(exception, failure);
             }
@@ -1045,7 +1057,7 @@ final class TownRuntime {
                 } else {
                     finance.cancelOperation(operation.operationId(), result.message());
                 }
-                plugin.getServer().getScheduler().runTask(plugin, () -> failure.accept(
+                plugin.runMain(() -> failure.accept(
                         new IllegalStateException(result.message()
                                 + compensationHint(operation, result))));
             } catch (RuntimeException exception) {
@@ -1097,7 +1109,7 @@ final class TownRuntime {
             try {
                 T result = operation.get();
                 databaseAvailable.set(true);
-                plugin.getServer().getScheduler().runTask(plugin, () -> success.accept(result));
+                plugin.runMain(() -> success.accept(result));
             } catch (RuntimeException exception) {
                 handleFailure(sender, exception);
             }
@@ -1115,17 +1127,17 @@ final class TownRuntime {
             try {
                 T result = operation.get();
                 databaseAvailable.set(true);
-                plugin.getServer().getScheduler().runTask(plugin, () -> success.accept(result));
+                plugin.runMain(() -> success.accept(result));
             } catch (RuntimeException exception) {
                 markStorageFailure(exception);
-                plugin.getServer().getScheduler().runTask(plugin, () -> failure.accept(exception));
+                plugin.runMain(() -> failure.accept(exception));
             }
         });
     }
 
     private void handleFailure(CommandSender sender, RuntimeException exception) {
         markStorageFailure(exception);
-        plugin.getServer().getScheduler().runTask(plugin,
+        plugin.runMain(
                 () -> sender.sendMessage("§c操作失败: " + safeMessage(exception)));
     }
 
@@ -1135,7 +1147,7 @@ final class TownRuntime {
         if (plugin.getServer().isPrimaryThread()) {
             failure.accept(exception);
         } else {
-            plugin.getServer().getScheduler().runTask(plugin, () -> failure.accept(exception));
+            plugin.runMain(() -> failure.accept(exception));
         }
     }
 

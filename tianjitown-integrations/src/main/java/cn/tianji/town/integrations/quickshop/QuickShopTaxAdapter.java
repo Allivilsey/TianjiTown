@@ -1,9 +1,9 @@
 package cn.tianji.town.integrations.quickshop;
 
 import cn.tianji.town.core.economy.MoneyAmount;
+import cn.tianji.town.integrations.ThirdPartyEventExecutor;
 import org.bukkit.Location;
 import org.bukkit.event.Event;
-import org.bukkit.event.EventException;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.EventExecutor;
@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -44,6 +45,7 @@ public final class QuickShopTaxAdapter {
     private final Set<Event> seenSuccessEvents = Collections.newSetFromMap(
             Collections.synchronizedMap(new WeakHashMap<>()));
     private final AtomicLong successSequence = new AtomicLong();
+    private final AtomicBoolean eventFailureLogged = new AtomicBoolean();
     private final UUID startupId = UUID.randomUUID();
     private Object settlementUser;
     private Class<?> qUserType;
@@ -66,13 +68,13 @@ public final class QuickShopTaxAdapter {
     }
 
     public Capability register() {
-        String version = quickShop.getPluginMeta().getVersion();
-        if (!isNewerThanMinimum(version)) {
-            return Capability.failure("QuickShop-Hikari 必须高于 "
-                    + MINIMUM_EXCLUSIVE_VERSION + "，当前为 " + version
-                    + "；动态税已保持关闭");
-        }
         try {
+            String version = quickShop.getPluginMeta().getVersion();
+            if (!isNewerThanMinimum(version)) {
+                return Capability.failure("QuickShop-Hikari 必须高于 "
+                        + MINIMUM_EXCLUSIVE_VERSION + "，当前为 " + version
+                        + "；动态税已保持关闭");
+            }
             ClassLoader loader = quickShop.getClass().getClassLoader();
             Class<? extends Event> taxEvent = eventClass(loader, TAX_EVENT);
             Class<? extends Event> transactionEvent = eventClass(loader, TRANSACTION_EVENT);
@@ -85,27 +87,27 @@ public final class QuickShopTaxAdapter {
             Listener listener = new Listener() {
             };
             owner.getServer().getPluginManager().registerEvent(taxEvent, listener,
-                    EventPriority.HIGHEST, filteredExecutor(taxEvent, this::onTax), owner, true);
+                    EventPriority.HIGHEST, safeExecutor(taxEvent, this::onTax), owner, true);
             owner.getServer().getPluginManager().registerEvent(transactionEvent, listener,
-                    EventPriority.HIGHEST, filteredExecutor(transactionEvent,
+                    EventPriority.HIGHEST, safeExecutor(transactionEvent,
                             this::onTransaction), owner, true);
             owner.getServer().getPluginManager().registerEvent(successEvent, listener,
-                    EventPriority.MONITOR, filteredExecutor(successEvent, this::onSuccess), owner,
+                    EventPriority.MONITOR, safeExecutor(successEvent, this::onSuccess), owner,
                     true);
             return Capability.success("QuickShop " + version
                     + " 税率、交易账户、精确事件分流和成功事件签名已通过能力检查");
-        } catch (ReflectiveOperationException | LinkageError exception) {
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             return Capability.failure("QuickShop 税务 API 能力检查失败: "
                     + exception.getClass().getSimpleName() + ": " + exception.getMessage());
         }
     }
 
     private void onTax(Event event) {
-        if (!taxEnabled.getAsBoolean()) {
-            pending.remove();
-            return;
-        }
         try {
+            if (!taxEnabled.getAsBoolean()) {
+                pending.remove();
+                return;
+            }
             Object shop = call(event, "getShop");
             Object interacting = call(event, "getUser");
             boolean selling = (boolean) call(shop, "isSelling");
@@ -124,22 +126,22 @@ public final class QuickShopTaxAdapter {
                     (UUID) call(shop, "getRuntimeRandomUniqueId"),
                     ((Number) call(shop, "getShopId")).longValue(),
                     selling ? "SELLING" : "BUYING", basisPoints));
-        } catch (ReflectiveOperationException | RuntimeException exception) {
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             pending.remove();
-            owner.getLogger().severe("QuickShop 税率事件处理失败: " + message(exception));
+            logEventFailure("税率事件处理失败", exception);
         }
     }
 
     private void onTransaction(Event event) {
-        if (!taxEnabled.getAsBoolean()) {
-            pending.remove();
-            return;
-        }
-        PendingTax tax = pending.get();
-        if (tax == null) {
-            return;
-        }
         try {
+            if (!taxEnabled.getAsBoolean()) {
+                pending.remove();
+                return;
+            }
+            PendingTax tax = pending.get();
+            if (tax == null) {
+                return;
+            }
             Object transaction = call(event, "getTransaction");
             Object recipient = call(transaction, "to");
             UUID recipientId = recipient == null ? null : (UUID) call(recipient, "getUniqueId");
@@ -147,23 +149,23 @@ public final class QuickShopTaxAdapter {
                 return;
             }
             call(transaction, "taxer", qUserType, settlementUser);
-        } catch (ReflectiveOperationException | RuntimeException exception) {
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             pending.remove();
-            owner.getLogger().severe("QuickShop 税款账户切换失败: " + message(exception));
+            logEventFailure("税款账户切换失败", exception);
         }
     }
 
     private void onSuccess(Event event) {
-        if (!taxEnabled.getAsBoolean()) {
-            pending.remove();
-            return;
-        }
-        PendingTax tax = pending.get();
-        pending.remove();
-        if (tax == null || !seenSuccessEvents.add(event)) {
-            return;
-        }
         try {
+            if (!taxEnabled.getAsBoolean()) {
+                pending.remove();
+                return;
+            }
+            PendingTax tax = pending.get();
+            pending.remove();
+            if (tax == null || !seenSuccessEvents.add(event)) {
+                return;
+            }
             Object shop = call(event, "getShop");
             Object purchaser = call(event, "getPurchaser");
             UUID shopRuntimeId = (UUID) call(shop, "getRuntimeRandomUniqueId");
@@ -186,8 +188,8 @@ public final class QuickShopTaxAdapter {
             successConsumer.accept(new SuccessfulTax(tax.townId(), businessKey, tax.shopId(),
                     tax.shopType(), tax.receiverId(), tax.interactingId(), gross.minorUnits(),
                     tax.basisPoints(), taxAmount.minorUnits(), location.getWorld().getName()));
-        } catch (ReflectiveOperationException | RuntimeException exception) {
-            owner.getLogger().severe("QuickShop 成功交易入账事件处理失败: " + message(exception));
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
+            logEventFailure("成功交易入账事件处理失败", exception);
         }
     }
 
@@ -198,20 +200,17 @@ public final class QuickShopTaxAdapter {
         return MoneyAmount.rounded(BigDecimal.valueOf(amount), moneyScale, RoundingMode.HALF_UP);
     }
 
-    static EventExecutor filteredExecutor(Class<? extends Event> expectedType,
-                                            Consumer<Event> consumer) {
-        Objects.requireNonNull(expectedType, "expectedType");
-        Objects.requireNonNull(consumer, "consumer");
-        return (listener, event) -> {
-            if (!expectedType.isInstance(event)) {
-                return;
-            }
-            try {
-                consumer.accept(event);
-            } catch (RuntimeException exception) {
-                throw new EventException(exception);
-            }
-        };
+    private EventExecutor safeExecutor(Class<? extends Event> expectedType,
+                                       Consumer<Event> consumer) {
+        return ThirdPartyEventExecutor.filtered(expectedType, consumer,
+                exception -> logEventFailure("事件边界捕获异常", exception));
+    }
+
+    private void logEventFailure(String context, Throwable throwable) {
+        if (eventFailureLogged.compareAndSet(false, true)) {
+            owner.getLogger().severe("QuickShop " + context + ": " + message(throwable)
+                    + "；同类后续错误将被抑制");
+        }
     }
 
     private static void verifyApi(Class<? extends Event> taxEvent,

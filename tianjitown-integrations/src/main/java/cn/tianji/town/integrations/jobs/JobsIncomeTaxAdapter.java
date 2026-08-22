@@ -1,8 +1,8 @@
 package cn.tianji.town.integrations.jobs;
 
+import cn.tianji.town.integrations.ThirdPartyEventExecutor;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.event.Event;
-import org.bukkit.event.EventException;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.EventExecutor;
@@ -11,6 +11,7 @@ import org.bukkit.plugin.Plugin;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
@@ -20,7 +21,8 @@ public final class JobsIncomeTaxAdapter {
     private final Plugin jobs;
     private final BooleanSupplier taxEnabled;
     private final Function<Earning, TaxResult> processor;
-    private boolean warnedAsync;
+    private final AtomicBoolean warnedAsync = new AtomicBoolean();
+    private final AtomicBoolean eventFailureLogged = new AtomicBoolean();
 
     public JobsIncomeTaxAdapter(Plugin owner, Plugin jobs, BooleanSupplier taxEnabled,
                                 Function<Earning, TaxResult> processor) {
@@ -40,27 +42,27 @@ public final class JobsIncomeTaxAdapter {
             Listener listener = new Listener() {
             };
             owner.getServer().getPluginManager().registerEvent(eventType, listener,
-                    EventPriority.HIGHEST, filteredExecutor(eventType, this::onPayment), owner,
+                    EventPriority.HIGHEST, safeExecutor(eventType, this::onPayment), owner,
                     true);
             return Capability.success("Jobs " + jobs.getPluginMeta().getVersion()
                     + " 收入事件与可变付款金额已通过能力检查");
-        } catch (ReflectiveOperationException | LinkageError exception) {
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             return Capability.failure("Jobs 收入税 API 能力检查失败: " + message(exception));
         }
     }
 
     private void onPayment(Event event) {
-        if (!taxEnabled.getAsBoolean()) {
-            return;
-        }
-        if (event.isAsynchronous()) {
-            if (!warnedAsync) {
-                warnedAsync = true;
-                owner.getLogger().severe("Jobs 在异步线程派发付款事件，已跳过收入税以保护 Vault 一致性");
-            }
-            return;
-        }
         try {
+            if (!taxEnabled.getAsBoolean()) {
+                return;
+            }
+            if (event.isAsynchronous()) {
+                if (warnedAsync.compareAndSet(false, true)) {
+                    owner.getLogger().severe(
+                            "Jobs 在异步线程派发付款事件，已跳过收入税以保护 Vault 一致性");
+                }
+                return;
+            }
             OfflinePlayer player = (OfflinePlayer) call(event, "getPlayer");
             double gross = ((Number) call(event, "getAmount")).doubleValue();
             if (player == null || !Double.isFinite(gross) || gross <= 0) {
@@ -70,24 +72,22 @@ public final class JobsIncomeTaxAdapter {
             if (result.applied()) {
                 call(event, "setAmount", double.class, result.netAmount());
             }
-        } catch (ReflectiveOperationException | RuntimeException exception) {
-            owner.getLogger().severe("Jobs 收入税处理失败，已保留玩家原始收入: "
-                    + message(exception));
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
+            logEventFailure("收入税处理失败，已保留玩家原始收入", exception);
         }
     }
 
-    private static EventExecutor filteredExecutor(Class<? extends Event> expectedType,
-                                                   java.util.function.Consumer<Event> consumer) {
-        return (listener, event) -> {
-            if (!expectedType.isInstance(event)) {
-                return;
-            }
-            try {
-                consumer.accept(event);
-            } catch (RuntimeException exception) {
-                throw new EventException(exception);
-            }
-        };
+    private EventExecutor safeExecutor(Class<? extends Event> expectedType,
+                                       java.util.function.Consumer<Event> consumer) {
+        return ThirdPartyEventExecutor.filtered(expectedType, consumer,
+                exception -> logEventFailure("事件边界捕获异常", exception));
+    }
+
+    private void logEventFailure(String context, Throwable throwable) {
+        if (eventFailureLogged.compareAndSet(false, true)) {
+            owner.getLogger().severe("Jobs " + context + ": " + message(throwable)
+                    + "；同类后续错误将被抑制");
+        }
     }
 
     @SuppressWarnings("unchecked")
