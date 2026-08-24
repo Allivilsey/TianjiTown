@@ -174,6 +174,15 @@ class EconomyRepositorySqliteTest {
                     .toList();
             assertTrue(recentEntryTypes.contains("JOBS_TAX"));
             assertTrue(recentEntryTypes.contains("SERVER_TAX_SUBSIDY"));
+            EconomyRepository.LedgerEntry displayedTax = repository.displayLedger(
+                            townId, 0, 45).stream()
+                    .filter(entry -> entry.businessKey().equals(jobsTax.businessKey()))
+                    .findFirst().orElseThrow();
+            assertEquals("JOBS_TAX", displayedTax.entryType());
+            assertEquals(400, displayedTax.amountMinor());
+            assertTrue(displayedTax.note().contains("服务器等额补贴"));
+            assertFalse(repository.displayLedger(townId, 0, 45).stream()
+                    .anyMatch(entry -> entry.entryType().equals("SERVER_TAX_SUBSIDY")));
         }
     }
 

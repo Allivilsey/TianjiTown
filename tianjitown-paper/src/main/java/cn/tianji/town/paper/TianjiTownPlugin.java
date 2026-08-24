@@ -552,7 +552,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         details.add((globalMarketCapability.available() ? "OK " : "WARN ")
                 + globalMarketCapability.detail());
         details.add("OK WorldBorder 边界 API 已接入");
-        details.add("OK 玩家界面=" + TownUiMode.load(getConfig()));
+        details.add("OK 玩家界面=DIALOG");
         details.add("OK 建筑返还、信标增强、统一诊断与定时备份已启用");
         gateStatus.set(new GateStatus(GateStatus.State.READY, details));
         getLogger().info("业务运行时启动完成；玩家入口仅限服务台和小镇手册。");

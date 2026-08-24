@@ -11,6 +11,9 @@ import org.bukkit.plugin.Plugin;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
@@ -21,7 +24,6 @@ public final class JobsIncomeTaxAdapter {
     private final Plugin jobs;
     private final BooleanSupplier taxEnabled;
     private final Function<Earning, TaxResult> processor;
-    private final AtomicBoolean warnedAsync = new AtomicBoolean();
     private final AtomicBoolean eventFailureLogged = new AtomicBoolean();
 
     public JobsIncomeTaxAdapter(Plugin owner, Plugin jobs, BooleanSupplier taxEnabled,
@@ -45,7 +47,7 @@ public final class JobsIncomeTaxAdapter {
                     EventPriority.HIGHEST, safeExecutor(eventType, this::onPayment), owner,
                     true);
             return Capability.success("Jobs " + jobs.getPluginMeta().getVersion()
-                    + " 收入事件与可变付款金额已通过能力检查");
+                    + " 收入事件、异步转主线程结算与可变付款金额已通过能力检查");
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             return Capability.failure("Jobs 收入税 API 能力检查失败: " + message(exception));
         }
@@ -56,24 +58,42 @@ public final class JobsIncomeTaxAdapter {
             if (!taxEnabled.getAsBoolean()) {
                 return;
             }
-            if (event.isAsynchronous()) {
-                if (warnedAsync.compareAndSet(false, true)) {
-                    owner.getLogger().severe(
-                            "Jobs 在异步线程派发付款事件，已跳过收入税以保护 Vault 一致性");
-                }
-                return;
-            }
             OfflinePlayer player = (OfflinePlayer) call(event, "getPlayer");
             double gross = ((Number) call(event, "getAmount")).doubleValue();
             if (player == null || !Double.isFinite(gross) || gross <= 0) {
                 return;
             }
-            TaxResult result = processor.apply(new Earning(player, gross));
+            TaxResult result = process(new Earning(player, gross));
             if (result.applied()) {
                 call(event, "setAmount", double.class, result.netAmount());
             }
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             logEventFailure("收入税处理失败，已保留玩家原始收入", exception);
+        }
+    }
+
+    private TaxResult process(Earning earning) {
+        if (owner.getServer().isPrimaryThread()) {
+            return processor.apply(earning);
+        }
+        try {
+            // Jobs 的付款事件固定为异步事件，Vault 操作必须切回服务器主线程。
+            return owner.getServer().getScheduler().callSyncMethod(owner,
+                    () -> processor.apply(earning)).get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("等待 Jobs 主线程税务结算时被中断", exception);
+        } catch (TimeoutException exception) {
+            throw new IllegalStateException("等待 Jobs 主线程税务结算超时", exception);
+        } catch (ExecutionException exception) {
+            Throwable cause = exception.getCause();
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            if (cause instanceof LinkageError linkage) {
+                throw linkage;
+            }
+            throw new IllegalStateException("Jobs 主线程税务结算失败", cause);
         }
     }
 

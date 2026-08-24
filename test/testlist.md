@@ -47,7 +47,7 @@
 | [x] | BLD-03 | P1/AUTO | 核心规则 | 执行 application、economy、governance、land、consumption 的核心单测。 | 文本边界、状态机、金额精度、投票门槛、3×3 单元、5×5 网格、Buff 定价均通过。 |
 | [x] | BLD-04 | P0/AUTO | 存储层 | 执行五类 SQLite Repository 与 DatabaseGate 测试。 | WAL、外键、busy timeout、事务、唯一约束、幂等键和异常映射符合契约。 |
 | [x] | BLD-05 | P1/AUTO | 集成适配器 | 执行 Residence、Vault、QuickShop、WorldBorder 适配器测试。 | 能力探测、精度换算、交易识别和命令保护正确；WorldBorder 从插件 ClassLoader 解析经典 API，检查含缓冲的四个角，并对未配置边界和非主线程调用安全失败。 |
-| [x] | BLD-06 | P1/AUTO | Paper 业务层 | 执行命令解析、权限、Tab 补全、确认令牌、重试队列、建镇协调、设置及 `TownUiMode` 测试。 | 缺失配置默认使用 `DIALOG`，`LEGACY` 大小写不敏感，未知模式被拒绝；玩家界面/TestCommand 共用业务入口，权限和并发约束正确。 |
+| [x] | BLD-06 | P1/AUTO | Paper 业务层 | 执行命令解析、权限、Tab 补全、确认令牌、重试队列、建镇协调及设置测试。 | 玩家界面统一使用 Paper Dialog；玩家界面/TestCommand 共用业务入口，权限和并发约束正确。 |
 | [x] | BLD-07 | P0/OPS | 唯一产物 | 检查各模块 `target` 目录与根 POM。 | 唯一安装包为 `tianjitown-paper/target/TianjiTown-1.4.0.jar`，版本与 POM、`plugin.yml` 一致。 |
 | [x] | BLD-08 | P0/OPS | JAR 内容 | 列出 JAR 内容并搜索测试类、数据库、密钥、本机绝对路径和临时文件。 | 包含四模块运行类、`plugin.yml`、默认配置、V0_1～V7_0 迁移；不含测试类、数据或敏感信息。 |
 | [x] | BLD-09 | P0/OPS | 依赖打包 | 检查 shaded JAR 的类与依赖清单。 | HikariCP、Flyway、SQLite JDBC 已合并；Paper、Residence、Vault、WorldBorder 等运行时 API 未被打入。 |
@@ -68,9 +68,9 @@
 | [x] | CFG-07 | P0/OPS | 数据库路径 | 测试合法相对/绝对路径、指向目录、父目录不可创建、只读文件、非法路径和数据库损坏。 | 合法路径生效；非法情况保持锁定，不覆盖原文件，错误含可定位路径与原因。 |
 | [x] | CFG-08 | P0/OPS | SQLite 超时 | 配置合法边界及零、负数、极大数、类型错误的 connection/busy timeout。 | 合法值生效；危险或错误值阻止就绪，不静默回退为可能不安全的值。 |
 | [x] | CFG-09 | P0/OPS | 配置 schema | 测试 schema 缺失、6、7、未来版本和非整数。 | 当前 schema 7 正常；旧版按支持策略升级/拒绝；未来版或类型错误保持锁定且不改配置。 |
-| [x] | CFG-10 | P0/OPS | YAML 与类型校验 | 对每个 phase 及 `ui.mode` 注入语法错误、错误类型、NaN/Infinity、越界值、无效枚举/材料/时区/世界名。 | 配置错误可定位；未知界面模式在运行时激活前锁定插件，不以危险默认值误进入 `READY`。 |
-| [x] | CFG-11 | P1/OPS | 默认配置 | 删除自定义配置后核对所有默认值。 | `ui.mode` 默认为 `DIALOG`；冷却、预留、治理、税率、扩张、Buff、返还、信标、诊断、备份与 `config.yml`/文档一致。 |
-| [x] | CFG-12 | P1/OPS | 热重载 | 修改维护、tax、consumption、Buff 商店、建筑返还和信标开关后执行 `reload`，并单独修改 `ui.mode`。 | 可热更新项立即生效；`ui.mode`、数据库路径、清算账户、金额精度、Buff 目录等明确提示需重启，当前玩家界面不会在运行中半切换。 |
+| [x] | CFG-10 | P0/OPS | YAML 与类型校验 | 对每个 phase 注入语法错误、错误类型、NaN/Infinity、越界值、无效枚举/材料/时区/世界名。 | 配置错误可定位，并在运行时激活前锁定插件。 |
+| [x] | CFG-11 | P1/OPS | 默认配置 | 删除自定义配置后核对所有默认值。 | 冷却、预留、治理、税率、扩张、Buff、返还、信标、诊断、备份与 `config.yml`/文档一致。 |
+| [x] | CFG-12 | P1/OPS | 热重载 | 修改维护、tax、consumption、Buff 商店、建筑返还和信标开关后执行 `reload`。 | 可热更新项立即生效；数据库路径、清算账户、金额精度、Buff 目录等明确提示需重启。 |
 | [x] | CFG-13 | P0/OPS | 测试接口默认关闭 | 首次安装、升级配置和发布包启动后检查 `test-command.enabled`。 | 默认始终为 `false`，无人因 OP 或管理员权限自动获得测试权限。 |
 | [x] | CFG-17 | P1/OPS | 界面模式启动 | 依次用配置缺失、空白、`dialog`、`DIALOG`、`legacy`、`LEGACY` 和 `CHEST` 启动，并查看 `status`。 | 缺失/空白/大小写变体按约定选择模式，`status` 报告实际模式；非法值保持 `LOCKED`，修正并重启后恢复 `READY`。 |
 

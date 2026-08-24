@@ -1,9 +1,5 @@
 schema-version: 7
 
-ui:
-  # DIALOG 为默认 Paper 对话框；LEGACY 可在兼容性需要时恢复旧箱子界面。修改后需重启。
-  mode: DIALOG
-
 database:
   # 相对路径以 plugins/TianjiTown 为基准，也可填写绝对路径。
   file: 'tianjitown.db'

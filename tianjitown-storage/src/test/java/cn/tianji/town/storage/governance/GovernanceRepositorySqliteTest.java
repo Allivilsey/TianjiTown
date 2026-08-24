@@ -129,6 +129,15 @@ class GovernanceRepositorySqliteTest {
                     () -> governance.cancelVote(settledKick.id(), created.mayorId(), "Mayor",
                             "不能取消已结束投票"));
 
+            VoteSnapshot cancellable = governance.createVote(created.town().id(),
+                    VoteType.KICK_MEMBER, candidateId, created.mayorId(), Duration.ofDays(30),
+                    Duration.ZERO, Duration.ofHours(72), false);
+            assertEquals(created.mayorId(), cancellable.createdBy());
+            assertThrows(GovernanceRepository.ConflictException.class,
+                    () -> governance.cancelOwnVote(cancellable.id(), officerId, "Officer"));
+            assertEquals(VoteStatus.CANCELLED, governance.cancelOwnVote(cancellable.id(),
+                    created.mayorId(), "Mayor").status());
+
             assertThrows(IllegalArgumentException.class,
                     () -> governance.requestMayorTransfer(created.town().id(), candidateId,
                             created.mayorId(), overflowingDuration));

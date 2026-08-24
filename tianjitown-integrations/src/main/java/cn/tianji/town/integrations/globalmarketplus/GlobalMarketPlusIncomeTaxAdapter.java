@@ -91,9 +91,11 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
             if (receiver == null) {
                 return;
             }
+            double gross = ((Number) call(result, "getPrice")).doubleValue();
+            double received = "SELLING".equals(type)
+                    ? amountAfterSellingTax(receiver, merchandise, gross) : gross;
             long merchandiseId = ((Number) call(merchandise, "getMerchandiseUID")).longValue();
-            dispatch(receiver, ((Number) call(result, "getPrice")).doubleValue(),
-                    "transaction:" + merchandiseId);
+            dispatch(receiver, received, "transaction:" + merchandiseId);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             logEventFailure("成交收入税处理失败", exception);
         }
@@ -113,8 +115,10 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
                 return;
             }
             Object receiver = call(result, "getMerchant");
+            double price = ((Number) call(result, "getPrice")).doubleValue();
+            double nativeTax = ((Number) call(result, "getExtraTaxed")).doubleValue();
             long merchandiseId = ((Number) call(auction, "getMerchandiseUID")).longValue();
-            dispatch(receiver, ((Number) call(result, "getPrice")).doubleValue(),
+            dispatch(receiver, amountAfterNativeTax(price, nativeTax),
                     "auction:" + merchandiseId);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             logEventFailure("拍卖收入税处理失败", exception);
@@ -125,6 +129,28 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
         Object currency = call(merchandise, "getCurrency");
         return currency != null && "Vault".equalsIgnoreCase(String.valueOf(
                 call(currency, "getName")));
+    }
+
+    private double amountAfterSellingTax(Object receiver, Object merchandise, double gross)
+            throws ReflectiveOperationException {
+        Object currency = call(merchandise, "getCurrency");
+        Object group = call(receiver, "getGroup");
+        if (group == null || currency == null) {
+            return gross;
+        }
+        double rate = ((Number) call(group, "getTaxRate_Selling", currency)).doubleValue();
+        double nativeTax = gross * rate;
+        if (nativeTax == 0.0D && rate != 0.0D) {
+            nativeTax = 1.0D;
+        }
+        return amountAfterNativeTax(gross, nativeTax);
+    }
+
+    static double amountAfterNativeTax(double gross, double nativeTax) {
+        if (!Double.isFinite(gross) || !Double.isFinite(nativeTax)) {
+            return 0.0D;
+        }
+        return Math.max(0.0D, gross - Math.max(0.0D, nativeTax));
     }
 
     private void dispatch(Object receiver, double gross, String sourceKey)
@@ -150,11 +176,8 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
         if (!owner.isEnabled()) {
             return;
         }
-        if (owner.getServer().isPrimaryThread()) {
-            task.run();
-        } else {
-            owner.getServer().getScheduler().runTask(owner, task);
-        }
+        // 等 GlobalMarketPlus 完成自身余额保存后再扣税，避免其旧余额覆盖 Vault 扣款。
+        owner.getServer().getScheduler().runTask(owner, task);
     }
 
     private static void verifyTransactionApi(Class<? extends Event> eventType)
@@ -167,6 +190,12 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
         result.getMethod("getTrader");
         result.getMethod("getPrice");
         verifyMerchandise(merchandise);
+        Class<?> receiver = result.getMethod("getMerchant").getReturnType();
+        Class<?> group = receiver.getMethod("getGroup").getReturnType();
+        Class<?> currency = merchandise.getMethod("getCurrency").getReturnType();
+        group.getMethod("getTaxRate_Selling", currency);
+        verifyReceiver(receiver);
+        verifyReceiver(result.getMethod("getTrader").getReturnType());
     }
 
     private static void verifyAuctionApi(Class<? extends Event> eventType)
@@ -176,7 +205,9 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
         result.getMethod("getResultType");
         result.getMethod("getMerchant");
         result.getMethod("getPrice");
+        result.getMethod("getExtraTaxed");
         verifyMerchandise(auction);
+        verifyReceiver(result.getMethod("getMerchant").getReturnType());
     }
 
     private static void verifyMerchandise(Class<?> merchandise)
@@ -184,6 +215,11 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
         merchandise.getMethod("getMerchandiseUID");
         Class<?> currency = merchandise.getMethod("getCurrency").getReturnType();
         currency.getMethod("getName");
+    }
+
+    private static void verifyReceiver(Class<?> receiver) throws ReflectiveOperationException {
+        receiver.getMethod("getPlayerUUID");
+        receiver.getMethod("getPlayerName");
     }
 
     private EventExecutor safeExecutor(Class<? extends Event> expectedType,
@@ -206,9 +242,23 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
     }
 
     private static Object call(Object target, String name) throws ReflectiveOperationException {
+        return call(target, name, null);
+    }
+
+    private static Object call(Object target, String name, Object argument)
+            throws ReflectiveOperationException {
         try {
-            Method method = target.getClass().getMethod(name);
-            return method.invoke(target);
+            Method method;
+            if (argument == null) {
+                method = target.getClass().getMethod(name);
+                return method.invoke(target);
+            }
+            method = java.util.Arrays.stream(target.getClass().getMethods())
+                    .filter(candidate -> candidate.getName().equals(name)
+                            && candidate.getParameterCount() == 1
+                            && candidate.getParameterTypes()[0].isInstance(argument))
+                    .findFirst().orElseThrow(() -> new NoSuchMethodException(name));
+            return method.invoke(target, argument);
         } catch (InvocationTargetException exception) {
             if (exception.getCause() instanceof RuntimeException runtime) {
                 throw runtime;

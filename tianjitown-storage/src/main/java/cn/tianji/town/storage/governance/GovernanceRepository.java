@@ -407,21 +407,19 @@ public final class GovernanceRepository {
         requireReason(reason);
         return transaction(connection -> {
             VoteSnapshot vote = requireVote(connection, voteId, actorId);
-            if (vote.status() != VoteStatus.OPEN) {
-                throw new ConflictException("投票已经结束，不能取消");
+            return cancelOpenVote(connection, vote, actorId, actorName, reason);
+        });
+    }
+
+    public VoteSnapshot cancelOwnVote(UUID voteId, UUID creatorId, String creatorName) {
+        requireWorkerThread();
+        return transaction(connection -> {
+            VoteSnapshot vote = requireVote(connection, voteId, creatorId);
+            if (!vote.createdBy().equals(creatorId)) {
+                throw new ConflictException("只有投票发起人可以终止本次投票");
             }
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE governance_votes SET status = 'CANCELLED', settled_at = ?,
-                           cancelled_reason = ? WHERE vote_id = ? AND status = 'OPEN'
-                    """)) {
-                statement.setLong(1, Instant.now().toEpochMilli());
-                statement.setString(2, reason);
-                statement.setBytes(3, uuid(voteId));
-                requireUpdated(statement, "投票已经结束");
-            }
-            audit(connection, actorId, actorName, "VOTE_CANCEL", vote.townId(), reason,
-                    voteId.toString());
-            return requireVote(connection, voteId, actorId);
+            return cancelOpenVote(connection, vote, creatorId, creatorName,
+                    "投票发起人主动终止");
         });
     }
 
@@ -702,11 +700,32 @@ public final class GovernanceRepository {
         return new VoteSnapshot(readUuid(result, "vote_id"), readUuid(result, "town_id"),
                 VoteType.valueOf(result.getString("vote_type")),
                 readUuid(result, "subject_uuid"), candidate == null ? null : uuid(candidate),
+                readUuid(result, "created_by"),
                 VoteStatus.valueOf(result.getString("status")),
                 result.getInt("eligible_voters"), result.getInt("required_yes"),
                 result.getInt("yes_votes"), result.getInt("no_votes"),
                 instant(result, "ends_at"), result.getBoolean("viewer_eligible"),
                 result.getBoolean("viewer_voted"));
+    }
+
+    private VoteSnapshot cancelOpenVote(Connection connection, VoteSnapshot vote,
+                                        UUID actorId, String actorName, String reason)
+            throws SQLException {
+        if (vote.status() != VoteStatus.OPEN) {
+            throw new ConflictException("投票已经结束，不能取消");
+        }
+        try (PreparedStatement statement = connection.prepareStatement("""
+                UPDATE governance_votes SET status = 'CANCELLED', settled_at = ?,
+                       cancelled_reason = ? WHERE vote_id = ? AND status = 'OPEN'
+                """)) {
+            statement.setLong(1, Instant.now().toEpochMilli());
+            statement.setString(2, reason);
+            statement.setBytes(3, uuid(vote.id()));
+            requireUpdated(statement, "投票已经结束");
+        }
+        audit(connection, actorId, actorName, "VOTE_CANCEL", vote.townId(), reason,
+                vote.id().toString());
+        return requireVote(connection, vote.id(), actorId);
     }
 
     private static void recount(Connection connection, UUID voteId) throws SQLException {

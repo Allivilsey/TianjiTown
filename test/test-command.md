@@ -1,7 +1,7 @@
 # TestCommand 自动化接口
 
 `/testcommand` 仅用于隔离的自动化测试服务器。它与 `/townadmin` 分离，也不会被玩家界面
-通过命令转发调用。玩家 Dialog（或可选旧箱子界面）和 TestCommand 都直接调用 `TownActions`。
+通过命令转发调用。玩家 Dialog 和 TestCommand 都直接调用 `TownActions`。
 
 ## 启用条件
 

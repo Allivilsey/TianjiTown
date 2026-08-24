@@ -664,6 +664,12 @@ final class TownRuntime {
             return;
         }
         pendingIncomeTaxes.submit(tax);
+        Player receiver = earning.player().getPlayer();
+        if (receiver != null) {
+            receiver.sendMessage("§e全球市场收入 " + money(tax.grossMinor())
+                    + "，已扣小镇税 " + money(tax.taxMinor())
+                    + "，实际到账 " + money(tax.grossMinor() - tax.taxMinor()) + "。");
+        }
     }
 
     private EconomyRepository.ExternalIncomeTax externalIncomeTax(

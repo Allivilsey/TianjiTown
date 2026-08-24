@@ -12,6 +12,7 @@ public record VoteSnapshot(
         VoteType type,
         UUID subjectId,
         UUID candidateId,
+        UUID createdBy,
         VoteStatus status,
         int eligibleVoters,
         int requiredYes,

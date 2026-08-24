@@ -48,6 +48,9 @@ class TownRepositorySqliteTest {
             ApplicationSnapshot draft = repository.createDraft(
                     applicantId, text, List.of(initialMemberOne, initialMemberTwo),
                     Duration.ofMinutes(5));
+            assertEquals(List.of(draft.id()), repository
+                    .listPendingInitialMemberApplications(initialMemberOne).stream()
+                    .map(ApplicationSnapshot::id).toList());
             assertThrows(TownRepository.ConflictException.class, () -> repository.createDraft(
                     UUID.randomUUID(), text, List.of(UUID.randomUUID(), UUID.randomUUID()),
                     Duration.ofMinutes(5)));
@@ -59,6 +62,8 @@ class TownRepositorySqliteTest {
                     () -> repository.submit(selected.id(), applicantId));
             repository.respondInitialMember(selected.id(), initialMemberOne, true);
             repository.respondInitialMember(selected.id(), initialMemberTwo, true);
+            assertTrue(repository.listPendingInitialMemberApplications(initialMemberOne)
+                    .isEmpty());
             ApplicationSnapshot submitted = repository.submit(selected.id(), applicantId);
             assertEquals(ApplicationStatus.SUBMITTED, submitted.status());
 

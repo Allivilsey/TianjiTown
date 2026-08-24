@@ -372,6 +372,33 @@ public final class TownRepository {
         return query(connection -> findApplication(connection, applicationId));
     }
 
+    public List<ApplicationSnapshot> listPendingInitialMemberApplications(UUID playerId) {
+        requireWorkerThread();
+        Objects.requireNonNull(playerId, "playerId");
+        return query(connection -> {
+            List<ApplicationSnapshot> applications = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT a.application_id
+                      FROM town_applications a
+                      JOIN application_initial_members m
+                        ON m.application_id = a.application_id
+                     WHERE m.player_uuid = ?
+                       AND m.confirmation_status = 'PENDING'
+                       AND a.status IN ('DRAFT', 'SITE_SELECTED', 'NEED_CHANGES')
+                     ORDER BY a.updated_at DESC, a.application_id
+                    """)) {
+                statement.setBytes(1, uuid(playerId));
+                try (ResultSet result = statement.executeQuery()) {
+                    while (result.next()) {
+                        findApplication(connection, readUuid(result, "application_id"))
+                                .ifPresent(applications::add);
+                    }
+                }
+            }
+            return List.copyOf(applications);
+        });
+    }
+
     public int recoverInterruptedProvisions(String reason) {
         requireWorkerThread();
         requireReason(reason);

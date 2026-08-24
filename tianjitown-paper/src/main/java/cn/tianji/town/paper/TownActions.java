@@ -278,6 +278,13 @@ final class TownActions {
                 }, completion);
     }
 
+    void cancelOwnVote(Player actor, UUID voteId,
+                       Consumer<TownActionOutcome<VoteSnapshot>> completion) {
+        write("VOTE_CANCEL", actor,
+                () -> runtime.governance().cancelOwnVote(voteId, actor.getUniqueId(),
+                        actor.getName()), TownActions::voteData, completion);
+    }
+
     void leaveTown(Player actor, UUID townId,
                    Consumer<TownActionOutcome<UUID>> completion) {
         write("TOWN_LEAVE", actor, () -> {

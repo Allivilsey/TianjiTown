@@ -508,6 +508,45 @@ public final class EconomyRepository {
         });
     }
 
+    public List<LedgerEntry> displayLedger(UUID townId, int page, int pageSize) {
+        requireWorkerThread();
+        if (page < 0 || pageSize < 1 || pageSize > 45) {
+            throw new IllegalArgumentException("账本分页参数无效");
+        }
+        return query(connection -> {
+            List<LedgerEntry> result = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT e.entry_id, e.town_id, e.entry_type,
+                           e.amount_minor + COALESCE(s.amount_minor, 0) AS amount_minor,
+                           COALESCE(s.balance_after_minor, e.balance_after_minor)
+                               AS balance_after_minor,
+                           e.actor_uuid, e.actor_name, e.business_key,
+                           CASE WHEN s.entry_id IS NULL THEN e.note
+                                ELSE e.note || '；含服务器等额补贴' END AS note,
+                           COALESCE(s.created_at, e.created_at) AS created_at
+                      FROM ledger_entries e
+                      LEFT JOIN ledger_entries s
+                        ON s.town_id = e.town_id
+                       AND s.entry_type = 'SERVER_TAX_SUBSIDY'
+                       AND s.business_key = e.business_key || ':subsidy'
+                     WHERE e.town_id = ?
+                       AND e.entry_type <> 'SERVER_TAX_SUBSIDY'
+                     ORDER BY COALESCE(s.created_at, e.created_at) DESC, e.entry_id
+                     LIMIT ? OFFSET ?
+                    """)) {
+                statement.setBytes(1, uuid(townId));
+                statement.setInt(2, pageSize);
+                statement.setInt(3, Math.multiplyExact(page, pageSize));
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) {
+                        result.add(readLedger(rows));
+                    }
+                }
+            }
+            return List.copyOf(result);
+        });
+    }
+
     public List<TerritoryUnitSnapshot> territoryUnits(UUID townId) {
         requireWorkerThread();
         return query(connection -> listTerritoryUnits(connection, townId));
