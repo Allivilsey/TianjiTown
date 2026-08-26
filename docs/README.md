@@ -11,5 +11,6 @@
 - [`operations/OPERATIONS.md`](operations/OPERATIONS.md)：日常运维、诊断、备份和故障处置；
 - [`PLAYER_GUIDE.md`](PLAYER_GUIDE.md)：玩家使用说明；
 - [`FUNCTIONS_AND_GAMEPLAY.md`](FUNCTIONS_AND_GAMEPLAY.md)：完整功能与玩法规则。
+- [`UI_DIALOG_BUTTON_REPORT.md`](UI_DIALOG_BUTTON_REPORT.md)：小镇 Dialog 改版实施报告、导航树、字符效果图与验收清单。
 
 升级文档内部仍保留版本号、schema 号和历史迁移说明；这些属于兼容契约，不作为目录分类依据。

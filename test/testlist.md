@@ -72,7 +72,7 @@
 | [x] | CFG-11 | P1/OPS | 默认配置 | 删除自定义配置后核对所有默认值。 | 冷却、预留、治理、税率、扩张、Buff、返还、信标、诊断、备份与 `config.yml`/文档一致。 |
 | [x] | CFG-12 | P1/OPS | 热重载 | 修改维护、tax、consumption、Buff 商店、建筑返还和信标开关后执行 `reload`。 | 可热更新项立即生效；数据库路径、清算账户、金额精度、Buff 目录等明确提示需重启。 |
 | [x] | CFG-13 | P0/OPS | 测试接口默认关闭 | 首次安装、升级配置和发布包启动后检查 `test-command.enabled`。 | 默认始终为 `false`，无人因 OP 或管理员权限自动获得测试权限。 |
-| [x] | CFG-17 | P1/OPS | 界面模式启动 | 依次用配置缺失、空白、`dialog`、`DIALOG`、`legacy`、`LEGACY` 和 `CHEST` 启动，并查看 `status`。 | 缺失/空白/大小写变体按约定选择模式，`status` 报告实际模式；非法值保持 `LOCKED`，修正并重启后恢复 `READY`。 |
+| [x] | CFG-17 | P1/OPS | Dialog 界面启动 | 使用干净默认配置和升级后配置启动，并查看 `status`。 | 玩家界面固定使用 Paper Dialog，`status` 报告 `DIALOG`，不加载或回退到旧箱子界面。 |
 
 ## 3. SQLite、迁移、约束与事务
 
