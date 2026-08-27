@@ -14,8 +14,10 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 final class SitePolicy {
@@ -102,16 +104,22 @@ final class SitePolicy {
     }
 
     void teleportAndPreview(Player player, InitialTerritory territory) {
-        World world = plugin.getServer().getWorld(territory.center().worldId());
+        teleportAndPreview(player, territory, List.of(territory));
+    }
+
+    void teleportAndPreview(Player player, InitialTerritory focus,
+                            List<InitialTerritory> territories) {
+        List<InitialTerritory> areas = previewAreas(focus, territories);
+        World world = plugin.getServer().getWorld(focus.center().worldId());
         if (world == null) {
-            world = plugin.getServer().getWorld(territory.center().worldName());
+            world = plugin.getServer().getWorld(focus.center().worldName());
         }
         if (world == null) {
             player.sendMessage("§c领地所在世界当前未加载。");
             return;
         }
-        int centerX = Math.addExact(Math.multiplyExact(territory.center().x(), 16), 8);
-        int centerZ = Math.addExact(Math.multiplyExact(territory.center().z(), 16), 8);
+        int centerX = Math.addExact(Math.multiplyExact(focus.center().x(), 16), 8);
+        int centerZ = Math.addExact(Math.multiplyExact(focus.center().z(), 16), 8);
         int surfaceY = world.getHighestBlockYAt(centerX, centerZ,
                 HeightMap.MOTION_BLOCKING_NO_LEAVES);
         double targetY = Math.min(world.getMaxHeight() - 1, surfaceY + 1);
@@ -122,11 +130,17 @@ final class SitePolicy {
             return;
         }
         player.sendMessage("§a已传送至领地中心传送点。");
-        preview(player, territory);
+        preview(player, areas);
     }
 
     void preview(Player player, InitialTerritory territory) {
-        if (!player.getWorld().getUID().equals(territory.center().worldId())) {
+        preview(player, List.of(territory));
+    }
+
+    void preview(Player player, List<InitialTerritory> territories) {
+        List<InitialTerritory> areas = previewAreas(null, territories);
+        UUID worldId = areas.getFirst().center().worldId();
+        if (!player.getWorld().getUID().equals(worldId)) {
             player.sendMessage("§c预览领地不在当前世界。");
             return;
         }
@@ -144,12 +158,12 @@ final class SitePolicy {
             public void run() {
                 try {
                     if (!player.isOnline() || !player.getWorld().getUID()
-                            .equals(territory.center().worldId()) || remaining-- <= 0) {
+                            .equals(worldId) || remaining-- <= 0) {
                         previews.remove(playerId);
                         cancel();
                         return;
                     }
-                    renderPreview(player, territory);
+                    renderPreview(player, areas);
                 } catch (RuntimeException | LinkageError exception) {
                     // 玩家、世界或插件在周期回调前失效时立即结束本次预览。
                     previews.remove(playerId);
@@ -171,9 +185,9 @@ final class SitePolicy {
         };
         BukkitTask task = runnable.runTaskTimer(plugin, 0L, intervalTicks);
         previews.put(playerId, task);
-        player.sendMessage("§e已显示 3×3 区块三维边界，粒子将持续约 " + durationSeconds
-                + " 秒；中心区块为 " + territory.center().x() + ", "
-                + territory.center().z() + "。");
+        String scope = areas.size() == 1 ? "3×3 区块" : areas.size() + " 个领地单元";
+        player.sendMessage("§e已显示 " + scope + " 的完整三维边界，粒子将持续约 "
+                + durationSeconds + " 秒。");
     }
 
     void stopPreview(UUID playerId) {
@@ -201,31 +215,79 @@ final class SitePolicy {
         previews.clear();
     }
 
-    private void renderPreview(Player player, InitialTerritory territory) {
+    private void renderPreview(Player player, List<InitialTerritory> territories) {
         World world = player.getWorld();
-        double minimumX = territory.minimumChunkX() * 16.0;
-        double minimumZ = territory.minimumChunkZ() * 16.0;
-        double maximumX = (territory.maximumChunkX() + 1) * 16.0;
-        double maximumZ = (territory.maximumChunkZ() + 1) * 16.0;
         int verticalRange = Math.max(8,
                 plugin.getConfig().getInt("phase1.site.preview-vertical-range-blocks", 24));
         double centerY = player.getLocation().getY() + 1;
         double minimumY = Math.max(world.getMinHeight() + 1, centerY - verticalRange);
         double maximumY = Math.min(world.getMaxHeight() - 1, centerY + verticalRange);
-        for (double y = minimumY; y <= maximumY; y += 2) {
-            for (double x = minimumX; x <= maximumX; x += 2) {
-                particle(player, x, y, minimumZ);
-                particle(player, x, y, maximumZ);
+        double spacing = territories.size() == 1 ? 2.0 : 4.0;
+        Set<ChunkCenter> centers = new HashSet<>();
+        territories.forEach(territory -> centers.add(new ChunkCenter(
+                territory.center().x(), territory.center().z())));
+        for (InitialTerritory territory : territories) {
+            renderPreview(player, territory, centers, minimumY, maximumY, spacing);
+        }
+    }
+
+    private void renderPreview(Player player, InitialTerritory territory,
+                               Set<ChunkCenter> centers, double minimumY, double maximumY,
+                               double spacing) {
+        double minimumX = territory.minimumBlockX();
+        double minimumZ = territory.minimumBlockZ();
+        double maximumX = territory.maximumBlockXExclusive();
+        double maximumZ = territory.maximumBlockZExclusive();
+        int centerX = territory.center().x();
+        int centerZ = territory.center().z();
+        boolean north = !centers.contains(new ChunkCenter(centerX, centerZ - 3));
+        boolean south = !centers.contains(new ChunkCenter(centerX, centerZ + 3));
+        boolean west = !centers.contains(new ChunkCenter(centerX - 3, centerZ));
+        boolean east = !centers.contains(new ChunkCenter(centerX + 3, centerZ));
+        for (double y = minimumY; y <= maximumY; y += spacing) {
+            if (north || south) {
+                for (double x = minimumX; x <= maximumX; x += spacing) {
+                    if (north) {
+                        particle(player, x, y, minimumZ);
+                    }
+                    if (south) {
+                        particle(player, x, y, maximumZ);
+                    }
+                }
             }
-            for (double z = minimumZ + 2; z < maximumZ; z += 2) {
-                particle(player, minimumX, y, z);
-                particle(player, maximumX, y, z);
+            if (west || east) {
+                for (double z = minimumZ + spacing; z < maximumZ; z += spacing) {
+                    if (west) {
+                        particle(player, minimumX, y, z);
+                    }
+                    if (east) {
+                        particle(player, maximumX, y, z);
+                    }
+                }
             }
         }
     }
 
+    private static List<InitialTerritory> previewAreas(
+            InitialTerritory required, List<InitialTerritory> territories) {
+        if (territories == null || territories.isEmpty()) {
+            throw new IllegalArgumentException("领地预览至少需要一个区域");
+        }
+        List<InitialTerritory> areas = List.copyOf(territories);
+        UUID worldId = areas.getFirst().center().worldId();
+        if (areas.stream().anyMatch(area -> !area.center().worldId().equals(worldId))) {
+            throw new IllegalArgumentException("领地预览区域必须位于同一世界");
+        }
+        if (required != null && (!required.center().worldId().equals(worldId)
+                || !areas.contains(required))) {
+            throw new IllegalArgumentException("领地中心不在预览区域中");
+        }
+        return areas;
+    }
+
     private static void particle(Player player, double x, double y, double z) {
-        player.spawnParticle(Particle.FLAME, x, y, z, 1, 0, 0, 0, 0);
+        player.spawnParticle(Particle.FLAME, x, y, z, 1, 0, 0, 0, 0,
+                null, true);
     }
 
     private List<Rectangle> rectangles(String path, String world) {
@@ -283,5 +345,8 @@ final class SitePolicy {
             return minimumX <= territory.maximumChunkX() && maximumX >= territory.minimumChunkX()
                     && minimumZ <= territory.maximumChunkZ() && maximumZ >= territory.minimumChunkZ();
         }
+    }
+
+    private record ChunkCenter(int x, int z) {
     }
 }

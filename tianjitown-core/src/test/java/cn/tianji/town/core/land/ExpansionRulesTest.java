@@ -41,6 +41,22 @@ class ExpansionRulesTest {
         assertEquals(new BigDecimal("103.00"), price.decimal());
     }
 
+    @Test
+    void targetsAnyAvailableFourWayAdjacentCell() {
+        TerritoryUnit origin = unit(0, 0, 10, 20);
+        TerritoryUnit east = TerritoryRules.target(List.of(origin), 1, 0);
+        TerritoryUnit southEast = TerritoryRules.target(List.of(origin, east), 1, 1);
+
+        assertEquals(13, east.territory().center().x());
+        assertEquals(23, southEast.territory().center().z());
+        assertThrows(IllegalArgumentException.class,
+                () -> TerritoryRules.target(List.of(origin, east), 2, 2));
+        assertThrows(IllegalArgumentException.class,
+                () -> TerritoryRules.target(List.of(origin, east), 1, 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> TerritoryRules.target(List.of(origin, east), 3, 0));
+    }
+
     private static TerritoryUnit unit(int gridX, int gridZ, int centerX, int centerZ) {
         return new TerritoryUnit(gridX, gridZ, new InitialTerritory(
                 new ChunkPosition(WORLD, "world", centerX, centerZ)));

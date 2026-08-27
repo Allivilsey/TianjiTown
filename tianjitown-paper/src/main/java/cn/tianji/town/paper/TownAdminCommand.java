@@ -731,7 +731,7 @@ final class TownAdminCommand implements CommandExecutor {
         requireLength(args, 3, "expand <view|preview> <小镇全名> [方向]");
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("preview") && !(sender instanceof Player)) {
-            sender.sendMessage("§c扩张预览需要玩家当前位置，只能由游戏内玩家执行。");
+            sender.sendMessage("§c扩张预览只能由游戏内玩家执行。");
             return true;
         }
         runtime.read(sender, () -> {
@@ -769,7 +769,7 @@ final class TownAdminCommand implements CommandExecutor {
                 long price = ExpansionPricing.price(runtime.economySettings().expansionBaseCost(),
                         runtime.economySettings().expansionPerUnitIncrease(), view.units().size(),
                         runtime.settlement().scale()).minorUnits();
-                runtime.sitePolicy().teleportAndPreview(player, view.preview().territory());
+                runtime.sitePolicy().preview(player, view.preview().territory());
                 player.sendMessage("§e预估价格: " + runtime.money(price));
             }
         });

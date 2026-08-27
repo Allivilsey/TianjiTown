@@ -19,6 +19,17 @@ class InitialTerritoryTest {
     }
 
     @Test
+    void blockBoundsCoverExactlyThreeByThreeChunks() {
+        InitialTerritory territory = territory(-1, 4);
+
+        assertEquals(-32, territory.minimumBlockX());
+        assertEquals(15, territory.maximumBlockX());
+        assertEquals(16, territory.maximumBlockXExclusive());
+        assertEquals(48, territory.maximumBlockXExclusive() - territory.minimumBlockX());
+        assertEquals(48, territory.maximumBlockZExclusive() - territory.minimumBlockZ());
+    }
+
+    @Test
     void detectsOverlapAndConfiguredBuffer() {
         InitialTerritory first = territory(0, 0);
         assertTrue(first.overlaps(territory(2, 0)));

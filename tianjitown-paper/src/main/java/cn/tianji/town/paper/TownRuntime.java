@@ -5,9 +5,6 @@ import cn.tianji.town.core.ports.WorldBoundaryService;
 import cn.tianji.town.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
 import cn.tianji.town.integrations.jobs.JobsIncomeTaxAdapter;
 import cn.tianji.town.core.land.ExpansionDirection;
-import cn.tianji.town.core.land.ExpansionPricing;
-import cn.tianji.town.core.land.TerritoryRules;
-import cn.tianji.town.core.land.TerritoryUnit;
 import cn.tianji.town.core.town.TownStatus;
 import cn.tianji.town.integrations.quickshop.QuickShopTaxAdapter;
 import cn.tianji.town.integrations.vault.VaultSettlementService;
@@ -44,6 +41,7 @@ final class TownRuntime {
     private final EconomyRepository finance;
     private final LandProtectionService landProtection;
     private final SitePolicy sitePolicy;
+    private final TerritoryService territories;
     private final EconomySettings economySettings;
     private final VaultSettlementService settlement;
     private final BuffRuntime buffs;
@@ -72,6 +70,8 @@ final class TownRuntime {
         this.economySettings = EconomySettings.load(plugin.getConfig());
         this.settlement = new VaultSettlementService(plugin.getServer(),
                 economySettings.settlementAccount(), economySettings.fallbackScale());
+        this.territories = new TerritoryService(finance, sitePolicy, economySettings,
+                settlement.scale());
         this.buffs = new BuffRuntime(plugin, this,
                 new CommerceRepository(database.dataSource(),
                         plugin.getServer()::isPrimaryThread),
@@ -797,44 +797,49 @@ final class TownRuntime {
                 + percent(change.basisPoints())));
     }
 
-    ExpansionPreview expansionPreview(UUID playerId, ExpansionDirection direction) {
-        EconomyRepository.TownFinance account = finance.findFinanceByPlayer(playerId)
-                .orElseThrow(() -> new IllegalArgumentException("你不属于任何小镇"));
-        if (!account.role().equals("MAYOR")) {
-            throw new IllegalArgumentException("只有镇长可以使用公共资金扩张");
-        }
-        List<EconomyRepository.TerritoryUnitSnapshot> snapshots =
-                finance.territoryUnits(account.townId()).stream()
-                        .filter(unit -> !unit.projectionStatus().equals("FAILED")).toList();
-        if (snapshots.size() >= economySettings.maximumUnits()) {
-            throw new IllegalArgumentException("领地单元已达到配置上限");
-        }
-        TerritoryUnit candidate = TerritoryRules.next(
-                snapshots.stream().map(EconomyRepository.TerritoryUnitSnapshot::unit).toList(),
-                direction);
-        long price = ExpansionPricing.price(economySettings.expansionBaseCost(),
-                economySettings.expansionPerUnitIncrease(), snapshots.size(),
-                settlement.scale())
-                .minorUnits();
-        EconomyRepository.TerritoryUnitSnapshot origin = snapshots.stream()
-                .filter(unit -> unit.unit().gridX() == 0 && unit.unit().gridZ() == 0)
-                .findFirst().orElseThrow(() -> new IllegalArgumentException("初始领地单元缺失"));
-        String areaName = "unit_" + coordinate(candidate.gridX()) + "_"
-                + coordinate(candidate.gridZ());
-        return new ExpansionPreview(account, candidate, origin.residenceName(), areaName, price,
-                snapshots.size() + 1);
+    TerritoryService.ExpansionPreview expansionPreview(UUID playerId,
+                                                        ExpansionDirection direction) {
+        return territories.preview(playerId, direction);
+    }
+
+    TerritoryService.ExpansionPreview expansionPreview(UUID playerId, int gridX, int gridZ) {
+        return territories.preview(playerId, gridX, gridZ);
+    }
+
+    void loadTerritoryMap(Player player, Consumer<TerritoryService.TerritoryMap> success) {
+        read(player, () -> territories.map(player.getUniqueId()),
+                map -> success.accept(territories.validate(map)));
+    }
+
+    SitePolicy.Validation validateExpansionPreview(
+            TerritoryService.ExpansionPreview preview) {
+        return territories.validate(preview);
     }
 
     void expandAction(Player mayor, ExpansionDirection direction,
                       Consumer<EconomyRepository.ExpansionOperation> success,
                       Consumer<RuntimeException> failure) {
+        expandAction(mayor, () -> expansionPreview(mayor.getUniqueId(), direction),
+                success, failure);
+    }
+
+    void expandAction(Player mayor, int gridX, int gridZ,
+                      Consumer<EconomyRepository.ExpansionOperation> success,
+                      Consumer<RuntimeException> failure) {
+        expandAction(mayor, () -> expansionPreview(mayor.getUniqueId(), gridX, gridZ),
+                success, failure);
+    }
+
+    private void expandAction(Player mayor,
+                              Supplier<TerritoryService.ExpansionPreview> previewSupplier,
+                              Consumer<EconomyRepository.ExpansionOperation> success,
+                              Consumer<RuntimeException> failure) {
         if (!consumptionEnabled()) {
             failure.accept(new IllegalStateException("公共资金新消费入口已由功能开关暂停"));
             return;
         }
-        readAction(mayor, () -> expansionPreview(mayor.getUniqueId(), direction), preview -> {
-            SitePolicy.Validation validation = sitePolicy.validateExpansion(
-                    preview.candidate().territory(), preview.residenceName());
+        readAction(mayor, previewSupplier, preview -> {
+            SitePolicy.Validation validation = territories.validate(preview);
             if (!validation.valid()) {
                 failure.accept(new IllegalArgumentException(
                         "扩张环境复核失败: " + validation.error()));
@@ -1101,10 +1106,6 @@ final class TownRuntime {
         sender.sendMessage("§c税率必须在 5%~25% 之间，并按 1% 递增。");
     }
 
-    private static String coordinate(int value) {
-        return value < 0 ? "m" + Math.abs(value) : "p" + value;
-    }
-
     private <T> void execute(CommandSender sender, boolean write, Supplier<T> operation,
                              Consumer<T> success) {
         if (write && !databaseAvailable.get()) {
@@ -1171,11 +1172,6 @@ final class TownRuntime {
     private static String safeMessage(Throwable throwable) {
         String message = throwable.getMessage();
         return message == null || message.isBlank() ? throwable.getClass().getSimpleName() : message;
-    }
-
-    record ExpansionPreview(EconomyRepository.TownFinance account, TerritoryUnit candidate,
-                            String residenceName, String areaName, long priceMinor,
-                            int totalUnits) {
     }
 
     private record TownMembers(TownSnapshot town, List<UUID> members,

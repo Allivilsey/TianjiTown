@@ -130,13 +130,13 @@ class EconomyRepositorySqliteTest {
                     () -> repository.changeTaxRate(townId, mayorId,
                             750, "Mayor", "非法税率测试"));
             EconomyRepository.TaxChange changed = repository.changeTaxRate(townId, mayorId,
-                    1_000, "Mayor", "测试税率");
-            assertEquals(1_000, changed.basisPoints());
+                    600, "Mayor", "测试 1% 步进税率");
+            assertEquals(600, changed.basisPoints());
             assertTrue(changed.revision() > 1);
             assertThrows(EconomyRepository.ConflictException.class,
                     () -> repository.changeTaxRate(townId, deputyMayorId,
-                            1_000, "Deputy", "副镇长越权修改测试"));
-            assertEquals(1_000, repository.findFinanceByTown(townId).orElseThrow().taxRateBps());
+                            700, "Deputy", "副镇长越权修改测试"));
+            assertEquals(600, repository.findFinanceByTown(townId).orElseThrow().taxRateBps());
 
             EconomyRepository.EconomyOperation uncertain = repository.prepareOperation(townId,
                     "ADMIN_ADJUSTMENT", 100, mayorId, "Mayor", "adjustment:uncertain",
@@ -308,15 +308,49 @@ class EconomyRepositorySqliteTest {
         }
     }
 
+    @Test
+    void findsTerritoryChunksOwnedByAnotherActiveTown() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("territory-map.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID worldId = UUID.randomUUID();
+            UUID townId = UUID.randomUUID();
+            UUID neighborId = UUID.randomUUID();
+            insertTown(gate, townId, UUID.randomUUID(), worldId);
+            insertTown(gate, neighborId, UUID.randomUUID(), worldId,
+                    "邻镇", "邻", "NEAR", 16, 20);
+            EconomyRepository repository = new EconomyRepository(
+                    gate.dataSource(), () -> false);
+
+            List<EconomyRepository.OccupiedTerritoryChunk> occupied =
+                    repository.occupiedChunksOutsideTown(townId, worldId,
+                            15, 17, 19, 21);
+
+            assertEquals(9, occupied.size());
+            assertTrue(occupied.stream().allMatch(chunk ->
+                    chunk.townId().equals(neighborId) && chunk.townName().equals("邻镇")));
+            assertTrue(repository.occupiedChunksOutsideTown(neighborId, worldId,
+                    15, 17, 19, 21).isEmpty());
+        }
+    }
+
     private static void insertTown(DatabaseGate gate, UUID townId, UUID mayorId, UUID worldId)
             throws Exception {
+        insertTown(gate, townId, mayorId, worldId,
+                "测试镇", "测", "SKY", 10, 20);
+    }
+
+    private static void insertTown(DatabaseGate gate, UUID townId, UUID mayorId, UUID worldId,
+                                   String name, String shortName, String residenceName,
+                                   int centerX, int centerZ) throws Exception {
         UUID unitId = UUID.randomUUID();
         try (Connection connection = gate.dataSource().getConnection();
              PreparedStatement town = connection.prepareStatement("""
                      INSERT INTO towns
                          (town_id, name, normalized_name, short_name, normalized_short_name,
                           description, rules_text, status, mayor_uuid)
-                     VALUES (?, '测试镇', '测试镇', '测', '测', '经济测试', '规则', 'ACTIVE', ?)
+                     VALUES (?, ?, ?, ?, ?, '经济测试', '规则', 'ACTIVE', ?)
                      """);
              PreparedStatement member = connection.prepareStatement("""
                      INSERT INTO town_members (town_id, player_uuid, role)
@@ -327,10 +361,14 @@ class EconomyRepositorySqliteTest {
                          (unit_id, town_id, world_uuid, world_name, grid_x, grid_z,
                           center_chunk_x, center_chunk_z, residence_name, residence_area_name,
                           projection_status)
-                     VALUES (?, ?, ?, 'world', 0, 0, 10, 20, 'SKY', 'main', 'ACTIVE')
+                     VALUES (?, ?, ?, 'world', 0, 0, ?, ?, ?, 'main', 'ACTIVE')
                      """)) {
             town.setBytes(1, uuid(townId));
-            town.setBytes(2, uuid(mayorId));
+            town.setString(2, name);
+            town.setString(3, name);
+            town.setString(4, shortName);
+            town.setString(5, shortName);
+            town.setBytes(6, uuid(mayorId));
             town.executeUpdate();
             member.setBytes(1, uuid(townId));
             member.setBytes(2, uuid(mayorId));
@@ -338,9 +376,12 @@ class EconomyRepositorySqliteTest {
             unit.setBytes(1, uuid(unitId));
             unit.setBytes(2, uuid(townId));
             unit.setBytes(3, uuid(worldId));
+            unit.setInt(4, centerX);
+            unit.setInt(5, centerZ);
+            unit.setString(6, residenceName);
             unit.executeUpdate();
             InitialTerritory territory = new InitialTerritory(
-                    new ChunkPosition(worldId, "world", 10, 20));
+                    new ChunkPosition(worldId, "world", centerX, centerZ));
             try (PreparedStatement chunk = connection.prepareStatement("""
                     INSERT INTO territory_chunks (unit_id, world_uuid, chunk_x, chunk_z)
                     VALUES (?, ?, ?, ?)

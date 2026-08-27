@@ -4,7 +4,7 @@ import cn.tianji.town.core.application.ApplicationStatus;
 import cn.tianji.town.core.application.ApplicationText;
 import cn.tianji.town.core.economy.MoneyAmount;
 import cn.tianji.town.core.consumption.BuffDefinition;
-import cn.tianji.town.core.land.ExpansionDirection;
+import cn.tianji.town.core.land.InitialTerritory;
 import cn.tianji.town.core.town.MemberRole;
 import cn.tianji.town.core.town.TownStatus;
 import cn.tianji.town.core.governance.VoteType;
@@ -893,7 +893,7 @@ final class TownUiController implements Listener {
                 "BUFF_SHOP", null)));
         if (account.role().equals("MAYOR") && runtime.consumptionEnabled()) {
             items.add(new MenuItem(16, button(Material.FILLED_MAP, "§b领地扩张",
-                    List.of("§7方向预览、线性价格和公共余额扣款"), "EXPANSION_MENU", null)));
+                    List.of("§75×5 领地地图、线性价格和公共余额扣款"), "EXPANSION_MENU", null)));
         }
         items.add(new MenuItem(22, button(Material.ARROW, "§7返回主菜单", List.of(),
                 "MAIN", null)));
@@ -922,7 +922,7 @@ final class TownUiController implements Listener {
                 return;
             }
             DialogInput input = DialogInput.numberRange("tax_rate", 360,
-                    Component.text("统一收入税率", NamedTextColor.GOLD), "%.0f%%", 5.0F,
+                    Component.text("统一收入税率", NamedTextColor.GOLD), "%s: %s%%", 5.0F,
                     runtime.economySettings().maximumTaxBps() / 100.0F,
                     account.taxRateBps() / 100.0F, 1.0F);
             openDialogPage(player, "设置收入税率", List.of(dialogTextBody(summary)), List.of(input),
@@ -1010,46 +1010,41 @@ final class TownUiController implements Listener {
     }
 
     private void openExpansionMenu(Player player) {
-        runtime.read(player, () -> {
-            Map<ExpansionDirection, TownRuntime.ExpansionPreview> previews = new LinkedHashMap<>();
-            Map<ExpansionDirection, String> errors = new LinkedHashMap<>();
-            for (ExpansionDirection direction : ExpansionDirection.values()) {
-                try {
-                    previews.put(direction, runtime.expansionPreview(player.getUniqueId(), direction));
-                } catch (IllegalArgumentException exception) {
-                    errors.put(direction, exception.getMessage());
-                }
-            }
-            return new ExpansionMenu(previews, errors);
-        }, menu -> {
-            List<MenuItem> items = new ArrayList<>();
-            int[] slots = {10, 12, 14, 16};
-            int index = 0;
-            for (ExpansionDirection direction : ExpansionDirection.values()) {
-                TownRuntime.ExpansionPreview preview = menu.previews().get(direction);
-                List<String> lore = preview == null
-                        ? List.of("§c" + menu.errors().get(direction))
-                        : List.of("§7目标网格: " + preview.candidate().gridX() + ","
-                                + preview.candidate().gridZ(),
-                                "§7价格: " + runtime.money(preview.priceMinor()),
-                                "§7扩张后单元: " + preview.totalUnits(),
-                                "§a点击传送并预览边界，再进入确认页");
-                items.add(new MenuItem(slots[index++], button(preview == null
-                        ? Material.GRAY_DYE : Material.COMPASS,
-                        (preview == null ? "§7" : "§e") + "向" + direction.displayName() + "扩张",
-                        lore, preview == null ? null : "PREVIEW_EXPANSION", direction.name())));
-            }
-            items.add(new MenuItem(22, button(Material.ARROW, "§7返回公共资金", List.of(),
-                    "FINANCE", "0")));
-            openMenu(player, 27, "3×3 固定网格扩张", items);
+        runtime.loadTerritoryMap(player, map -> {
+            String price = map.priceMinor() > 0
+                    ? runtime.money(map.priceMinor()) : "已达上限";
+            Component summary = Component.text("领地单元: " + map.currentUnits() + "/"
+                            + map.maximumUnits(), NamedTextColor.GRAY)
+                    .append(Component.newline())
+                    .append(Component.text("金色=中心 绿色=已占领 青色=可扩张 灰色=不可扩张 红色=其他小镇",
+                            NamedTextColor.DARK_GRAY));
+            openDialogPage(player, "5×5 领地扩张地图",
+                    List.of(DialogBody.plainMessage(summary, 360)), List.of(),
+                    DialogBase.DialogAfterAction.NONE, session -> {
+                        ActionButton back = ActionButton.create(
+                                Component.text("返回公共资产", NamedTextColor.GRAY),
+                                Component.text("返回公共资产页面", NamedTextColor.GRAY), 140,
+                                dialogAction(player, session, "FINANCE", "0"));
+                        return TerritoryDialogRenderer.render(map, price,
+                                cell -> dialogAction(player, session, "PREVIEW_EXPANSION",
+                                        cell.gridX() + "," + cell.gridZ()), back);
+                    });
         });
     }
 
-    private void previewExpansion(Player player, ExpansionDirection direction) {
-        runtime.read(player, () -> runtime.expansionPreview(player.getUniqueId(), direction), preview -> {
-            sitePolicy.teleportAndPreview(player, preview.candidate().territory());
-            openConfirmation(player, "确认向" + direction.displayName() + "扩张", "EXPAND",
-                    direction.name(), "将从公共资金扣除 " + runtime.money(preview.priceMinor())
+    private void previewExpansion(Player player, int gridX, int gridZ) {
+        runtime.read(player, () -> runtime.expansionPreview(
+                player.getUniqueId(), gridX, gridZ), preview -> {
+            SitePolicy.Validation validation = runtime.validateExpansionPreview(preview);
+            if (!validation.valid()) {
+                openNotice(player, "当前格子不可扩张", validation.error(),
+                        "返回扩张地图", "EXPANSION_MENU", null);
+                return;
+            }
+            sitePolicy.preview(player, preview.candidate().territory());
+            String target = gridX + "," + gridZ;
+            openConfirmation(player, "确认扩张至网格 " + target, "EXPAND",
+                    target, "将从公共资金扣除 " + runtime.money(preview.priceMinor())
                             + "，Residence 失败会自动退款", "EXPANSION_MENU", null);
         });
     }
@@ -1878,13 +1873,18 @@ final class TownUiController implements Listener {
                 case "BUY_BUFF" -> buyBuff(player, target);
                 case "DONATION_INPUT" -> startDonationInput(player);
                 case "EXPANSION_MENU" -> openExpansionMenu(player);
-                case "PREVIEW_EXPANSION" -> previewExpansion(player,
-                        ExpansionDirection.valueOf(target));
-                case "EXPAND" -> actions.expandTown(player, ExpansionDirection.valueOf(target),
-                        outcome -> handleOutcome(player, outcome, operation -> {
-                            openNotice(player, "领地扩张完成", "新领地已经生效，费用已从公共资金扣除。",
-                                    "返回扩张页面", "EXPANSION_MENU", null);
-                        }));
+                case "PREVIEW_EXPANSION" -> {
+                    GridTarget grid = gridTarget(target);
+                    previewExpansion(player, grid.x(), grid.z());
+                }
+                case "EXPAND" -> {
+                    GridTarget grid = gridTarget(target);
+                    actions.expandTown(player, grid.x(), grid.z(),
+                            outcome -> handleOutcome(player, outcome, operation ->
+                                    openNotice(player, "领地扩张完成",
+                                            "新领地已经生效，费用已从公共资金扣除。",
+                                            "返回扩张页面", "EXPANSION_MENU", null)));
+                }
                 case "MEMBERS" -> {
                     String[] parts = target.split(":");
                     openMembers(player, UUID.fromString(parts[0]), Integer.parseInt(parts[1]));
@@ -2170,9 +2170,19 @@ final class TownUiController implements Listener {
     }
 
     private void previewTown(Player player, UUID townId) {
-        runtime.read(player, () -> runtime.repository().findTown(townId)
-                .orElseThrow(() -> new IllegalArgumentException("小镇不存在")), town ->
-                sitePolicy.teleportAndPreview(player, town.territory()));
+        runtime.read(player, () -> {
+            TownSnapshot town = runtime.repository().findTown(townId)
+                    .orElseThrow(() -> new IllegalArgumentException("小镇不存在"));
+            List<InitialTerritory> territories = runtime.finance().territoryUnits(townId).stream()
+                    .filter(unit -> unit.projectionStatus().equals("ACTIVE"))
+                    .map(unit -> unit.unit().territory())
+                    .toList();
+            if (territories.isEmpty()) {
+                throw new IllegalArgumentException("小镇没有已生效的领地单元");
+            }
+            return new TownTerritoryPreview(town, territories);
+        }, preview -> sitePolicy.teleportAndPreview(player, preview.town().territory(),
+                preview.territories()));
     }
 
     private void submit(Player player, UUID applicationId) {
@@ -3302,8 +3312,16 @@ final class TownUiController implements Listener {
                               List<EconomyRepository.LedgerEntry> entries, int page) {
     }
 
-    private record ExpansionMenu(Map<ExpansionDirection, TownRuntime.ExpansionPreview> previews,
-                                 Map<ExpansionDirection, String> errors) {
+    private static GridTarget gridTarget(String target) {
+        String[] coordinates = target == null ? new String[0] : target.split(",", -1);
+        if (coordinates.length != 2) {
+            throw new IllegalArgumentException("领地网格坐标无效");
+        }
+        return new GridTarget(Integer.parseInt(coordinates[0]),
+                Integer.parseInt(coordinates[1]));
+    }
+
+    private record GridTarget(int x, int z) {
     }
 
     private record BuffShopView(List<CommerceRepository.ActiveBuff> active,
@@ -3312,6 +3330,13 @@ final class TownUiController implements Listener {
     }
 
     private record TownDetailsView(TownSnapshot town, MemberGovernanceSnapshot governance) {
+    }
+
+    private record TownTerritoryPreview(TownSnapshot town,
+                                        List<InitialTerritory> territories) {
+        private TownTerritoryPreview {
+            territories = List.copyOf(territories);
+        }
     }
 
     private record MemberPage(TownSnapshot.Page page, MemberGovernanceSnapshot governance) {

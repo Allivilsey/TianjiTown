@@ -552,6 +552,47 @@ public final class EconomyRepository {
         return query(connection -> listTerritoryUnits(connection, townId));
     }
 
+    public List<OccupiedTerritoryChunk> occupiedChunksOutsideTown(
+            UUID townId, UUID worldId, int minimumX, int maximumX,
+            int minimumZ, int maximumZ) {
+        requireWorkerThread();
+        Objects.requireNonNull(townId, "townId");
+        Objects.requireNonNull(worldId, "worldId");
+        if (minimumX > maximumX || minimumZ > maximumZ) {
+            throw new IllegalArgumentException("领地区块查询范围无效");
+        }
+        return query(connection -> {
+            List<OccupiedTerritoryChunk> result = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT DISTINCT u.town_id, t.name AS town_name,
+                           c.chunk_x, c.chunk_z
+                      FROM territory_chunks c
+                      JOIN territory_units u ON u.unit_id = c.unit_id
+                      JOIN towns t ON t.town_id = u.town_id
+                     WHERE u.town_id <> ? AND c.world_uuid = ?
+                       AND t.status = 'ACTIVE' AND u.reuse_blocked = 1
+                       AND c.chunk_x BETWEEN ? AND ?
+                       AND c.chunk_z BETWEEN ? AND ?
+                     ORDER BY c.chunk_z, c.chunk_x
+                    """)) {
+                statement.setBytes(1, uuid(townId));
+                statement.setBytes(2, uuid(worldId));
+                statement.setInt(3, minimumX);
+                statement.setInt(4, maximumX);
+                statement.setInt(5, minimumZ);
+                statement.setInt(6, maximumZ);
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) {
+                        result.add(new OccupiedTerritoryChunk(readUuid(rows, "town_id"),
+                                rows.getString("town_name"), rows.getInt("chunk_x"),
+                                rows.getInt("chunk_z")));
+                    }
+                }
+            }
+            return List.copyOf(result);
+        });
+    }
+
     public ExpansionOperation prepareExpansion(ExpansionRequest request) {
         requireWorkerThread();
         Objects.requireNonNull(request, "request");
@@ -1004,8 +1045,8 @@ public final class EconomyRepository {
     }
 
     private static void requireTaxRate(int basisPoints) {
-        if (basisPoints < 500 || basisPoints > 2_500 || basisPoints % 500 != 0) {
-            throw new IllegalArgumentException("税率必须为 5%~25%，且以 5% 为步进");
+        if (basisPoints < 500 || basisPoints > 2_500 || basisPoints % 100 != 0) {
+            throw new IllegalArgumentException("税率必须为 5%~25%，且以 1% 为步进");
         }
     }
 
@@ -1177,6 +1218,9 @@ public final class EconomyRepository {
     public record TerritoryUnitSnapshot(UUID unitId, UUID townId, TerritoryUnit unit,
                                         String residenceName, String residenceAreaName,
                                         String projectionStatus, String projectionError) {
+    }
+
+    public record OccupiedTerritoryChunk(UUID townId, String townName, int chunkX, int chunkZ) {
     }
 
     public record ExpansionRequest(UUID townId, TerritoryUnit unit, String residenceName,

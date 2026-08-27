@@ -33,13 +33,40 @@ public final class TerritoryRules {
                 .min(Comparator.comparingInt((Grid grid) -> Math.abs(grid.x()) + Math.abs(grid.z()))
                         .thenComparingInt(Grid::z).thenComparingInt(Grid::x))
                 .orElseThrow(() -> new IllegalArgumentException("该方向在 5×5 网格内已无可扩张单元"));
+        return target(units, candidate.x(), candidate.z());
+    }
+
+    public static TerritoryUnit target(List<TerritoryUnit> units, int gridX, int gridZ) {
+        if (units == null || units.isEmpty()) {
+            throw new IllegalArgumentException("小镇至少需要一个初始领地单元");
+        }
+        requireConnected(units);
+        if (Math.abs((long) gridX) > GRID_RADIUS || Math.abs((long) gridZ) > GRID_RADIUS) {
+            throw new IllegalArgumentException("目标超出 5×5 扩张网格");
+        }
+        TerritoryUnit origin = units.stream()
+                .filter(unit -> unit.gridX() == 0 && unit.gridZ() == 0)
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("缺少初始领地单元"));
+        Set<Grid> occupied = new HashSet<>();
+        units.forEach(unit -> occupied.add(new Grid(unit.gridX(), unit.gridZ())));
+        Grid target = new Grid(gridX, gridZ);
+        if (occupied.contains(target)) {
+            throw new IllegalArgumentException("目标领地单元已经被占领");
+        }
+        boolean adjacent = java.util.Arrays.stream(ExpansionDirection.values())
+                .map(direction -> new Grid(gridX + direction.gridX(),
+                        gridZ + direction.gridZ()))
+                .anyMatch(occupied::contains);
+        if (!adjacent) {
+            throw new IllegalArgumentException("目标必须与已有领地四方向相邻");
+        }
         int centerX = Math.addExact(origin.territory().center().x(),
-                Math.multiplyExact(candidate.x(), 3));
+                Math.multiplyExact(gridX, 3));
         int centerZ = Math.addExact(origin.territory().center().z(),
-                Math.multiplyExact(candidate.z(), 3));
+                Math.multiplyExact(gridZ, 3));
         ChunkPosition center = new ChunkPosition(origin.territory().center().worldId(),
                 origin.territory().center().worldName(), centerX, centerZ);
-        return new TerritoryUnit(candidate.x(), candidate.z(), new InitialTerritory(center));
+        return new TerritoryUnit(gridX, gridZ, new InitialTerritory(center));
     }
 
     public static void requireConnected(List<TerritoryUnit> units) {

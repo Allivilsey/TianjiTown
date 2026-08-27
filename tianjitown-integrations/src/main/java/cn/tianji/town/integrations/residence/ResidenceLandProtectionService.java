@@ -407,10 +407,10 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         if (world == null) {
             return null;
         }
-        int minimumX = Math.multiplyExact(territory.minimumChunkX(), 16);
-        int minimumZ = Math.multiplyExact(territory.minimumChunkZ(), 16);
-        int maximumX = Math.addExact(Math.multiplyExact(territory.maximumChunkX(), 16), 15);
-        int maximumZ = Math.addExact(Math.multiplyExact(territory.maximumChunkZ(), 16), 15);
+        int minimumX = territory.minimumBlockX();
+        int minimumZ = territory.minimumBlockZ();
+        int maximumX = territory.maximumBlockX();
+        int maximumZ = territory.maximumBlockZ();
         Location low = new Location(world, minimumX, world.getMinHeight(), minimumZ);
         Location high = new Location(world, maximumX, world.getMaxHeight() - 1, maximumZ);
         return new Bounds(low, high, new CuboidArea(low, high));

@@ -6,6 +6,7 @@ import java.util.Objects;
 
 public record InitialTerritory(ChunkPosition center) {
     public static final int RADIUS = 1;
+    public static final int BLOCKS_PER_CHUNK = 16;
 
     public InitialTerritory {
         Objects.requireNonNull(center, "center");
@@ -25,6 +26,30 @@ public record InitialTerritory(ChunkPosition center) {
 
     public int maximumChunkZ() {
         return Math.addExact(center.z(), RADIUS);
+    }
+
+    public int minimumBlockX() {
+        return Math.multiplyExact(minimumChunkX(), BLOCKS_PER_CHUNK);
+    }
+
+    public int maximumBlockX() {
+        return Math.subtractExact(maximumBlockXExclusive(), 1);
+    }
+
+    public int maximumBlockXExclusive() {
+        return Math.multiplyExact(Math.addExact(maximumChunkX(), 1), BLOCKS_PER_CHUNK);
+    }
+
+    public int minimumBlockZ() {
+        return Math.multiplyExact(minimumChunkZ(), BLOCKS_PER_CHUNK);
+    }
+
+    public int maximumBlockZ() {
+        return Math.subtractExact(maximumBlockZExclusive(), 1);
+    }
+
+    public int maximumBlockZExclusive() {
+        return Math.multiplyExact(Math.addExact(maximumChunkZ(), 1), BLOCKS_PER_CHUNK);
     }
 
     public List<ChunkPosition> chunks() {

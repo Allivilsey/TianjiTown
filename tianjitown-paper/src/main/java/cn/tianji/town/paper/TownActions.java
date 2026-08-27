@@ -398,6 +398,21 @@ final class TownActions {
 
     void expandTown(Player actor, ExpansionDirection direction,
                     Consumer<TownActionOutcome<EconomyRepository.ExpansionOperation>> completion) {
+        expandTown(actor, Map.of("direction", direction),
+                (success, failure) -> runtime.expandAction(actor, direction, success, failure),
+                completion);
+    }
+
+    void expandTown(Player actor, int gridX, int gridZ,
+                    Consumer<TownActionOutcome<EconomyRepository.ExpansionOperation>> completion) {
+        expandTown(actor, Map.of("grid_x", gridX, "grid_z", gridZ),
+                (success, failure) -> runtime.expandAction(
+                        actor, gridX, gridZ, success, failure), completion);
+    }
+
+    private void expandTown(Player actor, Map<String, ?> targetData,
+                            ExpansionExecutor executor,
+                            Consumer<TownActionOutcome<EconomyRepository.ExpansionOperation>> completion) {
         String action = "TOWN_EXPAND";
         if (rejectBeforeWrite(action, completion)) {
             return;
@@ -407,12 +422,15 @@ final class TownActions {
                     "FEATURE_DISABLED")));
             return;
         }
-        runtime.expandAction(actor, direction, operation -> completion.accept(
-                        TownActionOutcome.success(TownActionResult.success(action,
-                                Map.of("town_id", operation.townId(),
-                                        "expansion_id", operation.expansionId(),
-                                        "direction", direction,
-                                        "price_minor", operation.priceMinor())), operation)),
+        executor.execute(operation -> {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("town_id", operation.townId());
+            result.put("expansion_id", operation.expansionId());
+            result.putAll(targetData);
+            result.put("price_minor", operation.priceMinor());
+            completion.accept(TownActionOutcome.success(
+                    TownActionResult.success(action, result), operation));
+        },
                 exception -> completion.accept(TownActionOutcome.failure(
                         TownActionFailures.from(action, exception))));
     }
@@ -576,6 +594,12 @@ final class TownActions {
         return Map.of("vote_id", vote.id(), "town_id", vote.townId(), "status", vote.status(),
                 "yes_votes", vote.yesVotes(), "no_votes", vote.noVotes(),
                 "required_yes", vote.requiredYes());
+    }
+
+    @FunctionalInterface
+    private interface ExpansionExecutor {
+        void execute(Consumer<EconomyRepository.ExpansionOperation> success,
+                     Consumer<RuntimeException> failure);
     }
 
     private record TownMembers(TownSnapshot town, List<UUID> members) {
