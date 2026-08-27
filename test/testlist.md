@@ -43,7 +43,7 @@
 | 状态 | ID | 优先级/类型 | 功能 | 测试方法 | 预期结果 |
 |---|---|---|---|---|---|
 | [x] | BLD-01 | P0/AUTO | 干净构建 | 使用 JDK 25+、Maven 3.9+ 在干净工作区执行 `mvn -B clean verify`。 | Reactor 四个模块全部成功，无失败、错误或意外跳过。 |
-| [x] | BLD-02 | P1/AUTO | 测试发现 | 核对 Surefire 报告与源码中的测试类、`@Test` 数量；当前基线为 42 个测试类、124 个测试。 | 所有测试均被发现并执行；Core 17、Storage 35、Integrations 14、Paper 58，失败、错误和跳过均为 0。 |
+| [x] | BLD-02 | P1/AUTO | 测试发现 | 核对 Surefire 报告与源码中的测试类、`@Test` 数量；当前基线为 44 个测试类、135 个测试。 | 所有测试均被发现并执行；Core 19、Storage 38、Integrations 18、Paper 60，失败、错误和跳过均为 0。 |
 | [x] | BLD-03 | P1/AUTO | 核心规则 | 执行 application、economy、governance、land、consumption 的核心单测。 | 文本边界、状态机、金额精度、投票门槛、5×5 单元、5×5 网格、Buff 定价均通过。 |
 | [x] | BLD-04 | P0/AUTO | 存储层 | 执行五类 SQLite Repository 与 DatabaseGate 测试。 | WAL、外键、busy timeout、事务、唯一约束、幂等键和异常映射符合契约。 |
 | [x] | BLD-05 | P1/AUTO | 集成适配器 | 执行 Residence、Vault、QuickShop、WorldBorder 适配器测试。 | 能力探测、精度换算、交易识别和命令保护正确；WorldBorder 从插件 ClassLoader 解析经典 API，检查含缓冲的四个角，并对未配置边界和非主线程调用安全失败。 |
@@ -171,7 +171,6 @@
 | [x] | LAND-05 | P0/CMD | 余额边界 | 使用不足、恰好和超过所需公共余额执行扩张。 | 不足时零占位/零扣款；恰好与充足时一次扣款并产生 EXPANSION。 |
 | [x] | LAND-07 | P0/CMD | WorldBorder 扩张 | 用 MinecraftConsoleClient 登录镇长并通过 `/testcommand town expand` 驱动；在矩形/椭圆 WorldBorder 的正、负坐标边缘分别让目标 5×5 单元及缓冲刚好在内、贴线和单角越界。 | 仅四角及缓冲全部在边界内时允许扩张；越界返回稳定失败，不占位、不扣款、不改 Residence；与本镇已有 Residence 相接不被误判为外部冲突。 |
 | [x] | LAND-12 | P0/OPS | 扩张重启恢复 | 保留 PREPARED、REFUNDED、COMPENSATION_REQUIRED 等状态后重启。 | 启动恢复至一致终态；需人工处理项明确报告；重复启动幂等。 |
-| [x] | LAND-16 | P0/OPS | 已缺失投影 | 在停服状态移除 Residence 后启动或触发自动对账。 | ACTIVE 小镇安全归档并保留名称/区块复用锁，不自动创建/删除未知投影。 |
 | [x] | LAND-19 | P0/CMD | 第 8 次扩张价格闭环 | 修复 `LAND-03` 后执行默认第 8 次扩张，核对显示价格、Vault 扣款、账户和账本。 | 第 8 次价格仍为 300000；Vault、内部账户和账本金额一致，领地写入完整。 |
 
 ## 10. 公共 Buff

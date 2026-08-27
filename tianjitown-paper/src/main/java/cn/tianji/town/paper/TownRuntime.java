@@ -26,6 +26,7 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -53,6 +54,7 @@ final class TownRuntime {
     private final AtomicBoolean databaseAvailable = new AtomicBoolean(true);
     private final AtomicBoolean quickShopTaxAvailable = new AtomicBoolean(false);
     private final ProvisionCoordinator provisions = new ProvisionCoordinator();
+    private final Set<UUID> pendingLandRepairs = ConcurrentHashMap.newKeySet();
 
     TownRuntime(TianjiTownPlugin plugin, DatabaseGate database,
                     LandProtectionService landProtection,
@@ -321,6 +323,9 @@ final class TownRuntime {
                         .toList();
                 plugin.runMain(() -> {
                     for (TownMembers state : states) {
+                        if (hasUnsettledProjection(state)) {
+                            continue;
+                        }
                         List<LandProtectionService.Area> areas = state.units().stream()
                                 .filter(unit -> unit.projectionStatus().equals("ACTIVE"))
                                 .map(unit -> new LandProtectionService.Area(unit.residenceAreaName(),
@@ -330,24 +335,23 @@ final class TownRuntime {
                             inspection = landProtection.inspect(state.town().residenceName(), areas,
                                     state.members());
                         } catch (RuntimeException | LinkageError exception) {
-                            inspection = LandProtectionService.Inspection.invalid(
-                                    "Residence API 不可用: " + safeMessage(exception));
-                        }
-                        if (inspection.state() == LandProtectionService.ProjectionState.MISSING) {
-                            archiveMissingProjection(state.town(), inspection.message());
+                            LandProtectionService.Result failure =
+                                    LandProtectionService.Result.failure(
+                                            "Residence API 不可用: " + safeMessage(exception));
+                            plugin.getLogger().severe("Residence 对账失败 " + state.town().id()
+                                    + ": " + failure.message());
+                            recordLandAudit(null, "SYSTEM", state.town().id(), false, failure);
                             continue;
                         }
-                        boolean healthy = inspection.state()
-                                == LandProtectionService.ProjectionState.HEALTHY;
-                        LandProtectionService.Result result = healthy
-                                ? LandProtectionService.Result.ok(inspection.message())
-                                : LandProtectionService.Result.failure(inspection.message());
-                        if (!healthy) {
-                            plugin.getLogger().severe("Residence 对账发现异常 " + state.town().id()
-                                    + ": " + inspection.message()
-                                    + "；自动任务不会删除或重建投影，请由管理员检查。");
+                        if (inspection.state()
+                                == LandProtectionService.ProjectionState.HEALTHY) {
+                            recordLandAudit(null, "SYSTEM", state.town().id(), false,
+                                    LandProtectionService.Result.ok(inspection.message()));
+                            continue;
                         }
-                        recordLandAudit(null, "SYSTEM", state.town().id(), false, result);
+                        plugin.getLogger().warning("Residence 对账发现异常 " + state.town().id()
+                                + ": " + inspection.message() + "；正在读取最新 SQLite 记录修复。");
+                        repairLandFromDatabase(state.town().id(), inspection.message());
                     }
                 });
             } catch (RuntimeException exception) {
@@ -355,6 +359,88 @@ final class TownRuntime {
                 plugin.getLogger().severe("Residence 对账读取 SQLite 失败: " + safeMessage(exception));
             }
         });
+    }
+
+    private void repairLandFromDatabase(UUID townId, String detectedDifference) {
+        if (!pendingLandRepairs.add(townId)) {
+            return;
+        }
+        boolean submitted = plugin.runAsync(() -> {
+            try {
+                TownSnapshot town = repository.findTown(townId).orElse(null);
+                if (town == null || town.status() != TownStatus.ACTIVE) {
+                    pendingLandRepairs.remove(townId);
+                    plugin.getLogger().warning("Residence 自动修复已取消，小镇数据库版本已不存在或非 "
+                            + "ACTIVE: " + townId);
+                    return;
+                }
+                TownMembers latest = new TownMembers(town, repository.listMemberIds(townId),
+                        finance.territoryUnits(townId));
+                if (hasUnsettledProjection(latest)) {
+                    pendingLandRepairs.remove(townId);
+                    plugin.getLogger().info("Residence 自动修复已延后，小镇仍有未完成的领地投影: "
+                            + townId);
+                    return;
+                }
+                databaseAvailable.set(true);
+                if (!plugin.runMain(() -> applyAutomaticLandRepair(latest,
+                        detectedDifference))) {
+                    pendingLandRepairs.remove(townId);
+                }
+            } catch (RuntimeException exception) {
+                pendingLandRepairs.remove(townId);
+                if (exception instanceof TownRepository.StorageUnavailableException
+                        || exception instanceof EconomyRepository.StorageUnavailableException) {
+                    databaseAvailable.set(false);
+                }
+                plugin.getLogger().severe("Residence 自动修复读取最新 SQLite 记录失败 "
+                        + townId + ": " + safeMessage(exception));
+            }
+        });
+        if (!submitted) {
+            pendingLandRepairs.remove(townId);
+        }
+    }
+
+    private static boolean hasUnsettledProjection(TownMembers state) {
+        return state.units().stream()
+                .anyMatch(unit -> !unit.projectionStatus().equals("ACTIVE"));
+    }
+
+    private void applyAutomaticLandRepair(TownMembers state, String detectedDifference) {
+        try {
+            List<LandProtectionService.Area> areas = state.units().stream()
+                    .filter(unit -> unit.projectionStatus().equals("ACTIVE"))
+                    .map(unit -> new LandProtectionService.Area(unit.residenceAreaName(),
+                            unit.unit().territory())).toList();
+            AutomaticLandReconciler.Outcome outcome;
+            try {
+                outcome = AutomaticLandReconciler.reconcile(landProtection,
+                        state.town().residenceName(), areas, state.members());
+            } catch (RuntimeException | LinkageError exception) {
+                LandProtectionService.Result failure = LandProtectionService.Result.failure(
+                        "Residence API 不可用: " + safeMessage(exception));
+                plugin.getLogger().severe("Residence 对账自动修复失败 " + state.town().id()
+                        + ": " + failure.message());
+                recordLandAudit(null, "SYSTEM", state.town().id(), true, failure);
+                return;
+            }
+            if (!outcome.repairAttempted()) {
+                plugin.getLogger().info("Residence 投影在读取最新 SQLite 记录后已一致 "
+                        + state.town().id() + ": " + detectedDifference);
+            } else if (outcome.result().success()) {
+                plugin.getLogger().warning("Residence 对账发现异常并已依照最新 SQLite 记录自动修复 "
+                        + state.town().id() + ": " + outcome.inspection().message());
+            } else {
+                plugin.getLogger().severe("Residence 对账自动修复失败 " + state.town().id()
+                        + ": 检查=" + outcome.inspection().message() + "，修复="
+                        + outcome.result().message());
+            }
+            recordLandAudit(null, "SYSTEM", state.town().id(),
+                    outcome.repairAttempted(), outcome.result());
+        } finally {
+            pendingLandRepairs.remove(state.town().id());
+        }
     }
 
     void settleDueVotes() {
@@ -386,27 +472,6 @@ final class TownRuntime {
                     databaseAvailable.set(false);
                 }
                 plugin.getLogger().severe("治理投票定时结算失败: " + safeMessage(exception));
-            }
-        });
-    }
-
-    private void archiveMissingProjection(TownSnapshot town, String detail) {
-        plugin.getLogger().severe("ACTIVE 小镇缺少 Residence 投影 " + town.id() + "/"
-                + town.residenceName() + ": " + detail + "；正在执行安全归档并保留复用锁。");
-        plugin.runAsync(() -> {
-            try {
-                boolean archived = repository.archiveTownForMissingProjection(town.id(), detail);
-                databaseAvailable.set(true);
-                if (archived) {
-                    plugin.getLogger().severe("小镇已安全归档 " + town.profile().name()
-                            + "；名称、小镇代码和原区块保持锁定，未自动创建或删除 Residence。");
-                }
-            } catch (RuntimeException exception) {
-                if (exception instanceof TownRepository.StorageUnavailableException) {
-                    databaseAvailable.set(false);
-                }
-                plugin.getLogger().severe("小镇安全归档失败 " + town.id() + ": "
-                        + safeMessage(exception));
             }
         });
     }

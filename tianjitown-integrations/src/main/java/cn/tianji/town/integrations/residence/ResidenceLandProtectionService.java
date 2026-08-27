@@ -275,28 +275,13 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                             boolean repair) {
         requireMainThread();
         String name = registerManagedName(residenceName);
-        ClaimedResidence residence = manager().getByName(name);
+        ResidenceManager manager = manager();
+        ClaimedResidence residence = manager.getByName(name);
         if (residence == null) {
             if (!repair) {
                 return Result.failure("缺少 Residence 投影 " + name);
             }
-            Area main = areas.stream().filter(area -> area.name().equalsIgnoreCase("main"))
-                    .findFirst().orElseThrow(() -> new IllegalArgumentException(
-                            "多区域 Residence 缺少 main 区域"));
-            Result created = create(name, main.territory(), members);
-            if (!created.success()) {
-                return created;
-            }
-            for (Area area : areas) {
-                if (area == main) {
-                    continue;
-                }
-                Result added = addArea(name, area, members);
-                if (!added.success()) {
-                    return added;
-                }
-            }
-            residence = manager().getByName(name);
+            return createFromDatabase(name, areas, members);
         }
         Result current = verifyAndApply(name, residence, areas, members, repair);
         if (current.success() || !repair) {
@@ -314,10 +299,74 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                     return added;
                 }
             } else if (!matchesBounds(actual, bounds)) {
-                return Result.failure("区域边界不一致，拒绝自动替换: " + area.name());
+                return rebuildFromDatabase(manager, name, residence, areas, members,
+                        "区域边界不一致: " + area.name());
             }
         }
-        return verifyAndApply(name, residence, areas, members, true);
+        Result repaired = verifyAndApply(name, residence, areas, members, true);
+        return repaired.success() ? repaired
+                : rebuildFromDatabase(manager, name, residence, areas, members,
+                repaired.message());
+    }
+
+    private Result createFromDatabase(String name, List<Area> areas,
+                                      Collection<UUID> members) {
+        Area main = areas.stream().filter(area -> area.name().equalsIgnoreCase("main"))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException(
+                        "多区域 Residence 缺少 main 区域"));
+        Result created = create(name, main.territory(), members);
+        if (!created.success()) {
+            return created;
+        }
+        for (Area area : areas) {
+            if (area.equals(main)) {
+                continue;
+            }
+            Result added = addArea(name, area, members);
+            if (!added.success()) {
+                cleanupIncompleteProjection(name);
+                return Result.failure("依照数据库创建区域失败: " + added.message()
+                        + "；不完整投影已清理，后续对账将重试");
+            }
+        }
+        return Result.ok("Residence 投影已依照数据库重建: " + name);
+    }
+
+    private Result rebuildFromDatabase(ResidenceManager manager, String name,
+                                       ClaimedResidence residence, List<Area> areas,
+                                       Collection<UUID> members, String difference) {
+        if (!residence.isServerLand()) {
+            return Result.failure("同名 Residence 不属于受控服务端账户，拒绝按数据库重建: "
+                    + name);
+        }
+        for (Area area : areas) {
+            Bounds bounds = bounds(area.territory());
+            if (bounds == null) {
+                return Result.failure("目标世界未加载: " + area.territory().center().worldName());
+            }
+            String collision = manager.checkAreaCollision(bounds.area(), residence);
+            if (collision != null) {
+                return Result.failure("数据库领地与外部 Residence 冲突，拒绝重建: " + collision);
+            }
+        }
+        // 只有受控投影且数据库目标区域无外部冲突时，才允许以数据库版本整体替换。
+        removeResidence(manager, name);
+        if (manager.getByName(name) != null) {
+            return Result.failure("Residence 旧投影移除后仍可读取，无法按数据库重建: " + name);
+        }
+        Result rebuilt = createFromDatabase(name, areas, members);
+        return rebuilt.success()
+                ? Result.ok("Residence 投影已依照数据库自动修复: " + name
+                + "（" + difference + "）")
+                : rebuilt;
+    }
+
+    private void cleanupIncompleteProjection(String name) {
+        ResidenceManager manager = manager();
+        ClaimedResidence incomplete = manager.getByName(name);
+        if (incomplete != null && incomplete.isServerLand()) {
+            removeResidence(manager, name);
+        }
     }
 
     private Result verifyAndApply(String name, ClaimedResidence residence, List<Area> areas,

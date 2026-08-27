@@ -18,7 +18,7 @@
 /townadmin land reconcile all repair
 ```
 
-`diagnose` 是只读检查，不会自动修改 QuickShop 历史或 Residence。`land reconcile ... repair` 会修复权限/缺失区域，执行前应先查看只读结果。`backup` 只覆盖 TianjiTown SQLite 和配置，依赖插件仍按统一备份流程处理。
+`diagnose` 是只读检查，不会自动修改 QuickShop 历史或 Residence。系统定时领地对账发现差异时，会依照 SQLite 中的小镇、成员和已生效领地单元自动修复；`land reconcile ... repair` 可用于立即手动触发同类修复。`backup` 只覆盖 TianjiTown SQLite 和配置，依赖插件仍按统一备份流程处理。
 
 ## 定时任务
 
@@ -33,7 +33,7 @@
 ## 告警处置
 
 - SQLite 不可用：立即维护模式，禁止审批/消费/返还；不要删除 WAL/SHM。确认磁盘、权限和空间后等待连接恢复，再执行统一诊断。
-- Residence 异常：现有保护优先。先执行只读对账；缺失 ACTIVE 投影会触发安全归档，修复前不要手工新建同名领地。
+- Residence 异常：系统会依照 SQLite 记录自动修复缺失投影、区域和成员权限；若自动修复失败，先执行只读对账并排除世界未加载、同名外部领地或 Residence API 故障，不要手工覆盖同名领地。
 - Vault 短款：公共消费自动锁定。记录账户余额，核对 QuickShop、内部账本和管理员调账，补正外部状态后重新对账。
 - 捐款退款失败：系统会在当前运行期内有界重试玩家补偿，并在成功后自动复核清算余额。看到“正在自动补偿”时不要手工重复入账；达到重试上限、插件中途停止或仍显示 `COMPENSATION_REQUIRED` 时，保持消费锁并按操作 ID 人工核对玩家、清算、内部账户和流水。
 - QuickShop 差异：保留 H2 只读副本和诊断报告，按时间、收款方、税额核对；不要直接修改 QuickShop 数据库。
