@@ -4,6 +4,7 @@ import cn.tianji.town.core.land.InitialTerritory;
 import cn.tianji.town.core.land.TownResidenceName;
 import cn.tianji.town.core.ports.LandProtectionService;
 import com.bekvon.bukkit.residence.api.ResidenceApi;
+import com.bekvon.bukkit.residence.commands.padd;
 import com.bekvon.bukkit.residence.protection.ClaimedResidence;
 import com.bekvon.bukkit.residence.protection.CuboidArea;
 import com.bekvon.bukkit.residence.protection.FlagPermissions;
@@ -22,8 +23,7 @@ import java.util.UUID;
 
 public final class ResidenceLandProtectionService implements LandProtectionService {
     private static final String SYSTEM_OWNER_HINT = "TianjiTownSystem";
-    private static final Collection<String> MEMBER_FLAGS =
-            java.util.List.of("build", "destroy", "place", "container", "use", "move");
+    private static final String IGNITE_FLAG = "ignite";
     private final Server server;
     private final Set<String> managedNames;
     private final ThreadLocal<Integer> internalMutations = ThreadLocal.withInitial(() -> 0);
@@ -434,15 +434,20 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             }
         }
         for (UUID member : members) {
-            for (String flag : MEMBER_FLAGS) {
-                if (!applyPermissions && !Boolean.TRUE.equals(
-                        residence.getPermissions().getPlayerFlags(member).get(flag))) {
-                    return Result.failure("成员 " + member + " 的 " + flag + " 权限不一致");
-                }
-                if (applyPermissions && !residence.getPermissions().setPlayerFlag(member, flag,
-                        FlagPermissions.FlagState.TRUE)) {
-                    return Result.failure("无法写入成员 " + member + " 的 " + flag + " 权限");
-                }
+            Map<String, Boolean> playerFlags = residence.getPermissions().getPlayerFlags(member);
+            if (!applyPermissions && !residence.isTrusted(member)) {
+                return Result.failure("成员 " + member + " 的 padd 权限组不一致");
+            }
+            if (!applyPermissions && !Boolean.TRUE.equals(playerFlags.get(IGNITE_FLAG))) {
+                return Result.failure("成员 " + member + " 的点火权限不一致");
+            }
+            if (applyPermissions && !residence.getPermissions().setFlagGroupOnPlayer(
+                    server.getConsoleSender(), member, padd.groupedFlag, "true", true)) {
+                return Result.failure("无法写入成员 " + member + " 的 padd 权限组");
+            }
+            if (applyPermissions && !residence.getPermissions().setPlayerFlag(member, IGNITE_FLAG,
+                    FlagPermissions.FlagState.TRUE)) {
+                return Result.failure("无法写入成员 " + member + " 的点火权限");
             }
         }
         return Result.ok("Residence 投影正常: " + name);

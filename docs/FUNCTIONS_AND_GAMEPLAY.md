@@ -52,7 +52,7 @@ TianjiTown 是面向单个 Paper 服务器的小镇治理与统一经济插件�
 
 公共 Buff 的购买角色由每个商品单独配置，并不固定等于上表的默认值。
 
-Residence 领地中的成员权限由 TianjiTown 统一投影。所有成员都会获得 `build`、`destroy`、`place`、`container`、`use`、`move` 权限；离镇后这些玩家权限会被清除。系统领地不能由玩家使用 `/res` 或 `/residence` 命令直接修改。
+Residence 领地中的成员权限由 TianjiTown 统一投影。所有成员都会获得 Residence `/res padd` 当前配置的完整 `trusted` 权限组，并额外获得 `ignite` 点火权限；离镇后这些玩家权限会被清除。系统领地不能由玩家使用 `/res` 或 `/residence` 命令直接修改。
 
 ## 4. 建立小镇
 
