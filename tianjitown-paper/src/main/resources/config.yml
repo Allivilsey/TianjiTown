@@ -68,9 +68,8 @@ phase3:
     enabled: true
   reconciliation-interval-minutes: 5
   expansion:
-    base-cost: '1000.00'
-    # 第 N 次扩张费用 = 基础费用 + 每单元增价 × (当前单元数 - 1)。
-    per-unit-increase: '500.00'
+    # 每次扩张均使用同一价格，不随现有领地单元数增长。
+    fixed-cost: '3000.00'
 
 phase4:
   buffs:

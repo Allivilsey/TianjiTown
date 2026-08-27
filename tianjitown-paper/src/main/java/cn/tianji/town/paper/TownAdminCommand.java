@@ -766,8 +766,7 @@ final class TownAdminCommand implements CommandExecutor {
                     + " projection=" + unit.projectionStatus()));
             if (view.preview() != null) {
                 Player player = (Player) sender;
-                long price = ExpansionPricing.price(runtime.economySettings().expansionBaseCost(),
-                        runtime.economySettings().expansionPerUnitIncrease(), view.units().size(),
+                long price = ExpansionPricing.price(runtime.economySettings().expansionCost(),
                         runtime.settlement().scale()).minorUnits();
                 runtime.sitePolicy().preview(player, view.preview().territory());
                 player.sendMessage("§e预估价格: " + runtime.money(price));

@@ -34,11 +34,10 @@ class ExpansionRulesTest {
     }
 
     @Test
-    void appliesLinearPriceWithEconomyPrecision() {
-        MoneyAmount price = ExpansionPricing.price(new BigDecimal("100.00"),
-                new BigDecimal("1.5"), 3, 2);
+    void appliesFixedPriceWithEconomyPrecision() {
+        MoneyAmount price = ExpansionPricing.price(new BigDecimal("3000.001"), 2);
 
-        assertEquals(new BigDecimal("103.00"), price.decimal());
+        assertEquals(new BigDecimal("3000.01"), price.decimal());
     }
 
     @Test

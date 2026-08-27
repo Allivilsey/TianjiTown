@@ -104,8 +104,7 @@ final class TerritoryService {
                 }
             }
         }
-        long nextPrice = context.units().size() < settings.maximumUnits()
-                ? price(context.units().size()) : 0;
+        long nextPrice = context.units().size() < settings.maximumUnits() ? price() : 0;
         return new TerritoryMap(cells, context.units().size(), settings.maximumUnits(),
                 nextPrice);
     }
@@ -151,13 +150,12 @@ final class TerritoryService {
         String areaName = "unit_" + coordinate(candidate.gridX()) + "_"
                 + coordinate(candidate.gridZ());
         return new ExpansionPreview(context.account(), candidate,
-                context.origin().residenceName(), areaName, price(context.units().size()),
+                context.origin().residenceName(), areaName, price(),
                 context.units().size() + 1);
     }
 
-    private long price(int currentUnits) {
-        return ExpansionPricing.price(settings.expansionBaseCost(),
-                settings.expansionPerUnitIncrease(), currentUnits, moneyScale).minorUnits();
+    private long price() {
+        return ExpansionPricing.price(settings.expansionCost(), moneyScale).minorUnits();
     }
 
     private void requireCapacity(Context context) {

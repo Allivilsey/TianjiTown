@@ -893,7 +893,7 @@ final class TownUiController implements Listener {
                 "BUFF_SHOP", null)));
         if (account.role().equals("MAYOR") && runtime.consumptionEnabled()) {
             items.add(new MenuItem(16, button(Material.FILLED_MAP, "§b领地扩张",
-                    List.of("§75×5 领地地图、线性价格和公共余额扣款"), "EXPANSION_MENU", null)));
+                    List.of("§75×5 领地地图、固定 3000 价格和公共余额扣款"), "EXPANSION_MENU", null)));
         }
         items.add(new MenuItem(22, button(Material.ARROW, "§7返回主菜单", List.of(),
                 "MAIN", null)));
