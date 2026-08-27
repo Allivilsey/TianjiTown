@@ -1,4 +1,4 @@
-schema-version: 7
+schema-version: 8
 
 database:
   # 相对路径以 plugins/TianjiTown 为基准，也可填写绝对路径。
@@ -15,6 +15,8 @@ phase1:
   maintenance-mode: false
   # 由服务台管理命令维护；列表同时保留方块 PDC 中的服务台 ID 和当前位置。
   service-stations: []
+  # 玩家每次领取手册后需要等待的时间，管理员发放同样遵守该冷却。
+  handbook-cooldown-minutes: 60
   application:
     # 撤回或被拒绝后的再次申请冷却。
     cooldown-hours: 24
@@ -76,25 +78,25 @@ phase4:
     shop-enabled: true
     catalog:
       speed:
-        display-name: '公共迅捷'
+        display-name: '速度'
         effect-kind: POTION
         effect-key: 'minecraft:speed'
         operation: AMPLIFIER
-        # 每小时基础价；四档时长会按小时线性计价并应用长期折扣。
+        # 每小时基础价；玩家选择 1~4 周和 I~V 强度后按周折扣计价。
         base-price: '500.00'
-        maximum-level: 3
+        maximum-level: 5
         stacking: LEVEL_UP
         amount-per-level: 1.0
         purchasing-roles: [MAYOR, DEPUTY_MAYOR]
       health:
-        display-name: '公共生命'
+        display-name: '生命'
         effect-kind: ATTRIBUTE
         effect-key: 'minecraft:max_health'
         operation: ADD_NUMBER
         base-price: '1000.00'
-        maximum-level: 2
+        maximum-level: 5
         stacking: LEVEL_UP
-        amount-per-level: 2.0
+        amount-per-level: 4.0
         purchasing-roles: [MAYOR, DEPUTY_MAYOR]
 
 phase5:

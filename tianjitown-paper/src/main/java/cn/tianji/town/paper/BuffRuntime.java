@@ -81,6 +81,24 @@ final class BuffRuntime implements Listener {
         }
     }
 
+    void buyBuffAction(Player player, String key, int weeks, int level,
+                       Consumer<CommerceRepository.BuffPurchase> success,
+                       Consumer<RuntimeException> failure) {
+        if (!buffShopEnabled() || !host.consumptionEnabled()) {
+            failure.accept(new IllegalStateException("公共 Buff 商店当前暂停新购买"));
+            return;
+        }
+        try {
+            BuffDefinition definition = settings.requireBuff(key);
+            host.writeAction(player, () -> repository.purchaseBuff(player.getUniqueId(),
+                            player.getName(), definition, weeks, level, host.settlement().scale(),
+                            "buff-purchase:" + UUID.randomUUID(), Instant.now()),
+                    purchase -> verifyBuffPurchase(player, purchase, success, failure), failure);
+        } catch (RuntimeException exception) {
+            failure.accept(exception);
+        }
+    }
+
     void cleanupExpired() {
         host.write(org.bukkit.Bukkit.getConsoleSender(), () -> repository.expireBuffs(Instant.now()),
                 ignored -> refreshAllPlayers());

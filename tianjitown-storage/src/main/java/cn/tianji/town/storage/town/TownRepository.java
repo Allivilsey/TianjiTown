@@ -1170,7 +1170,7 @@ public final class TownRepository {
                 chunks.executeUpdate();
             }
             audit(connection, null, actorId, actorName, "TOWN_DELETE_COMPLETE", "TOWN",
-                    townId.toString(), reason, "Residence 已移除；名称、领地名称和区块已允许复用");
+                    townId.toString(), reason, "Residence 已移除；名称、小镇代码和区块已允许复用");
             return null;
         });
     }
@@ -1222,7 +1222,7 @@ public final class TownRepository {
             }
             audit(connection, null, null, "SYSTEM", "TOWN_SAFETY_ARCHIVE", "TOWN",
                     townId.toString(), "Residence 投影缺失", detail
-                            + "；名称、领地名称和区块继续锁定，禁止自动复用");
+                            + "；名称、小镇代码和区块继续锁定，禁止自动复用");
             return true;
         });
     }
@@ -1238,7 +1238,7 @@ public final class TownRepository {
                     || !current.profile().shortName().equals(profile.shortName())
                     || !current.profile().normalizedResidenceName()
                     .equals(profile.normalizedResidenceName())) {
-                throw new ConflictException("玩家资料入口不能修改小镇名称、简称或领地名称");
+                throw new ConflictException("玩家资料入口不能修改小镇名称或小镇代码");
             }
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE towns SET description = ?, rules_text = ?,
@@ -1543,7 +1543,7 @@ public final class TownRepository {
         String action = mayorOnly ? "TOWN_DISBAND_PREPARE"
                 : alreadyPrepared ? "TOWN_DELETE_RETRY" : "TOWN_DELETE_PREPARE";
         audit(connection, null, actorId, actorName, action, "TOWN", townId.toString(), reason,
-                "已安全归档；名称、领地名称和区块保持锁定，等待移除投影");
+                "已安全归档；名称、小镇代码和区块保持锁定，等待移除投影");
         return current;
     }
 
@@ -1736,7 +1736,7 @@ public final class TownRepository {
             }
             try (ResultSet result = statement.executeQuery()) {
                 if (result.next()) {
-                    throw new ConflictException("小镇名称、简称或领地名称已被其他申请占用");
+                    throw new ConflictException("小镇名称或小镇代码已被其他申请占用");
                 }
             }
         }
@@ -1745,7 +1745,7 @@ public final class TownRepository {
             statement.setString(1, TownResidenceName.initial(text.residenceName()));
             try (ResultSet result = statement.executeQuery()) {
                 if (result.next()) {
-                    throw new ConflictException("领地名称已被现有小镇使用");
+                    throw new ConflictException("小镇代码已被现有小镇使用");
                 }
             }
         }
@@ -1770,7 +1770,7 @@ public final class TownRepository {
             }
             try (ResultSet result = statement.executeQuery()) {
                 if (result.next()) {
-                    throw new ConflictException("名称或简称已被现有小镇使用");
+                    throw new ConflictException("小镇名称或代码已被现有小镇使用");
                 }
             }
         }

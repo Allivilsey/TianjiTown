@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class TianjiTownPlugin extends JavaPlugin {
-    private static final int CONFIG_SCHEMA = 7;
+    private static final int CONFIG_SCHEMA = 8;
     private final AtomicReference<GateStatus> gateStatus = new AtomicReference<>(
             new GateStatus(GateStatus.State.CHECKING, List.of("尚未开始")));
     private final AtomicLong lifecycleGeneration = new AtomicLong();
@@ -44,6 +44,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
     private volatile TownActions townActions;
     private volatile TownUiController townUi;
     private volatile TownAdminTabCompleter townAdminTabCompleter;
+    private volatile PluginMessages messages;
 
     @Override
     public void onEnable() {
@@ -54,6 +55,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
         asyncExecutor = Executors.newFixedThreadPool(4,
                 Thread.ofPlatform().daemon(true).name("TianjiTown-Async-", 0).factory());
         saveDefaultConfig();
+        saveResource("messages.yml", false);
+        messages = new PluginMessages(getDataFolder());
         org.bukkit.command.PluginCommand adminCommand = java.util.Objects.requireNonNull(
                 getCommand("townadmin"), "plugin.yml 缺少 townadmin");
         TownAdminTabCompleter completer = new TownAdminTabCompleter(this);
@@ -149,6 +152,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         townActions = null;
         townUi = null;
         townAdminTabCompleter = null;
+        messages = null;
     }
 
     public GateStatus gateStatus() {
@@ -165,6 +169,18 @@ public final class TianjiTownPlugin extends JavaPlugin {
 
     TownActions townActions() {
         return townActions;
+    }
+
+    PluginMessages messages() {
+        PluginMessages current = messages;
+        if (current == null) {
+            throw new IllegalStateException("messages.yml 尚未加载");
+        }
+        return current;
+    }
+
+    void reloadMessages() {
+        messages().reload();
     }
 
     boolean runAsync(Runnable task) {
@@ -334,7 +350,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
             return true;
         }
         if (configured == CONFIG_SCHEMA - 1) {
-            upgradeConfigFromSix();
+            upgradeConfigFromSeven();
             getConfig().set("schema-version", CONFIG_SCHEMA);
             saveConfig();
             details.add("OK config schema 已安全升级 " + configured + " -> " + CONFIG_SCHEMA);
@@ -348,6 +364,18 @@ public final class TianjiTownPlugin extends JavaPlugin {
                     + CONFIG_SCHEMA + "；请先按对应版本升级手册处理");
         }
         return false;
+    }
+
+    private void upgradeConfigFromSeven() {
+        getConfig().options().copyDefaults(true);
+        if (!getConfig().isSet("phase1.handbook-cooldown-minutes")) {
+            getConfig().set("phase1.handbook-cooldown-minutes", 60);
+        }
+        getConfig().set("phase4.buffs.catalog.speed.display-name", "速度");
+        getConfig().set("phase4.buffs.catalog.speed.maximum-level", 5);
+        getConfig().set("phase4.buffs.catalog.health.display-name", "生命");
+        getConfig().set("phase4.buffs.catalog.health.maximum-level", 5);
+        getConfig().set("phase4.buffs.catalog.health.amount-per-level", 4.0D);
     }
 
     private void upgradeConfigFromSix() {

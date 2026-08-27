@@ -116,6 +116,8 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs) 
                 }
                 BuffPricing.price(definition, duration, maximumPricedLevel, moneyScale);
             }
+            BuffPricing.weeklyPrice(definition, 4,
+                    Math.min(5, definition.maximumLevel()), moneyScale);
         } catch (ArithmeticException exception) {
             throw new IllegalArgumentException(section.getCurrentPath()
                     + ".base-price 产生的价格超出次级货币单位范围", exception);

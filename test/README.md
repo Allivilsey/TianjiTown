@@ -4,6 +4,7 @@
 
 - [自动化、命令与运维测试列表](testlist.md)：`AUTO`、`CMD` 与 `OPS` 测试项、执行模板和报告索引；
 - [人工测试列表](manualtest.md)：需要真人观察或操作的 `MANUAL` 测试项；
+- [Dialog UI 改版人工测试清单](UI_DIALOG_MANUAL_TEST.md)：本轮界面改版的角色、表单、分页、确认、会话与显示专项验收；
 - [测试报告分类](reports/README.md)：按 AUTO/MANUAL 分类存放；当前已有报告全部归入自动测试；
 - [TestCommand 自动化接口](test-command.md)：隔离测试服务器使用的自动化接口说明。
 

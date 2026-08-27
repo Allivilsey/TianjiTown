@@ -72,6 +72,17 @@ class PluginDescriptorTest {
                 .contains("default: false"));
     }
 
+    @Test
+    void packagesPlayerMessageConfiguration() throws IOException {
+        try (InputStream stream = PluginDescriptorTest.class.getResourceAsStream("/messages.yml")) {
+            assertNotNull(stream, "messages.yml 应进入插件 JAR");
+            String messages = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(messages.contains("handbook:"));
+            assertTrue(messages.contains("application:"));
+            assertTrue(messages.contains("operation-failed:"));
+        }
+    }
+
     private static String descriptor() throws IOException {
         try (InputStream stream = PluginDescriptorTest.class.getResourceAsStream("/plugin.yml")) {
             assertNotNull(stream, "plugin.yml 应进入测试类路径");

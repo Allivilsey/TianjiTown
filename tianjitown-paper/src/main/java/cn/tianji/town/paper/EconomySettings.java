@@ -12,7 +12,7 @@ record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, String se
                           BigDecimal expansionPerUnitIncrease, int maximumUnits) {
     boolean allowsTaxRate(int basisPoints) {
         return basisPoints >= 500 && basisPoints <= maximumTaxBps
-                && basisPoints % 500 == 0;
+                && basisPoints % 100 == 0;
     }
 
     static EconomySettings load(ConfigurationSection config) {

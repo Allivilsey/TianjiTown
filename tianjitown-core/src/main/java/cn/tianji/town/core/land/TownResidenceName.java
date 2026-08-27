@@ -16,7 +16,7 @@ public final class TownResidenceName {
         String normalized = Normalizer.normalize(residenceName.strip(), Normalizer.Form.NFC)
                 .toLowerCase(Locale.ROOT);
         if (!RESIDENCE_NAME.matcher(normalized).matches()) {
-            throw new IllegalArgumentException("领地名称必须为 1~12 个英文字母");
+            throw new IllegalArgumentException("小镇代码必须为 1~12 个英文字母");
         }
         return normalized;
     }

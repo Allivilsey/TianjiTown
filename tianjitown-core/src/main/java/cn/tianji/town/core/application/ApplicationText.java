@@ -29,11 +29,10 @@ public record ApplicationText(String name, String shortName, String residenceNam
     public List<String> validate() {
         List<String> errors = new ArrayList<>();
         validateName(name, "名称", 2, 24, errors);
-        validateName(shortName, "简称", 1, 8, errors);
         if (residenceName.isEmpty() || residenceName.length() > 12) {
-            errors.add("领地名称长度必须为 1~12");
+            errors.add("小镇代码长度必须为 1~12");
         } else if (!RESIDENCE_NAME.matcher(residenceName).matches()) {
-            errors.add("领地名称只能包含英文字母，不允许空格、数字或特殊符号");
+            errors.add("小镇代码只能包含英文字母，不允许空格、数字或特殊符号");
         }
         validateSafeText(description, "简介", 500, errors);
         if (rules.isEmpty() || rules.size() > 50) {

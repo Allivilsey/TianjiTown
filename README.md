@@ -17,7 +17,7 @@ mvn -B clean verify
 ## 安装与 SQLite
 
 1. 安装并启用 Residence、Vault、XConomy、WorldBorder、QuickShop-Hikari（版本必须严格高于 `6.3.0.0`）、Jobs 和 GlobalMarketPlus，确保 Vault 已注册可用的 `Economy` 服务，并使用 `/wb` 为每个允许建镇的世界配置边界。选址会要求初始 3×3 区块领地及其缓冲范围完整位于 WorldBorder 内；依赖未启用或目标世界未配置边界时会安全失败。
-2. 将 JAR 放入 `plugins`，首次启动会自动创建 `plugins/TianjiTown/tianjitown.db` 并执行 Flyway 迁移。
+2. 将 JAR 放入 `plugins`，首次启动会自动创建 `plugins/TianjiTown/tianjitown.db`、`config.yml` 和 `messages.yml`，并执行 Flyway 迁移。
 3. 如需更改位置，在 `config.yml` 中设置相对或绝对文件路径：
 
 ```yaml
@@ -53,7 +53,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin backup
 ```
 
-`reload` 只重读可热更新的配置；SQLite 文件和超时参数需重启。维护模式会暂停服务台、手册、玩家界面和表单提交，不会移除现有 Residence 保护。`diagnose` 生成 SQLite、Residence、Vault 与 QuickShop 历史统一报告；`backup` 创建 SQLite 在线一致性备份、配置快照与 SHA-256。
+`reload` 会重读可热更新的配置和 `messages.yml`；SQLite 文件和超时参数需重启。维护模式会暂停服务台、手册、玩家界面和表单提交，不会移除现有 Residence 保护。`diagnose` 生成 SQLite、Residence、Vault 与 QuickShop 历史统一报告；`backup` 创建 SQLite 在线一致性备份、配置快照与 SHA-256。
 
 ### 服务台与手册
 
@@ -63,7 +63,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin handbook [player]
 ```
 
-`station create`、`remove` 和 `info` 需由游戏内管理员看向讲台执行。游戏内执行 `station list` 后可点击每条记录旁的“传送”。`handbook` 不填玩家时会发给执行者，控制台必须指定在线玩家。
+`station create`、`remove` 和 `info` 需由游戏内管理员看向讲台执行。管理员也可潜行左键直接拆除已登记的服务台；管理员或镇长手持小镇手册右键空讲台可建立服务台，镇长建立的服务台绑定本镇且每镇限一个。游戏内执行 `station list` 后可点击每条记录旁的“传送”。`handbook` 不填玩家时会发给执行者，控制台必须指定在线玩家；玩家从服务页领取手册默认有 1 小时冷却。
 
 ### 申请审批
 
@@ -84,7 +84,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin mayor transfer <小镇全名> <玩家> <原因>
 ```
 
-发出删除命令后，聊天栏会显示“确认执行”和“取消”按钮；确认仅限发起者使用，60 秒后失效。删除操作会先安全归档；只有 Residence 确认移除后才释放名称、领地名称和区块占位，审计记录会保留。
+发出删除命令后，聊天栏会显示“确认执行”和“取消”按钮；确认仅限发起者使用，60 秒后失效。删除操作会先安全归档；只有 Residence 确认移除后才释放名称、小镇代码和区块占位，审计记录会保留。
 
 ### 治理投票
 
@@ -127,7 +127,7 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin buff grant <小镇全名> <buffKey> <原因>
 ```
 
-Buff 目录位于 `config.yml` 的 `phase4` 配置节。公共 Buff 不受世界限制，购买时可选 1 小时、1 天、1 周或 1 月，长期档按比例折扣且购买后不接受退款。效果、每小时价格和角色权限在启动时校验，修改后需要重启；`shop-enabled` 开关可通过 `reload` 热更新。
+Buff 目录位于 `config.yml` 的 `phase4` 配置节。公共 Buff 不受世界限制，购买时可用滑块选择 1～4 周和 I～V 级；再次购买会按新选择覆盖同类生效项，且购买后不接受退款。默认“速度”每级提升 20%，“生命”每级增加 4 点生命值。效果、每小时价格和角色权限在启动时校验，修改后需要重启；`shop-enabled` 开关可通过 `reload` 热更新。
 
 ### 领地加成
 
@@ -143,4 +143,4 @@ Buff 在登录、重生、跨世界、成员关系变化和到期清理时重新
 
 成员在自己小镇领地内放置未列入黑名单的普通建筑方块时，可能收到一个同种方块返还，操作栏会显示本周用量。有效小镇信标的原版效果会覆盖整个小镇领地；玩家无需额外领取。
 
-管理命令使用小镇全名定位目标。申请人另行填写仅含 `1~12` 个英文字母的领地名称（建议三个字母），该名称转为小写后直接作为 Residence 名称，例如 `SKY` 生成 `sky`。
+管理命令使用小镇全名定位目标。申请人另行填写仅含 `1~12` 个英文字母的小镇代码（建议三个字母），代码转为小写后直接作为 Residence 名称，例如 `SKY` 生成 `sky`。

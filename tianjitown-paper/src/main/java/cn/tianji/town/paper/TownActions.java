@@ -438,6 +438,27 @@ final class TownActions {
                         TownActionFailures.from(action, exception))));
     }
 
+    void buyBuff(Player actor, String buffKey, int weeks, int level,
+                 Consumer<TownActionOutcome<CommerceRepository.BuffPurchase>> completion) {
+        String action = "BUFF_BUY";
+        if (rejectBeforeWrite(action, completion)) {
+            return;
+        }
+        if (!runtime.buffs().buffShopEnabled() || !runtime.consumptionEnabled()) {
+            completion.accept(TownActionOutcome.failure(TownActionResult.failure(action,
+                    "FEATURE_DISABLED")));
+            return;
+        }
+        runtime.buffs().buyBuffAction(actor, buffKey, weeks, level,
+                purchase -> completion.accept(TownActionOutcome.success(
+                        TownActionResult.success(action, Map.of("buff_key", buffKey,
+                                "buff_id", purchase.buff().buffId(), "level", level,
+                                "weeks", weeks, "expires_at", purchase.buff().expiresAt(),
+                                "balance_minor", purchase.balanceAfterMinor())), purchase)),
+                exception -> completion.accept(TownActionOutcome.failure(
+                        TownActionFailures.from(action, exception))));
+    }
+
     void queryActor(Player actor, Consumer<TownActionOutcome<Void>> completion) {
         String action = "QUERY_ACTOR";
         runtime.readAction(actor, () -> {

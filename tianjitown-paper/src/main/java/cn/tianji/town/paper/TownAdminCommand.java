@@ -77,8 +77,9 @@ final class TownAdminCommand implements CommandExecutor {
             }
             if (root.equals("reload")) {
                 plugin.reloadConfig();
+                plugin.reloadMessages();
                 plugin.configureTestCommandVisibility();
-                sender.sendMessage("§a配置已重新读取；税收/消费、Buff 商店和领地加成开关立即生效。"
+                sender.sendMessage("§a配置与 messages.yml 已重新读取；税收/消费、Buff 商店和领地加成开关立即生效。"
                         + "SQLite、清算账户、金额精度和商品定义需重启后生效。");
                 return true;
             }
@@ -313,9 +314,11 @@ final class TownAdminCommand implements CommandExecutor {
             sender.sendMessage("§c目标玩家必须在线。用法: /townadmin handbook <player>");
             return true;
         }
-        plugin.townUi().giveHandbook(target);
-        if (!sender.equals(target)) {
+        boolean delivered = plugin.townUi().giveHandbook(target, true);
+        if (!sender.equals(target) && delivered) {
             sender.sendMessage("§a已向 " + target.getName() + " 发放小镇手册。");
+        } else if (!sender.equals(target)) {
+            sender.sendMessage("§e未向 " + target.getName() + " 发放手册：该玩家仍在领取冷却中。");
         }
         return true;
     }
@@ -377,7 +380,8 @@ final class TownAdminCommand implements CommandExecutor {
         if (action.equals("view")) {
             String townName = TownCommandParser.townName(args, 2);
             runtime.read(sender, () -> requireTown(runtime, townName), town -> {
-                sender.sendMessage("§6" + town.profile().name() + " [" + town.profile().shortName() + "]");
+                sender.sendMessage("§6" + town.profile().name() + " [代码 "
+                        + town.profile().residenceName() + "]");
                 sender.sendMessage("§7status=" + town.status() + " mayor=" + town.mayorId()
                         + " version=" + town.version());
                 if (town.territory() != null) {
@@ -430,7 +434,7 @@ final class TownAdminCommand implements CommandExecutor {
                         + result.message()));
             } else {
                 sender.sendMessage("§c小镇已安全归档，但 Residence 移除失败："
-                        + result.message() + "。名称、领地名称和区块仍保持锁定；处理后可重复执行删除命令。");
+                        + result.message() + "。名称、小镇代码和区块仍保持锁定；处理后可重复执行删除命令。");
                 plugin.getLogger().warning("删除小镇后 Residence 移除失败 "
                         + deleted.profile().name() + "/" + deleted.residenceName()
                         + ": " + result.message());

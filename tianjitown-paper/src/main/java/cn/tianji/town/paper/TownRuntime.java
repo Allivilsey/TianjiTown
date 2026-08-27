@@ -399,7 +399,7 @@ final class TownRuntime {
                 databaseAvailable.set(true);
                 if (archived) {
                     plugin.getLogger().severe("小镇已安全归档 " + town.profile().name()
-                            + "；名称、领地名称和原区块保持锁定，未自动创建或删除 Residence。");
+                            + "；名称、小镇代码和原区块保持锁定，未自动创建或删除 Residence。");
                 }
             } catch (RuntimeException exception) {
                 if (exception instanceof TownRepository.StorageUnavailableException) {
@@ -1098,7 +1098,7 @@ final class TownRuntime {
     }
 
     private void sendTaxRangeError(CommandSender sender) {
-        sender.sendMessage("§c税率必须在 5%~25% 之间，并按 5% 递增。");
+        sender.sendMessage("§c税率必须在 5%~25% 之间，并按 1% 递增。");
     }
 
     private static String coordinate(int value) {

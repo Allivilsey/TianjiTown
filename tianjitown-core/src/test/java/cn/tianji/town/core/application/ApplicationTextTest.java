@@ -32,7 +32,7 @@ class ApplicationTextTest {
                 List.of("规则"));
         assertFalse(text.validate().isEmpty());
         assertTrue(text.validate().stream().anyMatch(error -> error.contains("格式")));
-        assertTrue(text.validate().stream().anyMatch(error -> error.contains("领地名称")));
+        assertTrue(text.validate().stream().anyMatch(error -> error.contains("小镇代码")));
     }
 
     @Test

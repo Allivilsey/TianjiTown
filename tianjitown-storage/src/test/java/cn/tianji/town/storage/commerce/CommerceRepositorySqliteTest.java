@@ -29,6 +29,41 @@ class CommerceRepositorySqliteTest {
     Path temporaryDirectory;
 
     @Test
+    void purchasesSelectedWeeklyDurationAndRomanIntensity() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("selected-buff.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID townId = UUID.randomUUID();
+            UUID mayorId = UUID.randomUUID();
+            UUID memberId = UUID.randomUUID();
+            insertTown(gate, townId, mayorId, memberId);
+            CommerceRepository repository = new CommerceRepository(gate.dataSource(), () -> false);
+            BuffDefinition buff = new BuffDefinition("health", "生命",
+                    BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:max_health", "ADD_NUMBER",
+                    new BigDecimal("1.00"), 5, BuffStackingRule.LEVEL_UP, 4,
+                    Set.of(MemberRole.MAYOR));
+            Instant now = Instant.parse("2026-08-27T00:00:00Z");
+
+            CommerceRepository.SelectedBuffQuote quote = repository.quoteBuff(mayorId, buff,
+                    2, 3, 2, now);
+            assertEquals(80_640, quote.priceMinor());
+            assertEquals(now.plus(Duration.ofDays(14)), quote.expiresAt());
+
+            CommerceRepository.BuffPurchase purchase = repository.purchaseBuff(mayorId, "Mayor",
+                    buff, 2, 3, 2, "buff:selected", now);
+            assertEquals(3, purchase.buff().level());
+            assertEquals(3, purchase.buff().stackCount());
+            assertEquals(19_360, purchase.balanceAfterMinor());
+            assertEquals(4, purchase.buff().amountPerLevel());
+            assertThrows(IllegalArgumentException.class,
+                    () -> repository.quoteBuff(mayorId, buff, 5, 3, 2, now));
+            assertThrows(CommerceRepository.ConflictException.class,
+                    () -> repository.quoteBuff(memberId, buff, 1, 1, 2, now));
+        }
+    }
+
+    @Test
     void keepsBuffPurchasesAndCompensatingRefundsIdempotent() throws Exception {
         String url = "jdbc:sqlite:" + temporaryDirectory.resolve("phase4.db");
         try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,

@@ -1,0 +1,23 @@
+# TianjiTown 玩家消息。支持使用 & 颜色代码和 {placeholder} 占位符。
+system:
+  maintenance: '&c小镇系统正在维护，请稍后再试。'
+  menu-expired: '&c这个界面已经失效，请重新打开小镇服务。'
+  invalid-menu-data: '&c界面数据已过期，请重新打开后再试。'
+  operation-failed: '&c没有完成这项操作：{detail}'
+
+handbook:
+  received: '&a小镇手册已放入你的背包。'
+  cooldown: '&e每小时可以领取一次小镇手册，请在 {minutes} 分钟后再试。'
+
+station:
+  created-public: '&a已设置公共小镇服务台。'
+  created-town: '&a已为“{town}”设置专属小镇服务台。'
+  already-exists: '&e这个讲台已经是小镇服务台。'
+  town-limit: '&e“{town}”已经拥有一个专属小镇服务台，请先移除旧服务台。'
+  removed: '&a小镇服务台已移除。'
+  mayor-only: '&c只有小镇镇长或管理员可以放置手册来设置服务台。'
+
+application:
+  draft-saved: '&a申请草稿已保存。接下来请选择小镇领地并等待两名初始成员确认。'
+  reminder-sent: '&a已重新提醒尚未确认的初始成员。'
+  reminder-cooldown: '&e五分钟内只能提醒一次，请在 {seconds} 秒后再试。'

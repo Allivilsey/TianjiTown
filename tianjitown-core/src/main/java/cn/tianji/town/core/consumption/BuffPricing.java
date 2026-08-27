@@ -24,6 +24,23 @@ public final class BuffPricing {
         return MoneyAmount.rounded(value, scale, RoundingMode.CEILING);
     }
 
+    public static MoneyAmount weeklyPrice(BuffDefinition definition, int weeks, int level,
+                                          int scale) {
+        if (weeks < 1 || weeks > 4) {
+            throw new IllegalArgumentException("Buff 购买周数必须在 1~4 之间");
+        }
+        if (level < 1 || level > Math.min(5, definition.maximumLevel())) {
+            throw new IllegalArgumentException("Buff 强度必须在 1~"
+                    + Math.min(5, definition.maximumLevel()) + " 之间");
+        }
+        BigDecimal value = definition.basePrice()
+                .multiply(BigDecimal.valueOf(24L * 7L * weeks))
+                .multiply(BigDecimal.valueOf(
+                        BuffDurationOption.ONE_WEEK.discountBasisPoints(), 4))
+                .multiply(BigDecimal.valueOf(level));
+        return MoneyAmount.rounded(value, scale, RoundingMode.CEILING);
+    }
+
     public static NextStack next(BuffDefinition definition, int currentLevel,
                                  int currentStacks) {
         if (currentLevel < 0 || currentStacks < 0) {
