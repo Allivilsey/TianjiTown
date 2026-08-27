@@ -34,4 +34,13 @@ public record TownSnapshot(
             members = List.copyOf(members);
         }
     }
+
+    public record Visitor(UUID playerId, UUID invitedBy, Instant addedAt) {
+    }
+
+    public record VisitorPage(List<Visitor> visitors, boolean hasNext) {
+        public VisitorPage {
+            visitors = List.copyOf(visitors);
+        }
+    }
 }

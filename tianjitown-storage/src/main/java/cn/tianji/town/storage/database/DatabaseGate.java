@@ -16,7 +16,7 @@ import java.sql.Statement;
 
 public final class DatabaseGate implements AutoCloseable {
     private static final MigrationVersion SUPPORTED_SCHEMA_VERSION =
-            MigrationVersion.fromVersion("7.0");
+            MigrationVersion.fromVersion("8.0");
     private final HikariDataSource dataSource;
     private final Flyway flyway;
 

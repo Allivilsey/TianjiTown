@@ -215,6 +215,26 @@ final class TownActions {
         }, completion);
     }
 
+    void addVisitor(Player actor, UUID townId, UUID targetId,
+                    Consumer<TownActionOutcome<TownSnapshot.Visitor>> completion) {
+        write("VISITOR_ADD", actor,
+                () -> runtime.repository().addVisitor(townId, targetId,
+                        actor.getUniqueId(), actor.getName()), visitor -> {
+                    syncResidence(actor, townId);
+                    return Map.of("town_id", townId, "target_id", targetId);
+                }, completion);
+    }
+
+    void removeVisitor(Player actor, UUID townId, UUID targetId,
+                       Consumer<TownActionOutcome<UUID>> completion) {
+        write("VISITOR_REMOVE", actor,
+                () -> runtime.repository().removeVisitor(townId, targetId,
+                        actor.getUniqueId(), actor.getName()), removed -> {
+                    syncResidence(actor, townId);
+                    return Map.of("town_id", townId, "target_id", removed);
+                }, completion);
+    }
+
     void requestMayorTransfer(Player actor, UUID townId, UUID candidateId,
                               Consumer<TownActionOutcome<TransferSnapshot>> completion) {
         GovernanceSettings settings;
@@ -513,7 +533,7 @@ final class TownActions {
     private void syncResidence(Player actor, UUID townId) {
         runtime.readAction(actor, () -> new TownMembers(runtime.repository().findTown(townId)
                         .orElseThrow(() -> new IllegalArgumentException("小镇不存在")),
-                        runtime.repository().listMemberIds(townId)), state ->
+                        runtime.repository().listLandAccessIds(townId)), state ->
                         runtime.reconcileAction(actor, state.town(), state.members(), true,
                                 result -> {
                                     if (!result.success()) {

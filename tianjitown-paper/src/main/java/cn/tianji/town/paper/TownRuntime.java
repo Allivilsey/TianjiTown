@@ -318,7 +318,7 @@ final class TownRuntime {
             try {
                 List<TownMembers> states = repository.listTowns(false).stream()
                         .filter(town -> town.status() == TownStatus.ACTIVE)
-                        .map(town -> new TownMembers(town, repository.listMemberIds(town.id()),
+                        .map(town -> new TownMembers(town, repository.listLandAccessIds(town.id()),
                                 finance.territoryUnits(town.id())))
                         .toList();
                 plugin.runMain(() -> {
@@ -374,7 +374,7 @@ final class TownRuntime {
                             + "ACTIVE: " + townId);
                     return;
                 }
-                TownMembers latest = new TownMembers(town, repository.listMemberIds(townId),
+                TownMembers latest = new TownMembers(town, repository.listLandAccessIds(townId),
                         finance.territoryUnits(townId));
                 if (hasUnsettledProjection(latest)) {
                     pendingLandRepairs.remove(townId);
@@ -452,7 +452,8 @@ final class TownRuntime {
                                 && vote.type() == cn.tianji.town.core.governance.VoteType.KICK_MEMBER)
                         .map(VoteSnapshot::townId).distinct()
                         .map(townId -> repository.findTown(townId)
-                                .map(town -> new TownMembers(town, repository.listMemberIds(townId),
+                                .map(town -> new TownMembers(town,
+                                        repository.listLandAccessIds(townId),
                                         finance.territoryUnits(townId)))
                                 .orElse(null))
                         .filter(java.util.Objects::nonNull)
@@ -951,7 +952,7 @@ final class TownRuntime {
                                   Consumer<RuntimeException> failure) {
         plugin.runAsync(() -> {
             try {
-                List<UUID> loaded = repository.listMemberIds(operation.townId());
+                List<UUID> loaded = repository.listLandAccessIds(operation.townId());
                 plugin.runMain(
                         () -> addExpansionArea(sender, operation, loaded, success, failure));
             } catch (RuntimeException exception) {
@@ -1000,7 +1001,7 @@ final class TownRuntime {
         for (EconomyRepository.ExpansionOperation expansion : expansions) {
             plugin.runAsync(() -> {
                 try {
-                    List<UUID> members = repository.listMemberIds(expansion.townId());
+                    List<UUID> members = repository.listLandAccessIds(expansion.townId());
                     plugin.runMain(
                             () -> addExpansionArea(org.bukkit.Bukkit.getConsoleSender(),
                                     expansion, members,

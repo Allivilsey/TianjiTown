@@ -649,6 +649,123 @@ public final class TownRepository {
         });
     }
 
+    public TownSnapshot.VisitorPage listVisitors(UUID townId, int page, int pageSize) {
+        requireWorkerThread();
+        int safeSize = Math.max(1, Math.min(pageSize, 100));
+        int safePage = Math.max(page, 0);
+        return query(connection -> {
+            List<TownSnapshot.Visitor> visitors = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT player_uuid, invited_by, added_at FROM town_visitors
+                     WHERE town_id = ? ORDER BY added_at, player_uuid LIMIT ? OFFSET ?
+                    """)) {
+                statement.setBytes(1, uuid(townId));
+                statement.setInt(2, safeSize + 1);
+                statement.setInt(3, Math.multiplyExact(safePage, safeSize));
+                try (ResultSet result = statement.executeQuery()) {
+                    while (result.next()) {
+                        visitors.add(new TownSnapshot.Visitor(
+                                readUuid(result, "player_uuid"),
+                                readUuid(result, "invited_by"),
+                                result.getTimestamp("added_at").toInstant()));
+                    }
+                }
+            }
+            boolean hasNext = visitors.size() > safeSize;
+            if (hasNext) {
+                visitors.removeLast();
+            }
+            return new TownSnapshot.VisitorPage(visitors, hasNext);
+        });
+    }
+
+    public List<UUID> listVisitorIds(UUID townId) {
+        requireWorkerThread();
+        return query(connection -> {
+            List<UUID> visitors = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT player_uuid FROM town_visitors
+                     WHERE town_id = ? ORDER BY added_at, player_uuid
+                    """)) {
+                statement.setBytes(1, uuid(townId));
+                try (ResultSet result = statement.executeQuery()) {
+                    while (result.next()) {
+                        visitors.add(readUuid(result, "player_uuid"));
+                    }
+                }
+            }
+            return List.copyOf(visitors);
+        });
+    }
+
+    public List<UUID> listLandAccessIds(UUID townId) {
+        requireWorkerThread();
+        return query(connection -> {
+            List<UUID> players = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT player_uuid, subject_type, granted_at FROM (
+                        SELECT player_uuid, 0 AS subject_type, joined_at AS granted_at
+                          FROM town_members WHERE town_id = ?
+                        UNION ALL
+                        SELECT player_uuid, 1 AS subject_type, added_at AS granted_at
+                          FROM town_visitors WHERE town_id = ?
+                    ) ORDER BY subject_type, granted_at, player_uuid
+                    """)) {
+                statement.setBytes(1, uuid(townId));
+                statement.setBytes(2, uuid(townId));
+                try (ResultSet result = statement.executeQuery()) {
+                    while (result.next()) {
+                        players.add(readUuid(result, "player_uuid"));
+                    }
+                }
+            }
+            return List.copyOf(players);
+        });
+    }
+
+    public TownSnapshot.Visitor addVisitor(UUID townId, UUID playerId, UUID actorId,
+                                           String actorName) {
+        requireWorkerThread();
+        return transaction(connection -> {
+            requireManager(connection, townId, actorId);
+            if (memberExists(connection, townId, playerId)) {
+                throw new ConflictException("本镇成员不能加入访客名单");
+            }
+            if (visitorExists(connection, townId, playerId)) {
+                throw new ConflictException("目标玩家已经在访客名单中");
+            }
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    INSERT INTO town_visitors (town_id, player_uuid, invited_by)
+                    VALUES (?, ?, ?)
+                    """)) {
+                statement.setBytes(1, uuid(townId));
+                statement.setBytes(2, uuid(playerId));
+                statement.setBytes(3, uuid(actorId));
+                statement.executeUpdate();
+            }
+            audit(connection, null, actorId, actorName, "VISITOR_ADD", "TOWN",
+                    townId.toString(), "镇长或副镇长邀请访客", playerId.toString());
+            return requireVisitor(connection, townId, playerId);
+        });
+    }
+
+    public UUID removeVisitor(UUID townId, UUID playerId, UUID actorId, String actorName) {
+        requireWorkerThread();
+        return transaction(connection -> {
+            requireManager(connection, townId, actorId);
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    DELETE FROM town_visitors WHERE town_id = ? AND player_uuid = ?
+                    """)) {
+                statement.setBytes(1, uuid(townId));
+                statement.setBytes(2, uuid(playerId));
+                requireUpdated(statement, "目标玩家不在访客名单中");
+            }
+            audit(connection, null, actorId, actorName, "VISITOR_REMOVE", "TOWN",
+                    townId.toString(), "镇长或副镇长移出访客", playerId.toString());
+            return playerId;
+        });
+    }
+
     public Map<UUID, List<UUID>> listMemberIdsByTown() {
         requireWorkerThread();
         return query(connection -> {
@@ -1192,6 +1309,8 @@ public final class TownRepository {
                          """);
                  PreparedStatement members = connection.prepareStatement(
                          "DELETE FROM town_members WHERE town_id = ?");
+                 PreparedStatement visitors = connection.prepareStatement(
+                         "DELETE FROM town_visitors WHERE town_id = ?");
                  PreparedStatement invitations = connection.prepareStatement("""
                          UPDATE town_invitations
                             SET revoked_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
@@ -1215,6 +1334,8 @@ public final class TownRepository {
                 units.executeUpdate();
                 members.setBytes(1, uuid(townId));
                 members.executeUpdate();
+                visitors.setBytes(1, uuid(townId));
+                visitors.executeUpdate();
                 invitations.setBytes(1, uuid(townId));
                 invitations.executeUpdate();
                 joinApplications.setBytes(1, uuid(townId));
@@ -1514,6 +1635,8 @@ public final class TownRepository {
                      "UPDATE territory_units SET reuse_blocked = TRUE WHERE town_id = ?");
              PreparedStatement members = connection.prepareStatement(
                      "DELETE FROM town_members WHERE town_id = ?");
+             PreparedStatement visitors = connection.prepareStatement(
+                     "DELETE FROM town_visitors WHERE town_id = ?");
              PreparedStatement invitations = connection.prepareStatement("""
                      UPDATE town_invitations
                         SET revoked_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
@@ -1535,6 +1658,8 @@ public final class TownRepository {
             unit.executeUpdate();
             members.setBytes(1, uuid(townId));
             members.executeUpdate();
+            visitors.setBytes(1, uuid(townId));
+            visitors.executeUpdate();
             invitations.setBytes(1, uuid(townId));
             invitations.executeUpdate();
             joinApplications.setBytes(1, uuid(townId));
@@ -1955,6 +2080,38 @@ public final class TownRepository {
             statement.setBytes(2, uuid(playerId));
             try (ResultSet result = statement.executeQuery()) {
                 return result.next();
+            }
+        }
+    }
+
+    private boolean visitorExists(Connection connection, UUID townId, UUID playerId)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT 1 FROM town_visitors WHERE town_id = ? AND player_uuid = ? LIMIT 1
+                """)) {
+            statement.setBytes(1, uuid(townId));
+            statement.setBytes(2, uuid(playerId));
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next();
+            }
+        }
+    }
+
+    private TownSnapshot.Visitor requireVisitor(Connection connection, UUID townId, UUID playerId)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT player_uuid, invited_by, added_at FROM town_visitors
+                 WHERE town_id = ? AND player_uuid = ?
+                """)) {
+            statement.setBytes(1, uuid(townId));
+            statement.setBytes(2, uuid(playerId));
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) {
+                    throw new NotFoundException("访客记录不存在");
+                }
+                return new TownSnapshot.Visitor(readUuid(result, "player_uuid"),
+                        readUuid(result, "invited_by"),
+                        result.getTimestamp("added_at").toInstant());
             }
         }
     }

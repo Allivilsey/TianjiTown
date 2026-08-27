@@ -869,13 +869,13 @@ final class TownAdminCommand implements CommandExecutor {
     private static List<TownMembers> loadTownMembers(TownRuntime runtime,
                                                       List<TownSnapshot> towns) {
         return towns.stream().map(town -> new TownMembers(town,
-                runtime.repository().listMemberIds(town.id()))).toList();
+                runtime.repository().listLandAccessIds(town.id()))).toList();
     }
 
     private void reconcileOne(CommandSender sender, TownRuntime runtime, UUID townId,
                               boolean repair) {
         runtime.read(sender, () -> new TownMembers(requireTown(runtime, townId),
-                runtime.repository().listMemberIds(townId)),
+                runtime.repository().listLandAccessIds(townId)),
                 state -> runtime.reconcile(sender, state.town(), state.members(), repair));
     }
 

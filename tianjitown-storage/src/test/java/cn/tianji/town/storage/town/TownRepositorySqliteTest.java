@@ -517,6 +517,71 @@ class TownRepositorySqliteTest {
         }
     }
 
+    @Test
+    void managesVisitorsWithoutChangingTownMembership() {
+        DatabaseConfig config = new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("visitors.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5));
+        try (DatabaseGate gate = new DatabaseGate(config)) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            TownRepository repository = new TownRepository(gate.dataSource(), () -> false);
+            GovernanceRepository governance = new GovernanceRepository(
+                    gate.dataSource(), () -> false);
+            CreatedTown host = createTown(repository, 50,
+                    "访客接待镇", "接待镇", "VISITORS");
+            CreatedTown neighboring = createTown(repository, 51,
+                    "访客来源镇", "来源镇", "VISOURCE");
+            List<UUID> hostMembers = repository.listMemberIds(host.town().id());
+            UUID deputy = hostMembers.stream()
+                    .filter(playerId -> !playerId.equals(host.mayorId()))
+                    .findFirst().orElseThrow();
+            UUID regularMember = hostMembers.stream()
+                    .filter(playerId -> !playerId.equals(host.mayorId()))
+                    .filter(playerId -> !playerId.equals(deputy))
+                    .findFirst().orElseThrow();
+            governance.changeRoleByMayor(host.town().id(), deputy, MemberRole.DEPUTY_MAYOR,
+                    host.mayorId(), "Mayor");
+
+            TownSnapshot.Visitor visitor = repository.addVisitor(host.town().id(),
+                    neighboring.mayorId(), deputy, "Deputy");
+            assertEquals(neighboring.mayorId(), visitor.playerId());
+            assertEquals(List.of(neighboring.mayorId()),
+                    repository.listVisitorIds(host.town().id()));
+            assertFalse(repository.listMemberIds(host.town().id())
+                    .contains(neighboring.mayorId()));
+            assertTrue(repository.listLandAccessIds(host.town().id())
+                    .contains(neighboring.mayorId()));
+            assertThrows(TownRepository.ConflictException.class,
+                    () -> repository.addVisitor(host.town().id(), regularMember,
+                            host.mayorId(), "Mayor"));
+            assertThrows(TownRepository.ConflictException.class,
+                    () -> repository.addVisitor(host.town().id(), neighboring.mayorId(),
+                            host.mayorId(), "Mayor"));
+            assertThrows(TownRepository.ConflictException.class,
+                    () -> repository.removeVisitor(host.town().id(), neighboring.mayorId(),
+                            regularMember, "Member"));
+
+            repository.removeVisitor(host.town().id(), neighboring.mayorId(), deputy, "Deputy");
+            assertTrue(repository.listVisitorIds(host.town().id()).isEmpty());
+            assertFalse(repository.listLandAccessIds(host.town().id())
+                    .contains(neighboring.mayorId()));
+
+            UUID joiningVisitor = UUID.randomUUID();
+            repository.addVisitor(host.town().id(), joiningVisitor,
+                    host.mayorId(), "Mayor");
+            repository.addMember(host.town().id(), joiningVisitor,
+                    host.mayorId(), "Mayor", "访客正式入镇");
+            assertFalse(repository.listVisitorIds(host.town().id()).contains(joiningVisitor));
+            assertTrue(repository.listMemberIds(host.town().id()).contains(joiningVisitor));
+            assertEquals(1L, repository.listLandAccessIds(host.town().id()).stream()
+                    .filter(joiningVisitor::equals).count());
+            TownSnapshot.VisitorPage visitorPage = repository.listVisitors(
+                    host.town().id(), 0, 1);
+            assertTrue(visitorPage.visitors().isEmpty());
+            assertFalse(visitorPage.hasNext());
+        }
+    }
+
     private static JoinApplicationSnapshot apply(TownRepository repository, UUID townId,
                                                   UUID playerId) {
         return repository.applyToTown(townId, playerId, Duration.ofHours(48),

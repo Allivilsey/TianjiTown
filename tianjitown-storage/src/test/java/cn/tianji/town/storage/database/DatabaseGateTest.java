@@ -91,7 +91,7 @@ class DatabaseGateTest {
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
             DatabaseGate.HealthResult health = gate.verifyAndMigrate();
             assertTrue(health.healthy(), health.detail());
-            assertTrue(health.detail().contains("schema=7.0"));
+            assertTrue(health.detail().contains("schema=8.0"));
             try (Connection connection = gate.dataSource().getConnection();
                  PreparedStatement statement = connection.prepareStatement("""
                          SELECT t.name, t.rules_revision, m.role
@@ -137,7 +137,7 @@ class DatabaseGateTest {
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
             DatabaseGate.HealthResult health = gate.verifyAndMigrate();
             assertTrue(health.healthy(), health.detail());
-            assertTrue(health.detail().contains("schema=7.0"));
+            assertTrue(health.detail().contains("schema=8.0"));
             try (Connection connection = gate.dataSource().getConnection();
                  PreparedStatement votes = connection.prepareStatement("""
                          SELECT status, cancelled_reason FROM governance_votes
@@ -306,7 +306,7 @@ class DatabaseGateTest {
     void rejectsFailedMigrationHistory() throws Exception {
         String url = "jdbc:sqlite:" + temporaryDirectory.resolve("failed-migration.db");
         initializeDatabase(url);
-        insertMigrationHistory(url, "7.1", "V7_1__interrupted_test.sql", false);
+        insertMigrationHistory(url, "8.1", "V8_1__interrupted_test.sql", false);
 
         try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
@@ -314,7 +314,7 @@ class DatabaseGateTest {
 
             assertFalse(health.healthy());
             assertTrue(health.detail().contains("失败的 Flyway 迁移"), health.detail());
-            assertTrue(health.detail().contains("7.1"), health.detail());
+            assertTrue(health.detail().contains("8.1"), health.detail());
         }
     }
 
@@ -330,7 +330,9 @@ class DatabaseGateTest {
                      INSERT INTO flyway_schema_history
                          (installed_rank, version, description, type, script, checksum,
                           installed_by, execution_time, success)
-                      VALUES (11, ?, '测试迁移', 'SQL', ?, 1, 'test', 1, ?)
+                      VALUES ((SELECT COALESCE(MAX(installed_rank), 0) + 1
+                                 FROM flyway_schema_history),
+                              ?, '测试迁移', 'SQL', ?, 1, 'test', 1, ?)
                      """)) {
             statement.setString(1, version);
             statement.setString(2, script);

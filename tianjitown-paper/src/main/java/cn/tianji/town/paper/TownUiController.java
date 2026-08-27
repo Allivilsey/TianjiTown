@@ -769,11 +769,132 @@ final class TownUiController implements Listener {
                         pendingJoins > 0 ? "§b入镇申请 · " + pendingJoins : "§7入镇申请",
                         List.of("§7审核玩家的入镇申请"),
                         "JOIN_APPLICATIONS", town.id().toString())));
+                items.add(new MenuItem(16, button(Material.NAME_TAG, "§e访客管理",
+                        List.of("§7查看访客名单或邀请新访客",
+                                "§7访客拥有与普通成员相同的领地权限"),
+                        "VISITOR_CENTER", town.id().toString())));
             }
             items.add(new MenuItem(22, button(Material.ARROW, "§7返回主菜单",
                     List.of(), "MAIN", null)));
             openMenu(player, 27, "成员治理", items);
         });
+    }
+
+    private void openVisitorCenter(Player player, UUID townId) {
+        runtime.read(player, () -> new VisitorCenterView(
+                runtime.governance().dashboard(player.getUniqueId()).orElse(null),
+                runtime.repository().listVisitorIds(townId).size()), view -> {
+            if (rejectVisitorManagement(player, view.governance(), townId)) {
+                return;
+            }
+            List<MenuItem> items = new ArrayList<>();
+            items.add(new MenuItem(4, button(Material.NAME_TAG, "§6访客管理",
+                    List.of("§7当前访客: §f" + view.visitorCount(),
+                            "§7访客只获得本镇 Residence 领地权限",
+                            "§7不计入成员、投票、税务或公共 Buff"), null, null)));
+            items.add(new MenuItem(11, button(Material.PLAYER_HEAD, "§e访客列表",
+                    List.of("§7查看访客并将其移出名单"),
+                    "VISITOR_LIST", townId + ":0")));
+            items.add(new MenuItem(15, button(Material.WRITABLE_BOOK, "§a邀请",
+                    List.of("§7从在线的非本镇成员中选择访客"),
+                    "VISITOR_INVITE", townId + ":0")));
+            items.add(new MenuItem(22, button(Material.ARROW, "§7返回成员治理",
+                    List.of(), "GOVERNANCE_CENTER", null)));
+            openMenu(player, 27, "访客管理", items);
+        });
+    }
+
+    private void openVisitorList(Player player, UUID townId, int page) {
+        runtime.read(player, () -> new VisitorPageView(
+                runtime.repository().listVisitors(townId, page, 8),
+                runtime.governance().dashboard(player.getUniqueId()).orElse(null)), view -> {
+            if (rejectVisitorManagement(player, view.governance(), townId)) {
+                return;
+            }
+            List<MenuItem> items = new ArrayList<>();
+            int slot = 0;
+            for (TownSnapshot.Visitor visitor : view.page().visitors()) {
+                String visitorName = displayName(visitor.playerId());
+                String inviterName = displayName(visitor.invitedBy());
+                items.add(new MenuItem(slot++, button(Material.PLAYER_HEAD,
+                        "§f" + visitorName,
+                        List.of("§7邀请人: " + inviterName,
+                                "§7加入访客名单: " + visitor.addedAt(),
+                                "§c点击移出访客名单"),
+                        "CONFIRM_REMOVE_VISITOR",
+                        townId + ":" + visitor.playerId() + ":" + page)));
+            }
+            if (view.page().visitors().isEmpty()) {
+                items.add(new MenuItem(4, button(Material.PAPER, "§7暂无访客",
+                        List.of("§7可返回访客管理页面邀请在线玩家"), null, null)));
+            }
+            if (page > 0) {
+                items.add(new MenuItem(45, button(Material.ARROW, "§e上一页", List.of(),
+                        "VISITOR_LIST", townId + ":" + (page - 1))));
+            }
+            if (view.page().hasNext()) {
+                items.add(new MenuItem(53, button(Material.ARROW, "§e下一页", List.of(),
+                        "VISITOR_LIST", townId + ":" + (page + 1))));
+            }
+            items.add(new MenuItem(48, button(Material.ARROW, "§7返回访客管理", List.of(),
+                    "VISITOR_CENTER", townId.toString())));
+            openMenu(player, 54, "小镇访客 · 第 " + (page + 1) + " 页", items);
+        });
+    }
+
+    private void openVisitorInvite(Player player, UUID townId, int page) {
+        runtime.read(player, () -> new VisitorInviteView(
+                runtime.governance().dashboard(player.getUniqueId()).orElse(null),
+                runtime.repository().listMemberIds(townId),
+                runtime.repository().listVisitorIds(townId)), view -> {
+            if (rejectVisitorManagement(player, view.governance(), townId)) {
+                return;
+            }
+            List<? extends Player> candidates = Bukkit.getOnlinePlayers().stream()
+                    .filter(candidate -> !view.memberIds().contains(candidate.getUniqueId()))
+                    .filter(candidate -> !view.visitorIds().contains(candidate.getUniqueId()))
+                    .sorted(java.util.Comparator.comparing(Player::getName,
+                            String.CASE_INSENSITIVE_ORDER))
+                    .toList();
+            List<? extends Player> visible = page(candidates, page, 8);
+            List<MenuItem> items = new ArrayList<>();
+            int slot = 0;
+            for (Player candidate : visible) {
+                items.add(new MenuItem(slot++, button(Material.PLAYER_HEAD,
+                        "§e" + candidate.getName(),
+                        List.of("§7点击后确认加入访客名单",
+                                "§7可属于其他小镇，但不能是本镇成员"),
+                        "CONFIRM_ADD_VISITOR",
+                        townId + ":" + candidate.getUniqueId() + ":" + page)));
+            }
+            if (visible.isEmpty()) {
+                items.add(new MenuItem(4, button(Material.PAPER, "§7没有可邀请的在线玩家",
+                        List.of("§7本镇成员和已有访客不会显示"), null, null)));
+            }
+            if (page > 0) {
+                items.add(new MenuItem(45, button(Material.ARROW, "§e上一页", List.of(),
+                        "VISITOR_INVITE", townId + ":" + (page - 1))));
+            }
+            if (hasNext(candidates, page, 8)) {
+                items.add(new MenuItem(53, button(Material.ARROW, "§e下一页", List.of(),
+                        "VISITOR_INVITE", townId + ":" + (page + 1))));
+            }
+            items.add(new MenuItem(48, button(Material.ARROW, "§7返回访客管理", List.of(),
+                    "VISITOR_CENTER", townId.toString())));
+            openMenu(player, 54, "邀请访客 · 第 " + (page + 1) + " 页", items);
+        });
+    }
+
+    private boolean rejectVisitorManagement(Player player,
+                                            MemberGovernanceSnapshot governance,
+                                            UUID townId) {
+        if (governance != null && governance.townId().equals(townId)
+                && governance.role().isLeader()) {
+            return false;
+        }
+        openNotice(player, "无法管理访客", "只有本镇镇长或副镇长可以管理访客名单。",
+                "返回成员治理", "GOVERNANCE_CENTER", null);
+        return true;
     }
 
     private void openPendingCenter(Player player) {
@@ -1864,6 +1985,31 @@ final class TownUiController implements Listener {
                 case "TOWN_RULES" -> openTownRules(player, UUID.fromString(target));
                 case "FINANCE" -> openFinance(player, Integer.parseInt(target));
                 case "GOVERNANCE_CENTER" -> openGovernanceCenter(player);
+                case "VISITOR_CENTER" -> openVisitorCenter(player, UUID.fromString(target));
+                case "VISITOR_LIST" -> {
+                    String[] parts = target.split(":");
+                    openVisitorList(player, UUID.fromString(parts[0]),
+                            Integer.parseInt(parts[1]));
+                }
+                case "VISITOR_INVITE" -> {
+                    String[] parts = target.split(":");
+                    openVisitorInvite(player, UUID.fromString(parts[0]),
+                            Integer.parseInt(parts[1]));
+                }
+                case "CONFIRM_ADD_VISITOR" -> {
+                    String[] parts = target.split(":");
+                    openConfirmation(player, "确认邀请访客", "ADD_VISITOR", target,
+                            "目标玩家将立即获得本镇领地权限", "VISITOR_INVITE",
+                            parts[0] + ":" + parts[2]);
+                }
+                case "ADD_VISITOR" -> addVisitor(player, target);
+                case "CONFIRM_REMOVE_VISITOR" -> {
+                    String[] parts = target.split(":");
+                    openConfirmation(player, "确认移出访客", "REMOVE_VISITOR", target,
+                            "目标玩家将立即失去本镇领地权限", "VISITOR_LIST",
+                            parts[0] + ":" + parts[2]);
+                }
+                case "REMOVE_VISITOR" -> removeVisitor(player, target);
                 case "PENDING_CENTER" -> openPendingCenter(player);
                 case "PERSONAL_CENTER" -> openPersonalCenter(player);
                 case "TAX_MENU" -> openTaxMenu(player);
@@ -2019,6 +2165,40 @@ final class TownUiController implements Listener {
             }
             openNotice(mayor, "成员已移出", "该成员已离开小镇，Residence 权限已同步。",
                     "返回成员列表", "MEMBERS", changedTown + ":0");
+        }));
+    }
+
+    private void addVisitor(Player manager, String target) {
+        String[] parts = target.split(":");
+        UUID townId = UUID.fromString(parts[0]);
+        UUID playerId = UUID.fromString(parts[1]);
+        actions.addVisitor(manager, townId, playerId, outcome ->
+                handleOutcome(manager, outcome, visitor -> {
+            Player invited = Bukkit.getPlayer(playerId);
+            if (invited != null) {
+                invited.sendMessage("§a你已被加入一个小镇的访客名单，并获得该镇领地权限。");
+                playSound(invited, Sound.BLOCK_NOTE_BLOCK_PLING);
+            }
+            openNotice(manager, "访客已邀请",
+                    displayName(playerId) + " 已加入访客名单，Residence 权限已同步。",
+                    "返回访客列表", "VISITOR_LIST", townId + ":0");
+        }));
+    }
+
+    private void removeVisitor(Player manager, String target) {
+        String[] parts = target.split(":");
+        UUID townId = UUID.fromString(parts[0]);
+        UUID playerId = UUID.fromString(parts[1]);
+        int page = Integer.parseInt(parts[2]);
+        actions.removeVisitor(manager, townId, playerId, outcome ->
+                handleOutcome(manager, outcome, removed -> {
+            Player visitor = Bukkit.getPlayer(playerId);
+            if (visitor != null) {
+                visitor.sendMessage("§e你已被移出一个小镇的访客名单，并失去该镇领地权限。");
+            }
+            openNotice(manager, "访客已移出",
+                    displayName(playerId) + " 已移出访客名单，Residence 权限已同步。",
+                    "返回访客列表", "VISITOR_LIST", townId + ":" + page);
         }));
     }
 
@@ -3082,6 +3262,8 @@ final class TownUiController implements Listener {
                         || title.equals("小镇申请摘要") || title.equals("公共资产")
                         || title.startsWith("小镇账本") || title.equals("公共 Buff 商店")
                         || title.equals("成员治理") || title.startsWith("小镇治理投票")
+                        || title.equals("访客管理") || title.startsWith("小镇访客")
+                        || title.startsWith("邀请访客")
                         || title.startsWith("入镇申请") || title.equals("待办中心")
                         || title.equals("个人与帮助") || title.startsWith("申请审核")
                         ? dialogTextBody(item.item()) : dialogBody(item.item()))
@@ -3343,6 +3525,22 @@ final class TownUiController implements Listener {
     }
 
     private record MemberDetail(MemberGovernanceSnapshot viewer, MemberRole targetRole) {
+    }
+
+    private record VisitorCenterView(MemberGovernanceSnapshot governance, int visitorCount) {
+    }
+
+    private record VisitorPageView(TownSnapshot.VisitorPage page,
+                                   MemberGovernanceSnapshot governance) {
+    }
+
+    private record VisitorInviteView(MemberGovernanceSnapshot governance,
+                                     List<UUID> memberIds,
+                                     List<UUID> visitorIds) {
+        private VisitorInviteView {
+            memberIds = List.copyOf(memberIds);
+            visitorIds = List.copyOf(visitorIds);
+        }
     }
 
     private record ManagerNotification(TownSnapshot town, List<UUID> managerIds) {
