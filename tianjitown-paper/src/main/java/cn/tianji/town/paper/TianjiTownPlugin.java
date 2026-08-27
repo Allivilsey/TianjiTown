@@ -541,6 +541,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
             }
         });
         runtime.recoverStartupState();
+        runtime.buffs().refreshAllPlayers();
         runtime.bonuses().recoverTaggedBeacons();
         runtime.bonuses().refreshIndex();
         getServer().getScheduler().runTaskTimer(this,
@@ -556,9 +557,6 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 () -> runPeriodic("清算对账", runtime::reconcileSettlement), 20L * 20,
                 20L * 60 * Math.max(1,
                         getConfig().getLong("phase3.reconciliation-interval-minutes", 5)));
-        getServer().getScheduler().runTaskTimer(this,
-                () -> runPeriodic("Buff 清理", runtime.buffs()::cleanupExpired),
-                20L * 30, 20L * 60);
         getServer().getScheduler().runTaskTimer(this,
                 () -> runPeriodic("领地加成索引刷新", runtime.bonuses()::refreshIndex),
                 20L * 15, 20L * 30);

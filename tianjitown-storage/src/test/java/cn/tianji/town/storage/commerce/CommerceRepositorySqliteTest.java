@@ -100,7 +100,7 @@ class CommerceRepositorySqliteTest {
                     () -> repository.purchaseBuff(mayorId, "Mayor", buff,
                             BuffDurationOption.ONE_HOUR, 2,
                             "buff:test:3", now.plusSeconds(2)));
-            assertEquals(1, repository.activeBuffsForPlayer(memberId, now).size());
+            assertEquals(1, repository.activeBuffsForPlayer(memberId, now.plusSeconds(1)).size());
 
             CommerceRepository.BuffPurchase refundedBuff = repository.refundActiveBuff(
                     second.buff().buffId(), mayorId, "Mayor", "效果应用失败测试");
@@ -233,6 +233,52 @@ class CommerceRepositorySqliteTest {
                     + "WHERE business_key='buff:restart:once'"));
             assertEquals("EXPIRED", scalarText(gate, "SELECT status FROM active_buffs "
                     + "WHERE business_key='buff:restart:once'"));
+        }
+    }
+
+    @Test
+    void expiresPlayerBuffsAtTheirScheduledDeadlines() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("buff-expiration.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID townId = UUID.randomUUID();
+            UUID mayorId = UUID.randomUUID();
+            UUID memberId = UUID.randomUUID();
+            insertTown(gate, townId, mayorId, memberId);
+            CommerceRepository repository = new CommerceRepository(gate.dataSource(),
+                    () -> false);
+            BuffDefinition firstBuff = new BuffDefinition("expiration-one", "第一项到期测试",
+                    BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                    new BigDecimal("10.00"), 1, BuffStackingRule.LEVEL_UP, 1,
+                    Set.of(MemberRole.MAYOR));
+            BuffDefinition secondBuff = new BuffDefinition("expiration-two", "第二项到期测试",
+                    BuffDefinition.EffectKind.POTION, "minecraft:jump_boost", "AMPLIFIER",
+                    new BigDecimal("10.00"), 1, BuffStackingRule.LEVEL_UP, 1,
+                    Set.of(MemberRole.MAYOR));
+            Instant now = Instant.parse("2026-08-27T00:00:00Z");
+            CommerceRepository.BuffPurchase firstPurchase = repository.purchaseBuff(mayorId,
+                    "Mayor", firstBuff, BuffDurationOption.ONE_HOUR, 2,
+                    "buff:expiration:one", now);
+            CommerceRepository.BuffPurchase secondPurchase = repository.purchaseBuff(mayorId,
+                    "Mayor", secondBuff, BuffDurationOption.ONE_HOUR, 2,
+                    "buff:expiration:two", now.plus(Duration.ofMinutes(30)));
+
+            assertEquals(1, repository.expireBuffsForPlayer(memberId,
+                    firstPurchase.buff().expiresAt()));
+            assertEquals("EXPIRED", scalarText(gate, "SELECT status FROM active_buffs "
+                    + "WHERE business_key = 'buff:expiration:one'"));
+            assertEquals(1, repository.activeBuffsForPlayer(memberId,
+                    firstPurchase.buff().expiresAt()).size());
+            assertEquals("expiration-two", repository.activeBuffsForPlayer(memberId,
+                    firstPurchase.buff().expiresAt()).get(0).buffKey());
+
+            assertEquals(1, repository.expireBuffsForPlayer(memberId,
+                    secondPurchase.buff().expiresAt()));
+            assertTrue(repository.activeBuffsForPlayer(memberId,
+                    secondPurchase.buff().expiresAt()).isEmpty());
+            assertEquals(0, repository.expireBuffsForPlayer(memberId,
+                    secondPurchase.buff().expiresAt()));
         }
     }
 

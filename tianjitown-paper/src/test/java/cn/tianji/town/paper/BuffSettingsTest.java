@@ -43,6 +43,11 @@ class BuffSettingsTest {
                 () -> BuffSettings.load(configuration("100.00", "OFFICER", "LEVEL_UP")));
         assertThrows(IllegalArgumentException.class,
                 () -> BuffSettings.load(configuration("0", "MAYOR", "LEVEL_UP")));
+        assertThrows(IllegalArgumentException.class,
+                () -> new BuffDefinition("negative", "负数效果",
+                        BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:movement_speed",
+                        "ADD_SCALAR", new java.math.BigDecimal("10.00"), 1,
+                        BuffStackingRule.LEVEL_UP, -0.2D, Set.of(MemberRole.MAYOR)));
         IllegalArgumentException overflow = assertThrows(IllegalArgumentException.class,
                 () -> BuffSettings.load(configuration("1E1000000", "MAYOR", "LEVEL_UP")));
         assertTrue(overflow.getMessage().contains("次级货币单位范围"));

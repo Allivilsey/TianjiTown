@@ -87,11 +87,12 @@ public final class CommerceRepository {
                     JOIN town_members m ON m.town_id = b.town_id
                     JOIN towns t ON t.town_id = b.town_id
                     WHERE m.player_uuid = ? AND t.status = 'ACTIVE'
-                      AND b.status = 'ACTIVE' AND b.expires_at > ?
-                    ORDER BY b.buff_key
+                      AND b.status = 'ACTIVE' AND b.starts_at <= ? AND b.expires_at > ?
+                      ORDER BY b.buff_key
                     """)) {
                 statement.setBytes(1, uuid(playerId));
                 statement.setLong(2, now.toEpochMilli());
+                statement.setLong(3, now.toEpochMilli());
                 try (ResultSet rows = statement.executeQuery()) {
                     while (rows.next()) {
                         result.add(readBuff(rows));
@@ -130,6 +131,25 @@ public final class CommerceRepository {
                 update.executeUpdate();
             }
             return Set.copyOf(affected);
+        });
+    }
+
+    public int expireBuffsForPlayer(UUID playerId, Instant now) {
+        requireWorkerThread();
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(now, "now");
+        return transaction(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement("""
+                UPDATE active_buffs SET status = 'EXPIRED'
+                     WHERE status = 'ACTIVE' AND expires_at <= ?
+                       AND town_id IN (
+                           SELECT town_id FROM town_members WHERE player_uuid = ?
+                       )
+                    """)) {
+                statement.setLong(1, now.toEpochMilli());
+                statement.setBytes(2, uuid(playerId));
+                return statement.executeUpdate();
+            }
         });
     }
 
@@ -338,10 +358,12 @@ public final class CommerceRepository {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT * FROM active_buffs
                  WHERE town_id = ? AND status = 'ACTIVE' AND expires_at > ?
+                   AND starts_at <= ?
                  ORDER BY buff_key
-                """)) {
+                 """)) {
             statement.setBytes(1, uuid(townId));
             statement.setLong(2, now.toEpochMilli());
+            statement.setLong(3, now.toEpochMilli());
             try (ResultSet rows = statement.executeQuery()) {
                 while (rows.next()) {
                     result.add(readBuff(rows));

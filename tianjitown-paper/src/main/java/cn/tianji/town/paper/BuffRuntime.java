@@ -3,10 +3,11 @@ package cn.tianji.town.paper;
 import cn.tianji.town.core.consumption.BuffDefinition;
 import cn.tianji.town.core.consumption.BuffDurationOption;
 import cn.tianji.town.storage.commerce.CommerceRepository;
+import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
-import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -18,8 +19,11 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitTask;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -31,12 +35,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 final class BuffRuntime implements Listener {
+    private static final long REFRESH_RETRY_DELAY_TICKS = 20L * 5;
+
     private final TianjiTownPlugin plugin;
     private final TownRuntime host;
     private final CommerceRepository repository;
     private final BuffSettings settings;
     private final NamespacedKey potionKeysKey;
     private final Map<UUID, AppliedEffects> appliedEffects = new HashMap<>();
+    private final Map<UUID, Long> refreshGenerations = new HashMap<>();
+    private final Map<UUID, BukkitTask> expirationTasks = new HashMap<>();
+    private final Map<UUID, Instant> expirationDeadlines = new HashMap<>();
     private final AtomicBoolean cleanupFailureLogged = new AtomicBoolean();
 
     BuffRuntime(TianjiTownPlugin plugin, TownRuntime host,
@@ -99,11 +108,6 @@ final class BuffRuntime implements Listener {
         }
     }
 
-    void cleanupExpired() {
-        host.write(org.bukkit.Bukkit.getConsoleSender(), () -> repository.expireBuffs(Instant.now()),
-                ignored -> refreshAllPlayers());
-    }
-
     void refreshAllPlayers() {
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             refreshPlayer(player);
@@ -111,24 +115,68 @@ final class BuffRuntime implements Listener {
     }
 
     void refreshPlayer(Player player) {
+        refreshPlayer(player, false, false);
+    }
+
+    private void refreshPlayer(Player player, boolean expireRecords,
+                                boolean normalizeRespawnHealth) {
         if (!player.isOnline()) {
             return;
         }
-        host.read(player, () -> repository.activeBuffsForPlayer(player.getUniqueId(), Instant.now()),
-                buffs -> {
-            if (player.isOnline()) {
+        UUID playerId = player.getUniqueId();
+        long refreshGeneration = nextRefreshGeneration(playerId);
+        Consumer<List<CommerceRepository.ActiveBuff>> apply = buffs -> {
+            if (player.isOnline() && isCurrentRefresh(playerId, refreshGeneration)) {
                 try {
-                    applyBuffs(player, buffs);
+                    applyBuffs(player, buffs, normalizeRespawnHealth);
+                    scheduleExpiration(playerId, buffs, refreshGeneration);
                 } catch (RuntimeException | LinkageError exception) {
-                    tryClearManagedEffects(player);
                     plugin.getLogger().severe("刷新玩家公共 Buff 失败 " + player.getUniqueId()
                             + ": " + safeMessage(exception));
+                    retryRefresh(player, playerId, refreshGeneration, expireRecords, exception);
                 }
             }
-        });
+        };
+        if (expireRecords) {
+            host.writeAction(player, () -> {
+                Instant now = Instant.now();
+                repository.expireBuffsForPlayer(playerId, now);
+                return repository.activeBuffsForPlayer(playerId, now);
+            }, apply, exception -> retryRefresh(player, playerId, refreshGeneration,
+                    true, exception));
+        } else {
+            host.readAction(player,
+                    () -> repository.activeBuffsForPlayer(playerId, Instant.now()), apply,
+                    exception -> retryRefresh(player, playerId, refreshGeneration,
+                            false, exception));
+        }
+    }
+
+    private void retryRefresh(Player player, UUID playerId, long refreshGeneration,
+                              boolean expireRecords, Throwable exception) {
+        if (!isCurrentRefresh(playerId, refreshGeneration)) {
+            return;
+        }
+        plugin.getLogger().warning("检查玩家公共 Buff 失败 " + playerId
+                + "，将在稍后重试: " + safeMessage(exception));
+        if (!plugin.runMainLater(() -> {
+            if (!isCurrentRefresh(playerId, refreshGeneration)) {
+                return;
+            }
+            if (!player.isOnline()) {
+                refreshGenerations.remove(playerId, refreshGeneration);
+                return;
+            }
+            refreshPlayer(player, expireRecords, false);
+        }, REFRESH_RETRY_DELAY_TICKS)) {
+            refreshGenerations.remove(playerId, refreshGeneration);
+        }
     }
 
     void clearAll() {
+        clearExpirationTasks();
+        expirationDeadlines.clear();
+        refreshGenerations.clear();
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             tryClearManagedEffects(player);
         }
@@ -138,12 +186,14 @@ final class BuffRuntime implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        plugin.runMain(() -> refreshPlayer(player));
+        // 登录时先收尾停服期间已到期的记录，再校验并恢复玩家效果。
+        plugin.runMain(() -> refreshPlayer(player, true, false));
     }
 
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
-        plugin.runMain(() -> refreshPlayer(event.getPlayer()));
+        // 重生后重新校验 Buff，避免已到期效果残留。
+        plugin.runMain(() -> refreshPlayer(event.getPlayer(), true, true));
     }
 
     @EventHandler
@@ -153,21 +203,34 @@ final class BuffRuntime implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
+        UUID playerId = event.getPlayer().getUniqueId();
         tryClearManagedEffects(event.getPlayer());
-        appliedEffects.remove(event.getPlayer().getUniqueId());
+        appliedEffects.remove(playerId);
+        if (!expirationTasks.containsKey(playerId)) {
+            expirationDeadlines.remove(playerId);
+            refreshGenerations.remove(playerId);
+        }
     }
 
     private void verifyBuffPurchase(Player player, CommerceRepository.BuffPurchase purchase,
                                     Consumer<CommerceRepository.BuffPurchase> success,
                                     Consumer<RuntimeException> failure) {
+        UUID playerId = player.getUniqueId();
+        long refreshGeneration = nextRefreshGeneration(playerId);
+        ensureExpirationAt(playerId, refreshGeneration, purchase.buff().expiresAt());
         host.readAction(player,
-                () -> repository.activeBuffsForPlayer(player.getUniqueId(), Instant.now()), buffs -> {
+                () -> repository.activeBuffsForPlayer(playerId, Instant.now()), buffs -> {
+            if (!player.isOnline() || !isCurrentRefresh(playerId, refreshGeneration)) {
+                refreshAllPlayers();
+                success.accept(purchase);
+                return;
+            }
             try {
-                applyBuffs(player, buffs);
+                applyBuffs(player, buffs, false);
+                scheduleExpiration(playerId, buffs, refreshGeneration);
                 refreshAllPlayers();
                 success.accept(purchase);
             } catch (RuntimeException | LinkageError exception) {
-                tryClearManagedEffects(player);
                 host.writeAction(player,
                         () -> repository.refundActiveBuff(purchase.buff().buffId(), null,
                                 "SYSTEM", "Buff 应用失败自动补偿: " + safeMessage(exception)),
@@ -176,46 +239,373 @@ final class BuffRuntime implements Listener {
                     failure.accept(new IllegalStateException(
                             "Buff 应用失败，已自动取消并退回公共资金: "
                                     + safeMessage(exception), exception));
-                }, failure);
+                        }, refundFailure -> {
+                            retryRefresh(player, playerId, refreshGeneration, false, refundFailure);
+                            failure.accept(refundFailure);
+                        });
             }
-        }, failure);
+        }, exception -> {
+            retryRefresh(player, playerId, refreshGeneration, false, exception);
+            failure.accept(exception);
+        });
     }
 
-    private void applyBuffs(Player player, List<CommerceRepository.ActiveBuff> buffs) {
-        clearManagedEffects(player);
-        Set<PotionEffectType> potions = new HashSet<>();
-        Set<AttributeKey> attributes = new HashSet<>();
+    private long nextRefreshGeneration(UUID playerId) {
+        Instant previousDeadline = expirationDeadlines.get(playerId);
+        cancelExpirationTask(playerId);
+        long current = refreshGenerations.getOrDefault(playerId, 0L);
+        long next = current == Long.MAX_VALUE ? 1L : current + 1L;
+        refreshGenerations.put(playerId, next);
+        if (previousDeadline != null) {
+            scheduleExpirationTask(playerId, next, previousDeadline);
+        }
+        return next;
+    }
+
+    private boolean isCurrentRefresh(UUID playerId, long generation) {
+        return Objects.equals(refreshGenerations.get(playerId), generation);
+    }
+
+    private void scheduleExpiration(UUID playerId, List<CommerceRepository.ActiveBuff> buffs,
+                                     long refreshGeneration) {
+        if (!isCurrentRefresh(playerId, refreshGeneration)) {
+            return;
+        }
+        cancelExpirationTask(playerId);
+        expirationDeadlines.remove(playerId);
         Instant now = Instant.now();
-        for (CommerceRepository.ActiveBuff buff : buffs) {
-            if (!buff.expiresAt().isAfter(now)) {
-                continue;
-            }
-            if (buff.effectKind() == BuffDefinition.EffectKind.POTION) {
-                PotionEffectType type = requirePotion(buff.effectKey());
-                long remainingTicks = Math.max(1, java.time.Duration.between(now,
-                        buff.expiresAt()).toMillis() / 50);
-                int ticks = (int) Math.min(Integer.MAX_VALUE, remainingTicks);
-                int amplifier = Math.max(0, (int) Math.round(
-                        buff.amountPerLevel() * buff.level()) - 1);
-                player.addPotionEffect(new PotionEffect(type, ticks, amplifier,
-                        true, false, true), true);
-                potions.add(type);
-            } else {
-                Attribute attribute = requireAttribute(buff.effectKey());
-                AttributeInstance instance = player.getAttribute(attribute);
-                if (instance == null) {
-                    throw new IllegalStateException("玩家缺少 Attribute: " + buff.effectKey());
+        CommerceRepository.ActiveBuff next = buffs.stream()
+                .filter(buff -> buff.expiresAt().isAfter(now))
+                .min(Comparator.comparing(CommerceRepository.ActiveBuff::expiresAt))
+                .orElse(null);
+        if (next == null) {
+            return;
+        }
+        if (!scheduleExpirationTask(playerId, refreshGeneration, next.expiresAt())) {
+            expirationDeadlines.put(playerId, next.expiresAt());
+        }
+    }
+
+    private void ensureExpirationAt(UUID playerId, long refreshGeneration, Instant deadline) {
+        if (!isCurrentRefresh(playerId, refreshGeneration) || deadline == null) {
+            return;
+        }
+        Instant currentDeadline = expirationDeadlines.get(playerId);
+        if (currentDeadline != null && !currentDeadline.isAfter(deadline)) {
+            return;
+        }
+        cancelExpirationTask(playerId);
+        expirationDeadlines.remove(playerId);
+        if (!scheduleExpirationTask(playerId, refreshGeneration, deadline)) {
+            expirationDeadlines.put(playerId, deadline);
+        }
+    }
+
+    private boolean scheduleExpirationTask(UUID playerId, long refreshGeneration,
+                                           Instant deadline) {
+        if (!isCurrentRefresh(playerId, refreshGeneration)) {
+            return false;
+        }
+        long delayTicks = ticksUntil(Instant.now(), deadline);
+        try {
+            BukkitTask task = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                if (!isCurrentRefresh(playerId, refreshGeneration)) {
+                    return;
                 }
-                NamespacedKey modifierKey = modifierKey(buff.buffKey());
-                instance.removeModifier(modifierKey);
-                AttributeModifier.Operation operation = AttributeModifier.Operation.valueOf(
-                        buff.effectOperation());
-                instance.addTransientModifier(new AttributeModifier(modifierKey,
-                        buff.amountPerLevel() * buff.level(), operation));
-                attributes.add(new AttributeKey(attribute, modifierKey));
+                expirationTasks.remove(playerId);
+                expirationDeadlines.remove(playerId);
+                try {
+                    handleExpiration(playerId, refreshGeneration);
+                } catch (RuntimeException | LinkageError exception) {
+                    retryExpiration(playerId, refreshGeneration, exception);
+                }
+            }, delayTicks);
+            expirationTasks.put(playerId, task);
+            expirationDeadlines.put(playerId, deadline);
+            return true;
+        } catch (RuntimeException | LinkageError exception) {
+            plugin.getLogger().warning("安排公共 Buff 到期检查失败 " + playerId + ": "
+                    + safeMessage(exception));
+            return false;
+        }
+    }
+
+    private void handleExpiration(UUID playerId, long refreshGeneration) {
+        if (!isCurrentRefresh(playerId, refreshGeneration)) {
+            return;
+        }
+        host.writeAction(Bukkit.getConsoleSender(), () -> repository.expireBuffsForPlayer(playerId,
+                        Instant.now()),
+                ignored -> {
+                    if (!isCurrentRefresh(playerId, refreshGeneration)) {
+                        return;
+                    }
+                    Player player = Bukkit.getPlayer(playerId);
+                    if (player == null || !player.isOnline()) {
+                        refreshGenerations.remove(playerId, refreshGeneration);
+                        return;
+                    }
+                    refreshPlayer(player);
+                }, exception -> {
+                    retryExpiration(playerId, refreshGeneration, exception);
+                });
+    }
+
+    private void retryExpiration(UUID playerId, long refreshGeneration, Throwable exception) {
+        if (!isCurrentRefresh(playerId, refreshGeneration)) {
+            return;
+        }
+        plugin.getLogger().warning("公共 Buff 到期清理失败 " + playerId
+                + "，将在稍后重试: " + safeMessage(exception));
+        Instant retryAt = Instant.now().plusSeconds(1);
+        if (!scheduleExpirationTask(playerId, refreshGeneration, retryAt)) {
+            expirationDeadlines.put(playerId, retryAt);
+        }
+    }
+
+    private void cancelExpirationTask(UUID playerId) {
+        BukkitTask task = expirationTasks.remove(playerId);
+        if (task != null) {
+            try {
+                task.cancel();
+            } catch (RuntimeException | LinkageError exception) {
+                plugin.getLogger().warning("取消公共 Buff 到期检查失败 " + playerId + ": "
+                        + safeMessage(exception));
             }
         }
-        appliedEffects.put(player.getUniqueId(), new AppliedEffects(potions, attributes));
+    }
+
+    private void clearExpirationTasks() {
+        for (UUID playerId : List.copyOf(expirationTasks.keySet())) {
+            cancelExpirationTask(playerId);
+        }
+        expirationDeadlines.clear();
+    }
+
+    private static long ticksUntil(Instant now, Instant expiresAt) {
+        long remainingMillis = Math.max(0L, Duration.between(now, expiresAt).toMillis());
+        return Math.max(1L, (remainingMillis + 49L) / 50L);
+    }
+
+    private void applyBuffs(Player player, List<CommerceRepository.ActiveBuff> buffs,
+                            boolean normalizeRespawnHealth) {
+        double previousHealth = player.getHealth();
+        Map<PotionEffectType, PotionEffect> desiredPotions = new HashMap<>();
+        Map<AttributeKey, AttributeExpectation> desiredAttributes = new HashMap<>();
+        Set<Attribute> desiredAttributeTypes = new HashSet<>();
+        Set<AttributeKey> activeAttributeKeys = collectAttributeKeys(buffs);
+        Instant now = Instant.now();
+        try {
+            for (CommerceRepository.ActiveBuff buff : buffs) {
+                validateActiveBuff(buff);
+                if (!buff.expiresAt().isAfter(now)) {
+                    continue;
+                }
+                if (buff.effectKind() == BuffDefinition.EffectKind.POTION) {
+                    PotionEffectType type = requirePotion(buff.effectKey());
+                    long remainingTicks = Math.max(1, Duration.between(now,
+                            buff.expiresAt()).toMillis() / 50);
+                    int ticks = (int) Math.min(Integer.MAX_VALUE, remainingTicks);
+                    long roundedStrength = Math.round(buff.amountPerLevel() * buff.level());
+                    int amplifier = (int) Math.max(0L, Math.min(Integer.MAX_VALUE,
+                            roundedStrength - 1L));
+                    PotionEffect effect = new PotionEffect(type, ticks, amplifier,
+                            true, false, true);
+                    if (desiredPotions.put(type, effect) != null) {
+                        throw new IllegalStateException("多个 Buff 不能使用同一个 Potion Effect: "
+                                + buff.effectKey());
+                    }
+                } else {
+                    Attribute attribute = requireAttribute(buff.effectKey());
+                    if (!desiredAttributeTypes.add(attribute)) {
+                        throw new IllegalStateException("多个生效 Buff 使用同一个 Attribute: "
+                                + buff.effectKey());
+                    }
+                    AttributeModifier.Operation operation = AttributeModifier.Operation.valueOf(
+                            buff.effectOperation());
+                    double amount = buff.amountPerLevel() * buff.level();
+                    if (!Double.isFinite(amount) || amount <= 0) {
+                        throw new IllegalStateException("Buff Attribute 数值无效: "
+                                + buff.buffKey());
+                    }
+                    AttributeKey key = new AttributeKey(attribute, modifierKey(buff.buffKey()));
+                    if (desiredAttributes.put(key,
+                            new AttributeExpectation(key, amount, operation)) != null) {
+                        throw new IllegalStateException("重复的 Buff Attribute modifier: "
+                                + buff.buffKey());
+                    }
+                }
+            }
+
+            reconcileAttributes(player, desiredAttributes);
+            reconcilePotions(player, desiredPotions);
+            appliedEffects.put(player.getUniqueId(), new AppliedEffects(
+                    desiredPotions.keySet(), desiredAttributes.keySet()));
+            updatePersistedPotions(player, desiredPotions.keySet());
+            normalizeHealth(player, previousHealth, normalizeRespawnHealth);
+        } catch (RuntimeException | LinkageError exception) {
+            Set<AttributeKey> attemptedAttributes = new HashSet<>(activeAttributeKeys);
+            attemptedAttributes.addAll(desiredAttributes.keySet());
+            rollbackFailedApply(player, attemptedAttributes, desiredPotions.keySet(), exception);
+            throw exception;
+        }
+    }
+
+    private void validateActiveBuff(CommerceRepository.ActiveBuff buff) {
+        if (buff == null) {
+            throw new IllegalStateException("Buff 记录为空");
+        }
+        if (buff.expiresAt() == null) {
+            throw new IllegalStateException("Buff 到期时间为空: " + buff.buffKey());
+        }
+        if (buff.buffKey() == null || buff.buffKey().isBlank()) {
+            throw new IllegalStateException("Buff key 无效");
+        }
+        if (buff.level() < 1 || buff.level() > 255) {
+            throw new IllegalStateException("Buff 等级无效: " + buff.buffKey());
+        }
+        if (buff.stackCount() < 1) {
+            throw new IllegalStateException("Buff 层数无效: " + buff.buffKey());
+        }
+        if (buff.effectKind() == null || buff.effectKey() == null
+                || buff.effectKey().isBlank() || buff.effectOperation() == null
+                || buff.effectOperation().isBlank()) {
+            throw new IllegalStateException("Buff 效果描述无效: " + buff.buffKey());
+        }
+        if (!Double.isFinite(buff.amountPerLevel()) || buff.amountPerLevel() <= 0) {
+            throw new IllegalStateException("Buff 每级效果值无效: " + buff.buffKey());
+        }
+        double effectiveAmount = buff.amountPerLevel() * buff.level();
+        if (!Double.isFinite(effectiveAmount) || effectiveAmount <= 0) {
+            throw new IllegalStateException("Buff 生效效果值无效: " + buff.buffKey());
+        }
+        if (buff.effectKind() == BuffDefinition.EffectKind.POTION
+                && !"AMPLIFIER".equals(buff.effectOperation())) {
+            throw new IllegalStateException("Potion Buff 的 operation 无效: " + buff.buffKey());
+        }
+    }
+
+    private Set<AttributeKey> collectAttributeKeys(List<CommerceRepository.ActiveBuff> buffs) {
+        Set<AttributeKey> result = new HashSet<>();
+        for (CommerceRepository.ActiveBuff buff : buffs) {
+            if (buff == null || buff.effectKind() != BuffDefinition.EffectKind.ATTRIBUTE
+                    || buff.buffKey() == null) {
+                continue;
+            }
+            Attribute attribute = resolveAttribute(buff.effectKey());
+            if (attribute == null) {
+                continue;
+            }
+            try {
+                result.add(new AttributeKey(attribute, modifierKey(buff.buffKey())));
+            } catch (RuntimeException ignored) {
+                // 数据库中的非法 Buff key 没有可用的 modifier key。
+            }
+        }
+        return result;
+    }
+
+    private void rollbackFailedApply(Player player, Set<AttributeKey> attributes,
+                                     Set<PotionEffectType> potions, Throwable failure) {
+        try {
+            removeAttributeModifiers(player, attributes);
+        } catch (RuntimeException | LinkageError rollbackFailure) {
+            failure.addSuppressed(rollbackFailure);
+        }
+        for (PotionEffectType potion : potions) {
+            try {
+                player.removePotionEffect(potion);
+            } catch (RuntimeException | LinkageError rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+            }
+        }
+        try {
+            clearManagedEffects(player);
+        } catch (RuntimeException | LinkageError rollbackFailure) {
+            failure.addSuppressed(rollbackFailure);
+        }
+        appliedEffects.remove(player.getUniqueId());
+    }
+
+    private void reconcileAttributes(Player player,
+                                     Map<AttributeKey, AttributeExpectation> desired) {
+        AppliedEffects previous = appliedEffects.get(player.getUniqueId());
+        Set<AttributeKey> managed = new HashSet<>();
+        if (previous != null) {
+            managed.addAll(previous.attributes());
+        }
+        for (BuffDefinition definition : settings.buffs().values()) {
+            if (definition.effectKind() == BuffDefinition.EffectKind.ATTRIBUTE) {
+                managed.add(new AttributeKey(requireAttribute(definition.effectKey()),
+                        modifierKey(definition.key())));
+            }
+        }
+        managed.removeAll(desired.keySet());
+        removeAttributeModifiers(player, managed);
+
+        for (AttributeExpectation expectation : desired.values()) {
+            AttributeInstance instance = player.getAttribute(expectation.key().attribute());
+            if (instance == null) {
+                throw new IllegalStateException("玩家缺少 Attribute: "
+                        + expectation.key().attribute().getKey());
+            }
+            AttributeModifier current = instance.getModifier(expectation.key().modifierKey());
+            boolean wasPreviouslyManaged = previous != null
+                    && previous.attributes().contains(expectation.key());
+            if (current != null
+                    && current.getOperation() == expectation.operation()
+                    && Double.compare(current.getAmount(), expectation.amount()) == 0) {
+                continue;
+            }
+            if (wasPreviouslyManaged) {
+                logAttributeRepair(player, expectation, current);
+            }
+            if (current != null) {
+                instance.removeModifier(expectation.key().modifierKey());
+            }
+            instance.addTransientModifier(new AttributeModifier(expectation.key().modifierKey(),
+                    expectation.amount(), expectation.operation()));
+        }
+    }
+
+    private void logAttributeRepair(Player player, AttributeExpectation expectation,
+                                    AttributeModifier current) {
+        String actual = current == null ? "缺失" : "amount=" + current.getAmount()
+                + ", operation=" + current.getOperation();
+        plugin.getLogger().warning("检测到玩家 " + player.getUniqueId() + " 的 Buff Attribute 异常（"
+                + expectation.key().attribute().getKey() + "，实际 " + actual
+                + "，期望 amount=" + expectation.amount() + ", operation="
+                + expectation.operation() + "），已自动修复");
+    }
+
+    private void reconcilePotions(Player player, Map<PotionEffectType, PotionEffect> desired) {
+        Set<PotionEffectType> managed = managedPotionTypes(player);
+        managed.removeAll(desired.keySet());
+        managed.forEach(player::removePotionEffect);
+        desired.values().forEach(effect -> player.addPotionEffect(effect, true));
+    }
+
+    private Set<PotionEffectType> managedPotionTypes(Player player) {
+        Set<PotionEffectType> result = new HashSet<>();
+        AppliedEffects previous = appliedEffects.get(player.getUniqueId());
+        if (previous != null) {
+            result.addAll(previous.potions());
+        }
+        String persistedPotions = player.getPersistentDataContainer().get(potionKeysKey,
+                PersistentDataType.STRING);
+        if (persistedPotions != null) {
+            persistedPotions.lines().filter(value -> !value.isBlank())
+                    .map(this::resolvePotion).filter(Objects::nonNull).forEach(result::add);
+        }
+        for (BuffDefinition definition : settings.buffs().values()) {
+            if (definition.effectKind() == BuffDefinition.EffectKind.POTION) {
+                result.add(requirePotion(definition.effectKey()));
+            }
+        }
+        return result;
+    }
+
+    private void updatePersistedPotions(Player player, Set<PotionEffectType> potions) {
         if (potions.isEmpty()) {
             player.getPersistentDataContainer().remove(potionKeysKey);
         } else {
@@ -223,42 +613,59 @@ final class BuffRuntime implements Listener {
                     potions.stream().map(type -> type.getKey().toString()).sorted()
                             .collect(java.util.stream.Collectors.joining("\n")));
         }
-        double maximumHealth = Objects.requireNonNull(player.getAttribute(Attribute.MAX_HEALTH))
-                .getValue();
-        if (player.getHealth() > maximumHealth) {
-            player.setHealth(maximumHealth);
+    }
+
+    private void normalizeHealth(Player player, double previousHealth,
+                                 boolean normalizeRespawnHealth) {
+        AttributeInstance instance = Objects.requireNonNull(
+                player.getAttribute(Attribute.MAX_HEALTH), "玩家缺少 MAX_HEALTH Attribute");
+        double maximumHealth = instance.getValue();
+        if (!Double.isFinite(maximumHealth) || maximumHealth <= 0) {
+            throw new IllegalStateException("玩家 MAX_HEALTH Attribute 数值无效: " + maximumHealth);
+        }
+        double targetHealth = normalizeRespawnHealth || !Double.isFinite(previousHealth)
+                ? maximumHealth : Math.max(0, Math.min(previousHealth, maximumHealth));
+        if (Double.compare(player.getHealth(), targetHealth) != 0) {
+            player.setHealth(targetHealth);
         }
     }
 
     private void clearManagedEffects(Player player) {
         AppliedEffects previous = appliedEffects.get(player.getUniqueId());
-        Set<PotionEffectType> potionTypes = new HashSet<>();
+        Set<AttributeKey> attributes = new HashSet<>();
         if (previous != null) {
-            potionTypes.addAll(previous.potions());
-            for (AttributeKey key : previous.attributes()) {
-                AttributeInstance instance = player.getAttribute(key.attribute());
-                if (instance != null) {
-                    instance.removeModifier(key.modifierKey());
-                }
-            }
+            attributes.addAll(previous.attributes());
         }
-        String persistedPotions = player.getPersistentDataContainer().get(potionKeysKey,
-                PersistentDataType.STRING);
-        if (persistedPotions != null) {
-            persistedPotions.lines().filter(value -> !value.isBlank())
-                    .map(this::requirePotion).forEach(potionTypes::add);
-        }
-        potionTypes.forEach(player::removePotionEffect);
-        player.getPersistentDataContainer().remove(potionKeysKey);
-        // Attribute 使用本插件独占的稳定 key，可安全清理当前配置内的重载残留。
         for (BuffDefinition definition : settings.buffs().values()) {
             if (definition.effectKind() == BuffDefinition.EffectKind.ATTRIBUTE) {
-                AttributeInstance instance = player.getAttribute(requireAttribute(
-                        definition.effectKey()));
-                if (instance != null) {
-                    instance.removeModifier(modifierKey(definition.key()));
-                }
+                attributes.add(new AttributeKey(requireAttribute(definition.effectKey()),
+                        modifierKey(definition.key())));
             }
+        }
+        removeAttributeModifiers(player, attributes);
+
+        managedPotionTypes(player).forEach(player::removePotionEffect);
+        player.getPersistentDataContainer().remove(potionKeysKey);
+        clampCurrentHealth(player);
+    }
+
+    private void removeAttributeModifiers(Player player, Set<AttributeKey> attributes) {
+        for (AttributeKey key : attributes) {
+            AttributeInstance instance = player.getAttribute(key.attribute());
+            if (instance != null && instance.getModifier(key.modifierKey()) != null) {
+                instance.removeModifier(key.modifierKey());
+            }
+        }
+    }
+
+    private void clampCurrentHealth(Player player) {
+        AttributeInstance instance = player.getAttribute(Attribute.MAX_HEALTH);
+        if (instance == null) {
+            return;
+        }
+        double maximumHealth = instance.getValue();
+        if (player.getHealth() > maximumHealth) {
+            player.setHealth(maximumHealth);
         }
     }
 
@@ -303,21 +710,37 @@ final class BuffRuntime implements Listener {
     }
 
     private PotionEffectType requirePotion(String key) {
-        NamespacedKey namespacedKey = NamespacedKey.fromString(key);
-        PotionEffectType type = namespacedKey == null ? null : Registry.MOB_EFFECT.get(namespacedKey);
+        PotionEffectType type = resolvePotion(key);
         if (type == null) {
             throw new IllegalArgumentException("无效 Potion Effect: " + key);
         }
         return type;
     }
 
+    private PotionEffectType resolvePotion(String key) {
+        try {
+            NamespacedKey namespacedKey = NamespacedKey.fromString(key);
+            return namespacedKey == null ? null : Registry.MOB_EFFECT.get(namespacedKey);
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
     private Attribute requireAttribute(String key) {
-        NamespacedKey namespacedKey = NamespacedKey.fromString(key);
-        Attribute attribute = namespacedKey == null ? null : Registry.ATTRIBUTE.get(namespacedKey);
+        Attribute attribute = resolveAttribute(key);
         if (attribute == null) {
             throw new IllegalArgumentException("无效 Attribute: " + key);
         }
         return attribute;
+    }
+
+    private Attribute resolveAttribute(String key) {
+        try {
+            NamespacedKey namespacedKey = NamespacedKey.fromString(key);
+            return namespacedKey == null ? null : Registry.ATTRIBUTE.get(namespacedKey);
+        } catch (RuntimeException exception) {
+            return null;
+        }
     }
 
     private NamespacedKey modifierKey(String buffKey) {
@@ -331,6 +754,10 @@ final class BuffRuntime implements Listener {
     }
 
     private record AttributeKey(Attribute attribute, NamespacedKey modifierKey) {
+    }
+
+    private record AttributeExpectation(AttributeKey key, double amount,
+                                       AttributeModifier.Operation operation) {
     }
 
     private record AppliedEffects(Set<PotionEffectType> potions, Set<AttributeKey> attributes) {

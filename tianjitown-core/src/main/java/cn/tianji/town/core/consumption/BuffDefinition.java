@@ -29,8 +29,8 @@ public record BuffDefinition(String key, String displayName, EffectKind effectKi
         if (maximumLevel < 1 || maximumLevel > 255) {
             throw new IllegalArgumentException("Buff 最大等级必须在 1~255 之间");
         }
-        if (!Double.isFinite(amountPerLevel) || amountPerLevel == 0) {
-            throw new IllegalArgumentException("Buff 每级效果值必须为非零有限数");
+        if (!Double.isFinite(amountPerLevel) || amountPerLevel <= 0) {
+            throw new IllegalArgumentException("Buff 每级效果值必须为正的有限数");
         }
         purchasingRoles = purchasingRoles == null ? Set.of() : Set.copyOf(purchasingRoles);
         if (purchasingRoles.isEmpty()) {
