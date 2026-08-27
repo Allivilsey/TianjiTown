@@ -1,4 +1,4 @@
-schema-version: 8
+schema-version: 9
 
 database:
   # 相对路径以 plugins/TianjiTown 为基准，也可填写绝对路径。
@@ -78,14 +78,14 @@ phase4:
     catalog:
       speed:
         display-name: '速度'
-        effect-kind: POTION
-        effect-key: 'minecraft:speed'
-        operation: AMPLIFIER
+        effect-kind: ATTRIBUTE
+        effect-key: 'minecraft:movement_speed'
+        operation: ADD_SCALAR
         # 每小时基础价；玩家选择 1~4 周和 I~V 强度后按周折扣计价。
         base-price: '500.00'
         maximum-level: 5
         stacking: LEVEL_UP
-        amount-per-level: 1.0
+        amount-per-level: 0.2
         purchasing-roles: [MAYOR, DEPUTY_MAYOR]
       health:
         display-name: '生命'

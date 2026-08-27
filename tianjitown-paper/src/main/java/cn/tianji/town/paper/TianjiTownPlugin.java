@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class TianjiTownPlugin extends JavaPlugin {
-    private static final int CONFIG_SCHEMA = 8;
+    private static final int CONFIG_SCHEMA = 9;
     private final AtomicReference<GateStatus> gateStatus = new AtomicReference<>(
             new GateStatus(GateStatus.State.CHECKING, List.of("尚未开始")));
     private final AtomicLong lifecycleGeneration = new AtomicLong();
@@ -350,7 +350,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
             return true;
         }
         if (configured == CONFIG_SCHEMA - 1) {
-            upgradeConfigFromSeven();
+            upgradeConfigFromEight();
             getConfig().set("schema-version", CONFIG_SCHEMA);
             saveConfig();
             details.add("OK config schema 已安全升级 " + configured + " -> " + CONFIG_SCHEMA);
@@ -364,6 +364,14 @@ public final class TianjiTownPlugin extends JavaPlugin {
                     + CONFIG_SCHEMA + "；请先按对应版本升级手册处理");
         }
         return false;
+    }
+
+    private void upgradeConfigFromEight() {
+        getConfig().options().copyDefaults(true);
+        getConfig().set("phase4.buffs.catalog.speed.effect-kind", "ATTRIBUTE");
+        getConfig().set("phase4.buffs.catalog.speed.effect-key", "minecraft:movement_speed");
+        getConfig().set("phase4.buffs.catalog.speed.operation", "ADD_SCALAR");
+        getConfig().set("phase4.buffs.catalog.speed.amount-per-level", 0.2D);
     }
 
     private void upgradeConfigFromSeven() {

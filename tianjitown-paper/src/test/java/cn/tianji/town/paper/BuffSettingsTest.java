@@ -1,5 +1,6 @@
 package cn.tianji.town.paper;
 
+import cn.tianji.town.core.consumption.BuffDefinition;
 import cn.tianji.town.core.consumption.BuffStackingRule;
 import cn.tianji.town.core.town.MemberRole;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -19,6 +20,11 @@ class BuffSettingsTest {
         BuffSettings settings = BuffSettings.load(config);
 
         assertTrue(settings.buffShopEnabled());
+        assertEquals(BuffDefinition.EffectKind.ATTRIBUTE,
+                settings.requireBuff("speed").effectKind());
+        assertEquals("minecraft:movement_speed", settings.requireBuff("speed").effectKey());
+        assertEquals("ADD_SCALAR", settings.requireBuff("speed").effectOperation());
+        assertEquals(0.2D, settings.requireBuff("speed").amountPerLevel());
         assertEquals(BuffStackingRule.LEVEL_UP,
                 settings.requireBuff("speed").stackingRule());
         assertEquals(Set.of(MemberRole.MAYOR),
@@ -52,13 +58,13 @@ class BuffSettingsTest {
                     catalog:
                       speed:
                         display-name: 公共迅捷
-                        effect-kind: POTION
-                        effect-key: minecraft:speed
-                        operation: AMPLIFIER
+                        effect-kind: ATTRIBUTE
+                        effect-key: minecraft:movement_speed
+                        operation: ADD_SCALAR
                         base-price: '%s'
                         maximum-level: 2
                         stacking: %s
-                        amount-per-level: 1.0
+                        amount-per-level: 0.2
                         purchasing-roles: [%s]
                 """.formatted(basePrice, stacking, role));
         return config;

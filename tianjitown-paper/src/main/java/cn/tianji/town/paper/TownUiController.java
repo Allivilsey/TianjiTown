@@ -35,6 +35,7 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -3271,13 +3272,22 @@ final class TownUiController implements Listener {
         List<MenuItem> actions = ordered.stream()
                 .filter(item -> itemAction(item.item()) != null)
                 .toList();
+        // 返回项改用 Dialog 底部导航，避免与内容操作重复显示。
+        MenuItem returnItem = actions.stream()
+                .filter(item -> isBackButton(item.item()))
+                .findFirst().orElse(null);
+        List<MenuItem> contentActions = returnItem == null ? actions : actions.stream()
+                .filter(item -> item != returnItem)
+                .toList();
         return openDialogPage(player, title, bodies, List.of(),
                 DialogBase.DialogAfterAction.NONE, session -> {
-                    ActionButton exit = exitButton(player, session, "关闭", "关闭当前界面");
-                    if (actions.isEmpty()) {
+                    ActionButton exit = returnItem == null
+                            ? exitButton(player, session, "关闭", "关闭当前界面")
+                            : returnButton(player, session, returnItem.item());
+                    if (contentActions.isEmpty()) {
                         return DialogType.notice(exit);
                     }
-                    List<ActionButton> buttons = actions.stream()
+                    List<ActionButton> buttons = contentActions.stream()
                             .map(item -> dialogButton(player, item.item(), session))
                             .toList();
                     return DialogType.multiAction(buttons)
@@ -3356,6 +3366,16 @@ final class TownUiController implements Listener {
                 dialogAction(player, session, "CLOSE", null));
     }
 
+    private ActionButton returnButton(Player player, UUID session, ItemStack item) {
+        ItemMeta meta = item.getItemMeta();
+        String action = itemAction(item);
+        String target = meta == null ? null : meta.getPersistentDataContainer()
+                .get(targetKey, PersistentDataType.STRING);
+        return ActionButton.create(Component.text("返回", NamedTextColor.GRAY),
+                Component.text("返回上级菜单", NamedTextColor.GRAY), 140,
+                dialogAction(player, session, action, target));
+    }
+
     private ActionButton dialogButton(Player player, ItemStack item, UUID session) {
         ItemMeta meta = item.getItemMeta();
         Component label = meta != null && meta.hasDisplayName() && meta.displayName() != null
@@ -3416,6 +3436,16 @@ final class TownUiController implements Listener {
         ItemMeta meta = item.getItemMeta();
         return meta == null ? null : meta.getPersistentDataContainer()
                 .get(actionKey, PersistentDataType.STRING);
+    }
+
+    private static boolean isBackButton(ItemStack item) {
+        ItemMeta meta = item.getItemMeta();
+        Component name = meta == null ? null : meta.displayName();
+        if (name == null) {
+            return false;
+        }
+        String label = PlainTextComponentSerializer.plainText().serialize(name).strip();
+        return label.startsWith("返回") || label.equals("上一步");
     }
 
     private Component callbackButton(Player recipient, String label, Runnable action) {
