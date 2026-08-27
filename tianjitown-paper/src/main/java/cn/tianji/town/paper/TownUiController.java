@@ -20,6 +20,7 @@ import cn.tianji.town.storage.economy.EconomyRepository;
 import cn.tianji.town.storage.commerce.CommerceRepository;
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.dialog.DialogResponseView;
+import io.papermc.paper.event.player.PlayerInsertLecternBookEvent;
 import io.papermc.paper.registry.data.dialog.ActionButton;
 import io.papermc.paper.registry.data.dialog.DialogBase;
 import io.papermc.paper.registry.data.dialog.action.DialogAction;
@@ -54,7 +55,6 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.meta.BookMeta;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -378,9 +378,9 @@ final class TownUiController implements Listener {
                 || stationAt(block) != null;
     }
 
-    private void createStationFromHandbook(Player player, Block block, EquipmentSlot hand) {
+    private void createStationFromHandbook(Player player, Block block) {
         if (player.hasPermission("tianjitown.admin")) {
-            completeStationCreation(player, block, hand, null, null);
+            completeStationCreation(player, block, null, null);
             return;
         }
         runtime.read(player, () -> runtime.repository().dashboard(player.getUniqueId()).town(), town -> {
@@ -388,15 +388,13 @@ final class TownUiController implements Listener {
                 plugin.messages().send(player, "station.mayor-only");
                 return;
             }
-            completeStationCreation(player, block, hand, town.id(), town.profile().name());
+            completeStationCreation(player, block, town.id(), town.profile().name());
         });
     }
 
-    private void completeStationCreation(Player player, Block block, EquipmentSlot hand,
-                                         UUID townId, String townName) {
-        if (!(block.getState() instanceof Lectern lectern) || hasBook(lectern)
-                || isStation(block)) {
-            plugin.messages().send(player, "station.already-exists");
+    private void completeStationCreation(Player player, Block block, UUID townId, String townName) {
+        if (!(block.getState() instanceof Lectern lectern)
+                || !isHandbook(lectern.getInventory().getItem(0)) || isStation(block)) {
             return;
         }
         if (townId != null && stationRecords().stream().anyMatch(station ->
@@ -404,20 +402,6 @@ final class TownUiController implements Listener {
             plugin.messages().send(player, "station.town-limit", Map.of("town", townName));
             return;
         }
-        ItemStack held = hand == EquipmentSlot.OFF_HAND
-                ? player.getInventory().getItemInOffHand()
-                : player.getInventory().getItemInMainHand();
-        if (!isHandbook(held)) {
-            openNotice(player, "无法设置服务台", "你手中的小镇手册已经变化，请重新操作。",
-                    "返回小镇服务", "MAIN", null);
-            return;
-        }
-        ItemStack placed = held.clone();
-        placed.setAmount(1);
-        if (player.getGameMode() != org.bukkit.GameMode.CREATIVE) {
-            held.setAmount(held.getAmount() - 1);
-        }
-        lectern.getInventory().setItem(0, placed);
         String stationId = UUID.randomUUID().toString();
         lectern.getPersistentDataContainer().set(stationKey, PersistentDataType.STRING, stationId);
         lectern.update(true);
@@ -599,16 +583,10 @@ final class TownUiController implements Listener {
         boolean rightClick = event.getAction() == Action.RIGHT_CLICK_AIR
                 || event.getAction() == Action.RIGHT_CLICK_BLOCK;
         Block block = event.getClickedBlock();
-        if (rightClick && block != null && block.getState() instanceof Lectern lectern
-                && isHandbook(item) && !hasBook(lectern)
-                && !lectern.getPersistentDataContainer().has(stationKey, PersistentDataType.STRING)) {
-            event.setCancelled(true);
-            createStationFromHandbook(event.getPlayer(), block, event.getHand());
-            return;
-        }
-        if (rightClick && item != null && item.hasItemMeta()
-                && item.getItemMeta().getPersistentDataContainer().has(handbookKey,
-                PersistentDataType.BYTE)) {
+        boolean emptyUnregisteredLectern = block != null
+                && block.getState() instanceof Lectern lectern
+                && !hasBook(lectern) && !isStation(block);
+        if (rightClick && isHandbook(item) && !emptyUnregisteredLectern) {
             Player player = event.getPlayer();
             event.setCancelled(true);
             event.setUseItemInHand(Event.Result.DENY);
@@ -630,16 +608,35 @@ final class TownUiController implements Listener {
         }
         if (block != null && block.getState() instanceof Lectern lectern
                 && lectern.getPersistentDataContainer().has(stationKey, PersistentDataType.STRING)) {
-            event.setCancelled(true);
             String stationId = lectern.getPersistentDataContainer().get(stationKey,
                     PersistentDataType.STRING);
-            if (stationId == null
+            if (stationId == null || stationId.isBlank()
                     || registeredStation(block, stationId, stationRecords()) == null) {
                 event.getPlayer().sendMessage("§c该讲台是复制或移动后的无效服务台，登记坐标校验未通过。");
                 return;
             }
+            event.setCancelled(true);
             openMain(event.getPlayer());
         }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInsertLecternBook(PlayerInsertLecternBookEvent event) {
+        if (!isHandbook(event.getBook())) {
+            return;
+        }
+        Block block = event.getBlock();
+        if (!(block.getState() instanceof Lectern lectern) || hasBook(lectern)
+                || isStation(block)) {
+            return;
+        }
+        Player player = event.getPlayer();
+        // 插书事件发生在方块真正写入之前，下一刻再检查才能确保手册已经留在讲台上。
+        plugin.runMainLater(() -> {
+            if (player.isOnline()) {
+                createStationFromHandbook(player, block);
+            }
+        }, 1L);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -928,7 +925,7 @@ final class TownUiController implements Listener {
                     Component.text("统一收入税率", NamedTextColor.GOLD), "%.0f%%", 5.0F,
                     runtime.economySettings().maximumTaxBps() / 100.0F,
                     account.taxRateBps() / 100.0F, 1.0F);
-            openDialogPage(player, "设置收入税率", List.of(dialogBody(summary)), List.of(input),
+            openDialogPage(player, "设置收入税率", List.of(dialogTextBody(summary)), List.of(input),
                     DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                             DialogType.confirmation(
                                     ActionButton.create(Component.text("保存修改", NamedTextColor.GREEN),
@@ -1081,8 +1078,7 @@ final class TownUiController implements Listener {
             items.add(new MenuItem(4, button(Material.NETHER_STAR, "§d小镇公共 Buff",
                     List.of(runtime.buffs().buffShopEnabled()
                             ? "§7使用公共资金购买，效果作用于全体成员且不限制世界"
-                                    : "§e商店已暂停新购买，现有效果仍持续到期",
-                            "§7购买时可选择 1–4 周和 I–V 强度"), null, null)));
+                                    : "§e商店已暂停新购买，现有效果仍持续到期"), null, null)));
             int slot = 9;
             for (BuffDefinition definition : runtime.buffs().settings().buffs().values()) {
                 CommerceRepository.SelectedBuffQuote quote = view.quotes().get(definition.key());
@@ -1234,8 +1230,7 @@ final class TownUiController implements Listener {
                 false, "true", "false");
         String target = governance.townId() + ":" + governance.townRulesRevision();
         openDialogPage(player, "小镇规则已更新",
-                List.of(DialogBody.item(new ItemStack(Material.WRITTEN_BOOK),
-                                DialogBody.plainMessage(rules, 420), false, false, 48, 48)),
+                List.of(DialogBody.plainMessage(rules, 420)),
                 List.of(acknowledged), DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                 session -> DialogType.confirmation(
                         ActionButton.create(Component.text("确认规则", NamedTextColor.GREEN),
@@ -1371,8 +1366,7 @@ final class TownUiController implements Listener {
                 }
             }
             openDialogPage(player, "小镇规则", List.of(
-                            DialogBody.item(new ItemStack(Material.WRITTEN_BOOK),
-                                    DialogBody.plainMessage(content, 420), false, false, 48, 48)),
+                            DialogBody.plainMessage(content, 420)),
                     List.of(), DialogBase.DialogAfterAction.NONE,
                     session -> DialogType.notice(ActionButton.create(
                             Component.text("返回小镇资料", NamedTextColor.GREEN), null, 220,
@@ -2604,7 +2598,7 @@ final class TownUiController implements Listener {
                 form.id() + ":1")));
         items.add(new MenuItem(20, button(Material.ARROW, "§7上一步", List.of(),
                 "APPLICATION_CONTENT_FORM", form.id().toString())));
-        items.add(new MenuItem(22, button(Material.WRITABLE_BOOK, "§a保存草稿",
+        items.add(new MenuItem(22, button(Material.WRITABLE_BOOK, "§a保存",
                 List.of("§7保存后系统会邀请两名成员确认"), "SAVE_APPLICATION_DRAFT",
                 form.id().toString())));
         openMenu(player, 27, "第 3 / 3 步 · 选择初始成员", items);
@@ -2675,9 +2669,7 @@ final class TownUiController implements Listener {
                 .append(Component.newline())
                 .append(Component.text("名称和小镇代码需要管理员代办；此处只编辑简介和规则。",
                         NamedTextColor.GRAY));
-        openDialogPage(player, "编辑小镇简介和规则", List.of(
-                        DialogBody.item(new ItemStack(Material.WRITABLE_BOOK),
-                                DialogBody.plainMessage(guidance, 420), false, false, 48, 48)),
+        openDialogPage(player, "编辑小镇简介和规则", List.of(DialogBody.plainMessage(guidance, 420)),
                 inputs, DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                 session -> DialogType.confirmation(
                         ActionButton.create(Component.text("保存修改", NamedTextColor.GREEN),
@@ -2742,7 +2734,7 @@ final class TownUiController implements Listener {
             DialogInput amount = DialogInput.text("donation_amount", 360,
                     Component.text("捐款金额", NamedTextColor.GOLD), true,
                     initial, 64, null);
-            openDialogPage(player, "向小镇捐款", List.of(dialogBody(summary)), List.of(amount),
+            openDialogPage(player, "向小镇捐款", List.of(dialogTextBody(summary)), List.of(amount),
                     DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                             DialogType.confirmation(
                                     ActionButton.create(Component.text("确认捐款", NamedTextColor.GREEN),
@@ -3057,7 +3049,9 @@ final class TownUiController implements Listener {
                 List.of("§7" + consequence,
                         title.contains("解散") || title.contains("终止")
                                 ? "§c此操作不可撤销" : "§7请确认信息无误"), null, null);
-        openDialogPage(player, title, List.of(dialogBody(summary)), List.of(),
+        DialogBody summaryBody = title.contains("解散")
+                ? dialogTextBody(summary) : dialogBody(summary);
+        openDialogPage(player, title, List.of(summaryBody), List.of(),
                 DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                         DialogType.confirmation(
                                 ActionButton.create(Component.text("确认", NamedTextColor.GREEN),
@@ -3074,7 +3068,12 @@ final class TownUiController implements Listener {
                 .toList();
         List<DialogBody> bodies = ordered.stream()
                 .filter(item -> itemAction(item.item()) == null)
-                .map(item -> title.equals("小镇服务")
+                .map(item -> title.equals("小镇服务") || title.equals("小镇详情")
+                        || title.equals("小镇申请摘要") || title.equals("公共资产")
+                        || title.startsWith("小镇账本") || title.equals("公共 Buff 商店")
+                        || title.equals("成员治理") || title.startsWith("小镇治理投票")
+                        || title.startsWith("入镇申请") || title.equals("待办中心")
+                        || title.equals("个人与帮助") || title.startsWith("申请审核")
                         ? dialogTextBody(item.item()) : dialogBody(item.item()))
                 .toList();
         List<MenuItem> actions = ordered.stream()
