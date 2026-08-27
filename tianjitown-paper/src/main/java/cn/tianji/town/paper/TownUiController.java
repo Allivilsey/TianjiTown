@@ -1016,7 +1016,7 @@ final class TownUiController implements Listener {
             Component summary = Component.text("领地单元: " + map.currentUnits() + "/"
                             + map.maximumUnits(), NamedTextColor.GRAY)
                     .append(Component.newline())
-                    .append(Component.text("金色=中心 绿色=已占领 青色=可扩张 灰色=不可扩张 红色=其他小镇",
+                    .append(Component.text("黄色=中心 绿色=已扩张 浅灰色=可扩张 红色=不可扩张",
                             NamedTextColor.DARK_GRAY));
             openDialogPage(player, "5×5 领地扩张地图",
                     List.of(DialogBody.plainMessage(summary, 360)), List.of(),
@@ -1281,7 +1281,7 @@ final class TownUiController implements Listener {
                         "REMIND_INITIAL_MEMBERS", application.id().toString())));
             }
             items.add(new MenuItem(12, button(Material.COMPASS, "§e选择当前区块",
-                    List.of("§7当前区块将成为 3×3 初始领地中心"), "SELECT_SITE",
+                    List.of("§7当前区块将成为 5×5 初始领地中心"), "SELECT_SITE",
                     application.id().toString())));
             if (application.territory() != null) {
                 items.add(new MenuItem(14, button(Material.ENDER_EYE, "§b预览已选领地",
@@ -1789,7 +1789,7 @@ final class TownUiController implements Listener {
             if (application.status() == ApplicationStatus.SUBMITTED
                     || application.status() == ApplicationStatus.UNDER_REVIEW) {
                 items.add(new MenuItem(10, button(Material.LIME_CONCRETE, "§a批准",
-                        List.of("§7创建小镇并投影 3×3 Residence"), "CONFIRM_ADMIN_APPROVE",
+                        List.of("§7创建小镇并投影 5×5 Residence"), "CONFIRM_ADMIN_APPROVE",
                         application.id().toString())));
                 items.add(new MenuItem(12, button(Material.RED_CONCRETE, "§c拒绝",
                         List.of("§7在 Dialog 中填写拒绝原因"), "CONFIRM_ADMIN_REJECT",

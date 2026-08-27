@@ -617,11 +617,13 @@ public final class EconomyRepository {
             ChunkPosition expectedCenter = new ChunkPosition(
                     origin.territory().center().worldId(), origin.territory().center().worldName(),
                     Math.addExact(origin.territory().center().x(),
-                            Math.multiplyExact(request.unit().gridX(), 3)),
+                            Math.multiplyExact(request.unit().gridX(),
+                                    InitialTerritory.CHUNKS_PER_SIDE)),
                     Math.addExact(origin.territory().center().z(),
-                            Math.multiplyExact(request.unit().gridZ(), 3)));
+                            Math.multiplyExact(request.unit().gridZ(),
+                                    InitialTerritory.CHUNKS_PER_SIDE)));
             if (!request.unit().territory().center().equals(expectedCenter)) {
-                throw new ConflictException("目标领地不在固定 3×3 单元网格上");
+                throw new ConflictException("目标领地不在固定 5×5 单元网格上");
             }
             List<TerritoryUnit> withCandidate = new ArrayList<>(units);
             withCandidate.add(request.unit());

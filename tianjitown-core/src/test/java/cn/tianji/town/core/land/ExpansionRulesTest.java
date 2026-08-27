@@ -22,7 +22,7 @@ class ExpansionRulesTest {
                 ExpansionDirection.EAST);
 
         assertEquals(1, east.gridX());
-        assertEquals(13, east.territory().center().x());
+        assertEquals(15, east.territory().center().x());
         assertEquals(-1, north.gridZ());
         assertEquals(1, northEast.gridX());
         assertEquals(-1, northEast.gridZ());
@@ -47,8 +47,8 @@ class ExpansionRulesTest {
         TerritoryUnit east = TerritoryRules.target(List.of(origin), 1, 0);
         TerritoryUnit southEast = TerritoryRules.target(List.of(origin, east), 1, 1);
 
-        assertEquals(13, east.territory().center().x());
-        assertEquals(23, southEast.territory().center().z());
+        assertEquals(15, east.territory().center().x());
+        assertEquals(25, southEast.territory().center().z());
         assertThrows(IllegalArgumentException.class,
                 () -> TerritoryRules.target(List.of(origin, east), 2, 2));
         assertThrows(IllegalArgumentException.class,

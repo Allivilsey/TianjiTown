@@ -52,7 +52,7 @@ final class SitePolicy {
             return Validation.failure("Residence 碰撞检查不可用: " + safeMessage(exception));
         }
         if (collision.occupied()) {
-            return Validation.failure("3×3 区块与现有 Residence 冲突: "
+            return Validation.failure("5×5 区块与现有 Residence 冲突: "
                     + collision.residenceName());
         }
         return environment;
@@ -71,7 +71,7 @@ final class SitePolicy {
         }
         if (collision.occupied() && (collision.residenceName() == null
                 || !collision.residenceName().equalsIgnoreCase(residenceName))) {
-            return Validation.failure("3×3 区块与其他 Residence 冲突: "
+            return Validation.failure("5×5 区块与其他 Residence 冲突: "
                     + collision.residenceName());
         }
         return environment;
@@ -84,7 +84,7 @@ final class SitePolicy {
         }
         if (rectangles("phase1.site.blacklist", world.getName()).stream()
                 .anyMatch(area -> area.overlaps(territory))) {
-            return Validation.failure("3×3 区块与出生点、活动区或管理黑名单重叠");
+            return Validation.failure("5×5 区块与出生点、活动区或管理黑名单重叠");
         }
         int bufferChunks = Math.max(0,
                 plugin.getConfig().getInt("phase1.site.minimum-buffer-chunks", 1));
@@ -98,7 +98,7 @@ final class SitePolicy {
             return Validation.failure("WorldBorder 未配置目标世界的边界");
         }
         if (!boundary.inside()) {
-            return Validation.failure("3×3 区块或其缓冲范围会超出 WorldBorder 边界");
+            return Validation.failure("5×5 区块或其缓冲范围会超出 WorldBorder 边界");
         }
         return Validation.success(territory);
     }
@@ -185,7 +185,7 @@ final class SitePolicy {
         };
         BukkitTask task = runnable.runTaskTimer(plugin, 0L, intervalTicks);
         previews.put(playerId, task);
-        String scope = areas.size() == 1 ? "3×3 区块" : areas.size() + " 个领地单元";
+        String scope = areas.size() == 1 ? "5×5 区块" : areas.size() + " 个领地单元";
         player.sendMessage("§e已显示 " + scope + " 的完整三维边界，粒子将持续约 "
                 + durationSeconds + " 秒。");
     }

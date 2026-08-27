@@ -87,7 +87,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             }
             ClaimedResidence collision = manager.collidesWithResidence(bounds.area());
             if (collision != null) {
-                return Result.failure("目标 3×3 区块与 Residence 冲突: " + collision.getName());
+                return Result.failure("目标 5×5 区块与 Residence 冲突: " + collision.getName());
             }
             if (!manager.addResidence(name, SYSTEM_OWNER_HINT, bounds.low(), bounds.high())) {
                 return Result.failure("Residence API 拒绝创建系统领地 " + name);
@@ -215,7 +215,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             }
             String collision = manager.checkAreaCollision(bounds.area(), residence);
             if (collision != null) {
-                return Result.failure("目标 3×3 区块与 Residence 冲突: " + collision);
+                return Result.failure("目标 5×5 区块与 Residence 冲突: " + collision);
             }
             if (!residence.addArea(bounds.area(), area.name())) {
                 return Result.failure("Residence API 拒绝添加区域 " + area.name());
@@ -363,7 +363,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         for (Location check : checks) {
             ClaimedResidence found = manager.getByLoc(check);
             if (found == null || !name.equalsIgnoreCase(found.getName())) {
-                return Result.failure("Residence 边界不覆盖预期的 3×3 区块");
+                return Result.failure("Residence 边界不覆盖预期的 5×5 区块");
             }
         }
         return verifyPermissions(name, residence, members, applyPermissions);

@@ -495,6 +495,28 @@ class TownRepositorySqliteTest {
         }
     }
 
+    @Test
+    void appliesConfiguredBufferAroundFiveByFiveTownUnits() {
+        DatabaseConfig config = new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("site-buffer.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5));
+        try (DatabaseGate gate = new DatabaseGate(config)) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            TownRepository repository = new TownRepository(gate.dataSource(), () -> false);
+            CreatedTown existing = createTown(repository, 40,
+                    "缓冲基准镇", "基准镇", "BUFFERBASE");
+            ApplicationSnapshot draft = createDraft(repository,
+                    applicationText("缓冲候选镇", "候选镇", "BUFCAND"));
+            ChunkPosition origin = existing.town().territory().center();
+            InitialTerritory adjacent = new InitialTerritory(new ChunkPosition(
+                    origin.worldId(), origin.worldName(), origin.x() + 5, origin.z()));
+
+            assertThrows(TownRepository.ConflictException.class,
+                    () -> repository.selectSite(draft.id(), draft.applicantId(), adjacent,
+                            Instant.now().plus(Duration.ofHours(1)), 1));
+        }
+    }
+
     private static JoinApplicationSnapshot apply(TownRepository repository, UUID townId,
                                                   UUID playerId) {
         return repository.applyToTown(townId, playerId, Duration.ofHours(48),

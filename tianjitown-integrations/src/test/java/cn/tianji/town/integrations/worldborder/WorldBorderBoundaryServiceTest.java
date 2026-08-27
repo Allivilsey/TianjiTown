@@ -64,10 +64,10 @@ class WorldBorderBoundaryServiceTest {
         assertTrue(result.configured());
         assertTrue(result.inside());
         assertEquals(List.of(
-                new Point(128, 288),
-                new Point(128, 367),
-                new Point(207, 288),
-                new Point(207, 367)), checked);
+                new Point(112, 272),
+                new Point(112, 383),
+                new Point(223, 272),
+                new Point(223, 383)), checked);
     }
 
     @Test

@@ -170,8 +170,10 @@ final class TerritoryService {
         ChunkPosition originCenter = origin.territory().center();
         return new InitialTerritory(new ChunkPosition(originCenter.worldId(),
                 originCenter.worldName(),
-                Math.addExact(originCenter.x(), Math.multiplyExact(gridX, 3)),
-                Math.addExact(originCenter.z(), Math.multiplyExact(gridZ, 3))));
+                Math.addExact(originCenter.x(), Math.multiplyExact(gridX,
+                        InitialTerritory.CHUNKS_PER_SIDE)),
+                Math.addExact(originCenter.z(), Math.multiplyExact(gridZ,
+                        InitialTerritory.CHUNKS_PER_SIDE))));
     }
 
     private static String foreignTown(InitialTerritory territory,

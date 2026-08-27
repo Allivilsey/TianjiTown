@@ -15,13 +15,12 @@ import java.util.function.Function;
 
 final class TerritoryDialogRenderer {
     private static final int COLUMNS = 5;
-    private static final int CELL_WIDTH = 44;
-    private static final Key ITEM_ATLAS = Key.key("minecraft:items");
-    private static final Key CENTER_SPRITE = Key.key("minecraft:item/nether_star");
-    private static final Key OWNED_SPRITE = Key.key("minecraft:item/lime_dye");
-    private static final Key EXPANDABLE_SPRITE = Key.key("minecraft:item/emerald");
-    private static final Key BLOCKED_SPRITE = Key.key("minecraft:item/gray_dye");
-    private static final Key OTHER_TOWN_SPRITE = Key.key("minecraft:item/red_dye");
+    private static final int CELL_SIZE = 20;
+    private static final Key BLOCK_ATLAS = Key.key("minecraft:blocks");
+    private static final Key CENTER_SPRITE = Key.key("minecraft:block/yellow_stained_glass");
+    private static final Key OWNED_SPRITE = Key.key("minecraft:block/green_stained_glass");
+    private static final Key EXPANDABLE_SPRITE = Key.key("minecraft:block/light_gray_stained_glass");
+    private static final Key BLOCKED_SPRITE = Key.key("minecraft:block/red_stained_glass");
 
     private TerritoryDialogRenderer() {
     }
@@ -48,7 +47,7 @@ final class TerritoryDialogRenderer {
         DialogAction action = state == TerritoryCellState.EXPANDABLE
                 ? actionFactory.apply(cell) : null;
         return ActionButton.create(sprite(state), tooltip(cell, formattedPrice),
-                CELL_WIDTH, action);
+                CELL_SIZE, action);
     }
 
     private static Component sprite(TerritoryCellState state) {
@@ -56,10 +55,9 @@ final class TerritoryDialogRenderer {
             case CENTER -> CENTER_SPRITE;
             case OWNED -> OWNED_SPRITE;
             case EXPANDABLE -> EXPANDABLE_SPRITE;
-            case BLOCKED -> BLOCKED_SPRITE;
-            case OTHER_TOWN -> OTHER_TOWN_SPRITE;
+            case BLOCKED, OTHER_TOWN -> BLOCKED_SPRITE;
         };
-        return Component.object(ObjectContents.sprite(ITEM_ATLAS, sprite));
+        return Component.object(ObjectContents.sprite(BLOCK_ATLAS, sprite));
     }
 
     private static Component tooltip(TerritoryService.TerritoryCell cell,

@@ -526,7 +526,7 @@ final class TownRuntime {
             }
             databaseAvailable.set(true);
             plugin.runMain(() -> {
-                sender.sendMessage(completed ? "§a小镇已批准并完成 3×3 领地投影。"
+                sender.sendMessage(completed ? "§a小镇已批准并完成 5×5 领地投影。"
                         : "§c自动创建失败，申请已进入 PROVISION_FAILED: " + completedDetail);
                 completion.accept(application);
             });

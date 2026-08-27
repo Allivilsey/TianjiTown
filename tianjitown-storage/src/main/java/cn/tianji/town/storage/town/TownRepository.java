@@ -1704,10 +1704,14 @@ public final class TownRepository {
                  LIMIT 1
                 """)) {
             statement.setBytes(1, uuid(territory.center().worldId()));
-            statement.setInt(2, territory.minimumChunkX() - 1 - bufferChunks);
-            statement.setInt(3, territory.maximumChunkX() + 1 + bufferChunks);
-            statement.setInt(4, territory.minimumChunkZ() - 1 - bufferChunks);
-            statement.setInt(5, territory.maximumChunkZ() + 1 + bufferChunks);
+            statement.setInt(2, territory.minimumChunkX()
+                    - InitialTerritory.RADIUS - bufferChunks);
+            statement.setInt(3, territory.maximumChunkX()
+                    + InitialTerritory.RADIUS + bufferChunks);
+            statement.setInt(4, territory.minimumChunkZ()
+                    - InitialTerritory.RADIUS - bufferChunks);
+            statement.setInt(5, territory.maximumChunkZ()
+                    + InitialTerritory.RADIUS + bufferChunks);
             try (ResultSet result = statement.executeQuery()) {
                 if (result.next()) {
                     throw new ConflictException("选址与已有小镇领地重叠或距离过近");

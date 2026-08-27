@@ -61,9 +61,9 @@ public final class TerritoryRules {
             throw new IllegalArgumentException("目标必须与已有领地四方向相邻");
         }
         int centerX = Math.addExact(origin.territory().center().x(),
-                Math.multiplyExact(gridX, 3));
+                Math.multiplyExact(gridX, InitialTerritory.CHUNKS_PER_SIDE));
         int centerZ = Math.addExact(origin.territory().center().z(),
-                Math.multiplyExact(gridZ, 3));
+                Math.multiplyExact(gridZ, InitialTerritory.CHUNKS_PER_SIDE));
         ChunkPosition center = new ChunkPosition(origin.territory().center().worldId(),
                 origin.territory().center().worldName(), centerX, centerZ);
         return new TerritoryUnit(gridX, gridZ, new InitialTerritory(center));

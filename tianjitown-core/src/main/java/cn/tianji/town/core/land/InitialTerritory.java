@@ -5,7 +5,9 @@ import java.util.List;
 import java.util.Objects;
 
 public record InitialTerritory(ChunkPosition center) {
-    public static final int RADIUS = 1;
+    public static final int RADIUS = 2;
+    public static final int CHUNKS_PER_SIDE = RADIUS * 2 + 1;
+    public static final int CHUNKS_PER_UNIT = CHUNKS_PER_SIDE * CHUNKS_PER_SIDE;
     public static final int BLOCKS_PER_CHUNK = 16;
 
     public InitialTerritory {
@@ -53,7 +55,7 @@ public record InitialTerritory(ChunkPosition center) {
     }
 
     public List<ChunkPosition> chunks() {
-        List<ChunkPosition> result = new ArrayList<>(9);
+        List<ChunkPosition> result = new ArrayList<>(CHUNKS_PER_UNIT);
         for (int x = minimumChunkX(); x <= maximumChunkX(); x++) {
             for (int z = minimumChunkZ(); z <= maximumChunkZ(); z++) {
                 result.add(new ChunkPosition(center.worldId(), center.worldName(), x, z));
