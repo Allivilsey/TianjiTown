@@ -744,8 +744,9 @@ final class TownUiController implements Listener {
             TownSnapshot town = view.dashboard().town();
             MemberGovernanceSnapshot governance = view.governance();
             if (town == null || governance == null) {
-                openNotice(player, "没有小镇身份", "你当前不属于任何小镇。",
-                        "返回小镇服务", "MAIN", null);
+                openNotice(player, dialogText("notice.no-town-title"),
+                        dialogText("notice.no-town-message"),
+                        dialogText("common.return-town-service"), "MAIN", null);
                 return;
             }
             int pendingJoins = governance.canReviewApplications()
@@ -893,8 +894,9 @@ final class TownUiController implements Listener {
                 && governance.role().isLeader()) {
             return false;
         }
-        openNotice(player, "无法管理访客", "只有本镇镇长或副镇长可以管理访客名单。",
-                "返回成员治理", "GOVERNANCE_CENTER", null);
+        openNotice(player, dialogText("notice.visitor-forbidden-title"),
+                dialogText("notice.visitor-forbidden-message"),
+                dialogText("common.return-governance"), "GOVERNANCE_CENTER", null);
         return true;
     }
 
@@ -1044,17 +1046,23 @@ final class TownUiController implements Listener {
                 return;
             }
             DialogInput input = DialogInput.numberRange("tax_rate", 360,
-                    Component.text("统一收入税率", NamedTextColor.GOLD), "%s: %s%%", 5.0F,
+                    Component.text(dialogText("tax.rate-label"), NamedTextColor.GOLD),
+                    dialogText("tax.rate-format"), 5.0F,
                     runtime.economySettings().maximumTaxBps() / 100.0F,
                     account.taxRateBps() / 100.0F, 1.0F);
-            openDialogPage(player, "设置收入税率", List.of(dialogTextBody(summary)), List.of(input),
+            openDialogPage(player, dialogText("tax.title"), List.of(dialogTextBody(summary)),
+                    List.of(input),
                     DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                             DialogType.confirmation(
-                                    ActionButton.create(Component.text("保存修改", NamedTextColor.GREEN),
-                                            Component.text("保存后立即通知全体成员", NamedTextColor.GRAY),
+                                    ActionButton.create(Component.text(
+                                                    dialogText("common.save-changes"),
+                                                    NamedTextColor.GREEN),
+                                            Component.text(dialogText("tax.save-tooltip"),
+                                                    NamedTextColor.GRAY),
                                             170, dialogAction(player, session,
                                                     response -> applyTaxDialog(player, account, response))),
-                                    ActionButton.create(Component.text("取消", NamedTextColor.RED),
+                                    ActionButton.create(Component.text(dialogText("common.cancel"),
+                                                    NamedTextColor.RED),
                                             null, 170,
                                             dialogAction(player, session, "FINANCE", "0"))));
         });
@@ -1064,22 +1072,26 @@ final class TownUiController implements Listener {
                                 DialogResponseView response) {
         Float selected = response.getFloat("tax_rate");
         if (selected == null) {
-            openNotice(player, "请选择税率", "请拖动滑动条选择新的统一收入税率。",
-                    "返回设置", "TAX_MENU", null);
+            openNotice(player, dialogText("tax.select-title"),
+                    dialogText("tax.select-message"), dialogText("common.return-settings"),
+                    "TAX_MENU", null);
             return;
         }
         int rate = Math.round(selected) * 100;
         if (rate == account.taxRateBps()) {
-            openNotice(player, "税率未变化", "当前税率已经是 "
-                            + TownRuntime.percent(rate) + "。", "返回公共资产", "FINANCE", "0");
+            openNotice(player, dialogText("tax.unchanged-title"),
+                    dialogText("tax.unchanged-message", Map.of(
+                            "rate", TownRuntime.percent(rate))),
+                    dialogText("common.return-finance"), "FINANCE", "0");
             return;
         }
         actions.changeTaxRate(player, account.townId(), rate, outcome ->
                 handleOutcome(player, outcome, change -> {
                     notifyTaxRateChange(change);
-                    openNotice(player, "税率已保存", "统一收入税率已更新为 "
-                                    + TownRuntime.percent(change.basisPoints()) + "。",
-                            "返回公共资产", "FINANCE", "0");
+                    openNotice(player, dialogText("tax.saved-title"),
+                            dialogText("tax.saved-message", Map.of(
+                                    "rate", TownRuntime.percent(change.basisPoints()))),
+                            dialogText("common.return-finance"), "FINANCE", "0");
                 }));
     }
 
@@ -1134,20 +1146,23 @@ final class TownUiController implements Listener {
     private void openExpansionMenu(Player player) {
         runtime.loadTerritoryMap(player, map -> {
             String price = map.priceMinor() > 0
-                    ? runtime.money(map.priceMinor()) : "已达上限";
-            Component summary = Component.text("领地单元: " + map.currentUnits() + "/"
-                            + map.maximumUnits(), NamedTextColor.GRAY)
+                    ? runtime.money(map.priceMinor()) : dialogText("territory.limit-reached");
+            Component summary = Component.text(dialogText("territory.summary", Map.of(
+                            "current", map.currentUnits(), "maximum", map.maximumUnits())),
+                            NamedTextColor.GRAY)
                     .append(Component.newline())
-                    .append(Component.text("黄色=中心 绿色=已扩张 浅灰色=可扩张 红色=不可扩张",
+                    .append(Component.text(dialogText("territory.legend"),
                             NamedTextColor.DARK_GRAY));
-            openDialogPage(player, "5×5 领地扩张地图",
+            openDialogPage(player, dialogText("territory.title"),
                     List.of(DialogBody.plainMessage(summary, 360)), List.of(),
                     DialogBase.DialogAfterAction.NONE, session -> {
                         ActionButton back = ActionButton.create(
-                                Component.text("返回公共资产", NamedTextColor.GRAY),
-                                Component.text("返回公共资产页面", NamedTextColor.GRAY), 140,
+                                Component.text(dialogText("common.return-finance"),
+                                        NamedTextColor.GRAY),
+                                Component.text(dialogText("territory.return-tooltip"),
+                                        NamedTextColor.GRAY), 140,
                                 dialogAction(player, session, "FINANCE", "0"));
-                        return TerritoryDialogRenderer.render(map, price,
+                        return TerritoryDialogRenderer.render(map, price, plugin.messages(),
                                 cell -> dialogAction(player, session, "PREVIEW_EXPANSION",
                                         cell.gridX() + "," + cell.gridZ()), back);
                     });
@@ -1159,15 +1174,17 @@ final class TownUiController implements Listener {
                 player.getUniqueId(), gridX, gridZ), preview -> {
             SitePolicy.Validation validation = runtime.validateExpansionPreview(preview);
             if (!validation.valid()) {
-                openNotice(player, "当前格子不可扩张", validation.error(),
-                        "返回扩张地图", "EXPANSION_MENU", null);
+                openNotice(player, dialogText("territory.unavailable-title"), validation.error(),
+                        dialogText("territory.return-map"), "EXPANSION_MENU", null);
                 return;
             }
             sitePolicy.preview(player, preview.candidate().territory());
             String target = gridX + "," + gridZ;
-            openConfirmation(player, "确认扩张至网格 " + target, "EXPAND",
-                    target, "将从公共资金扣除 " + runtime.money(preview.priceMinor())
-                            + "，Residence 失败会自动退款", "EXPANSION_MENU", null);
+            openConfirmation(player, dialogText("territory.confirm-title", Map.of(
+                            "grid", target)), "EXPAND", target,
+                    dialogText("territory.confirm-consequence", Map.of(
+                            "price", runtime.money(preview.priceMinor()))),
+                    "EXPANSION_MENU", null);
         });
     }
 
@@ -1224,28 +1241,35 @@ final class TownUiController implements Listener {
         }, quote -> {
             BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey);
             ItemStack summary = button(Material.POTION, "§d" + definition.displayName(),
-                    List.of("§7效果: " + buffEffectDescription(definition),
-                            quote.current() == null ? "§7当前未生效"
-                                    : "§a当前强度 " + roman(quote.current().level())
-                                    + "，到期 " + quote.current().expiresAt(),
-                            "§7强度使用罗马数字：I / II / III / IV / V",
-                            "§7下一步会显示最终价格"), null, null);
+                    List.of("§7" + dialogText("buff.effect", Map.of(
+                                    "effect", buffEffectDescription(definition))),
+                            quote.current() == null
+                                    ? "§7" + dialogText("buff.inactive")
+                                    : "§a" + dialogText("buff.active", Map.of(
+                                            "level", roman(quote.current().level()),
+                                            "expires", quote.current().expiresAt())),
+                            "§7" + dialogText("buff.intensity-hint"),
+                            "§7" + dialogText("buff.price-hint")), null, null);
             DialogInput duration = DialogInput.numberRange("buff_weeks", 420,
-                    Component.text("持续时间（周）", NamedTextColor.GOLD), "%.0f 周",
+                    Component.text(dialogText("buff.duration-label"), NamedTextColor.GOLD),
+                    dialogText("buff.duration-format"),
                     1.0F, 4.0F, 1.0F, 1.0F);
             DialogInput intensity = DialogInput.numberRange("buff_level", 420,
-                    Component.text("强度 I–V", NamedTextColor.GOLD), "等级 %.0f",
+                    Component.text(dialogText("buff.intensity-label"), NamedTextColor.GOLD),
+                    dialogText("buff.intensity-format"),
                     1.0F, Math.min(5, definition.maximumLevel()),
                     quote.current() == null ? 1.0F
                             : Math.min(5.0F, quote.current().level()), 1.0F);
-            openDialogPage(player, "购买公共 Buff", List.of(dialogBody(summary)),
+            openDialogPage(player, dialogText("buff.title"), List.of(dialogBody(summary)),
                     List.of(duration, intensity), DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                     session -> DialogType.confirmation(
-                            ActionButton.create(Component.text("继续购买", NamedTextColor.GREEN),
+                            ActionButton.create(Component.text(dialogText("buff.continue"),
+                                            NamedTextColor.GREEN),
                                     null, 170, dialogAction(player, session,
                                             response -> applyBuffDurationDialog(
                                                     player, buffKey, response))),
-                            ActionButton.create(Component.text("取消", NamedTextColor.RED),
+                            ActionButton.create(Component.text(dialogText("common.cancel"),
+                                            NamedTextColor.RED),
                                     null, 170,
                                     dialogAction(player, session, "BUFF_SHOP", null))));
         });
@@ -1256,8 +1280,9 @@ final class TownUiController implements Listener {
         Float selectedWeeks = response.getFloat("buff_weeks");
         Float selectedLevel = response.getFloat("buff_level");
         if (selectedWeeks == null || selectedLevel == null) {
-            openNotice(player, "请选择购买参数", "请设置持续周数和 Buff 强度。",
-                    "返回设置", "BUFF_DURATIONS", buffKey);
+            openNotice(player, dialogText("buff.select-title"),
+                    dialogText("buff.select-message"), dialogText("common.return-settings"),
+                    "BUFF_DURATIONS", buffKey);
             return;
         }
         int weeks = Math.round(selectedWeeks);
@@ -1266,10 +1291,12 @@ final class TownUiController implements Listener {
             BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey);
             return runtime.buffs().repository().quoteBuff(player.getUniqueId(), definition,
                     weeks, level, runtime.settlement().scale(), Instant.now());
-        }, quote -> openConfirmation(player, "确认购买公共 Buff", "BUY_BUFF",
+        }, quote -> openConfirmation(player, dialogText("buff.confirm-title"), "BUY_BUFF",
                 buffKey + ":" + weeks + ":" + level,
-                roman(level) + " 强度，持续 " + weeks + " 周，将扣除 "
-                        + runtime.money(quote.priceMinor()), "BUFF_DURATIONS", buffKey));
+                dialogText("buff.confirm-consequence", Map.of(
+                        "level", roman(level), "weeks", weeks,
+                        "price", runtime.money(quote.priceMinor()))),
+                "BUFF_DURATIONS", buffKey));
     }
 
     private void buyBuff(Player player, String target) {
@@ -1280,24 +1307,27 @@ final class TownUiController implements Listener {
         actions.buyBuff(player, buffKey, weeks, level, outcome ->
                 handleOutcome(player, outcome, purchase -> {
                     BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey);
-                    openNotice(player, "购买成功",
-                            "已购买 " + definition.displayName() + "\n等级: "
-                                    + roman(purchase.buff().level()) + "\n到期: "
-                                    + purchase.buff().expiresAt() + "\n公共余额: "
-                                    + runtime.money(purchase.balanceAfterMinor()),
-                            "返回公共资产", "FINANCE", "0");
+                    openNotice(player, dialogText("buff.success-title"),
+                            dialogText("buff.success-message", Map.of(
+                                    "name", definition.displayName(),
+                                    "level", roman(purchase.buff().level()),
+                                    "expires", purchase.buff().expiresAt(),
+                                    "balance", runtime.money(purchase.balanceAfterMinor()))),
+                            dialogText("common.return-finance"), "FINANCE", "0");
                 }));
     }
 
-    private static String buffEffectDescription(BuffDefinition definition) {
+    private String buffEffectDescription(BuffDefinition definition) {
         if (definition.key().equals("health")) {
-            return "每级最大生命值 +4（2 颗心）";
+            return dialogText("buff.health-effect");
         }
         if (definition.key().equals("speed")) {
-            return "每级移动速度 +20%";
+            return dialogText("buff.speed-effect");
         }
-        return "每级 " + definition.effectKey() + " "
-                + (definition.amountPerLevel() >= 0 ? "+" : "") + definition.amountPerLevel();
+        return dialogText("buff.generic-effect", Map.of(
+                "effect", definition.effectKey(),
+                "amount", (definition.amountPerLevel() >= 0 ? "+" : "")
+                        + definition.amountPerLevel()));
     }
 
     private static String roman(int level) {
@@ -1331,38 +1361,43 @@ final class TownUiController implements Listener {
     }
 
     private void renderRulesConfirmation(Player player, MemberGovernanceSnapshot governance) {
-        Component rules = Component.text("小镇: " + governance.townName(), NamedTextColor.GRAY)
+        Component rules = Component.text(dialogText("rules.town", Map.of(
+                        "town", governance.townName())), NamedTextColor.GRAY)
                 .append(Component.newline())
-                .append(Component.text("新规则版本: " + governance.townRulesRevision(),
-                        NamedTextColor.GRAY));
+                .append(Component.text(dialogText("rules.revision", Map.of(
+                        "revision", governance.townRulesRevision())), NamedTextColor.GRAY));
         for (int index = 0; index < governance.rules().size(); index++) {
             rules = rules.append(Component.newline()).append(Component.newline())
                     .append(Component.text((index + 1) + ". " + governance.rules().get(index),
                             NamedTextColor.WHITE));
         }
         rules = rules.append(Component.newline()).append(Component.newline())
-                .append(Component.text("确认前不能继续使用其他小镇功能", NamedTextColor.RED));
+                .append(Component.text(dialogText("rules.locked-hint"), NamedTextColor.RED));
         DialogInput acknowledged = DialogInput.bool("rules_acknowledged",
-                Component.text("我已阅读并理解以上规则", NamedTextColor.GOLD),
+                Component.text(dialogText("rules.acknowledgement"), NamedTextColor.GOLD),
                 false, "true", "false");
         String target = governance.townId() + ":" + governance.townRulesRevision();
-        openDialogPage(player, "小镇规则已更新",
+        openDialogPage(player, dialogText("rules.updated-title"),
                 List.of(DialogBody.plainMessage(rules, 420)),
                 List.of(acknowledged), DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                 session -> DialogType.confirmation(
-                        ActionButton.create(Component.text("确认规则", NamedTextColor.GREEN),
+                        ActionButton.create(Component.text(dialogText("rules.confirm"),
+                                        NamedTextColor.GREEN),
                                 null, 170, dialogAction(player, session,
                                         response -> acknowledgeRulesDialog(player, target, response))),
-                        ActionButton.create(Component.text("稍后", NamedTextColor.RED),
-                                Component.text("关闭界面；小镇功能仍保持锁定", NamedTextColor.GRAY),
+                        ActionButton.create(Component.text(dialogText("rules.later"),
+                                        NamedTextColor.RED),
+                                Component.text(dialogText("rules.later-tooltip"),
+                                        NamedTextColor.GRAY),
                                 170, dialogAction(player, session, "CLOSE", null))));
     }
 
     private void acknowledgeRulesDialog(Player player, String target,
                                         DialogResponseView response) {
         if (!Boolean.TRUE.equals(response.getBoolean("rules_acknowledged"))) {
-            openNotice(player, "请确认小镇规则", "勾选“我已阅读并理解以上规则”后才能继续。",
-                    "返回规则", "MAIN", null);
+            openNotice(player, dialogText("rules.required-title"),
+                    dialogText("rules.required-message"), dialogText("rules.return"),
+                    "MAIN", null);
             return;
         }
         acknowledgeRules(player, target);
@@ -1470,11 +1505,11 @@ final class TownUiController implements Listener {
     private void openTownRules(Player player, UUID townId) {
         runtime.read(player, () -> runtime.repository().findTown(townId)
                 .orElseThrow(() -> new IllegalArgumentException("小镇不存在")), town -> {
-            Component content = Component.text(town.profile().name() + " · 当前规则",
-                    NamedTextColor.GOLD);
+            Component content = Component.text(dialogText("rules.current-heading", Map.of(
+                    "town", town.profile().name())), NamedTextColor.GOLD);
             if (town.profile().rules().isEmpty()) {
                 content = content.append(Component.newline()).append(Component.newline())
-                        .append(Component.text("暂未设置规则", NamedTextColor.GRAY));
+                        .append(Component.text(dialogText("rules.empty"), NamedTextColor.GRAY));
             } else {
                 for (int index = 0; index < town.profile().rules().size(); index++) {
                     content = content.append(Component.newline()).append(Component.newline())
@@ -1482,11 +1517,12 @@ final class TownUiController implements Listener {
                                     + town.profile().rules().get(index), NamedTextColor.WHITE));
                 }
             }
-            openDialogPage(player, "小镇规则", List.of(
+            openDialogPage(player, dialogText("rules.title"), List.of(
                             DialogBody.plainMessage(content, 420)),
                     List.of(), DialogBase.DialogAfterAction.NONE,
                     session -> DialogType.notice(ActionButton.create(
-                            Component.text("返回小镇资料", NamedTextColor.GREEN), null, 220,
+                            Component.text(dialogText("rules.return-profile"),
+                                    NamedTextColor.GREEN), null, 220,
                             dialogAction(player, session, "TOWN", town.id().toString()))));
         });
     }
@@ -1533,8 +1569,9 @@ final class TownUiController implements Listener {
                         .orElseThrow(() -> new IllegalArgumentException("你不属于任何小镇")),
                 runtime.governance().memberRole(townId, targetId)), view -> {
             if (!view.viewer().townId().equals(townId)) {
-                openNotice(player, "无法管理成员", "只能管理自己小镇的成员。",
-                        "返回小镇服务", "MAIN", null);
+                openNotice(player, dialogText("notice.member-forbidden-title"),
+                        dialogText("notice.member-forbidden-message"),
+                        dialogText("common.return-town-service"), "MAIN", null);
                 return;
             }
             String name = Objects.requireNonNullElse(Bukkit.getOfflinePlayer(targetId).getName(),
@@ -1586,8 +1623,9 @@ final class TownUiController implements Listener {
                 .orElseThrow(() -> new IllegalArgumentException("你不属于任何小镇")), governance -> {
             TransferSnapshot transfer = governance.pendingTransfer();
             if (transfer == null || !transfer.id().equals(transferId)) {
-                openNotice(player, "请求已失效", "这项镇长转让请求已经关闭。",
-                        "返回主菜单", "MAIN", null);
+                openNotice(player, dialogText("notice.transfer-expired-title"),
+                        dialogText("notice.transfer-expired-message"),
+                        dialogText("common.return-main"), "MAIN", null);
                 return;
             }
             List<MenuItem> items = List.of(
@@ -1652,8 +1690,10 @@ final class TownUiController implements Listener {
             VoteSnapshot vote = governance.votes().stream().filter(item -> item.id().equals(voteId))
                     .findFirst().orElse(null);
             if (vote == null) {
-                openNotice(player, "投票已结束", "该投票不存在或已经结算。",
-                        "返回投票列表", "VOTES", governance.townId().toString());
+                openNotice(player, dialogText("notice.vote-ended-title"),
+                        dialogText("notice.vote-ended-message"),
+                        dialogText("common.return-votes"), "VOTES",
+                        governance.townId().toString());
                 return;
             }
             String target = vote.type() == VoteType.KICK_MEMBER
@@ -1842,8 +1882,9 @@ final class TownUiController implements Listener {
 
     private void openAdminApplications(Player admin, int requestedPage) {
         if (!admin.hasPermission("tianjitown.admin")) {
-            openNotice(admin, "没有权限", "你不能查看管理员审核列表。",
-                    "返回", "MAIN", null);
+            openNotice(admin, dialogText("notice.no-permission-title"),
+                    dialogText("notice.review-list-forbidden"), dialogText("common.back"),
+                    "MAIN", null);
             return;
         }
         int page = Math.max(0, requestedPage);
@@ -1880,8 +1921,9 @@ final class TownUiController implements Listener {
 
     private void openAdminApplication(Player admin, UUID applicationId) {
         if (!admin.hasPermission("tianjitown.admin")) {
-            openNotice(admin, "没有权限", "你不能查看管理员审核详情。",
-                    "返回", "MAIN", null);
+            openNotice(admin, dialogText("notice.no-permission-title"),
+                    dialogText("notice.review-detail-forbidden"), dialogText("common.back"),
+                    "MAIN", null);
             return;
         }
         runtime.read(admin, () -> runtime.repository().findApplication(applicationId)
@@ -1937,8 +1979,9 @@ final class TownUiController implements Listener {
 
     private void handleAction(Player player, String action, String target) {
         if (maintenanceMode()) {
-            openNotice(player, "系统维护中", plugin.messages().text("system.maintenance"),
-                    "关闭", "CLOSE", null);
+            openNotice(player, dialogText("notice.maintenance-title"),
+                    plugin.messages().text("system.maintenance"), dialogText("common.close"),
+                    "CLOSE", null);
             return;
         }
         try {
@@ -1947,11 +1990,13 @@ final class TownUiController implements Listener {
                 case "CLOSE" -> closeUi(player);
                 case "GIVE_HANDBOOK" -> {
                     if (giveHandbook(player, false)) {
-                        openNotice(player, "领取成功", plugin.messages().text("handbook.received"),
-                                "返回", "MAIN", null);
+                        openNotice(player, dialogText("notice.handbook-received-title"),
+                                plugin.messages().text("handbook.received"),
+                                dialogText("common.back"), "MAIN", null);
                     } else {
-                        openNotice(player, "暂时不能领取", "每小时只能领取一次小镇手册。",
-                                "返回", "MAIN", null);
+                        openNotice(player, dialogText("notice.handbook-cooldown-title"),
+                                dialogText("notice.handbook-cooldown-message"),
+                                dialogText("common.back"), "MAIN", null);
                     }
                 }
                 case "CREATE_APPLICATION" -> startApplicationForm(player, null, 0,
@@ -1976,11 +2021,15 @@ final class TownUiController implements Listener {
                         UUID.fromString(target));
                 case "SELECT_SITE" -> selectSite(player, UUID.fromString(target));
                 case "PREVIEW_SITE" -> previewApplication(player, UUID.fromString(target));
-                case "CONFIRM_SUBMIT" -> openConfirmation(player, "确认提交申请", "SUBMIT", target,
-                        "提交后需等待管理员审核", "APPLICATION", target);
+                case "CONFIRM_SUBMIT" -> openConfirmation(player,
+                        dialogText("confirmation.submit-application-title"), "SUBMIT", target,
+                        dialogText("confirmation.submit-application-consequence"),
+                        "APPLICATION", target);
                 case "SUBMIT" -> submit(player, UUID.fromString(target));
-                case "CONFIRM_CANCEL" -> openConfirmation(player, "确认撤回申请", "CANCEL", target,
-                        "撤回会释放选址并进入冷却", "APPLICATION", target);
+                case "CONFIRM_CANCEL" -> openConfirmation(player,
+                        dialogText("confirmation.cancel-application-title"), "CANCEL", target,
+                        dialogText("confirmation.cancel-application-consequence"),
+                        "APPLICATION", target);
                 case "CANCEL" -> cancel(player, UUID.fromString(target));
                 case "TOWN" -> openTown(player, UUID.fromString(target));
                 case "TOWN_RULES" -> openTownRules(player, UUID.fromString(target));
@@ -1999,15 +2048,17 @@ final class TownUiController implements Listener {
                 }
                 case "CONFIRM_ADD_VISITOR" -> {
                     String[] parts = target.split(":");
-                    openConfirmation(player, "确认邀请访客", "ADD_VISITOR", target,
-                            "目标玩家将立即获得本镇领地权限", "VISITOR_INVITE",
+                    openConfirmation(player, dialogText("confirmation.add-visitor-title"),
+                            "ADD_VISITOR", target,
+                            dialogText("confirmation.add-visitor-consequence"), "VISITOR_INVITE",
                             parts[0] + ":" + parts[2]);
                 }
                 case "ADD_VISITOR" -> addVisitor(player, target);
                 case "CONFIRM_REMOVE_VISITOR" -> {
                     String[] parts = target.split(":");
-                    openConfirmation(player, "确认移出访客", "REMOVE_VISITOR", target,
-                            "目标玩家将立即失去本镇领地权限", "VISITOR_LIST",
+                    openConfirmation(player, dialogText("confirmation.remove-visitor-title"),
+                            "REMOVE_VISITOR", target,
+                            dialogText("confirmation.remove-visitor-consequence"), "VISITOR_LIST",
                             parts[0] + ":" + parts[2]);
                 }
                 case "REMOVE_VISITOR" -> removeVisitor(player, target);
@@ -2028,9 +2079,10 @@ final class TownUiController implements Listener {
                     GridTarget grid = gridTarget(target);
                     actions.expandTown(player, grid.x(), grid.z(),
                             outcome -> handleOutcome(player, outcome, operation ->
-                                    openNotice(player, "领地扩张完成",
-                                            "新领地已经生效，费用已从公共资金扣除。",
-                                            "返回扩张页面", "EXPANSION_MENU", null)));
+                                    openNotice(player, dialogText("notice.expansion-complete-title"),
+                                            dialogText("notice.expansion-complete-message"),
+                                            dialogText("territory.return-map"),
+                                            "EXPANSION_MENU", null)));
                 }
                 case "MEMBERS" -> {
                     String[] parts = target.split(":");
@@ -2042,26 +2094,34 @@ final class TownUiController implements Listener {
                 }
                 case "CONFIRM_ROLE" -> {
                     String[] parts = target.split(":");
-                    openConfirmation(player, "确认调整成员角色", "SET_ROLE", target,
-                            "目标角色将变更为 " + parts[2], "MEMBER_DETAIL",
+                    openConfirmation(player, dialogText("confirmation.change-role-title"),
+                            "SET_ROLE", target, dialogText(
+                                    "confirmation.change-role-consequence", Map.of("role", parts[2])),
+                            "MEMBER_DETAIL",
                             parts[0] + ":" + parts[1]);
                 }
                 case "SET_ROLE" -> changeMemberRole(player, target);
-                case "CONFIRM_KICK_MEMBER" -> openConfirmation(player, "确认移除成员",
-                        "KICK_MEMBER", target, "目标将立即离镇并失去 Residence 权限",
+                case "CONFIRM_KICK_MEMBER" -> openConfirmation(player,
+                        dialogText("confirmation.kick-member-title"), "KICK_MEMBER", target,
+                        dialogText("confirmation.kick-member-consequence"),
                         "MEMBER_DETAIL", target);
                 case "KICK_MEMBER" -> kickMember(player, target);
-                case "CONFIRM_TRANSFER_MAYOR" -> openConfirmation(player, "确认发起镇长转让",
-                        "REQUEST_TRANSFER_MAYOR", target, "候选人接受后才会变更镇长",
+                case "CONFIRM_TRANSFER_MAYOR" -> openConfirmation(player,
+                        dialogText("confirmation.transfer-mayor-title"),
+                        "REQUEST_TRANSFER_MAYOR", target,
+                        dialogText("confirmation.transfer-mayor-consequence"),
                         "MEMBER_DETAIL", target);
                 case "REQUEST_TRANSFER_MAYOR" -> requestMayorTransfer(player, target);
                 case "TRANSFER_REQUEST" -> openTransferRequest(player, UUID.fromString(target));
                 case "CONFIRM_TRANSFER_DECISION" -> {
                     String[] parts = target.split(":");
                     boolean accept = Boolean.parseBoolean(parts[1]);
-                    openConfirmation(player, accept ? "确认接任镇长" : "确认拒绝转让",
+                    openConfirmation(player, accept
+                                    ? dialogText("confirmation.accept-transfer-title")
+                                    : dialogText("confirmation.reject-transfer-title"),
                             "TRANSFER_DECISION", target,
-                            accept ? "你将立即成为新镇长" : "本次转让请求将关闭",
+                            accept ? dialogText("confirmation.accept-transfer-consequence")
+                                    : dialogText("confirmation.reject-transfer-consequence"),
                             "TRANSFER_REQUEST", parts[0]);
                 }
                 case "TRANSFER_DECISION" -> decideMayorTransfer(player, target);
@@ -2071,13 +2131,15 @@ final class TownUiController implements Listener {
                     openVotes(player, UUID.fromString(parts[0]), Integer.parseInt(parts[1]));
                 }
                 case "VOTE_DETAIL" -> openVote(player, UUID.fromString(target));
-                case "CONFIRM_CREATE_VOTE" -> openConfirmation(player, "确认发起治理投票",
-                        "CREATE_VOTE", target, "选民快照和通过门槛将在创建时冻结",
+                case "CONFIRM_CREATE_VOTE" -> openConfirmation(player,
+                        dialogText("confirmation.create-vote-title"), "CREATE_VOTE", target,
+                        dialogText("confirmation.create-vote-consequence"),
                         "MEMBER_DETAIL", memberTarget(target));
                 case "CREATE_VOTE" -> createVote(player, target);
                 case "CAST_VOTE" -> castVote(player, target);
-                case "CONFIRM_CANCEL_VOTE" -> openConfirmation(player, "确认终止治理投票",
-                        "CANCEL_VOTE", target, "投票将立即结束且不可恢复",
+                case "CONFIRM_CANCEL_VOTE" -> openConfirmation(player,
+                        dialogText("confirmation.cancel-vote-title"), "CANCEL_VOTE", target,
+                        dialogText("confirmation.cancel-vote-consequence"),
                         "VOTE_DETAIL", target);
                 case "CANCEL_VOTE" -> cancelVote(player, UUID.fromString(target));
                 case "PREVIEW_TOWN" -> {
@@ -2087,12 +2149,14 @@ final class TownUiController implements Listener {
                 case "JOIN_TOWNS" -> openJoinTowns(player);
                 case "JOIN_TOWNS_PAGE" -> openJoinTowns(player, Integer.parseInt(target));
                 case "JOIN_TOWN" -> openJoinTown(player, UUID.fromString(target));
-                case "CONFIRM_APPLY_JOIN" -> openConfirmation(player, "确认提交入镇申请",
-                        "APPLY_JOIN", target, "申请将在 48 小时后过期", "JOIN_TOWN", target);
+                case "CONFIRM_APPLY_JOIN" -> openConfirmation(player,
+                        dialogText("confirmation.apply-join-title"), "APPLY_JOIN", target,
+                        dialogText("confirmation.apply-join-consequence"), "JOIN_TOWN", target);
                 case "APPLY_JOIN" -> applyJoin(player, UUID.fromString(target));
                 case "MY_JOIN_APPLICATIONS" -> openMyJoinApplications(player);
-                case "CONFIRM_CANCEL_JOIN" -> openConfirmation(player, "确认撤回入镇申请",
-                        "CANCEL_JOIN", target, "撤回后本次申请立即失效",
+                case "CONFIRM_CANCEL_JOIN" -> openConfirmation(player,
+                        dialogText("confirmation.cancel-join-title"), "CANCEL_JOIN", target,
+                        dialogText("confirmation.cancel-join-consequence"),
                         "MY_JOIN_APPLICATIONS", null);
                 case "CANCEL_JOIN" -> cancelJoin(player, UUID.fromString(target));
                 case "JOIN_APPLICATIONS" -> openTownJoinApplications(player,
@@ -2104,27 +2168,32 @@ final class TownUiController implements Listener {
                 }
                 case "JOIN_APPLICATION" -> openTownJoinApplication(player,
                         UUID.fromString(target));
-                case "CONFIRM_APPROVE_JOIN" -> openConfirmation(player, "确认批准入镇申请",
-                        "APPROVE_JOIN", target, "申请人将立即成为成员",
+                case "CONFIRM_APPROVE_JOIN" -> openConfirmation(player,
+                        dialogText("confirmation.approve-join-title"), "APPROVE_JOIN", target,
+                        dialogText("confirmation.approve-join-consequence"),
                         "JOIN_APPLICATION", target);
                 case "APPROVE_JOIN" -> approveJoin(player, UUID.fromString(target));
-                case "CONFIRM_REJECT_JOIN" -> openConfirmation(player, "确认拒绝入镇申请",
-                        "REJECT_JOIN", target, "申请人 24 小时内不能再次申请本镇",
+                case "CONFIRM_REJECT_JOIN" -> openConfirmation(player,
+                        dialogText("confirmation.reject-join-title"), "REJECT_JOIN", target,
+                        dialogText("confirmation.reject-join-consequence"),
                         "JOIN_APPLICATION", target);
                 case "REJECT_JOIN" -> rejectJoin(player, UUID.fromString(target));
                 case "EDIT_TOWN" -> loadTownForForm(player, UUID.fromString(target));
-                case "CONFIRM_LEAVE" -> openConfirmation(player, "确认退出小镇", "LEAVE", target,
-                        "退出后 24 小时内不能申请加入新镇", "TOWN", target);
+                case "CONFIRM_LEAVE" -> openConfirmation(player,
+                        dialogText("confirmation.leave-town-title"), "LEAVE", target,
+                        dialogText("confirmation.leave-town-consequence"), "TOWN", target);
                 case "LEAVE" -> leave(player, UUID.fromString(target));
-                case "CONFIRM_DISBAND" -> openConfirmation(player, "确认解散小镇", "DISBAND",
-                        target, "将删除 Residence 领地并释放名称，此操作不可撤销", "MAIN", null);
+                case "CONFIRM_DISBAND" -> openConfirmation(player,
+                        dialogText("confirmation.disband-town-title"), "DISBAND", target,
+                        dialogText("confirmation.disband-town-consequence"), "MAIN", null);
                 case "DISBAND" -> disband(player, target);
                 case "ADMIN_APPLICATIONS" -> openAdminApplications(player);
                 case "ADMIN_APPLICATIONS_PAGE" -> openAdminApplications(player,
                         Integer.parseInt(target));
                 case "ADMIN_APPLICATION" -> openAdminApplication(player, UUID.fromString(target));
-                case "CONFIRM_ADMIN_APPROVE" -> openConfirmation(player, "确认批准申请",
-                        "ADMIN_APPROVE", target, "将创建小镇并建立 Residence 投影",
+                case "CONFIRM_ADMIN_APPROVE" -> openConfirmation(player,
+                        dialogText("confirmation.admin-approve-title"), "ADMIN_APPROVE", target,
+                        dialogText("confirmation.admin-approve-consequence"),
                         "ADMIN_APPLICATION", target);
                 case "CONFIRM_ADMIN_REJECT" -> beginAdminDecision(player,
                         UUID.fromString(target), false);
@@ -2132,12 +2201,14 @@ final class TownUiController implements Listener {
                         UUID.fromString(target), true);
                 case "ADMIN_APPROVE" -> adminApprove(player, UUID.fromString(target));
                 case "ADMIN_PREVIEW_SITE" -> adminPreviewSite(player, UUID.fromString(target));
-                default -> openNotice(player, "界面已失效",
-                        plugin.messages().text("system.menu-expired"), "重新打开", "MAIN", null);
+                default -> openNotice(player, dialogText("notice.expired-title"),
+                        plugin.messages().text("system.menu-expired"),
+                        dialogText("common.reopen"), "MAIN", null);
             }
         } catch (IllegalArgumentException exception) {
-            openNotice(player, "界面数据已过期",
-                    plugin.messages().text("system.invalid-menu-data"), "重新打开", "MAIN", null);
+            openNotice(player, dialogText("notice.stale-data-title"),
+                    plugin.messages().text("system.invalid-menu-data"),
+                    dialogText("common.reopen"), "MAIN", null);
         }
     }
 
@@ -2148,8 +2219,9 @@ final class TownUiController implements Listener {
         MemberRole role = MemberRole.valueOf(parts[2]);
         actions.changeMemberRole(mayor, townId, playerId, role, outcome ->
                 handleOutcome(mayor, outcome, changed -> {
-            openNotice(mayor, "成员角色已更新", "目标成员现在是 " + changed
-                            + "，Residence 权限已同步复核。", "返回成员详情",
+            openNotice(mayor, dialogText("notice.role-updated-title"),
+                    dialogText("notice.role-updated-message", Map.of("role", changed)),
+                    dialogText("common.return-member-detail"),
                     "MEMBER_DETAIL", townId + ":" + playerId);
         }));
     }
@@ -2164,8 +2236,9 @@ final class TownUiController implements Listener {
             if (removed != null) {
                 removed.sendMessage("§c你已被小镇管理组移出小镇。");
             }
-            openNotice(mayor, "成员已移出", "该成员已离开小镇，Residence 权限已同步。",
-                    "返回成员列表", "MEMBERS", changedTown + ":0");
+            openNotice(mayor, dialogText("notice.member-removed-title"),
+                    dialogText("notice.member-removed-message"),
+                    dialogText("common.return-members"), "MEMBERS", changedTown + ":0");
         }));
     }
 
@@ -2180,9 +2253,10 @@ final class TownUiController implements Listener {
                 invited.sendMessage("§a你已被加入一个小镇的访客名单，并获得该镇领地权限。");
                 playSound(invited, Sound.BLOCK_NOTE_BLOCK_PLING);
             }
-            openNotice(manager, "访客已邀请",
-                    displayName(playerId) + " 已加入访客名单，Residence 权限已同步。",
-                    "返回访客列表", "VISITOR_LIST", townId + ":0");
+            openNotice(manager, dialogText("notice.visitor-added-title"),
+                    dialogText("notice.visitor-added-message", Map.of(
+                            "player", displayName(playerId))),
+                    dialogText("common.return-visitors"), "VISITOR_LIST", townId + ":0");
         }));
     }
 
@@ -2197,9 +2271,10 @@ final class TownUiController implements Listener {
             if (visitor != null) {
                 visitor.sendMessage("§e你已被移出一个小镇的访客名单，并失去该镇领地权限。");
             }
-            openNotice(manager, "访客已移出",
-                    displayName(playerId) + " 已移出访客名单，Residence 权限已同步。",
-                    "返回访客列表", "VISITOR_LIST", townId + ":" + page);
+            openNotice(manager, dialogText("notice.visitor-removed-title"),
+                    dialogText("notice.visitor-removed-message", Map.of(
+                            "player", displayName(playerId))),
+                    dialogText("common.return-visitors"), "VISITOR_LIST", townId + ":" + page);
         }));
     }
 
@@ -2216,8 +2291,10 @@ final class TownUiController implements Listener {
                         .append(callbackButton(candidate, "[处理]",
                                 () -> openTransferRequest(candidate, transfer.id()))));
             }
-            openNotice(mayor, "转让请求已发出", "候选成员需要在 " + transfer.expiresAt()
-                            + " 前接受。", "返回主菜单", "MAIN", null);
+            openNotice(mayor, dialogText("notice.transfer-requested-title"),
+                    dialogText("notice.transfer-requested-message", Map.of(
+                            "expires", transfer.expiresAt())),
+                    dialogText("common.return-main"), "MAIN", null);
         }));
     }
 
@@ -2232,9 +2309,11 @@ final class TownUiController implements Listener {
                 oldMayor.sendMessage(accept ? "§e镇长转让已被接受，你现在是普通成员。"
                         : "§e候选成员拒绝了镇长转让。");
             }
-            openNotice(candidate, accept ? "镇长转让完成" : "已拒绝转让",
-                    accept ? "你现在是小镇镇长。" : "本次镇长转让请求已关闭。",
-                    "返回主菜单", "MAIN", null);
+            openNotice(candidate, accept ? dialogText("notice.transfer-complete-title")
+                            : dialogText("notice.transfer-rejected-title"),
+                    accept ? dialogText("notice.transfer-complete-message")
+                            : dialogText("notice.transfer-rejected-message"),
+                    dialogText("common.return-main"), "MAIN", null);
         }));
     }
 
@@ -2244,8 +2323,10 @@ final class TownUiController implements Listener {
         long revision = Long.parseLong(parts[1]);
         actions.acknowledgeRules(player, townId, revision, outcome ->
                 handleOutcome(player, outcome, confirmed -> {
-            openNotice(player, "规则已确认", "已记录你对规则版本 " + confirmed + " 的确认。",
-                    "进入小镇服务", "MAIN", null);
+            openNotice(player, dialogText("notice.rules-confirmed-title"),
+                    dialogText("notice.rules-confirmed-message", Map.of(
+                            "revision", confirmed)),
+                    dialogText("common.enter-town-service"), "MAIN", null);
         }));
     }
 
@@ -2256,8 +2337,10 @@ final class TownUiController implements Listener {
         UUID targetId = UUID.fromString(parts[2]);
         actions.createVote(player, townId, type, targetId, outcome ->
                 handleOutcome(player, outcome, vote -> {
-            openNotice(player, "治理投票已创建", "有效选民 " + vote.eligibleVoters()
-                            + " 人，通过需要 " + vote.requiredYes() + " 票。", "查看投票",
+            openNotice(player, dialogText("notice.vote-created-title"),
+                    dialogText("notice.vote-created-message", Map.of(
+                            "voters", vote.eligibleVoters(), "required", vote.requiredYes())),
+                    dialogText("common.view-vote"),
                     "VOTE_DETAIL", vote.id().toString());
         }));
     }
@@ -2268,17 +2351,21 @@ final class TownUiController implements Listener {
         boolean approve = Boolean.parseBoolean(parts[1]);
         actions.castVote(player, voteId, approve, outcome ->
                 handleOutcome(player, outcome, vote -> {
-            openNotice(player, "投票已记录", "当前赞成票 " + vote.yesVotes()
-                            + " / 通过门槛 " + vote.requiredYes() + "，状态 " + vote.status() + "。",
-                    "返回投票列表", "VOTES", vote.townId().toString());
+            openNotice(player, dialogText("notice.vote-recorded-title"),
+                    dialogText("notice.vote-recorded-message", Map.of(
+                            "yes", vote.yesVotes(), "required", vote.requiredYes(),
+                            "status", vote.status())), dialogText("common.return-votes"),
+                    "VOTES", vote.townId().toString());
         }));
     }
 
     private void cancelVote(Player player, UUID voteId) {
         actions.cancelOwnVote(player, voteId, outcome ->
                 handleOutcome(player, outcome, vote -> {
-                    openNotice(player, "投票已终止", "本次治理投票已经关闭。",
-                            "返回投票列表", "VOTES", vote.townId().toString());
+                    openNotice(player, dialogText("notice.vote-cancelled-title"),
+                            dialogText("notice.vote-cancelled-message"),
+                            dialogText("common.return-votes"), "VOTES",
+                            vote.townId().toString());
                 }));
     }
 
@@ -2342,8 +2429,10 @@ final class TownUiController implements Listener {
         runtime.read(player, () -> runtime.repository().findApplication(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("申请不存在")), application -> {
             if (application.territory() == null) {
-                openNotice(player, "尚未选择领地", "请先选择当前区块作为小镇领地中心。",
-                        "返回申请", "APPLICATION", applicationId.toString());
+                openNotice(player, dialogText("notice.site-missing-title"),
+                        dialogText("notice.site-missing-message"),
+                        dialogText("common.return-application"), "APPLICATION",
+                        applicationId.toString());
             } else {
                 sitePolicy.teleportAndPreview(player, application.territory());
             }
@@ -2371,16 +2460,19 @@ final class TownUiController implements Listener {
                 handleOutcome(player, outcome, application -> {
                     playSound(player, Sound.BLOCK_NOTE_BLOCK_PLING);
                     notifyApplicationSubmitted(application);
-                    openNotice(player, "申请已提交", "管理员审核期间仍可在批准前撤回申请。",
-                            "查看申请", "APPLICATION", application.id().toString());
+                    openNotice(player, dialogText("notice.application-submitted-title"),
+                            dialogText("notice.application-submitted-message"),
+                            dialogText("common.view-application"), "APPLICATION",
+                            application.id().toString());
                 }));
     }
 
     private void cancel(Player player, UUID applicationId) {
         actions.cancelApplication(player, applicationId, outcome ->
                 handleOutcome(player, outcome, application -> {
-            openNotice(player, "申请已撤回", "选址预留已经释放，新的建镇申请需要等待冷却。",
-                    "返回小镇服务", "MAIN", null);
+            openNotice(player, dialogText("notice.application-cancelled-title"),
+                    dialogText("notice.application-cancelled-message"),
+                    dialogText("common.return-town-service"), "MAIN", null);
         }));
     }
 
@@ -2389,8 +2481,10 @@ final class TownUiController implements Listener {
                 handleOutcome(player, outcome, application -> {
                     playSound(player, Sound.BLOCK_NOTE_BLOCK_PLING);
                     notifyMayorJoinApplication(application);
-                    openNotice(player, "入镇申请已提交", "申请有效期至 "
-                                    + application.expiresAt() + "。", "查看我的申请",
+                    openNotice(player, dialogText("notice.join-submitted-title"),
+                            dialogText("notice.join-submitted-message", Map.of(
+                                    "expires", application.expiresAt())),
+                            dialogText("common.view-my-applications"),
                             "MY_JOIN_APPLICATIONS", null);
                 }));
     }
@@ -2399,7 +2493,9 @@ final class TownUiController implements Listener {
         actions.cancelJoinApplication(player, applicationId, outcome ->
                 handleOutcome(player, outcome, ignored -> {
             playSound(player, Sound.UI_BUTTON_CLICK);
-            openNotice(player, "入镇申请已撤回", "该申请已经关闭。", "返回我的申请",
+            openNotice(player, dialogText("notice.join-cancelled-title"),
+                    dialogText("notice.join-cancelled-message"),
+                    dialogText("common.return-my-applications"),
                     "MY_JOIN_APPLICATIONS", null);
         }));
     }
@@ -2409,8 +2505,10 @@ final class TownUiController implements Listener {
                 handleOutcome(mayor, outcome, application -> {
             playSound(mayor, Sound.ENTITY_PLAYER_LEVELUP);
             notifyJoinDecision(application, true);
-            openNotice(mayor, "入镇申请已批准", "新成员已经加入，Residence 权限已同步。",
-                    "返回申请列表", "JOIN_APPLICATIONS", application.townId().toString());
+            openNotice(mayor, dialogText("notice.join-approved-title"),
+                    dialogText("notice.join-approved-message"),
+                    dialogText("common.return-application-list"), "JOIN_APPLICATIONS",
+                    application.townId().toString());
         }));
     }
 
@@ -2419,8 +2517,10 @@ final class TownUiController implements Listener {
                 handleOutcome(mayor, outcome, application -> {
             playSound(mayor, Sound.UI_BUTTON_CLICK);
             notifyJoinDecision(application, false);
-            openNotice(mayor, "入镇申请已拒绝", "申请人会收到结果通知。",
-                    "返回申请列表", "JOIN_APPLICATIONS", application.townId().toString());
+            openNotice(mayor, dialogText("notice.join-rejected-title"),
+                    dialogText("notice.join-rejected-message"),
+                    dialogText("common.return-application-list"), "JOIN_APPLICATIONS",
+                    application.townId().toString());
         }));
     }
 
@@ -2463,7 +2563,9 @@ final class TownUiController implements Listener {
 
     private void adminApprove(Player admin, UUID applicationId) {
         if (!admin.hasPermission("tianjitown.admin")) {
-            openNotice(admin, "没有权限", "你不能审核小镇申请。", "返回", "MAIN", null);
+            openNotice(admin, dialogText("notice.no-permission-title"),
+                    dialogText("notice.review-forbidden"), dialogText("common.back"),
+                    "MAIN", null);
             return;
         }
         runtime.read(admin, () -> runtime.repository().findApplication(applicationId)
@@ -2488,29 +2590,36 @@ final class TownUiController implements Listener {
     private void openAdminDecisionDialog(Player admin, UUID applicationId, boolean requestChanges,
                                          String initialReason, String error) {
         if (!admin.hasPermission("tianjitown.admin")) {
-            openNotice(admin, "没有权限", "你不能审核小镇申请。", "返回", "MAIN", null);
+            openNotice(admin, dialogText("notice.no-permission-title"),
+                    dialogText("notice.review-forbidden"), dialogText("common.back"),
+                    "MAIN", null);
             return;
         }
         runtime.read(admin, () -> runtime.repository().findApplication(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("申请不存在")), application -> {
-            Component explanation = Component.text(requestChanges ? "要求补充资料" : "拒绝申请",
-                            requestChanges ? NamedTextColor.YELLOW : NamedTextColor.RED)
+            Component explanation = Component.text(requestChanges
+                            ? dialogText("review.change-heading")
+                            : dialogText("review.reject-heading"),
+                             requestChanges ? NamedTextColor.YELLOW : NamedTextColor.RED)
                     .append(Component.newline())
-                    .append(Component.text("小镇: " + application.text().name(), NamedTextColor.GRAY))
+                    .append(Component.text(dialogText("review.town", Map.of(
+                            "town", application.text().name())), NamedTextColor.GRAY))
                     .append(Component.newline())
                     .append(Component.text(requestChanges
-                            ? "请写明需要申请人补充或修改的内容。"
-                            : "请写明拒绝原因，便于申请人理解和改进。",
+                            ? dialogText("review.change-guidance")
+                            : dialogText("review.reject-guidance"),
                             NamedTextColor.WHITE));
             if (error != null) {
                 explanation = explanation.append(Component.newline()).append(Component.newline())
                         .append(Component.text(error, NamedTextColor.RED));
             }
             DialogInput reasonInput = DialogInput.text("review_reason", 400,
-                    Component.text(requestChanges ? "修改要求" : "拒绝原因",
+                    Component.text(requestChanges ? dialogText("review.change-label")
+                                    : dialogText("review.reject-label"),
                             NamedTextColor.GOLD), true, initialReason, 500,
                     TextDialogInput.MultilineOptions.create(6, 110));
-            openDialogPage(admin, requestChanges ? "要求修改申请" : "拒绝小镇申请",
+            openDialogPage(admin, requestChanges ? dialogText("review.change-title")
+                            : dialogText("review.reject-title"),
                     List.of(DialogBody.item(new ItemStack(requestChanges
                                             ? Material.WRITABLE_BOOK : Material.BARRIER),
                                     DialogBody.plainMessage(explanation, 420),
@@ -2518,13 +2627,15 @@ final class TownUiController implements Listener {
                     List.of(reasonInput), DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                     session -> DialogType.confirmation(
                             ActionButton.create(Component.text(requestChanges
-                                            ? "发送修改要求" : "确认拒绝",
+                                            ? dialogText("review.send-change")
+                                            : dialogText("review.confirm-reject"),
                                     requestChanges ? NamedTextColor.YELLOW : NamedTextColor.RED),
-                                    Component.text("操作将立即记录并通知申请人",
+                                    Component.text(dialogText("review.submit-tooltip"),
                                             NamedTextColor.GRAY), 190,
                                     dialogAction(admin, session, response -> applyReviewReason(
                                             admin, applicationId, requestChanges, response))),
-                            ActionButton.create(Component.text("取消", NamedTextColor.GRAY),
+                            ActionButton.create(Component.text(dialogText("common.cancel"),
+                                            NamedTextColor.GRAY),
                                     null, 150, dialogAction(admin, session,
                                             "ADMIN_APPLICATION", applicationId.toString()))));
         });
@@ -2533,13 +2644,16 @@ final class TownUiController implements Listener {
     private void applyReviewReason(Player admin, UUID applicationId, boolean requestChanges,
                                    DialogResponseView response) {
         if (!admin.hasPermission("tianjitown.admin")) {
-            openNotice(admin, "没有权限", "本次审批没有执行。", "返回", "MAIN", null);
+            openNotice(admin, dialogText("notice.no-permission-title"),
+                    dialogText("notice.review-not-executed"), dialogText("common.back"),
+                    "MAIN", null);
             return;
         }
         String reason = responseText(response, "review_reason");
         if (reason.isBlank() || reason.length() > 500) {
             openAdminDecisionDialog(admin, applicationId, requestChanges, reason,
-                    reason.isBlank() ? "原因不能为空。" : "原因不能超过 500 个字符。");
+                    reason.isBlank() ? dialogText("review.empty-error")
+                            : dialogText("review.too-long-error"));
             return;
         }
         adminDecision(admin, applicationId, requestChanges, reason);
@@ -2551,22 +2665,29 @@ final class TownUiController implements Listener {
                 handleOutcome(admin, outcome, application -> {
             playSound(admin, Sound.UI_BUTTON_CLICK);
             notifyApplicationDecision(application);
-            openNotice(admin, requestChanges ? "修改要求已发送" : "申请已拒绝",
-                    requestChanges ? "申请人会在小镇界面看到修改要求。" : "申请人会收到拒绝结果。",
-                    "返回审核列表", "ADMIN_APPLICATIONS", null);
+            openNotice(admin, requestChanges
+                            ? dialogText("notice.review-change-sent-title")
+                            : dialogText("notice.review-rejected-title"),
+                    requestChanges ? dialogText("notice.review-change-sent-message")
+                            : dialogText("notice.review-rejected-message"),
+                    dialogText("common.return-review-list"), "ADMIN_APPLICATIONS", null);
         }));
     }
 
     private void adminPreviewSite(Player admin, UUID applicationId) {
         if (!admin.hasPermission("tianjitown.admin")) {
-            openNotice(admin, "没有权限", "你不能预览申请选址。", "返回", "MAIN", null);
+            openNotice(admin, dialogText("notice.no-permission-title"),
+                    dialogText("notice.preview-forbidden"), dialogText("common.back"),
+                    "MAIN", null);
             return;
         }
         runtime.read(admin, () -> runtime.repository().findApplication(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("申请不存在")), application -> {
             if (application.territory() == null) {
-                openNotice(admin, "申请尚未选址", "申请人还没有选择领地。",
-                        "返回审核", "ADMIN_APPLICATION", applicationId.toString());
+                openNotice(admin, dialogText("notice.review-site-missing-title"),
+                        dialogText("notice.review-site-missing-message"),
+                        dialogText("common.return-review"), "ADMIN_APPLICATION",
+                        applicationId.toString());
                 return;
             }
             closeUi(admin);
@@ -2589,8 +2710,9 @@ final class TownUiController implements Listener {
 
     private void leave(Player player, UUID townId) {
         actions.leaveTown(player, townId, outcome -> handleOutcome(player, outcome, result -> {
-            openNotice(player, "已退出小镇", "你的成员身份和领地权限已经移除。",
-                    "返回小镇服务", "MAIN", null);
+            openNotice(player, dialogText("notice.left-town-title"),
+                    dialogText("notice.left-town-message"),
+                    dialogText("common.return-town-service"), "MAIN", null);
         }));
     }
 
@@ -2601,17 +2723,19 @@ final class TownUiController implements Listener {
         actions.disbandTown(mayor, townId, expectedVersion, outcome ->
                 handleOutcome(mayor, outcome, completed -> {
                 playSound(mayor, Sound.BLOCK_ANVIL_LAND);
-                openNotice(mayor, "小镇已解散", "“" + completed.profile().name()
-                                + "”的领地、成员和名称占位均已释放。",
-                        "返回小镇服务", "MAIN", null);
+                openNotice(mayor, dialogText("notice.disbanded-title"),
+                        dialogText("notice.disbanded-message", Map.of(
+                                "town", completed.profile().name())),
+                        dialogText("common.return-town-service"), "MAIN", null);
             }));
     }
 
     private void startApplicationForm(Player player, UUID targetId, long version,
                                       ApplicationText text, List<String> initialMemberNames) {
         if (maintenanceMode()) {
-            openNotice(player, "系统维护中", plugin.messages().text("system.maintenance"),
-                    "关闭", "CLOSE", null);
+            openNotice(player, dialogText("notice.maintenance-title"),
+                    plugin.messages().text("system.maintenance"), dialogText("common.close"),
+                    "CLOSE", null);
             return;
         }
         UUID formId = UUID.randomUUID();
@@ -2625,8 +2749,9 @@ final class TownUiController implements Listener {
     private void startTownProfileForm(Player player, UUID townId, long version,
                                       ApplicationText text) {
         if (maintenanceMode()) {
-            openNotice(player, "系统维护中", plugin.messages().text("system.maintenance"),
-                    "关闭", "CLOSE", null);
+            openNotice(player, dialogText("notice.maintenance-title"),
+                    plugin.messages().text("system.maintenance"), dialogText("common.close"),
+                    "CLOSE", null);
             return;
         }
         UUID formId = UUID.randomUUID();
@@ -2639,8 +2764,9 @@ final class TownUiController implements Listener {
     private void renderApplicationForm(Player player, UUID formId) {
         ApplicationFormSession form = applicationForms.get(player.getUniqueId());
         if (form == null || !form.id().equals(formId)) {
-            openNotice(player, "编辑会话已失效", "请重新打开小镇服务后继续。",
-                    "重新打开", "MAIN", null);
+            openNotice(player, dialogText("notice.edit-expired-title"),
+                    dialogText("notice.edit-expired-message"), dialogText("common.reopen"),
+                    "MAIN", null);
             return;
         }
         if (form.purpose() == FormPurpose.TOWN_PROFILE) {
@@ -2667,25 +2793,30 @@ final class TownUiController implements Listener {
         ApplicationText text = form.text();
         List<DialogInput> inputs = List.of(
                 DialogInput.text("town_name", 380,
-                        Component.text("小镇名称", NamedTextColor.GOLD), true,
+                        Component.text(dialogText("application.name-label"),
+                                NamedTextColor.GOLD), true,
                         text.name(), 24, null),
                 DialogInput.text("residence_name", 380,
-                        Component.text("小镇代码", NamedTextColor.GOLD), true,
+                        Component.text(dialogText("application.code-label"),
+                                NamedTextColor.GOLD), true,
                         text.residenceName(), 12, null));
-        Component guidance = Component.text("第 1 / 3 步 · 基础资料", NamedTextColor.GOLD)
+        Component guidance = Component.text(dialogText("application.basics-heading"),
+                        NamedTextColor.GOLD)
                 .append(Component.newline())
-                .append(Component.text("小镇代码只能包含 1～12 个英文字母，并会直接作为 Residence 领地名。",
+                .append(Component.text(dialogText("application.basics-guidance"),
                         NamedTextColor.GRAY));
-        openDialogPage(player, "申请建立小镇", List.of(
+        openDialogPage(player, dialogText("application.title"), List.of(
                         DialogBody.item(new ItemStack(Material.WRITABLE_BOOK),
                                 DialogBody.plainMessage(guidance, 400), false, false, 48, 48)),
                 inputs, DialogBase.DialogAfterAction.NONE, session ->
                         DialogType.confirmation(
-                                ActionButton.create(Component.text("下一步", NamedTextColor.GREEN),
+                                ActionButton.create(Component.text(dialogText("common.next-step"),
+                                                NamedTextColor.GREEN),
                                         null, 170, dialogAction(player, session,
                                                 response -> applyApplicationBasics(
                                                         player, form.id(), response))),
-                                ActionButton.create(Component.text("取消编辑", NamedTextColor.RED),
+                                ActionButton.create(Component.text(dialogText("common.cancel-edit"),
+                                                NamedTextColor.RED),
                                         null, 170, dialogAction(player, session,
                                                 response -> cancelApplicationForm(player, form.id())))));
     }
@@ -2707,7 +2838,8 @@ final class TownUiController implements Listener {
         errors.addAll(fieldErrors(player, candidate, ApplicationField.NAME));
         errors.addAll(fieldErrors(player, candidate, ApplicationField.RESIDENCE_NAME));
         if (!errors.isEmpty()) {
-            openNotice(player, "基础资料需要修改", String.join("\n", errors), "返回修改",
+            openNotice(player, dialogText("notice.basics-invalid-title"),
+                    String.join("\n", errors), dialogText("common.return-edit"),
                     "APPLICATION_BASICS_FORM", form.id().toString());
             return;
         }
@@ -2721,30 +2853,36 @@ final class TownUiController implements Listener {
                 .create(20, 150);
         List<DialogInput> inputs = List.of(
                 DialogInput.text("description", 400,
-                        Component.text("小镇简介", NamedTextColor.GOLD), true,
+                        Component.text(dialogText("application.description-label"),
+                                NamedTextColor.GOLD), true,
                         form.text().description(), 500, descriptionLines),
                 DialogInput.text("rules", 400,
-                        Component.text("小镇规则（每行一条）", NamedTextColor.GOLD), true,
+                        Component.text(dialogText("application.rules-label"),
+                                NamedTextColor.GOLD), true,
                         String.join("\n", form.text().rules()), 5000, ruleLines));
-        Component guidance = Component.text("第 2 / 3 步 · 简介和规则", NamedTextColor.GOLD)
+        Component guidance = Component.text(dialogText("application.content-heading"),
+                        NamedTextColor.GOLD)
                 .append(Component.newline())
-                .append(Component.text("规则至少填写一条、最多 50 条；每行视为一条规则。",
+                .append(Component.text(dialogText("application.content-guidance"),
                         NamedTextColor.GRAY));
-        openDialogPage(player, "申请建立小镇", List.of(
+        openDialogPage(player, dialogText("application.title"), List.of(
                         DialogBody.item(new ItemStack(Material.BOOK),
                                 DialogBody.plainMessage(guidance, 420), false, false, 48, 48)),
                 inputs, DialogBase.DialogAfterAction.NONE, session -> {
                     List<ActionButton> actions = List.of(
-                            ActionButton.create(Component.text("上一步", NamedTextColor.GRAY),
+                            ActionButton.create(Component.text(dialogText("common.previous-step"),
+                                            NamedTextColor.GRAY),
                                     null, 150, dialogAction(player, session,
                                             response -> renderApplicationBasicsDialog(player, form))),
-                            ActionButton.create(Component.text("下一步", NamedTextColor.GREEN),
+                            ActionButton.create(Component.text(dialogText("common.next-step"),
+                                            NamedTextColor.GREEN),
                                     null, 150, dialogAction(player, session,
                                             response -> applyApplicationContent(
                                                     player, form.id(), response))));
                     return DialogType.multiAction(actions)
                             .exitAction(ActionButton.create(
-                                    Component.text("取消编辑", NamedTextColor.RED), null, 140,
+                                    Component.text(dialogText("common.cancel-edit"),
+                                            NamedTextColor.RED), null, 140,
                                     dialogAction(player, session,
                                             response -> cancelApplicationForm(player, form.id()))))
                             .columns(2).build();
@@ -2768,7 +2906,8 @@ final class TownUiController implements Listener {
         errors.addAll(fieldErrors(player, candidate, ApplicationField.DESCRIPTION));
         errors.addAll(fieldErrors(player, candidate, ApplicationField.RULES));
         if (!errors.isEmpty()) {
-            openNotice(player, "简介或规则需要修改", String.join("\n", errors), "返回修改",
+            openNotice(player, dialogText("notice.content-invalid-title"),
+                    String.join("\n", errors), dialogText("common.return-edit"),
                     "APPLICATION_CONTENT_FORM", form.id().toString());
             return;
         }
@@ -2780,19 +2919,26 @@ final class TownUiController implements Listener {
         String first = form.initialMemberNames().get(0);
         String second = form.initialMemberNames().get(1);
         items.add(new MenuItem(10, button(Material.PLAYER_HEAD,
-                first.isBlank() ? "§e<小镇初始成员一>" : "§a" + first,
-                List.of("§7点击后从在线玩家列表中选择"), "SELECT_INITIAL_MEMBER",
+                first.isBlank() ? "§e" + dialogText("application.member-one-placeholder")
+                        : "§a" + first,
+                List.of("§7" + dialogText("application.member-select-hint")),
+                "SELECT_INITIAL_MEMBER",
                 form.id() + ":0")));
         items.add(new MenuItem(12, button(Material.PLAYER_HEAD,
-                second.isBlank() ? "§e<小镇初始成员二>" : "§a" + second,
-                List.of("§7点击后从在线玩家列表中选择"), "SELECT_INITIAL_MEMBER",
+                second.isBlank() ? "§e" + dialogText("application.member-two-placeholder")
+                        : "§a" + second,
+                List.of("§7" + dialogText("application.member-select-hint")),
+                "SELECT_INITIAL_MEMBER",
                 form.id() + ":1")));
-        items.add(new MenuItem(20, button(Material.ARROW, "§7上一步", List.of(),
+        items.add(new MenuItem(20, button(Material.ARROW,
+                "§7" + dialogText("common.previous-step"), List.of(),
                 "APPLICATION_CONTENT_FORM", form.id().toString())));
-        items.add(new MenuItem(22, button(Material.WRITABLE_BOOK, "§a保存",
-                List.of("§7保存后系统会邀请两名成员确认"), "SAVE_APPLICATION_DRAFT",
+        items.add(new MenuItem(22, button(Material.WRITABLE_BOOK,
+                "§a" + dialogText("application.save"),
+                List.of("§7" + dialogText("application.save-hint")),
+                "SAVE_APPLICATION_DRAFT",
                 form.id().toString())));
-        openMenu(player, 27, "第 3 / 3 步 · 选择初始成员", items);
+        openMenu(player, 27, dialogText("application.members-title"), items);
     }
 
     private void openInitialMemberOptions(Player player, UUID formId, int memberIndex) {
@@ -2807,8 +2953,10 @@ final class TownUiController implements Listener {
                 .sorted(java.util.Comparator.comparing(Player::getName,
                         String.CASE_INSENSITIVE_ORDER)).toList();
         if (candidates.isEmpty()) {
-            openNotice(player, "没有可选玩家", "至少需要两名其他在线玩家才能保存草稿。",
-                    "返回成员选择", "APPLICATION_MEMBERS_FORM", formId.toString());
+            openNotice(player, dialogText("notice.no-candidates-title"),
+                    dialogText("notice.no-candidates-message"),
+                    dialogText("application.return-members"), "APPLICATION_MEMBERS_FORM",
+                    formId.toString());
             return;
         }
         List<MenuItem> items = new ArrayList<>();
@@ -2818,9 +2966,12 @@ final class TownUiController implements Listener {
                     List.of(), "CHOOSE_INITIAL_MEMBER",
                     formId + ":" + memberIndex + ":" + candidate.getUniqueId())));
         }
-        items.add(new MenuItem(53, button(Material.ARROW, "§7返回成员选择", List.of(),
+        items.add(new MenuItem(53, button(Material.ARROW,
+                "§7" + dialogText("application.return-members"), List.of(),
                 "APPLICATION_MEMBERS_FORM", formId.toString())));
-        openMenu(player, 54, memberIndex == 0 ? "选择小镇初始成员一" : "选择小镇初始成员二", items);
+        openMenu(player, 54, memberIndex == 0
+                ? dialogText("application.select-member-one-title")
+                : dialogText("application.select-member-two-title"), items);
     }
 
     private void chooseInitialMember(Player player, String target) {
@@ -2834,7 +2985,9 @@ final class TownUiController implements Listener {
             return;
         }
         if (candidate == null || candidate.getUniqueId().equals(player.getUniqueId())) {
-            openNotice(player, "玩家不可用", "该玩家已经离线，请重新选择。", "重新选择",
+            openNotice(player, dialogText("notice.player-unavailable-title"),
+                    dialogText("notice.player-unavailable-message"),
+                    dialogText("common.select-again"),
                     "SELECT_INITIAL_MEMBER", formId + ":" + memberIndex);
             return;
         }
@@ -2849,25 +3002,30 @@ final class TownUiController implements Listener {
     private void renderTownProfileDialog(Player player, ApplicationFormSession form) {
         List<DialogInput> inputs = List.of(
                 DialogInput.text("description", 400,
-                        Component.text("小镇简介", NamedTextColor.GOLD), true,
+                        Component.text(dialogText("application.description-label"),
+                                NamedTextColor.GOLD), true,
                         form.text().description(), 500,
                         TextDialogInput.MultilineOptions.create(6, 100)),
                 DialogInput.text("rules", 400,
-                        Component.text("小镇规则（每行一条）", NamedTextColor.GOLD), true,
+                        Component.text(dialogText("application.rules-label"),
+                                NamedTextColor.GOLD), true,
                         String.join("\n", form.text().rules()), 5000,
                         TextDialogInput.MultilineOptions.create(20, 170)));
         Component guidance = Component.text(form.text().name(), NamedTextColor.GOLD)
                 .append(Component.newline())
-                .append(Component.text("名称和小镇代码需要管理员代办；此处只编辑简介和规则。",
+                .append(Component.text(dialogText("application.profile-guidance"),
                         NamedTextColor.GRAY));
-        openDialogPage(player, "编辑小镇简介和规则", List.of(DialogBody.plainMessage(guidance, 420)),
+        openDialogPage(player, dialogText("application.profile-title"),
+                List.of(DialogBody.plainMessage(guidance, 420)),
                 inputs, DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                 session -> DialogType.confirmation(
-                        ActionButton.create(Component.text("保存修改", NamedTextColor.GREEN),
+                        ActionButton.create(Component.text(dialogText("common.save-changes"),
+                                        NamedTextColor.GREEN),
                                 null, 170, dialogAction(player, session,
                                         response -> applyTownProfileDialog(
                                                 player, form.id(), response))),
-                        ActionButton.create(Component.text("取消", NamedTextColor.RED),
+                        ActionButton.create(Component.text(dialogText("common.cancel"),
+                                        NamedTextColor.RED),
                                 null, 170, dialogAction(player, session,
                                         response -> cancelApplicationForm(player, form.id())))));
     }
@@ -2890,8 +3048,9 @@ final class TownUiController implements Listener {
     private ApplicationFormSession requireApplicationForm(Player player, UUID formId) {
         ApplicationFormSession form = applicationForms.get(player.getUniqueId());
         if (form == null || !form.id().equals(formId)) {
-            openNotice(player, "编辑会话已失效", "请重新打开小镇服务后继续。",
-                    "重新打开", "MAIN", null);
+            openNotice(player, dialogText("notice.edit-expired-title"),
+                    dialogText("notice.edit-expired-message"), dialogText("common.reopen"),
+                    "MAIN", null);
             return null;
         }
         return form;
@@ -2903,8 +3062,9 @@ final class TownUiController implements Listener {
 
     private void startDonationInput(Player player) {
         if (!runtime.consumptionEnabled()) {
-            openNotice(player, "捐款暂不可用", "新的公共资金写入目前暂停。",
-                    "返回公共资产", "FINANCE", "0");
+            openNotice(player, dialogText("donation.unavailable-title"),
+                    dialogText("donation.unavailable-message"),
+                    dialogText("common.return-finance"), "FINANCE", "0");
             return;
         }
         openDonationDialog(player, null, "");
@@ -2914,25 +3074,32 @@ final class TownUiController implements Listener {
         runtime.read(player, () -> runtime.finance().findFinanceByPlayer(player.getUniqueId())
                 .orElseThrow(() -> new IllegalArgumentException("你不属于任何小镇")), account -> {
             List<String> description = new ArrayList<>(List.of(
-                    "§7小镇: §f" + account.townName(),
-                    "§7当前公共余额: §f" + runtime.money(account.balanceMinor()),
-                    "§7金额必须大于 0，最多保留 " + runtime.settlement().scale() + " 位小数"));
+                    "§7" + dialogText("donation.town", Map.of("town", account.townName())),
+                    "§7" + dialogText("donation.balance", Map.of(
+                            "balance", runtime.money(account.balanceMinor()))),
+                    "§7" + dialogText("donation.amount-hint", Map.of(
+                            "scale", runtime.settlement().scale()))));
             if (error != null && !error.isBlank()) {
                 description.add("§c" + error);
             }
-            ItemStack summary = button(Material.SUNFLOWER, "§6向小镇捐款",
+            ItemStack summary = button(Material.SUNFLOWER,
+                    "§6" + dialogText("donation.title"),
                     description, null, null);
             DialogInput amount = DialogInput.text("donation_amount", 360,
-                    Component.text("捐款金额", NamedTextColor.GOLD), true,
+                    Component.text(dialogText("donation.amount-label"), NamedTextColor.GOLD), true,
                     initial, 64, null);
-            openDialogPage(player, "向小镇捐款", List.of(dialogTextBody(summary)), List.of(amount),
+            openDialogPage(player, dialogText("donation.title"),
+                    List.of(dialogTextBody(summary)), List.of(amount),
                     DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                             DialogType.confirmation(
-                                    ActionButton.create(Component.text("确认捐款", NamedTextColor.GREEN),
-                                            Component.text("从个人余额转入公共资金", NamedTextColor.GRAY),
+                                    ActionButton.create(Component.text(dialogText("donation.confirm"),
+                                                    NamedTextColor.GREEN),
+                                            Component.text(dialogText("donation.confirm-tooltip"),
+                                                    NamedTextColor.GRAY),
                                             170, dialogAction(player, session,
                                                     response -> applyDonationDialog(player, response))),
-                                    ActionButton.create(Component.text("取消", NamedTextColor.RED),
+                                    ActionButton.create(Component.text(dialogText("common.cancel"),
+                                                    NamedTextColor.RED),
                                             null, 170,
                                             dialogAction(player, session, "FINANCE", "0"))));
         });
@@ -2948,13 +3115,14 @@ final class TownUiController implements Listener {
             }
             actions.donate(player, amount.minorUnits(), outcome ->
                     handleOutcome(player, outcome, mutation ->
-                            openNotice(player, "捐款成功",
-                                    "已向小镇捐款 " + runtime.money(amount.minorUnits())
-                                            + "\n当前公共余额: "
-                                            + runtime.money(mutation.balanceAfterMinor()),
-                                    "返回公共资产", "FINANCE", "0")));
+                            openNotice(player, dialogText("notice.donation-success-title"),
+                                    dialogText("notice.donation-success-message", Map.of(
+                                            "amount", runtime.money(amount.minorUnits()),
+                                            "balance", runtime.money(
+                                                    mutation.balanceAfterMinor()))),
+                                    dialogText("common.return-finance"), "FINANCE", "0")));
         } catch (ArithmeticException | NumberFormatException exception) {
-            openDonationDialog(player, "金额格式无效，请输入有效正数。", value);
+            openDonationDialog(player, dialogText("donation.invalid-amount"), value);
         } catch (IllegalArgumentException exception) {
             openDonationDialog(player, exception.getMessage(), value);
         }
@@ -2963,14 +3131,16 @@ final class TownUiController implements Listener {
     private void saveApplicationForm(Player player, UUID formId) {
         if (maintenanceMode()) {
             applicationForms.remove(player.getUniqueId());
-            openNotice(player, "草稿未保存", plugin.messages().text("system.maintenance"),
-                    "关闭", "CLOSE", null);
+            openNotice(player, dialogText("notice.draft-not-saved-title"),
+                    plugin.messages().text("system.maintenance"), dialogText("common.close"),
+                    "CLOSE", null);
             return;
         }
         ApplicationFormSession form = applicationForms.get(player.getUniqueId());
         if (form == null || !form.id().equals(formId)) {
-            openNotice(player, "编辑会话已失效", "请重新打开小镇服务后继续。",
-                    "重新打开", "MAIN", null);
+            openNotice(player, dialogText("notice.edit-expired-title"),
+                    dialogText("notice.edit-expired-message"), dialogText("common.reopen"),
+                    "MAIN", null);
             return;
         }
         try {
@@ -2979,7 +3149,8 @@ final class TownUiController implements Listener {
                 requireInitialMemberIds(player, form.initialMemberNames());
             }
         } catch (IllegalArgumentException exception) {
-            openNotice(player, "草稿尚未完成", exception.getMessage(), "返回修改",
+            openNotice(player, dialogText("notice.draft-incomplete-title"),
+                    exception.getMessage(), dialogText("common.return-edit"),
                     "APPLICATION_MEMBERS_FORM", form.id().toString());
             return;
         }
@@ -2987,8 +3158,9 @@ final class TownUiController implements Listener {
         if (form.purpose() == FormPurpose.TOWN_PROFILE) {
             actions.updateTownProfile(player, form.targetId(), form.text(), form.version(), outcome ->
                     handleOutcome(player, outcome, town -> {
-                openNotice(player, "小镇资料已保存", "新的简介和规则已经生效。",
-                        "返回小镇详情", "TOWN", town.id().toString());
+                openNotice(player, dialogText("notice.profile-saved-title"),
+                        dialogText("notice.profile-saved-message"),
+                        dialogText("common.return-town-details"), "TOWN", town.id().toString());
             }));
             return;
         }
@@ -2998,8 +3170,9 @@ final class TownUiController implements Listener {
             actions.createApplication(player, form.text(), initialMemberIds, outcome ->
                     handleOutcome(player, outcome, application -> {
                 notifyInitialMembers(application);
-                openNotice(player, "草稿已保存",
-                        plugin.messages().text("application.draft-saved"), "继续办理",
+                openNotice(player, dialogText("notice.draft-saved-title"),
+                        plugin.messages().text("application.draft-saved"),
+                        dialogText("common.continue-processing"),
                         "APPLICATION", application.id().toString());
             }));
         } else {
@@ -3007,8 +3180,9 @@ final class TownUiController implements Listener {
                     form.version(), outcome ->
                     handleOutcome(player, outcome, application -> {
                 notifyInitialMembers(application);
-                openNotice(player, "草稿已保存",
-                        plugin.messages().text("application.draft-saved"), "继续办理",
+                openNotice(player, dialogText("notice.draft-saved-title"),
+                        plugin.messages().text("application.draft-saved"),
+                        dialogText("common.continue-processing"),
                         "APPLICATION", application.id().toString());
             }));
         }
@@ -3017,8 +3191,9 @@ final class TownUiController implements Listener {
     private void cancelApplicationForm(Player player, UUID formId) {
         ApplicationFormSession form = applicationForms.get(player.getUniqueId());
         if (form == null || !form.id().equals(formId)) {
-            openNotice(player, "编辑会话已失效", "请重新打开小镇服务后继续。",
-                    "重新打开", "MAIN", null);
+            openNotice(player, dialogText("notice.edit-expired-title"),
+                    dialogText("notice.edit-expired-message"), dialogText("common.reopen"),
+                    "MAIN", null);
             return;
         }
         applicationForms.remove(player.getUniqueId(), form);
@@ -3103,45 +3278,51 @@ final class TownUiController implements Listener {
         Instant availableAt = initialMemberReminderCooldowns.get(applicationId);
         if (availableAt != null && availableAt.isAfter(now)) {
             long remaining = Math.max(1, Duration.between(now, availableAt).toSeconds());
-            openNotice(applicant, "提醒冷却中", plugin.messages().text(
+            openNotice(applicant, dialogText("notice.reminder-cooldown-title"), plugin.messages().text(
                             "application.reminder-cooldown", Map.of("seconds", remaining)),
-                    "返回申请", "APPLICATION", applicationId.toString());
+                    dialogText("common.return-application"), "APPLICATION",
+                    applicationId.toString());
             return;
         }
         runtime.read(applicant, () -> runtime.repository().findApplication(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("申请不存在")), application -> {
             if (!application.applicantId().equals(applicant.getUniqueId())) {
-                openNotice(applicant, "无法提醒", "只有申请人可以重新发送初始成员邀请。",
-                        "返回", "MAIN", null);
+                openNotice(applicant, dialogText("notice.reminder-forbidden-title"),
+                        dialogText("notice.reminder-forbidden-message"),
+                        dialogText("common.back"), "MAIN", null);
                 return;
             }
             if (application.initialMembers().stream().noneMatch(member ->
                     member.status() == InitialMemberConfirmation.Status.PENDING)) {
-                openNotice(applicant, "无需提醒", "两名初始成员都已经处理邀请。",
-                        "返回申请", "APPLICATION", applicationId.toString());
+                openNotice(applicant, dialogText("notice.reminder-unneeded-title"),
+                        dialogText("notice.reminder-unneeded-message"),
+                        dialogText("common.return-application"), "APPLICATION",
+                        applicationId.toString());
                 return;
             }
             notifyInitialMembers(application);
             initialMemberReminderCooldowns.put(applicationId, now.plus(Duration.ofMinutes(5)));
-            openNotice(applicant, "提醒已发送",
-                    plugin.messages().text("application.reminder-sent"), "返回申请",
+            openNotice(applicant, dialogText("notice.reminder-sent-title"),
+                    plugin.messages().text("application.reminder-sent"),
+                    dialogText("common.return-application"),
                     "APPLICATION", applicationId.toString());
         });
     }
 
     private void sendInitialMemberReminder(Player member, ApplicationSnapshot application) {
-        Component message = Component.text("“" + application.text().name()
-                + "”邀请你成为建镇初始成员。确认前请先与申请人核对小镇计划。",
-                NamedTextColor.GOLD);
-        openDialogPage(member, "小镇初始成员邀请",
+        Component message = Component.text(dialogText("invitation.message", Map.of(
+                "town", application.text().name())), NamedTextColor.GOLD);
+        openDialogPage(member, dialogText("invitation.title"),
                 List.of(DialogBody.plainMessage(message, 400)), List.of(),
                 DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                         DialogType.confirmation(
-                                ActionButton.create(Component.text("接受邀请", NamedTextColor.GREEN),
+                                ActionButton.create(Component.text(dialogText("invitation.accept"),
+                                                NamedTextColor.GREEN),
                                         null, 170, dialogAction(member, session,
                                                 response -> respondInitialMember(member,
                                                         application.id(), true))),
-                                ActionButton.create(Component.text("拒绝邀请", NamedTextColor.RED),
+                                ActionButton.create(Component.text(dialogText("invitation.reject"),
+                                                NamedTextColor.RED),
                                         null, 170, dialogAction(member, session,
                                                 response -> respondInitialMember(member,
                                                         application.id(), false)))));
@@ -3150,10 +3331,12 @@ final class TownUiController implements Listener {
     private void respondInitialMember(Player member, UUID applicationId, boolean confirm) {
         actions.respondInitialMember(member, applicationId, confirm, outcome ->
                 handleOutcome(member, outcome, application -> {
-                    openNotice(member, confirm ? "已接受邀请" : "已拒绝邀请",
-                            confirm ? "你已确认成为该小镇的初始成员。"
-                                    : "你已拒绝成为该小镇的初始成员。",
-                            "关闭", "CLOSE", null);
+                    openNotice(member, confirm
+                                    ? dialogText("notice.invitation-accepted-title")
+                                    : dialogText("notice.invitation-rejected-title"),
+                            confirm ? dialogText("notice.invitation-accepted-message")
+                                    : dialogText("notice.invitation-rejected-message"),
+                            dialogText("common.close"), "CLOSE", null);
                     Player applicant = Bukkit.getPlayer(application.applicantId());
                     if (applicant != null) {
                         applicant.sendMessage((confirm ? "§a" : "§e") + member.getName()
@@ -3224,31 +3407,40 @@ final class TownUiController implements Listener {
                     case "NOT_FOUND" -> "目标已经不存在，请刷新界面。";
                     default -> "暂时无法完成这项操作，请刷新后重试。";
                 } : detail;
-        openNotice(player, "操作未完成", plugin.messages().text("system.operation-failed",
-                Map.of("detail", friendly)), "返回小镇服务", "MAIN", null);
+        openNotice(player, dialogText("notice.operation-failed-title"),
+                plugin.messages().text("system.operation-failed", Map.of("detail", friendly)),
+                dialogText("common.return-town-service"), "MAIN", null);
     }
 
     private void openConfirmation(Player player, String title, String confirmedAction,
                                   String target, String consequence, String returnAction,
                                   String returnTarget) {
-        Material material = title.contains("解散") ? Material.TNT
-                : title.contains("扩张") ? Material.FILLED_MAP
-                : title.contains("Buff") || title.contains("购买") ? Material.POTION
-                : title.contains("移除") || title.contains("终止") ? Material.BARRIER
+        // 使用内部操作标识决定图标和不可撤销提示，避免自定义标题影响确认页行为。
+        boolean disband = confirmedAction.equals("DISBAND");
+        boolean irreversible = disband || confirmedAction.equals("CANCEL_VOTE");
+        Material material = disband ? Material.TNT
+                : confirmedAction.equals("EXPAND") ? Material.FILLED_MAP
+                : confirmedAction.equals("BUY_BUFF") ? Material.POTION
+                : confirmedAction.equals("REMOVE_VISITOR")
+                        || confirmedAction.equals("KICK_MEMBER")
+                        || confirmedAction.equals("CANCEL_VOTE") ? Material.BARRIER
                 : Material.PAPER;
         ItemStack summary = button(material, "§6" + title,
                 List.of("§7" + consequence,
-                        title.contains("解散") || title.contains("终止")
-                                ? "§c此操作不可撤销" : "§7请确认信息无误"), null, null);
-        DialogBody summaryBody = title.contains("解散")
+                        irreversible ? "§c" + dialogText("confirmation.irreversible")
+                                : "§7" + dialogText("confirmation.check-details")),
+                null, null);
+        DialogBody summaryBody = disband
                 ? dialogTextBody(summary) : dialogBody(summary);
         openDialogPage(player, title, List.of(summaryBody), List.of(),
                 DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                         DialogType.confirmation(
-                                ActionButton.create(Component.text("确认", NamedTextColor.GREEN),
+                                ActionButton.create(Component.text(dialogText("common.confirm"),
+                                                NamedTextColor.GREEN),
                                         Component.text(consequence, NamedTextColor.GRAY), 170,
                                         dialogAction(player, session, confirmedAction, target)),
-                                ActionButton.create(Component.text("取消", NamedTextColor.RED),
+                                ActionButton.create(Component.text(dialogText("common.cancel"),
+                                                NamedTextColor.RED),
                                         null, 170,
                                         dialogAction(player, session, returnAction, returnTarget))));
     }
@@ -3282,7 +3474,8 @@ final class TownUiController implements Listener {
         return openDialogPage(player, title, bodies, List.of(),
                 DialogBase.DialogAfterAction.NONE, session -> {
                     ActionButton exit = returnItem == null
-                            ? exitButton(player, session, "关闭", "关闭当前界面")
+                            ? exitButton(player, session, dialogText("common.close"),
+                                    dialogText("common.close-tooltip"))
                             : returnButton(player, session, returnItem.item());
                     if (contentActions.isEmpty()) {
                         return DialogType.notice(exit);
@@ -3371,8 +3564,8 @@ final class TownUiController implements Listener {
         String action = itemAction(item);
         String target = meta == null ? null : meta.getPersistentDataContainer()
                 .get(targetKey, PersistentDataType.STRING);
-        return ActionButton.create(Component.text("返回", NamedTextColor.GRAY),
-                Component.text("返回上级菜单", NamedTextColor.GRAY), 140,
+        return ActionButton.create(Component.text(dialogText("common.back"), NamedTextColor.GRAY),
+                Component.text(dialogText("common.back-tooltip"), NamedTextColor.GRAY), 140,
                 dialogAction(player, session, action, target));
     }
 
@@ -3430,6 +3623,15 @@ final class TownUiController implements Listener {
 
     private void closeUi(Player player) {
         player.closeDialog();
+    }
+
+    private String dialogText(String key) {
+        // Dialog 文案不转换颜色码；每个组件仍可按语义设置自己的颜色。
+        return plugin.messages().plainText("dialog." + key);
+    }
+
+    private String dialogText(String key, Map<String, ?> placeholders) {
+        return plugin.messages().plainText("dialog." + key, placeholders);
     }
 
     private String itemAction(ItemStack item) {

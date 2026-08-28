@@ -10,6 +10,7 @@ import net.kyori.adventure.text.object.ObjectContents;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 
@@ -26,13 +27,16 @@ final class TerritoryDialogRenderer {
     }
 
     static DialogType render(TerritoryService.TerritoryMap map, String formattedPrice,
+                             PluginMessages messages,
                              Function<TerritoryService.TerritoryCell, DialogAction> actionFactory,
                              ActionButton exitAction) {
+        // 领地格子的状态名称、坐标和操作提示都从 messages.yml 读取，保持地图界面可配置。
         Objects.requireNonNull(map, "map");
         Objects.requireNonNull(formattedPrice, "formattedPrice");
+        Objects.requireNonNull(messages, "messages");
         Objects.requireNonNull(actionFactory, "actionFactory");
         List<ActionButton> buttons = map.cells().stream()
-                .map(cell -> button(cell, formattedPrice, actionFactory))
+                .map(cell -> button(cell, formattedPrice, messages, actionFactory))
                 .toList();
         return DialogType.multiAction(buttons)
                 .exitAction(exitAction)
@@ -42,11 +46,12 @@ final class TerritoryDialogRenderer {
 
     private static ActionButton button(
             TerritoryService.TerritoryCell cell, String formattedPrice,
+            PluginMessages messages,
             Function<TerritoryService.TerritoryCell, DialogAction> actionFactory) {
         TerritoryCellState state = cell.state();
         DialogAction action = state == TerritoryCellState.EXPANDABLE
                 ? actionFactory.apply(cell) : null;
-        return ActionButton.create(sprite(state), tooltip(cell, formattedPrice),
+        return ActionButton.create(sprite(state), tooltip(cell, formattedPrice, messages),
                 CELL_SIZE, action);
     }
 
@@ -61,20 +66,22 @@ final class TerritoryDialogRenderer {
     }
 
     private static Component tooltip(TerritoryService.TerritoryCell cell,
-                                     String formattedPrice) {
-        Component tooltip = Component.text(name(cell.state()), color(cell.state()))
+                                     String formattedPrice, PluginMessages messages) {
+        Component tooltip = Component.text(name(cell.state(), messages), color(cell.state()))
                 .append(Component.newline())
-                .append(Component.text("网格: " + cell.gridX() + "," + cell.gridZ(),
-                        NamedTextColor.GRAY));
+                .append(Component.text(messages.plainText("dialog.territory.cell.grid", Map.of(
+                        "x", cell.gridX(), "z", cell.gridZ())), NamedTextColor.GRAY));
         if (cell.state() == TerritoryCellState.EXPANDABLE && cell.preview() != null) {
             tooltip = tooltip.append(Component.newline())
-                    .append(Component.text("价格: " + formattedPrice, NamedTextColor.GOLD))
+                    .append(Component.text(messages.plainText("dialog.territory.cell.price",
+                            Map.of("price", formattedPrice)), NamedTextColor.GOLD))
                     .append(Component.newline())
-                    .append(Component.text("扩张后单元: " + cell.preview().totalUnits(),
-                            NamedTextColor.GRAY))
+                    .append(Component.text(messages.plainText(
+                            "dialog.territory.cell.units-after-expansion",
+                            Map.of("units", cell.preview().totalUnits())), NamedTextColor.GRAY))
                     .append(Component.newline())
-                    .append(Component.text("点击预览边界并进入确认页",
-                            NamedTextColor.GREEN));
+                    .append(Component.text(messages.plainText(
+                            "dialog.territory.cell.expand-hint"), NamedTextColor.GREEN));
         } else if (cell.detail() != null && !cell.detail().isBlank()) {
             tooltip = tooltip.append(Component.newline())
                     .append(Component.text(cell.detail(), NamedTextColor.GRAY));
@@ -82,13 +89,13 @@ final class TerritoryDialogRenderer {
         return tooltip;
     }
 
-    private static String name(TerritoryCellState state) {
+    private static String name(TerritoryCellState state, PluginMessages messages) {
         return switch (state) {
-            case CENTER -> "小镇中心";
-            case OWNED -> "已占领区域";
-            case EXPANDABLE -> "可扩张区域";
-            case BLOCKED -> "不可扩张区域";
-            case OTHER_TOWN -> "其他小镇区域";
+            case CENTER -> messages.plainText("dialog.territory.cell.center");
+            case OWNED -> messages.plainText("dialog.territory.cell.owned");
+            case EXPANDABLE -> messages.plainText("dialog.territory.cell.expandable");
+            case BLOCKED -> messages.plainText("dialog.territory.cell.blocked");
+            case OTHER_TOWN -> messages.plainText("dialog.territory.cell.other-town");
         };
     }
 
