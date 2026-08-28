@@ -67,7 +67,7 @@ final class BuffRuntime implements Listener {
     }
 
     boolean buffShopEnabled() {
-        return plugin.getConfig().getBoolean("phase4.buffs.shop-enabled",
+        return plugin.getConfig().getBoolean("buffs.shop-enabled",
                 settings.buffShopEnabled());
     }
 

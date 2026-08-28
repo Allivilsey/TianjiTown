@@ -82,12 +82,12 @@ final class SitePolicy {
         if (world == null) {
             return Validation.failure("目标世界当前未加载");
         }
-        if (rectangles("phase1.site.blacklist", world.getName()).stream()
+        if (rectangles("town.site.blacklist", world.getName()).stream()
                 .anyMatch(area -> area.overlaps(territory))) {
             return Validation.failure("5×5 区块与出生点、活动区或管理黑名单重叠");
         }
         int bufferChunks = Math.max(0,
-                plugin.getConfig().getInt("phase1.site.minimum-buffer-chunks", 1));
+                plugin.getConfig().getInt("town.site.minimum-buffer-chunks", 1));
         WorldBoundaryService.Check boundary;
         try {
             boundary = worldBoundaries.check(territory, bufferChunks);
@@ -147,9 +147,9 @@ final class SitePolicy {
         UUID playerId = player.getUniqueId();
         stopPreview(playerId);
         int durationSeconds = Math.max(5,
-                plugin.getConfig().getInt("phase1.site.preview-duration-seconds", 15));
+                plugin.getConfig().getInt("town.site.preview-duration-seconds", 15));
         int intervalTicks = Math.max(5,
-                plugin.getConfig().getInt("phase1.site.preview-interval-ticks", 20));
+                plugin.getConfig().getInt("town.site.preview-interval-ticks", 20));
         int renderCount = Math.max(1, durationSeconds * 20 / intervalTicks);
         BukkitRunnable runnable = new BukkitRunnable() {
             private int remaining = renderCount;
@@ -218,7 +218,7 @@ final class SitePolicy {
     private void renderPreview(Player player, List<InitialTerritory> territories) {
         World world = player.getWorld();
         int verticalRange = Math.max(8,
-                plugin.getConfig().getInt("phase1.site.preview-vertical-range-blocks", 24));
+                plugin.getConfig().getInt("town.site.preview-vertical-range-blocks", 24));
         double centerY = player.getLocation().getY() + 1;
         double minimumY = Math.max(world.getMinHeight() + 1, centerY - verticalRange);
         double maximumY = Math.min(world.getMaxHeight() - 1, centerY + verticalRange);

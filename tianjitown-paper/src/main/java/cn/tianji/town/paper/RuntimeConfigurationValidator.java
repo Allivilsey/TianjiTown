@@ -19,9 +19,9 @@ final class RuntimeConfigurationValidator {
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(loadedWorld, "loadedWorld");
         ConfigurationValues.bool(config, "test-command.enabled", false);
-        ConfigurationValues.bool(config, "phase1.maintenance-mode", false);
-        ConfigurationValues.list(config, "phase1.service-stations");
-        validatePhaseOne(config, loadedWorld);
+        ConfigurationValues.bool(config, "town.maintenance-mode", false);
+        ConfigurationValues.list(config, "town.service-stations");
+        validateTown(config, loadedWorld);
         GovernanceSettings.load(config);
         EconomySettings economy = EconomySettings.load(config);
         BuffSettings.load(config, economy.fallbackScale());
@@ -29,7 +29,7 @@ final class RuntimeConfigurationValidator {
         List<String> missingWorlds = bonuses.beacon().allowedWorlds().stream()
                 .filter(world -> !loadedWorld.test(world)).sorted().toList();
         if (!missingWorlds.isEmpty()) {
-            throw new IllegalArgumentException("phase5.beacon.allowed-worlds 包含未加载世界: "
+            throw new IllegalArgumentException("territory.beacon.allowed-worlds 包含未加载世界: "
                     + String.join(", ", missingWorlds));
         }
         return databaseSettings(config);
@@ -51,32 +51,32 @@ final class RuntimeConfigurationValidator {
         return new DatabaseSettings(connectionTimeout, busyTimeout);
     }
 
-    private static void validatePhaseOne(ConfigurationSection config,
-                                         Predicate<String> loadedWorld) {
-        requireRange(config, "phase1.application.cooldown-hours", 24, 0, 8_760);
-        requireRange(config, "phase1.application.reservation-minutes", 60, 1, 1_440);
-        requireRange(config, "phase1.membership.maximum-pending-applications", 3, 1, 100);
-        requireRange(config, "phase1.membership.application-lifetime-hours", 48, 1, 8_760);
-        requireRange(config, "phase1.membership.rejection-cooldown-hours", 24, 0, 8_760);
-        requireRange(config, "phase1.membership.leave-cooldown-hours", 24, 0, 8_760);
-        requireRange(config, "phase1.site.minimum-buffer-chunks", 1, 0, 64);
-        requireRange(config, "phase1.site.preview-duration-seconds", 15, 5, 300);
-        requireRange(config, "phase1.site.preview-interval-ticks", 20, 5, 1_200);
-        requireRange(config, "phase1.site.preview-vertical-range-blocks", 24, 8, 384);
-        for (Object item : ConfigurationValues.list(config, "phase1.site.blacklist")) {
+    private static void validateTown(ConfigurationSection config,
+                                     Predicate<String> loadedWorld) {
+        requireRange(config, "town.application.cooldown-hours", 24, 0, 8_760);
+        requireRange(config, "town.application.reservation-minutes", 60, 1, 1_440);
+        requireRange(config, "town.membership.maximum-pending-applications", 3, 1, 100);
+        requireRange(config, "town.membership.application-lifetime-hours", 48, 1, 8_760);
+        requireRange(config, "town.membership.rejection-cooldown-hours", 24, 0, 8_760);
+        requireRange(config, "town.membership.leave-cooldown-hours", 24, 0, 8_760);
+        requireRange(config, "town.site.minimum-buffer-chunks", 1, 0, 64);
+        requireRange(config, "town.site.preview-duration-seconds", 15, 5, 300);
+        requireRange(config, "town.site.preview-interval-ticks", 20, 5, 1_200);
+        requireRange(config, "town.site.preview-vertical-range-blocks", 24, 8, 384);
+        for (Object item : ConfigurationValues.list(config, "town.site.blacklist")) {
             if (!(item instanceof Map<?, ?> area)) {
-                throw new IllegalArgumentException("phase1.site.blacklist 必须为区域列表");
+                throw new IllegalArgumentException("town.site.blacklist 必须为区域列表");
             }
-            String world = mapText(area, "world", "phase1.site.blacklist");
+            String world = mapText(area, "world", "town.site.blacklist");
             if (!loadedWorld.test(world.toLowerCase(Locale.ROOT))) {
-                throw new IllegalArgumentException("phase1.site.blacklist 包含未加载世界: " + world);
+                throw new IllegalArgumentException("town.site.blacklist 包含未加载世界: " + world);
             }
-            int minimumX = mapInteger(area, "min-chunk-x", "phase1.site.blacklist");
-            int maximumX = mapInteger(area, "max-chunk-x", "phase1.site.blacklist");
-            int minimumZ = mapInteger(area, "min-chunk-z", "phase1.site.blacklist");
-            int maximumZ = mapInteger(area, "max-chunk-z", "phase1.site.blacklist");
+            int minimumX = mapInteger(area, "min-chunk-x", "town.site.blacklist");
+            int maximumX = mapInteger(area, "max-chunk-x", "town.site.blacklist");
+            int minimumZ = mapInteger(area, "min-chunk-z", "town.site.blacklist");
+            int maximumZ = mapInteger(area, "max-chunk-z", "town.site.blacklist");
             if (minimumX > maximumX || minimumZ > maximumZ) {
-                throw new IllegalArgumentException("phase1.site.blacklist 区域最小坐标不能大于最大坐标");
+                throw new IllegalArgumentException("town.site.blacklist 区域最小坐标不能大于最大坐标");
             }
         }
     }

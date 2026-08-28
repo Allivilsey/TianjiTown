@@ -11,7 +11,6 @@ import cn.tianji.town.integrations.vault.VaultEconomyProbe;
 import cn.tianji.town.integrations.worldborder.WorldBorderBoundaryService;
 import cn.tianji.town.storage.database.DatabaseConfig;
 import cn.tianji.town.storage.database.DatabaseGate;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -31,7 +30,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class TianjiTownPlugin extends JavaPlugin {
-    private static final int CONFIG_SCHEMA = 9;
+    private static final int CONFIG_SCHEMA = 10;
     private final AtomicReference<GateStatus> gateStatus = new AtomicReference<>(
             new GateStatus(GateStatus.State.CHECKING, List.of("尚未开始")));
     private final AtomicLong lifecycleGeneration = new AtomicLong();
@@ -349,13 +348,6 @@ public final class TianjiTownPlugin extends JavaPlugin {
             details.add("OK config schema=" + CONFIG_SCHEMA);
             return true;
         }
-        if (configured == CONFIG_SCHEMA - 1) {
-            upgradeConfigFromEight();
-            getConfig().set("schema-version", CONFIG_SCHEMA);
-            saveConfig();
-            details.add("OK config schema 已安全升级 " + configured + " -> " + CONFIG_SCHEMA);
-            return true;
-        }
         if (configured > CONFIG_SCHEMA) {
             details.add("FAIL config schema=" + configured + " 高于本插件支持的 "
                     + CONFIG_SCHEMA + "，拒绝降级读取");
@@ -364,49 +356,6 @@ public final class TianjiTownPlugin extends JavaPlugin {
                     + CONFIG_SCHEMA + "；请先按对应版本升级手册处理");
         }
         return false;
-    }
-
-    private void upgradeConfigFromEight() {
-        getConfig().options().copyDefaults(true);
-        getConfig().set("phase4.buffs.catalog.speed.effect-kind", "ATTRIBUTE");
-        getConfig().set("phase4.buffs.catalog.speed.effect-key", "minecraft:movement_speed");
-        getConfig().set("phase4.buffs.catalog.speed.operation", "ADD_SCALAR");
-        getConfig().set("phase4.buffs.catalog.speed.amount-per-level", 0.2D);
-    }
-
-    private void upgradeConfigFromSeven() {
-        getConfig().options().copyDefaults(true);
-        if (!getConfig().isSet("phase1.handbook-cooldown-minutes")) {
-            getConfig().set("phase1.handbook-cooldown-minutes", 60);
-        }
-        getConfig().set("phase4.buffs.catalog.speed.display-name", "速度");
-        getConfig().set("phase4.buffs.catalog.speed.maximum-level", 5);
-        getConfig().set("phase4.buffs.catalog.health.display-name", "生命");
-        getConfig().set("phase4.buffs.catalog.health.maximum-level", 5);
-        getConfig().set("phase4.buffs.catalog.health.amount-per-level", 4.0D);
-    }
-
-    private void upgradeConfigFromSix() {
-        getConfig().options().copyDefaults(true);
-        getConfig().set("phase5.building-refund.chance", 0.25D);
-        for (String path : List.of(
-                "phase1.application.cooldown-minutes",
-                "phase1.site.require-service-area",
-                "phase1.site.service-areas",
-                "phase3.tax.maximum-basis-points",
-                "phase3.expansion.growth-factor",
-                "phase3.expansion.maximum-units",
-                "phase5.beacon.scan-interval-ticks")) {
-            getConfig().set(path, null);
-        }
-        ConfigurationSection catalog = getConfig().getConfigurationSection("phase4.buffs.catalog");
-        if (catalog != null) {
-            for (String key : catalog.getKeys(false)) {
-                getConfig().set("phase4.buffs.catalog." + key + ".price-multiplier", null);
-                getConfig().set("phase4.buffs.catalog." + key + ".duration-minutes", null);
-                getConfig().set("phase4.buffs.catalog." + key + ".allowed-worlds", null);
-            }
-        }
     }
 
     private String resolveDatabaseUrl() {
@@ -556,7 +505,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         getServer().getScheduler().runTaskTimer(this,
                 () -> runPeriodic("清算对账", runtime::reconcileSettlement), 20L * 20,
                 20L * 60 * Math.max(1,
-                        getConfig().getLong("phase3.reconciliation-interval-minutes", 5)));
+                        getConfig().getLong("economy.reconciliation-interval-minutes", 5)));
         getServer().getScheduler().runTaskTimer(this,
                 () -> runPeriodic("领地加成索引刷新", runtime.bonuses()::refreshIndex),
                 20L * 15, 20L * 30);

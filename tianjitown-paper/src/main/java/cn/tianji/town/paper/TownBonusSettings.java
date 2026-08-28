@@ -24,7 +24,7 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
     }
 
     private static BuildingRefund loadBuildingRefund(ConfigurationSection config) {
-        String root = "phase5.building-refund";
+        String root = "territory.building-refund";
         double chance = decimal(config, root + ".chance", 0.1D);
         int weeklyLimit = integer(config, root + ".weekly-limit", 3_000);
         int retentionWeeks = integer(config, root + ".counter-retention-weeks", 12);
@@ -66,7 +66,7 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
     }
 
     private static BeaconEnhancement loadBeacon(ConfigurationSection config) {
-        String root = "phase5.beacon";
+        String root = "territory.beacon";
         long refreshTicks = longInteger(config, root + ".refresh-interval-ticks", 100L);
         if (refreshTicks < 20 || refreshTicks > 20L * 60) {
             throw new IllegalArgumentException(root
@@ -83,7 +83,7 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
     }
 
     private static Operations loadOperations(ConfigurationSection config) {
-        String root = "phase5.operations";
+        String root = "operations";
         int diagnosticsDays = integer(config, root + ".quickshop-diagnostic-days", 7);
         long diagnosticsMinutes = longInteger(config, root + ".diagnostics-interval-minutes", 60);
         long backupHours = longInteger(config, root + ".backup.interval-hours", 6);

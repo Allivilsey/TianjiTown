@@ -33,8 +33,8 @@ class EconomySettingsTest {
     @Test
     void rejectsUnsafeTaxMoneyAndExpansionSettings() {
         for (Setting setting : new Setting[]{
-                new Setting("phase3.money-scale", 9),
-                new Setting("phase3.expansion.fixed-cost", "0")}) {
+                new Setting("economy.money-scale", 9),
+                new Setting("economy.expansion.fixed-cost", "0")}) {
             MemoryConfiguration config = new MemoryConfiguration();
             config.set(setting.path(), setting.value());
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,

@@ -32,7 +32,7 @@ class TownBonusSettingsTest {
                 () -> TownBonusSettings.load(configuration("STONE", "1.5")));
         IllegalArgumentException wrongType = assertThrows(IllegalArgumentException.class,
                 () -> TownBonusSettings.load(configuration("STONE", "not-a-number")));
-        assertTrue(wrongType.getMessage().contains("phase5.building-refund.chance"));
+        assertTrue(wrongType.getMessage().contains("territory.building-refund.chance"));
         assertTrue(TownBonusSettings.isRedstoneCategory(Material.OAK_BUTTON));
         assertFalse(TownBonusSettings.isSafeSingleBlock(Material.OAK_DOOR));
         assertFalse(TownBonusSettings.isSafeSingleBlock(Material.SHULKER_BOX));
@@ -42,7 +42,7 @@ class TownBonusSettingsTest {
             throws Exception {
         YamlConfiguration config = new YamlConfiguration();
         config.loadFromString("""
-                phase5:
+                territory:
                   building-refund:
                     enabled: true
                     chance: %s

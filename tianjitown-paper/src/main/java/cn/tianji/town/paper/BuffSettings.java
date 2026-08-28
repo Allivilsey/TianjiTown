@@ -35,15 +35,15 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs) 
     static BuffSettings load(ConfigurationSection config, int moneyScale) {
         Objects.requireNonNull(config, "config");
         Map<String, BuffDefinition> buffs = loadBuffs(
-                config.getConfigurationSection("phase4.buffs.catalog"), moneyScale);
+                config.getConfigurationSection("buffs.catalog"), moneyScale);
         if (buffs.isEmpty()) {
-            throw new IllegalArgumentException("phase4.buffs.catalog 至少需要一个 Buff");
+            throw new IllegalArgumentException("buffs.catalog 至少需要一个 Buff");
         }
         if (buffs.size() > 36) {
-            throw new IllegalArgumentException("phase4.buffs.catalog 最多支持 36 个 Buff");
+            throw new IllegalArgumentException("buffs.catalog 最多支持 36 个 Buff");
         }
         return new BuffSettings(ConfigurationValues.bool(config,
-                "phase4.buffs.shop-enabled", true), buffs);
+                "buffs.shop-enabled", true), buffs);
     }
 
     private static Map<String, BuffDefinition> loadBuffs(ConfigurationSection catalog,

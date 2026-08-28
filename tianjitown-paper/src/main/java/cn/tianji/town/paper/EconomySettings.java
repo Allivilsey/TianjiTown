@@ -17,20 +17,20 @@ record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, String se
 
     static EconomySettings load(ConfigurationSection config) {
         Objects.requireNonNull(config, "config");
-        String account = ConfigurationValues.text(config, "phase3.settlement-account", "tax");
-        int scale = ConfigurationValues.integer(config, "phase3.money-scale", 2);
+        String account = ConfigurationValues.text(config, "economy.settlement-account", "tax");
+        int scale = ConfigurationValues.integer(config, "economy.money-scale", 2);
         int maximumTaxBps = 2500;
         BigDecimal expansionCost = ConfigurationValues.decimalText(config,
-                "phase3.expansion.fixed-cost", "3000.00");
+                "economy.expansion.fixed-cost", "3000.00");
         int maximumUnits = cn.tianji.town.core.land.TerritoryRules.MAXIMUM_UNITS;
         if (account == null || account.isBlank()) {
-            throw new IllegalArgumentException("phase3.settlement-account 不能为空");
+            throw new IllegalArgumentException("economy.settlement-account 不能为空");
         }
         if (scale < 0 || scale > 8) {
-            throw new IllegalArgumentException("phase3.money-scale 必须在 0~8 之间");
+            throw new IllegalArgumentException("economy.money-scale 必须在 0~8 之间");
         }
         if (expansionCost.signum() <= 0) {
-            throw new IllegalArgumentException("phase3.expansion.fixed-cost 必须大于 0");
+            throw new IllegalArgumentException("economy.expansion.fixed-cost 必须大于 0");
         }
         try {
             if (expansionCost.compareTo(BigDecimal.valueOf(Long.MAX_VALUE, scale)) > 0) {
@@ -38,11 +38,11 @@ record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, String se
             }
             MoneyAmount.rounded(expansionCost, scale, RoundingMode.CEILING);
         } catch (ArithmeticException exception) {
-            throw new IllegalArgumentException("phase3.expansion 价格超出次级货币单位范围",
+            throw new IllegalArgumentException("economy.expansion 价格超出次级货币单位范围",
                     exception);
         }
-        return new EconomySettings(ConfigurationValues.bool(config, "phase3.tax.enabled", true),
-                ConfigurationValues.bool(config, "phase3.consumption.enabled", true),
+        return new EconomySettings(ConfigurationValues.bool(config, "economy.tax.enabled", true),
+                ConfigurationValues.bool(config, "economy.consumption.enabled", true),
                 account.strip(), scale, maximumTaxBps, expansionCost, maximumUnits);
     }
 }

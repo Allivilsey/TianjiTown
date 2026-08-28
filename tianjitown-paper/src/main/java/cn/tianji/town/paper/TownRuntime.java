@@ -236,7 +236,7 @@ final class TownRuntime {
     }
 
     boolean taxEnabled() {
-        return plugin.getConfig().getBoolean("phase3.tax.enabled",
+        return plugin.getConfig().getBoolean("economy.tax.enabled",
                 economySettings.taxEnabled());
     }
 
@@ -249,7 +249,7 @@ final class TownRuntime {
     }
 
     boolean consumptionEnabled() {
-        return plugin.getConfig().getBoolean("phase3.consumption.enabled",
+        return plugin.getConfig().getBoolean("economy.consumption.enabled",
                 economySettings.consumptionEnabled());
     }
 

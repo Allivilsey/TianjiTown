@@ -53,7 +53,7 @@ final class TownAdminCompletionEngine {
             case "mayor" -> mayor(args, snapshot, dynamic);
             case "vote" -> vote(args, snapshot, dynamic);
             case "land" -> land(args, snapshot, dynamic);
-            case "money", "tax", "ledger", "expand" -> phaseThree(args, snapshot);
+            case "money", "tax", "ledger", "expand" -> economyCommands(args, snapshot);
             case "buff" -> buffs(args, snapshot);
             default -> List.of();
         };
@@ -223,7 +223,7 @@ final class TownAdminCompletionEngine {
         return phraseSuggestions;
     }
 
-    private List<String> phaseThree(String[] args, Snapshot snapshot) {
+    private List<String> economyCommands(String[] args, Snapshot snapshot) {
         String root = args[0].toLowerCase(Locale.ROOT);
         if (args.length == 2) {
             return filter(switch (root) {

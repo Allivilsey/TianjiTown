@@ -1,26 +1,26 @@
 # 公共经济与领地扩张升级验收
 
-> 当前 schema `7.0` 要求 QuickShop-Hikari 严格高于 `6.3.0.0`，税率固定为 5%～25% 且按 1% 调整，并为每笔税收提供同额服务器补贴。以下内容保留为旧版本发布记录。
+> 当前 schema `7.0` 要求 QuickShop-Hikari 版本不低于 `6.3.0.0`，税率固定为 5%～25% 且按 1% 调整，并为每笔税收提供同额服务器补贴。以下内容保留为旧版本发布记录。
 
 本功能最初由 `1.2.0` 交付，数据库目标版本为 `3.0`。生产切换必须先完成本手册中的预发验证；代码完成不等于真实经济链路已经通过生产门禁。
 
 ## QuickShop 兼容决策
 
-当前税务适配器要求 QuickShop-Hikari 版本严格高于 `6.3.0.0`，并使用新版增强税率事件与交易账户 API。插件启动时会核对版本和以下能力：税率事件、经济交易事件、成功购买事件、税款接收方切换以及 QUser 创建接口。版本或签名不匹配时不会注册动态税监听器，并在 `/townadmin status` 中给出警告；公共账本、查询和其他业务功能仍可用。
+当前税务适配器要求 QuickShop-Hikari 版本不低于 `6.3.0.0`，并使用新版增强税率事件与交易账户 API。插件启动时会核对版本和以下能力：税率事件、经济交易事件、成功购买事件、税款接收方切换以及 QUser 创建接口。版本或签名不匹配时不会注册动态税监听器，并在 `/townadmin status` 中给出警告；公共账本、查询和其他业务功能仍可用。
 
 动态税只处理 QuickShop 交易：
 
 - `SELLING` 商店的实际收款方是商店所有者。
 - `BUYING` 商店的实际收款方是与商店交互的玩家。
 - 实际收款方属于小镇时，使用该镇税率；否则税率为零。
-- 税款接收方切换为 `phase3.settlement-account`，仅在 QuickShop 成功事件后写入小镇账本。
+- 税款接收方切换为 `economy.settlement-account`，仅在 QuickShop 成功事件后写入小镇账本。
 - 金额按 Vault 提供者的小数位转换为最小货币单位，税率按基点保存。
 
 ## 上线前准备
 
 1. 停服备份 QuickShop H2、XConomy 数据库、`plugins/TianjiTown/tianjitown.db` 及其 `-wal`/`-shm` 文件，并记录清算账户的精确余额。
-2. 在隔离预发服恢复上述备份，安装严格高于 `6.3.0.0` 的 QuickShop-Hikari 和当前 TianjiTown。
-3. 确认 `phase3.settlement-account` 指向 XConomy 中专用且可由 Vault 以离线玩家 UUID 访问的账户，默认值为 `tax`；插件会采用 Paper 缓存中的实际名称大小写（例如 `Tax`），并在启动时复核建账结果。
+2. 在隔离预发服恢复上述备份，安装版本不低于 `6.3.0.0` 的 QuickShop-Hikari 和当前 TianjiTown。
+3. 确认 `economy.settlement-account` 指向 XConomy 中专用且可由 Vault 以离线玩家 UUID 访问的账户，默认值为 `tax`；插件会采用 Paper 缓存中的实际名称大小写（例如 `Tax`），并在启动时复核建账结果。
 4. 停止 QuickShop 原固定 5% 税和 DailyTaxEconomy 对该账户的独立写入，避免同一笔交易重复计税或产生无法归属的小镇外余额。切换期间只允许 TianjiTown 适配器为小镇成员交易设置税率。
 5. 启动后执行 `/townadmin status`，确认数据库为 `7.0`、清算账户可用，并出现 QuickShop 新版 API 能力检查通过信息。
 
@@ -60,7 +60,7 @@ Residence 默认 `Visualizer.Range` 只显示玩家附近的局部边界，不�
 ## 功能开关与回滚
 
 ```yaml
-phase3:
+economy:
   tax:
     enabled: false
   consumption:

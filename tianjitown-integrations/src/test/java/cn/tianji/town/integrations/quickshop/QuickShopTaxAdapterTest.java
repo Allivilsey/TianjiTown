@@ -7,11 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class QuickShopTaxAdapterTest {
     @Test
-    void requiresQuickShopVersionStrictlyAboveSixThree() {
-        assertFalse(QuickShopTaxAdapter.isNewerThanMinimum("6.3.0.0"));
-        assertFalse(QuickShopTaxAdapter.isNewerThanMinimum("6.2.0.11"));
-        assertFalse(QuickShopTaxAdapter.isNewerThanMinimum("build-7"));
-        assertTrue(QuickShopTaxAdapter.isNewerThanMinimum("6.3.0.0-SNAPSHOT-12"));
-        assertTrue(QuickShopTaxAdapter.isNewerThanMinimum("6.3.0.1"));
+    void acceptsQuickShopVersionAtLeastSixThree() {
+        assertTrue(QuickShopTaxAdapter.isAtLeastMinimum("6.3.0.0"));
+        assertFalse(QuickShopTaxAdapter.isAtLeastMinimum("6.2.0.11"));
+        assertFalse(QuickShopTaxAdapter.isAtLeastMinimum("build-7"));
+        assertTrue(QuickShopTaxAdapter.isAtLeastMinimum("6.3.0.0-SNAPSHOT-12"));
+        assertTrue(QuickShopTaxAdapter.isAtLeastMinimum("6.3.0.1"));
     }
 }

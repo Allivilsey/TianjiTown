@@ -11,10 +11,10 @@ import java.util.function.LongFunction;
 record GovernanceSettings(Duration transferConfirmation, Duration activeMemberWindow,
                         Duration minimumMembership, Duration voteDuration) {
     private static final String TRANSFER_CONFIRMATION =
-            "phase2.governance.transfer-confirmation-hours";
-    private static final String ACTIVE_MEMBER_WINDOW = "phase2.voting.active-member-days";
-    private static final String MINIMUM_MEMBERSHIP = "phase2.voting.minimum-membership-days";
-    private static final String VOTE_DURATION = "phase2.voting.duration-hours";
+            "governance.transfer-confirmation-hours";
+    private static final String ACTIVE_MEMBER_WINDOW = "governance.voting.active-member-days";
+    private static final String MINIMUM_MEMBERSHIP = "governance.voting.minimum-membership-days";
+    private static final String VOTE_DURATION = "governance.voting.duration-hours";
 
     static GovernanceSettings load(ConfigurationSection config) {
         Objects.requireNonNull(config, "config");

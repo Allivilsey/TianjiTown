@@ -29,10 +29,10 @@ class RuntimeConfigurationValidatorTest {
         for (Setting setting : List.of(
                 new Setting("database.connection-timeout-ms", "5000"),
                 new Setting("database.busy-timeout-ms", "5000"),
-                new Setting("phase1.application.reservation-minutes", "60"),
-                new Setting("phase2.voting.duration-hours", "72"),
-                new Setting("phase3.tax.enabled", "true"),
-                new Setting("phase4.buffs.shop-enabled", "true"))) {
+                new Setting("town.application.reservation-minutes", "60"),
+                new Setting("governance.voting.duration-hours", "72"),
+                new Setting("economy.tax.enabled", "true"),
+                new Setting("buffs.shop-enabled", "true"))) {
             YamlConfiguration config = configuration();
             config.set(setting.path(), setting.value());
 
@@ -46,7 +46,7 @@ class RuntimeConfigurationValidatorTest {
     @Test
     void rejectsReferencesToWorldsThatAreNotLoaded() {
         YamlConfiguration beacon = configuration();
-        beacon.set("phase5.beacon.allowed-worlds", List.of("missing_world"));
+        beacon.set("territory.beacon.allowed-worlds", List.of("missing_world"));
         IllegalArgumentException beaconFailure = assertThrows(IllegalArgumentException.class,
                 () -> RuntimeConfigurationValidator.validate(beacon,
                         world -> world.equals("world")));
@@ -54,10 +54,10 @@ class RuntimeConfigurationValidatorTest {
 
         YamlConfiguration blacklist = configuration();
         LinkedHashMap<String, Object> area = new LinkedHashMap<>();
-        blacklist.getMapList("phase1.site.blacklist").getFirst()
+        blacklist.getMapList("town.site.blacklist").getFirst()
                 .forEach((key, value) -> area.put(String.valueOf(key), value));
         area.put("world", "missing_world");
-        blacklist.set("phase1.site.blacklist", List.of(area));
+        blacklist.set("town.site.blacklist", List.of(area));
         IllegalArgumentException blacklistFailure = assertThrows(IllegalArgumentException.class,
                 () -> RuntimeConfigurationValidator.validate(blacklist,
                         world -> world.equals("world")));

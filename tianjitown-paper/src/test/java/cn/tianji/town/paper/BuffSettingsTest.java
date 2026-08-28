@@ -57,20 +57,19 @@ class BuffSettingsTest {
             throws Exception {
         YamlConfiguration config = new YamlConfiguration();
         config.loadFromString("""
-                phase4:
-                  buffs:
-                    shop-enabled: true
-                    catalog:
-                      speed:
-                        display-name: 公共迅捷
-                        effect-kind: ATTRIBUTE
-                        effect-key: minecraft:movement_speed
-                        operation: ADD_SCALAR
-                        base-price: '%s'
-                        maximum-level: 2
-                        stacking: %s
-                        amount-per-level: 0.2
-                        purchasing-roles: [%s]
+                buffs:
+                  shop-enabled: true
+                  catalog:
+                    speed:
+                      display-name: 公共迅捷
+                      effect-kind: ATTRIBUTE
+                      effect-key: minecraft:movement_speed
+                      operation: ADD_SCALAR
+                      base-price: '%s'
+                      maximum-level: 2
+                      stacking: %s
+                      amount-per-level: 0.2
+                      purchasing-roles: [%s]
                 """.formatted(basePrice, stacking, role));
         return config;
     }

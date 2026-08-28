@@ -24,10 +24,10 @@ class GovernanceSettingsTest {
     @Test
     void rejectsEveryOverflowingGovernanceDurationWithConfigurationPath() {
         for (String path : List.of(
-                "phase2.governance.transfer-confirmation-hours",
-                "phase2.voting.active-member-days",
-                "phase2.voting.minimum-membership-days",
-                "phase2.voting.duration-hours")) {
+                "governance.transfer-confirmation-hours",
+                "governance.voting.active-member-days",
+                "governance.voting.minimum-membership-days",
+                "governance.voting.duration-hours")) {
             MemoryConfiguration config = new MemoryConfiguration();
             config.set(path, Long.MAX_VALUE);
 
@@ -40,12 +40,12 @@ class GovernanceSettingsTest {
     @Test
     void rejectsNonPositiveLifetimesAndNegativeWindows() {
         MemoryConfiguration zeroVoteDuration = new MemoryConfiguration();
-        zeroVoteDuration.set("phase2.voting.duration-hours", 0);
+        zeroVoteDuration.set("governance.voting.duration-hours", 0);
         assertThrows(IllegalArgumentException.class,
                 () -> GovernanceSettings.load(zeroVoteDuration));
 
         MemoryConfiguration negativeWindow = new MemoryConfiguration();
-        negativeWindow.set("phase2.voting.active-member-days", -1);
+        negativeWindow.set("governance.voting.active-member-days", -1);
         assertThrows(IllegalArgumentException.class,
                 () -> GovernanceSettings.load(negativeWindow));
     }

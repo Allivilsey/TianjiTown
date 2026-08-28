@@ -42,15 +42,15 @@ class GovernanceRepositorySqliteTest {
                 Duration.ofSeconds(5), Duration.ofSeconds(5));
         try (DatabaseGate gate = new DatabaseGate(config)) {
             assertTrue(gate.verifyAndMigrate().healthy());
-            TownRepository phaseOne = new TownRepository(gate.dataSource(), () -> false);
+            TownRepository townRepository = new TownRepository(gate.dataSource(), () -> false);
             GovernanceRepository governance = new GovernanceRepository(gate.dataSource(), () -> false);
-            CreatedTown created = createTown(phaseOne);
+            CreatedTown created = createTown(townRepository);
             UUID officerId = UUID.randomUUID();
             UUID targetId = UUID.randomUUID();
             UUID candidateId = UUID.randomUUID();
-            phaseOne.addMember(created.town().id(), officerId, created.mayorId(), "Admin", "测试");
-            phaseOne.addMember(created.town().id(), targetId, created.mayorId(), "Admin", "测试");
-            phaseOne.addMember(created.town().id(), candidateId, created.mayorId(), "Admin", "测试");
+            townRepository.addMember(created.town().id(), officerId, created.mayorId(), "Admin", "测试");
+            townRepository.addMember(created.town().id(), targetId, created.mayorId(), "Admin", "测试");
+            townRepository.addMember(created.town().id(), candidateId, created.mayorId(), "Admin", "测试");
             for (UUID playerId : List.of(created.mayorId(), officerId, targetId, candidateId)) {
                 governance.recordActivity(playerId);
             }
@@ -61,7 +61,7 @@ class GovernanceRepositorySqliteTest {
             UUID thirdDeputy = UUID.randomUUID();
             UUID fourthDeputy = UUID.randomUUID();
             for (UUID playerId : List.of(secondDeputy, thirdDeputy, fourthDeputy)) {
-                phaseOne.addMember(created.town().id(), playerId, created.mayorId(), "Admin", "测试");
+                townRepository.addMember(created.town().id(), playerId, created.mayorId(), "Admin", "测试");
             }
             governance.changeRoleByMayor(created.town().id(), secondDeputy,
                     MemberRole.DEPUTY_MAYOR, created.mayorId(), "Mayor");
@@ -72,15 +72,15 @@ class GovernanceRepositorySqliteTest {
                             MemberRole.DEPUTY_MAYOR, created.mayorId(), "Mayor"));
             governance.removeMemberByMayor(created.town().id(), fourthDeputy, officerId,
                     "Deputy");
-            assertFalse(phaseOne.listMemberIds(created.town().id()).contains(fourthDeputy));
+            assertFalse(townRepository.listMemberIds(created.town().id()).contains(fourthDeputy));
             UUID applicantId = UUID.randomUUID();
-            JoinApplicationSnapshot join = phaseOne.applyToTown(created.town().id(), applicantId,
+            JoinApplicationSnapshot join = townRepository.applyToTown(created.town().id(), applicantId,
                     Duration.ofHours(48), Duration.ZERO, Duration.ZERO, 3);
-            phaseOne.approveJoinApplication(join.id(), officerId);
-            assertTrue(phaseOne.listMemberIds(created.town().id()).contains(applicantId));
+            townRepository.approveJoinApplication(join.id(), officerId);
+            assertTrue(townRepository.listMemberIds(created.town().id()).contains(applicantId));
 
-            TownSnapshot beforeRules = phaseOne.findTown(created.town().id()).orElseThrow();
-            phaseOne.updateTownProfile(beforeRules.id(), new ApplicationText(
+            TownSnapshot beforeRules = townRepository.findTown(created.town().id()).orElseThrow();
+            townRepository.updateTownProfile(beforeRules.id(), new ApplicationText(
                     beforeRules.profile().name(), beforeRules.profile().shortName(),
                     beforeRules.profile().residenceName(), beforeRules.profile().description(),
                     List.of("新规则")), beforeRules.version(), created.mayorId(), "Mayor", "更新规则");
@@ -124,7 +124,7 @@ class GovernanceRepositorySqliteTest {
                     created.mayorId(), false).stream().filter(vote -> vote.id().equals(kick.id()))
                     .findFirst().orElseThrow();
             assertEquals(VoteStatus.PASSED, settledKick.status());
-            assertFalse(phaseOne.listMemberIds(created.town().id()).contains(targetId));
+            assertFalse(townRepository.listMemberIds(created.town().id()).contains(targetId));
             assertThrows(GovernanceRepository.ConflictException.class,
                     () -> governance.cancelVote(settledKick.id(), created.mayorId(), "Mayor",
                             "不能取消已结束投票"));
@@ -144,7 +144,7 @@ class GovernanceRepositorySqliteTest {
             TransferSnapshot transfer = governance.requestMayorTransfer(created.town().id(),
                     candidateId, created.mayorId(), Duration.ofHours(24));
             governance.decideMayorTransfer(transfer.id(), candidateId, true);
-            TownSnapshot transferred = phaseOne.findTown(created.town().id()).orElseThrow();
+            TownSnapshot transferred = townRepository.findTown(created.town().id()).orElseThrow();
             assertEquals(candidateId, transferred.mayorId());
             assertEquals(MemberRole.MAYOR, governance.memberRole(created.town().id(), candidateId));
 
@@ -168,10 +168,10 @@ class GovernanceRepositorySqliteTest {
                     officerId, false).stream().filter(vote -> vote.id().equals(replace.id()))
                     .findFirst().orElseThrow();
             assertEquals(VoteStatus.PASSED, settledReplace.status());
-            assertEquals(created.mayorId(), phaseOne.findTown(created.town().id())
+            assertEquals(created.mayorId(), townRepository.findTown(created.town().id())
                     .orElseThrow().mayorId());
 
-            phaseOne.deleteTown(created.town().id(), UUID.randomUUID(), "Admin", "归档测试");
+            townRepository.deleteTown(created.town().id(), UUID.randomUUID(), "Admin", "归档测试");
             try (Connection connection = gate.dataSource().getConnection();
                  PreparedStatement statement = connection.prepareStatement(
                          "SELECT COUNT(*) FROM town_archived_members WHERE town_id = ?")) {
@@ -473,7 +473,7 @@ class GovernanceRepositorySqliteTest {
                 Instant.now().plus(Duration.ofHours(1)), 1);
         ApplicationSnapshot submitted = repository.submit(selected.id(), mayorId);
         TownRepository.Provisioning provisioning = repository.beginProvision(submitted.id(),
-                UUID.randomUUID(), "Admin", "审核通过", "phase2:test:" + submitted.id(), 200_000);
+                UUID.randomUUID(), "Admin", "审核通过", "governance:test:" + submitted.id(), 200_000);
         repository.finishProvision(submitted.id(), true, "ok");
         return new CreatedTown(repository.findTown(provisioning.town().id()).orElseThrow(), mayorId);
     }

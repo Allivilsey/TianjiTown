@@ -96,12 +96,12 @@ final class TownBonusRuntime implements Listener {
     }
 
     boolean buildingRefundEnabled() {
-        return plugin.getConfig().getBoolean("phase5.building-refund.enabled",
+        return plugin.getConfig().getBoolean("territory.building-refund.enabled",
                 settings.buildingRefund().enabled());
     }
 
     boolean beaconEnabled() {
-        return plugin.getConfig().getBoolean("phase5.beacon.enabled", settings.beacon().enabled());
+        return plugin.getConfig().getBoolean("territory.beacon.enabled", settings.beacon().enabled());
     }
 
     void refreshIndex() {

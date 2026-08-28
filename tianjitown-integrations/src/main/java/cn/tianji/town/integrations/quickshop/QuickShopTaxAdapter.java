@@ -25,7 +25,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 public final class QuickShopTaxAdapter {
-    public static final String MINIMUM_EXCLUSIVE_VERSION = "6.3.0.0";
+    public static final String MINIMUM_SUPPORTED_VERSION = "6.3.0.0";
     private static final String TAX_EVENT =
             "com.ghostchu.quickshop.api.event.economy.ShopEnhancedTaxEvent";
     private static final String TRANSACTION_EVENT =
@@ -70,9 +70,9 @@ public final class QuickShopTaxAdapter {
     public Capability register() {
         try {
             String version = quickShop.getPluginMeta().getVersion();
-            if (!isNewerThanMinimum(version)) {
-                return Capability.failure("QuickShop-Hikari 必须高于 "
-                        + MINIMUM_EXCLUSIVE_VERSION + "，当前为 " + version
+            if (!isAtLeastMinimum(version)) {
+                return Capability.failure("QuickShop-Hikari 版本至少为 "
+                        + MINIMUM_SUPPORTED_VERSION + "，当前为 " + version
                         + "；动态税已保持关闭");
             }
             ClassLoader loader = quickShop.getClass().getClassLoader();
@@ -239,12 +239,12 @@ public final class QuickShopTaxAdapter {
         successEvent.getMethod("getBalanceWithoutTax");
     }
 
-    static boolean isNewerThanMinimum(String version) {
+    static boolean isAtLeastMinimum(String version) {
         if (version == null || version.isBlank()) {
             return false;
         }
         int[] candidate = numericParts(version);
-        int[] minimum = numericParts(MINIMUM_EXCLUSIVE_VERSION);
+        int[] minimum = numericParts(MINIMUM_SUPPORTED_VERSION);
         if (candidate.length < 4) {
             return false;
         }
@@ -256,7 +256,7 @@ public final class QuickShopTaxAdapter {
                 return left > right;
             }
         }
-        return false;
+        return true;
     }
 
     private static int[] numericParts(String version) {

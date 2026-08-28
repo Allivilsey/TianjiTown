@@ -292,7 +292,7 @@ final class TownUiController implements Listener {
 
     private List<StationRecord> stationRecords() {
         List<StationRecord> result = new ArrayList<>();
-        for (Map<?, ?> raw : plugin.getConfig().getMapList("phase1.service-stations")) {
+        for (Map<?, ?> raw : plugin.getConfig().getMapList("town.service-stations")) {
             try {
                 Object townId = raw.get("town-id");
                 result.add(new StationRecord(String.valueOf(raw.get("id")),
@@ -323,7 +323,7 @@ final class TownUiController implements Listener {
             }
             serialized.add(value);
         }
-        plugin.getConfig().set("phase1.service-stations", serialized);
+        plugin.getConfig().set("town.service-stations", serialized);
         plugin.saveConfig();
     }
 
@@ -428,7 +428,7 @@ final class TownUiController implements Listener {
         Long lastReceived = player.getPersistentDataContainer().get(handbookCooldownKey,
                 PersistentDataType.LONG);
         long cooldownMillis = Duration.ofMinutes(Math.max(1, plugin.getConfig().getLong(
-                "phase1.handbook-cooldown-minutes", 60))).toMillis();
+                "town.handbook-cooldown-minutes", 60))).toMillis();
         if (lastReceived != null && now - lastReceived < cooldownMillis) {
             long remainingMinutes = Math.max(1,
                     (cooldownMillis - (now - lastReceived) + 59_999L) / 60_000L);
@@ -2469,8 +2469,8 @@ final class TownUiController implements Listener {
         runtime.read(admin, () -> runtime.repository().findApplication(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("申请不存在")), application -> {
             String idempotencyKey = application.status() == ApplicationStatus.PROVISION_FAILED
-                    ? "phase1:retry:" + application.id() + ":" + UUID.randomUUID()
-                    : "phase1:approve:" + application.id();
+                    ? "town:retry:" + application.id() + ":" + UUID.randomUUID()
+                    : "town:approve:" + application.id();
             runtime.provision(admin, application.id(), admin.getUniqueId(), admin.getName(),
                     "管理员通过玩家界面批准申请", idempotencyKey, approved -> {
                         notifyApplicationDecision(approved);
@@ -3495,7 +3495,7 @@ final class TownUiController implements Listener {
     }
 
     private boolean maintenanceMode() {
-        return plugin.getConfig().getBoolean("phase1.maintenance-mode", false);
+        return plugin.getConfig().getBoolean("town.maintenance-mode", false);
     }
 
     private static String safeMessage(Throwable throwable) {

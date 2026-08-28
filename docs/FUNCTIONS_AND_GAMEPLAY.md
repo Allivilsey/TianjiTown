@@ -1,6 +1,6 @@
 # TianjiTown 功能与玩法说明
 
-> 本文按当前仓库源码整理，适用于 TianjiTown `1.4.0`、配置 schema `8`、数据库 schema `8.0`。文中标为“默认”的数值来自当前 `config.yml`，服务器实际规则以部署后的配置为准。
+> 本文按当前仓库源码整理，适用于 TianjiTown `1.4.0`、配置 schema `10`、数据库 schema `1.0`。文中标为“默认”的数值来自当前 `config.yml`，服务器实际规则以部署后的配置为准。
 
 ## 1. 插件定位
 
@@ -226,7 +226,7 @@ WorldBorder 是运行时必需依赖；`plugin.yml` 以软依赖声明，使其�
 
 税率变更后，成员登录时会收到提示；打开公共资金页后会记录已读版本。
 
-QuickShop 动态税适配器要求 QuickShop-Hikari 版本严格高于 `6.3.0.0`，并使用新版增强税率与交易账户 API。版本或接口不匹配时，插件会关闭 QuickShop 动态税并在状态中显示警告；其他小镇功能以及 Jobs、GlobalMarketPlus 税链路不因此自动停用。
+QuickShop 动态税适配器要求 QuickShop-Hikari 版本不低于 `6.3.0.0`，并使用新版增强税率与交易账户 API。版本或接口不匹配时，插件会关闭 QuickShop 动态税并在状态中显示警告；其他小镇功能以及 Jobs、GlobalMarketPlus 税链路不因此自动停用。
 
 ### 8.3 对账和消费锁
 

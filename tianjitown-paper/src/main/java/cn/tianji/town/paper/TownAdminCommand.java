@@ -186,7 +186,7 @@ final class TownAdminCommand implements CommandExecutor {
         } else {
             throw new IllegalArgumentException("用法: /townadmin maintenance <on|off|status>");
         }
-        plugin.getConfig().set("phase1.maintenance-mode", enabled);
+        plugin.getConfig().set("town.maintenance-mode", enabled);
         plugin.saveConfig();
         sender.sendMessage(enabled
                 ? "§e维护模式已开启；服务台、手册、玩家界面和表单提交现已暂停。"
@@ -353,8 +353,8 @@ final class TownAdminCommand implements CommandExecutor {
             ApplicationSnapshot application = request.application();
             if (action.equals("approve")) {
                 String key = application.status() == cn.tianji.town.core.application.ApplicationStatus.PROVISION_FAILED
-                        ? "phase1:retry:" + application.id() + ":" + UUID.randomUUID()
-                        : "phase1:approve:" + application.id();
+                        ? "town:retry:" + application.id() + ":" + UUID.randomUUID()
+                        : "town:approve:" + application.id();
                 runtime.provision(sender, application.id(), actorId(sender), sender.getName(),
                         request.reason(), key, plugin.townUi()::notifyApplicationDecision);
             } else if (action.equals("reject")) {
@@ -963,7 +963,7 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private boolean maintenanceMode() {
-        return plugin.getConfig().getBoolean("phase1.maintenance-mode", false);
+        return plugin.getConfig().getBoolean("town.maintenance-mode", false);
     }
 
     private static void applicationHelp(CommandSender sender) {

@@ -1,4 +1,4 @@
-schema-version: 9
+schema-version: 10
 
 database:
   # 相对路径以 plugins/TianjiTown 为基准，也可填写绝对路径。
@@ -10,7 +10,7 @@ database:
 test-command:
   enabled: false
 
-phase1:
+town:
   # 可通过 /townadmin maintenance on|off 即时切换；开启时玩家 UI 和表单全部暂停。
   maintenance-mode: false
   # 由服务台管理命令维护；列表同时保留方块 PDC 中的服务台 ID 和当前位置。
@@ -43,10 +43,9 @@ phase1:
         min-chunk-z: -8
         max-chunk-z: 8
 
-phase2:
-  governance:
-    # 镇长发起转让后，候选成员必须在有效期内明确接受。
-    transfer-confirmation-hours: 24
+governance:
+  # 镇长发起转让后，候选成员必须在有效期内明确接受。
+  transfer-confirmation-hours: 24
   voting:
     # 最近这些天内登录过的成员属于活跃成员候选。
     active-member-days: 30
@@ -55,7 +54,7 @@ phase2:
     # 投票到期后由每分钟执行一次的幂等任务结算。
     duration-hours: 72
 
-phase3:
+economy:
   # 按 Paper 离线玩家身份（UUID 和实际名称大小写）访问的 Vault 清算账户；需与 QuickShop 原 tax 账户切换方案一致。
   settlement-account: 'tax'
   # Economy provider 未声明 fractionalDigits 时使用此精度。
@@ -71,34 +70,33 @@ phase3:
     # 每次扩张均使用同一价格，不随现有领地单元数增长。
     fixed-cost: '3000.00'
 
-phase4:
-  buffs:
-    # 关闭商店只会阻止新购买；已购买 Buff 仍持续到期并正常清理。
-    shop-enabled: true
-    catalog:
-      speed:
-        display-name: '速度'
-        effect-kind: ATTRIBUTE
-        effect-key: 'minecraft:movement_speed'
-        operation: ADD_SCALAR
-        # 每小时基础价；玩家选择 1~4 周和 I~V 强度后按周折扣计价。
-        base-price: '500.00'
-        maximum-level: 5
-        stacking: LEVEL_UP
-        amount-per-level: 0.2
-        purchasing-roles: [MAYOR, DEPUTY_MAYOR]
-      health:
-        display-name: '生命'
-        effect-kind: ATTRIBUTE
-        effect-key: 'minecraft:max_health'
-        operation: ADD_NUMBER
-        base-price: '1000.00'
-        maximum-level: 5
-        stacking: LEVEL_UP
-        amount-per-level: 4.0
-        purchasing-roles: [MAYOR, DEPUTY_MAYOR]
+buffs:
+  # 关闭商店只会阻止新购买；已购买 Buff 仍持续到期并正常清理。
+  shop-enabled: true
+  catalog:
+    speed:
+      display-name: '速度'
+      effect-kind: ATTRIBUTE
+      effect-key: 'minecraft:movement_speed'
+      operation: ADD_SCALAR
+      # 每小时基础价；玩家选择 1~4 周和 I~V 强度后按周折扣计价。
+      base-price: '500.00'
+      maximum-level: 5
+      stacking: LEVEL_UP
+      amount-per-level: 0.2
+      purchasing-roles: [MAYOR, DEPUTY_MAYOR]
+    health:
+      display-name: '生命'
+      effect-kind: ATTRIBUTE
+      effect-key: 'minecraft:max_health'
+      operation: ADD_NUMBER
+      base-price: '1000.00'
+      maximum-level: 5
+      stacking: LEVEL_UP
+      amount-per-level: 4.0
+      purchasing-roles: [MAYOR, DEPUTY_MAYOR]
 
-phase5:
+territory:
   building-refund:
     # 只处理玩家在自己小镇有效 Residence 内的安全单方块放置；每周一零点重新计数。
     enabled: true
@@ -137,14 +135,15 @@ phase5:
     enabled: true
     refresh-interval-ticks: 100
     allowed-worlds: [world]
-  operations:
-    quickshop-diagnostic-days: 7
-    diagnostics-interval-minutes: 60
-    backup:
-      # 在线备份只覆盖 TianjiTown SQLite 与 config.yml；依赖插件需按阶段5手册统一备份。
-      # 目录必须是 plugins/TianjiTown 下的相对路径，禁止绝对路径或 ../ 逃逸。
-      enabled: true
-      interval-hours: 6
-      retention-count: 14
-      directory: backups
+
+operations:
+  quickshop-diagnostic-days: 7
+  diagnostics-interval-minutes: 60
+  backup:
+    # 在线备份只覆盖 TianjiTown SQLite 与 config.yml；依赖插件需按运维手册统一备份。
+    # 目录必须是 plugins/TianjiTown 下的相对路径，禁止绝对路径或 ../ 逃逸。
+    enabled: true
+    interval-hours: 6
+    retention-count: 14
+    directory: backups
 

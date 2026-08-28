@@ -45,7 +45,7 @@ final class TownActions {
             return;
         }
         Duration cooldown = Duration.ofHours(plugin.getConfig()
-                .getLong("phase1.application.cooldown-hours", 24));
+                .getLong("town.application.cooldown-hours", 24));
         write("APPLICATION_CREATE", actor,
                 () -> runtime.repository().createDraft(actor.getUniqueId(), text,
                         initialMemberIds, cooldown),
@@ -88,8 +88,8 @@ final class TownActions {
                     "SITE_INVALID", Map.of("detail", validation.error()))));
             return;
         }
-        long minutes = plugin.getConfig().getLong("phase1.application.reservation-minutes", 60);
-        int buffer = plugin.getConfig().getInt("phase1.site.minimum-buffer-chunks", 1);
+        long minutes = plugin.getConfig().getLong("town.application.reservation-minutes", 60);
+        int buffer = plugin.getConfig().getInt("town.site.minimum-buffer-chunks", 1);
         writeUnchecked(action, actor, () -> runtime.repository().selectSite(applicationId,
                         actor.getUniqueId(), validation.territory(),
                         Instant.now().plusSeconds(minutes * 60), buffer),
@@ -158,7 +158,7 @@ final class TownActions {
         Duration rejectionCooldown = durationHours("rejection-cooldown-hours", 24);
         Duration leaveCooldown = durationHours("leave-cooldown-hours", 24);
         int maximumPending = plugin.getConfig().getInt(
-                "phase1.membership.maximum-pending-applications", 3);
+                "town.membership.maximum-pending-applications", 3);
         write("JOIN_APPLY", actor, () -> runtime.repository().applyToTown(townId,
                         actor.getUniqueId(), lifetime, rejectionCooldown, leaveCooldown,
                         maximumPending),
@@ -527,7 +527,7 @@ final class TownActions {
 
     private Duration durationHours(String name, long fallback) {
         return Duration.ofHours(plugin.getConfig().getLong(
-                "phase1.membership." + name, fallback));
+                "town.membership." + name, fallback));
     }
 
     private void syncResidence(Player actor, UUID townId) {
@@ -569,7 +569,7 @@ final class TownActions {
 
     private <T> boolean rejectBeforeWrite(String action,
                                           Consumer<TownActionOutcome<T>> completion) {
-        if (plugin.getConfig().getBoolean("phase1.maintenance-mode", false)) {
+        if (plugin.getConfig().getBoolean("town.maintenance-mode", false)) {
             completion.accept(TownActionOutcome.failure(TownActionResult.failure(action,
                     "MAINTENANCE_MODE")));
             return true;

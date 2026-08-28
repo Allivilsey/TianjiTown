@@ -1,6 +1,6 @@
 # TianjiTown 自动化、命令与运维测试列表
 
-> 基线：TianjiTown `1.4.0`、配置 schema `8`、Flyway 迁移 `8.0`、Java `25+`、Paper API `26.2`
+> 基线：TianjiTown `1.4.0`、配置 schema `10`、Flyway 迁移 `1.0`、Java `25+`、Paper API `26.2`
 > 本次增量基线：`7519430`（Dialog 界面、WorldBorder 边界）  
 > 更新日期：2026-08-23
 > 覆盖模块：`tianjitown-core`、`tianjitown-storage`、`tianjitown-integrations`、`tianjitown-paper`
@@ -63,12 +63,12 @@
 | [x] | CFG-02 | P0/OPS | 必需依赖齐全 | 安装并启用 Residence、Vault、XConomy、WorldBorder、QuickShop-Hikari、Jobs、GlobalMarketPlus，且 Vault 注册 Economy。 | 状态逐项报告版本与能力，玩家入口和写功能开放。 |
 | [x] | CFG-03 | P0/OPS | 依赖缺失 | 分别移除或禁用上述七个插件并启动。 | 每种组合均保持 `LOCKED`，指出具体依赖，不注册可写运行时，不生成半成品业务数据。 |
 | [x] | CFG-04 | P0/OPS | Vault provider | 保留 Vault 但移除/禁用 XConomy Economy provider。 | 门禁显示 Economy provider 不可用并锁定写功能。 |
-| [x] | CFG-05 | P1/OPS | QuickShop 版本能力 | 分别使用 `<=6.3.0.0`、支持的新版本和接口不匹配版本。 | 依赖插件存在时主系统可按门禁启动；动态税能力仅在版本严格高于 6.3.0.0 且 API 匹配时开启，其他情况显示明确警告且 Jobs/GMP 税链路不被误停。 |
+| [x] | CFG-05 | P1/OPS | QuickShop 版本能力 | 分别使用 `<6.3.0.0`、生产版本 `6.3.0.0`、支持的新版本和接口不匹配版本。 | 依赖插件存在时主系统可按门禁启动；动态税能力仅在版本不低于 6.3.0.0 且 API 匹配时开启，其他情况显示明确警告且 Jobs/GMP 税链路不被误停。 |
 | [x] | CFG-06 | P0/OPS | WorldBorder API | 分别禁用 WorldBorder、使用缺少 `Config.Border`/`BorderData.insideBorder` 的版本、让目标世界无边界，并令边界查询抛出 RuntimeException/LinkageError。 | 插件禁用或经典 API 缺失时启动保持 `LOCKED`；单世界未配置或查询异常时选址、扩张安全拒绝，状态或错误指出 WorldBorder 原因，绝不把未知边界当作无限地图。 |
 | [x] | CFG-07 | P0/OPS | 数据库路径 | 测试合法相对/绝对路径、指向目录、父目录不可创建、只读文件、非法路径和数据库损坏。 | 合法路径生效；非法情况保持锁定，不覆盖原文件，错误含可定位路径与原因。 |
 | [x] | CFG-08 | P0/OPS | SQLite 超时 | 配置合法边界及零、负数、极大数、类型错误的 connection/busy timeout。 | 合法值生效；危险或错误值阻止就绪，不静默回退为可能不安全的值。 |
-| [x] | CFG-09 | P0/OPS | 配置 schema | 测试 schema 缺失、7、8、未来版本和非整数。 | 当前 schema 8 正常；旧版按支持策略升级/拒绝；未来版或类型错误保持锁定且不改配置。 |
-| [x] | CFG-10 | P0/OPS | YAML 与类型校验 | 对每个 phase 注入语法错误、错误类型、NaN/Infinity、越界值、无效枚举/材料/时区/世界名。 | 配置错误可定位，并在运行时激活前锁定插件。 |
+| [x] | CFG-09 | P0/OPS | 配置 schema | 测试 schema 缺失、7、8、9、未来版本和非整数。 | 当前 schema 10 正常；schema 9 可自动迁移分类；更旧版本按支持策略拒绝；未来版或类型错误保持锁定且不改配置。 |
+| [x] | CFG-10 | P0/OPS | YAML 与类型校验 | 对每个配置分组注入语法错误、错误类型、NaN/Infinity、越界值、无效枚举/材料/时区/世界名。 | 配置错误可定位，并在运行时激活前锁定插件。 |
 | [x] | CFG-11 | P1/OPS | 默认配置 | 删除自定义配置后核对所有默认值。 | 冷却、预留、治理、税率、扩张、Buff、返还、信标、诊断、备份与 `config.yml`/文档一致。 |
 | [x] | CFG-12 | P1/OPS | 热重载 | 修改维护、tax、consumption、Buff 商店、建筑返还和信标开关后执行 `reload`。 | 可热更新项立即生效；数据库路径、清算账户、金额精度、Buff 目录等明确提示需重启。 |
 | [x] | CFG-13 | P0/OPS | 测试接口默认关闭 | 首次安装、升级配置和发布包启动后检查 `test-command.enabled`。 | 默认始终为 `false`，无人因 OP 或管理员权限自动获得测试权限。 |

@@ -16,7 +16,7 @@ mvn -B clean verify
 
 ## 安装与 SQLite
 
-1. 安装并启用 Residence、Vault、XConomy、WorldBorder、QuickShop-Hikari（版本必须严格高于 `6.3.0.0`）、Jobs 和 GlobalMarketPlus，确保 Vault 已注册可用的 `Economy` 服务，并使用 `/wb` 为每个允许建镇的世界配置边界。选址会要求初始 5×5 区块领地及其缓冲范围完整位于 WorldBorder 内；依赖未启用或目标世界未配置边界时会安全失败。
+1. 安装并启用 Residence、Vault、XConomy、WorldBorder、QuickShop-Hikari（版本不低于 `6.3.0.0`）、Jobs 和 GlobalMarketPlus，确保 Vault 已注册可用的 `Economy` 服务，并使用 `/wb` 为每个允许建镇的世界配置边界。选址会要求初始 5×5 区块领地及其缓冲范围完整位于 WorldBorder 内；依赖未启用或目标世界未配置边界时会安全失败。
 2. 将 JAR 放入 `plugins`，首次启动会自动创建 `plugins/TianjiTown/tianjitown.db`、`config.yml` 和 `messages.yml`，并执行 Flyway 迁移。
 3. 如需更改位置，在 `config.yml` 中设置相对或绝对文件路径：
 
@@ -27,7 +27,7 @@ database:
   busy-timeout-ms: 5000
 ```
 
-4. 按实际地图修改 `phase1.site.blacklist`，重启后执行 `/townadmin status`。状态为 `READY` 时才开放服务台。
+4. 按实际地图修改 `town.site.blacklist`，重启后执行 `/townadmin status`。状态为 `READY` 时才开放服务台。
 
 玩家界面统一使用 Paper Dialog；申请、捐款、资料编辑和审核原因等自由文本也直接在 Dialog 内填写。
 
@@ -127,11 +127,11 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin buff grant <小镇全名> <buffKey> <原因>
 ```
 
-Buff 目录位于 `config.yml` 的 `phase4` 配置节。公共 Buff 不受世界限制，购买时可用滑块选择 1～4 周和 I～V 级；再次购买会按新选择覆盖同类生效项，且购买后不接受退款。默认“速度”每级提升 20%，“生命”每级增加 4 点生命值。效果、每小时价格和角色权限在启动时校验，修改后需要重启；`shop-enabled` 开关可通过 `reload` 热更新。
+Buff 目录位于 `config.yml` 的 `buffs` 配置节。公共 Buff 不受世界限制，购买时可用滑块选择 1～4 周和 I～V 级；再次购买会按新选择覆盖同类生效项，且购买后不接受退款。默认“速度”每级提升 20%，“生命”每级增加 4 点生命值。效果、每小时价格和角色权限在启动时校验，修改后需要重启；`shop-enabled` 开关可通过 `reload` 热更新。
 
 ### 领地加成
 
-建筑返还与领地信标位于 `config.yml` 的 `phase5` 配置节。建筑返还以 25% 概率处理生存模式成员在本镇有效 Residence 内放置的安全单方块，成功时只播放拾取音效，不展示内部额度。镇长或副镇长切换信标效果时，系统记录数据库中尚未存在或等级更高的效果，不再扫描区块中的信标。
+建筑返还与领地信标位于 `config.yml` 的 `territory` 配置节，诊断和备份位于 `operations` 配置节。建筑返还以 25% 概率处理生存模式成员在本镇有效 Residence 内放置的安全单方块，成功时只播放拾取音效，不展示内部额度。镇长或副镇长切换信标效果时，系统记录数据库中尚未存在或等级更高的效果，不再扫描区块中的信标。
 
 ## 玩家入口
 

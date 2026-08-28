@@ -26,7 +26,7 @@ class TownBonusRepositorySqliteTest {
 
     @Test
     void reservesWeeklyRefundAtomicallyAndRevalidatesTerritory() throws Exception {
-        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("phase5.db");
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("bonus-repository.db");
         try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
             assertTrue(gate.verifyAndMigrate().healthy());

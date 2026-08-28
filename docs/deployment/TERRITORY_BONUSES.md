@@ -1,14 +1,14 @@
 # 领地加成上线、验收与回滚
 
-当前数据库目标版本为 `8.0`，配置 schema 为 `8`。升级会保留旧官员迁移、每周返还计数以及 Jobs 与 GlobalMarketPlus 收入税记录，并新增独立的小镇访客名单。迁移前必须保留完整 SQLite 与依赖数据备份。
+当前数据库初始版本为 `1.0`，配置 schema 为 `10`。该基线面向首次正式部署，不提供旧开发数据库升级路径；部署时应使用新建 SQLite 数据库。
 
 ## 上线前
 
 1. 开启维护模式，停止新税收与新消费，完成补偿任务和开放投票检查，并导出未结束的历史资源订单供升级后核对。
 2. 在同一停服时间点备份 TianjiTown SQLite、配置/JAR、Residence、QuickShop H2、XConomy 数据，并记录 Vault 清算账户精确余额。
 3. 在隔离环境恢复生产副本，以 `1.3.0` 确认基线后替换为 `1.4.0`；不得直接在唯一生产副本上首次验证迁移。
-4. 按地图和经济规模配置 `phase5.building-refund`、`phase5.beacon` 与 `phase5.operations`。返还黑名单默认包含红石类别和高获取难度方块，信标世界清单必须显式填写。
-5. 启动后确认 `/townadmin status` 显示 config schema `8`、Flyway schema `7.0` 和 `READY`。
+4. 按地图和经济规模配置 `territory.building-refund`、`territory.beacon` 与 `operations`。返还黑名单默认包含红石类别和高获取难度方块，信标世界清单必须显式填写。
+5. 启动后确认 `/townadmin status` 显示 config schema `10`、Flyway schema `7.0` 和 `READY`。
 6. 执行 `/townadmin diagnose 7` 和 `/townadmin backup`，保存报告、备份文件及 SHA-256。
 
 ## 领地加成验收

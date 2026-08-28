@@ -9,7 +9,7 @@
 1. 使用 JDK 25 和 Maven 3.9+ 执行 `mvn -B clean verify`，确认生成 `tianjitown-paper/target/TianjiTown-1.1.0.jar`。
 2. 停止旧版写入口，并按 [`SQLITE_AND_BACKUP.md`](../operations/SQLITE_AND_BACKUP.md) 备份 TianjiTown SQLite、Residence 与相关依赖数据。
 3. 在数据库副本上启动 `1.1.0`，确认 Flyway 从 `1.1` 升级到 `2.1`，已有小镇、申请、成员和领地均可读取。
-4. 检查并合并 `config.yml` 的 `phase2.governance` 与 `phase2.voting` 配置。旧配置缺少这些键时会使用代码中的安全默认值。
+4. 检查并合并 `config.yml` 的 `governance` 配置。旧配置缺少这些键时会使用代码中的安全默认值。
 
 ## 升级步骤
 

@@ -1,6 +1,6 @@
 # TianjiTown 人工测试列表
 
-> 基线：TianjiTown `1.4.0`、配置 schema `8`、Flyway 迁移 `8.0`、Java `25+`、Paper API `26.2`
+> 基线：TianjiTown `1.4.0`、配置 schema `10`、Flyway 迁移 `1.0`、Java `25+`、Paper API `26.2`
 > 本次增量基线：`7519430`（Dialog 界面、WorldBorder 边界）  
 > 更新日期：2026-08-23
 > 覆盖模块：`tianjitown-core`、`tianjitown-storage`、`tianjitown-integrations`、`tianjitown-paper`
