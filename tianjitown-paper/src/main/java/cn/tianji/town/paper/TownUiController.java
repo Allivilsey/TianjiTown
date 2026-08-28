@@ -78,6 +78,23 @@ import java.util.function.Function;
 
 final class TownUiController implements Listener {
     private static final int MENU_TIMEOUT_TICKS = 20 * 60;
+    private static final Map<String, String> DIALOG_COLOR_KEYS = Map.ofEntries(
+            Map.entry("§0", "black"),
+            Map.entry("§1", "dark-blue"),
+            Map.entry("§2", "dark-green"),
+            Map.entry("§3", "dark-aqua"),
+            Map.entry("§4", "dark-red"),
+            Map.entry("§5", "dark-purple"),
+            Map.entry("§6", "gold"),
+            Map.entry("§7", "gray"),
+            Map.entry("§8", "dark-gray"),
+            Map.entry("§9", "blue"),
+            Map.entry("§a", "green"),
+            Map.entry("§b", "aqua"),
+            Map.entry("§c", "red"),
+            Map.entry("§d", "light-purple"),
+            Map.entry("§e", "yellow"),
+            Map.entry("§f", "white"));
     private final TianjiTownPlugin plugin;
     private final TownRuntime runtime;
     private final TownActions actions;
@@ -746,7 +763,7 @@ final class TownUiController implements Listener {
             if (town == null || governance == null) {
                 openNotice(player, dialogText("notice.no-town-title"),
                         dialogText("notice.no-town-message"),
-                        dialogText("common.return-town-service"), "MAIN", null);
+                        dialogText("common.back"), "MAIN", null);
                 return;
             }
             int pendingJoins = governance.canReviewApplications()
@@ -896,7 +913,7 @@ final class TownUiController implements Listener {
         }
         openNotice(player, dialogText("notice.visitor-forbidden-title"),
                 dialogText("notice.visitor-forbidden-message"),
-                dialogText("common.return-governance"), "GOVERNANCE_CENTER", null);
+                dialogText("common.back"), "GOVERNANCE_CENTER", null);
         return true;
     }
 
@@ -1046,23 +1063,19 @@ final class TownUiController implements Listener {
                 return;
             }
             DialogInput input = DialogInput.numberRange("tax_rate", 360,
-                    Component.text(dialogText("tax.rate-label"), NamedTextColor.GOLD),
-                    dialogText("tax.rate-format"), 5.0F,
+                    dialogComponent("tax.rate-label"),
+                    dialogFormat("tax.rate-format"), 5.0F,
                     runtime.economySettings().maximumTaxBps() / 100.0F,
                     account.taxRateBps() / 100.0F, 1.0F);
             openDialogPage(player, dialogText("tax.title"), List.of(dialogTextBody(summary)),
                     List.of(input),
                     DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                             DialogType.confirmation(
-                                    ActionButton.create(Component.text(
-                                                    dialogText("common.save-changes"),
-                                                    NamedTextColor.GREEN),
-                                            Component.text(dialogText("tax.save-tooltip"),
-                                                    NamedTextColor.GRAY),
+                                    ActionButton.create(dialogComponent("common.save-changes"),
+                                            dialogComponent("tax.save-tooltip"),
                                             170, dialogAction(player, session,
                                                     response -> applyTaxDialog(player, account, response))),
-                                    ActionButton.create(Component.text(dialogText("common.cancel"),
-                                                    NamedTextColor.RED),
+                                    ActionButton.create(dialogComponent("common.cancel"),
                                             null, 170,
                                             dialogAction(player, session, "FINANCE", "0"))));
         });
@@ -1073,7 +1086,7 @@ final class TownUiController implements Listener {
         Float selected = response.getFloat("tax_rate");
         if (selected == null) {
             openNotice(player, dialogText("tax.select-title"),
-                    dialogText("tax.select-message"), dialogText("common.return-settings"),
+                    dialogText("tax.select-message"), dialogText("common.back"),
                     "TAX_MENU", null);
             return;
         }
@@ -1082,7 +1095,7 @@ final class TownUiController implements Listener {
             openNotice(player, dialogText("tax.unchanged-title"),
                     dialogText("tax.unchanged-message", Map.of(
                             "rate", TownRuntime.percent(rate))),
-                    dialogText("common.return-finance"), "FINANCE", "0");
+                    dialogText("common.back"), "FINANCE", "0");
             return;
         }
         actions.changeTaxRate(player, account.townId(), rate, outcome ->
@@ -1091,7 +1104,7 @@ final class TownUiController implements Listener {
                     openNotice(player, dialogText("tax.saved-title"),
                             dialogText("tax.saved-message", Map.of(
                                     "rate", TownRuntime.percent(change.basisPoints()))),
-                            dialogText("common.return-finance"), "FINANCE", "0");
+                            dialogText("common.back"), "FINANCE", "0");
                 }));
     }
 
@@ -1147,20 +1160,16 @@ final class TownUiController implements Listener {
         runtime.loadTerritoryMap(player, map -> {
             String price = map.priceMinor() > 0
                     ? runtime.money(map.priceMinor()) : dialogText("territory.limit-reached");
-            Component summary = Component.text(dialogText("territory.summary", Map.of(
-                            "current", map.currentUnits(), "maximum", map.maximumUnits())),
-                            NamedTextColor.GRAY)
+            Component summary = dialogComponent("territory.summary", Map.of(
+                            "current", map.currentUnits(), "maximum", map.maximumUnits()))
                     .append(Component.newline())
-                    .append(Component.text(dialogText("territory.legend"),
-                            NamedTextColor.DARK_GRAY));
+                    .append(dialogComponent("territory.legend"));
             openDialogPage(player, dialogText("territory.title"),
                     List.of(DialogBody.plainMessage(summary, 360)), List.of(),
                     DialogBase.DialogAfterAction.NONE, session -> {
                         ActionButton back = ActionButton.create(
-                                Component.text(dialogText("common.return-finance"),
-                                        NamedTextColor.GRAY),
-                                Component.text(dialogText("territory.return-tooltip"),
-                                        NamedTextColor.GRAY), 140,
+                                dialogComponent("common.back"),
+                                dialogComponent("common.back-tooltip"), 140,
                                 dialogAction(player, session, "FINANCE", "0"));
                         return TerritoryDialogRenderer.render(map, price, plugin.messages(),
                                 cell -> dialogAction(player, session, "PREVIEW_EXPANSION",
@@ -1175,7 +1184,7 @@ final class TownUiController implements Listener {
             SitePolicy.Validation validation = runtime.validateExpansionPreview(preview);
             if (!validation.valid()) {
                 openNotice(player, dialogText("territory.unavailable-title"), validation.error(),
-                        dialogText("territory.return-map"), "EXPANSION_MENU", null);
+                        dialogText("common.back"), "EXPANSION_MENU", null);
                 return;
             }
             sitePolicy.preview(player, preview.candidate().territory());
@@ -1241,35 +1250,33 @@ final class TownUiController implements Listener {
         }, quote -> {
             BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey);
             ItemStack summary = button(Material.POTION, "§d" + definition.displayName(),
-                    List.of("§7" + dialogText("buff.effect", Map.of(
+                    List.of(dialogText("buff.effect", Map.of(
                                     "effect", buffEffectDescription(definition))),
                             quote.current() == null
-                                    ? "§7" + dialogText("buff.inactive")
-                                    : "§a" + dialogText("buff.active", Map.of(
+                                    ? dialogText("buff.inactive")
+                                    : dialogText("buff.active", Map.of(
                                             "level", roman(quote.current().level()),
                                             "expires", quote.current().expiresAt())),
-                            "§7" + dialogText("buff.intensity-hint"),
-                            "§7" + dialogText("buff.price-hint")), null, null);
+                            dialogText("buff.intensity-hint"),
+                            dialogText("buff.price-hint")), null, null);
             DialogInput duration = DialogInput.numberRange("buff_weeks", 420,
-                    Component.text(dialogText("buff.duration-label"), NamedTextColor.GOLD),
-                    dialogText("buff.duration-format"),
+                    dialogComponent("buff.duration-label"),
+                    dialogFormat("buff.duration-format"),
                     1.0F, 4.0F, 1.0F, 1.0F);
             DialogInput intensity = DialogInput.numberRange("buff_level", 420,
-                    Component.text(dialogText("buff.intensity-label"), NamedTextColor.GOLD),
-                    dialogText("buff.intensity-format"),
+                    dialogComponent("buff.intensity-label"),
+                    dialogFormat("buff.intensity-format"),
                     1.0F, Math.min(5, definition.maximumLevel()),
                     quote.current() == null ? 1.0F
                             : Math.min(5.0F, quote.current().level()), 1.0F);
             openDialogPage(player, dialogText("buff.title"), List.of(dialogBody(summary)),
                     List.of(duration, intensity), DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                     session -> DialogType.confirmation(
-                            ActionButton.create(Component.text(dialogText("buff.continue"),
-                                            NamedTextColor.GREEN),
+                            ActionButton.create(dialogComponent("buff.continue"),
                                     null, 170, dialogAction(player, session,
                                             response -> applyBuffDurationDialog(
                                                     player, buffKey, response))),
-                            ActionButton.create(Component.text(dialogText("common.cancel"),
-                                            NamedTextColor.RED),
+                            ActionButton.create(dialogComponent("common.cancel"),
                                     null, 170,
                                     dialogAction(player, session, "BUFF_SHOP", null))));
         });
@@ -1281,7 +1288,7 @@ final class TownUiController implements Listener {
         Float selectedLevel = response.getFloat("buff_level");
         if (selectedWeeks == null || selectedLevel == null) {
             openNotice(player, dialogText("buff.select-title"),
-                    dialogText("buff.select-message"), dialogText("common.return-settings"),
+                    dialogText("buff.select-message"), dialogText("common.back"),
                     "BUFF_DURATIONS", buffKey);
             return;
         }
@@ -1313,7 +1320,7 @@ final class TownUiController implements Listener {
                                     "level", roman(purchase.buff().level()),
                                     "expires", purchase.buff().expiresAt(),
                                     "balance", runtime.money(purchase.balanceAfterMinor()))),
-                            dialogText("common.return-finance"), "FINANCE", "0");
+                            dialogText("common.back"), "FINANCE", "0");
                 }));
     }
 
@@ -1361,34 +1368,31 @@ final class TownUiController implements Listener {
     }
 
     private void renderRulesConfirmation(Player player, MemberGovernanceSnapshot governance) {
-        Component rules = Component.text(dialogText("rules.town", Map.of(
-                        "town", governance.townName())), NamedTextColor.GRAY)
+        Component rules = dialogComponent("rules.town", Map.of(
+                        "town", governance.townName()))
                 .append(Component.newline())
-                .append(Component.text(dialogText("rules.revision", Map.of(
-                        "revision", governance.townRulesRevision())), NamedTextColor.GRAY));
+                .append(dialogComponent("rules.revision", Map.of(
+                        "revision", governance.townRulesRevision())));
         for (int index = 0; index < governance.rules().size(); index++) {
             rules = rules.append(Component.newline()).append(Component.newline())
-                    .append(Component.text((index + 1) + ". " + governance.rules().get(index),
-                            NamedTextColor.WHITE));
+                    .append(dialogComponent("rules.item", Map.of(
+                            "index", index + 1, "rule", governance.rules().get(index))));
         }
         rules = rules.append(Component.newline()).append(Component.newline())
-                .append(Component.text(dialogText("rules.locked-hint"), NamedTextColor.RED));
+                .append(dialogComponent("rules.locked-hint"));
         DialogInput acknowledged = DialogInput.bool("rules_acknowledged",
-                Component.text(dialogText("rules.acknowledgement"), NamedTextColor.GOLD),
+                dialogComponent("rules.acknowledgement"),
                 false, "true", "false");
         String target = governance.townId() + ":" + governance.townRulesRevision();
         openDialogPage(player, dialogText("rules.updated-title"),
                 List.of(DialogBody.plainMessage(rules, 420)),
                 List.of(acknowledged), DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                 session -> DialogType.confirmation(
-                        ActionButton.create(Component.text(dialogText("rules.confirm"),
-                                        NamedTextColor.GREEN),
+                        ActionButton.create(dialogComponent("rules.confirm"),
                                 null, 170, dialogAction(player, session,
                                         response -> acknowledgeRulesDialog(player, target, response))),
-                        ActionButton.create(Component.text(dialogText("rules.later"),
-                                        NamedTextColor.RED),
-                                Component.text(dialogText("rules.later-tooltip"),
-                                        NamedTextColor.GRAY),
+                        ActionButton.create(dialogComponent("rules.later"),
+                                dialogComponent("rules.later-tooltip"),
                                 170, dialogAction(player, session, "CLOSE", null))));
     }
 
@@ -1396,7 +1400,7 @@ final class TownUiController implements Listener {
                                         DialogResponseView response) {
         if (!Boolean.TRUE.equals(response.getBoolean("rules_acknowledged"))) {
             openNotice(player, dialogText("rules.required-title"),
-                    dialogText("rules.required-message"), dialogText("rules.return"),
+                    dialogText("rules.required-message"), dialogText("common.back"),
                     "MAIN", null);
             return;
         }
@@ -1505,24 +1509,23 @@ final class TownUiController implements Listener {
     private void openTownRules(Player player, UUID townId) {
         runtime.read(player, () -> runtime.repository().findTown(townId)
                 .orElseThrow(() -> new IllegalArgumentException("小镇不存在")), town -> {
-            Component content = Component.text(dialogText("rules.current-heading", Map.of(
-                    "town", town.profile().name())), NamedTextColor.GOLD);
+            Component content = dialogComponent("rules.current-heading", Map.of(
+                    "town", town.profile().name()));
             if (town.profile().rules().isEmpty()) {
                 content = content.append(Component.newline()).append(Component.newline())
-                        .append(Component.text(dialogText("rules.empty"), NamedTextColor.GRAY));
+                        .append(dialogComponent("rules.empty"));
             } else {
                 for (int index = 0; index < town.profile().rules().size(); index++) {
                     content = content.append(Component.newline()).append(Component.newline())
-                            .append(Component.text((index + 1) + ". "
-                                    + town.profile().rules().get(index), NamedTextColor.WHITE));
+                            .append(dialogComponent("rules.item", Map.of(
+                                    "index", index + 1, "rule", town.profile().rules().get(index))));
                 }
             }
             openDialogPage(player, dialogText("rules.title"), List.of(
                             DialogBody.plainMessage(content, 420)),
                     List.of(), DialogBase.DialogAfterAction.NONE,
                     session -> DialogType.notice(ActionButton.create(
-                            Component.text(dialogText("rules.return-profile"),
-                                    NamedTextColor.GREEN), null, 220,
+                            dialogComponent("common.back"), null, 220,
                             dialogAction(player, session, "TOWN", town.id().toString()))));
         });
     }
@@ -1571,7 +1574,7 @@ final class TownUiController implements Listener {
             if (!view.viewer().townId().equals(townId)) {
                 openNotice(player, dialogText("notice.member-forbidden-title"),
                         dialogText("notice.member-forbidden-message"),
-                        dialogText("common.return-town-service"), "MAIN", null);
+                        dialogText("common.back"), "MAIN", null);
                 return;
             }
             String name = Objects.requireNonNullElse(Bukkit.getOfflinePlayer(targetId).getName(),
@@ -1625,7 +1628,7 @@ final class TownUiController implements Listener {
             if (transfer == null || !transfer.id().equals(transferId)) {
                 openNotice(player, dialogText("notice.transfer-expired-title"),
                         dialogText("notice.transfer-expired-message"),
-                        dialogText("common.return-main"), "MAIN", null);
+                        dialogText("common.back"), "MAIN", null);
                 return;
             }
             List<MenuItem> items = List.of(
@@ -1692,7 +1695,7 @@ final class TownUiController implements Listener {
             if (vote == null) {
                 openNotice(player, dialogText("notice.vote-ended-title"),
                         dialogText("notice.vote-ended-message"),
-                        dialogText("common.return-votes"), "VOTES",
+                        dialogText("common.back"), "VOTES",
                         governance.townId().toString());
                 return;
             }
@@ -2081,7 +2084,7 @@ final class TownUiController implements Listener {
                             outcome -> handleOutcome(player, outcome, operation ->
                                     openNotice(player, dialogText("notice.expansion-complete-title"),
                                             dialogText("notice.expansion-complete-message"),
-                                            dialogText("territory.return-map"),
+                                            dialogText("common.back"),
                                             "EXPANSION_MENU", null)));
                 }
                 case "MEMBERS" -> {
@@ -2221,7 +2224,7 @@ final class TownUiController implements Listener {
                 handleOutcome(mayor, outcome, changed -> {
             openNotice(mayor, dialogText("notice.role-updated-title"),
                     dialogText("notice.role-updated-message", Map.of("role", changed)),
-                    dialogText("common.return-member-detail"),
+                    dialogText("common.back"),
                     "MEMBER_DETAIL", townId + ":" + playerId);
         }));
     }
@@ -2238,7 +2241,7 @@ final class TownUiController implements Listener {
             }
             openNotice(mayor, dialogText("notice.member-removed-title"),
                     dialogText("notice.member-removed-message"),
-                    dialogText("common.return-members"), "MEMBERS", changedTown + ":0");
+                    dialogText("common.back"), "MEMBERS", changedTown + ":0");
         }));
     }
 
@@ -2256,7 +2259,7 @@ final class TownUiController implements Listener {
             openNotice(manager, dialogText("notice.visitor-added-title"),
                     dialogText("notice.visitor-added-message", Map.of(
                             "player", displayName(playerId))),
-                    dialogText("common.return-visitors"), "VISITOR_LIST", townId + ":0");
+                    dialogText("common.back"), "VISITOR_LIST", townId + ":0");
         }));
     }
 
@@ -2274,7 +2277,7 @@ final class TownUiController implements Listener {
             openNotice(manager, dialogText("notice.visitor-removed-title"),
                     dialogText("notice.visitor-removed-message", Map.of(
                             "player", displayName(playerId))),
-                    dialogText("common.return-visitors"), "VISITOR_LIST", townId + ":" + page);
+                    dialogText("common.back"), "VISITOR_LIST", townId + ":" + page);
         }));
     }
 
@@ -2294,7 +2297,7 @@ final class TownUiController implements Listener {
             openNotice(mayor, dialogText("notice.transfer-requested-title"),
                     dialogText("notice.transfer-requested-message", Map.of(
                             "expires", transfer.expiresAt())),
-                    dialogText("common.return-main"), "MAIN", null);
+                    dialogText("common.back"), "MAIN", null);
         }));
     }
 
@@ -2313,7 +2316,7 @@ final class TownUiController implements Listener {
                             : dialogText("notice.transfer-rejected-title"),
                     accept ? dialogText("notice.transfer-complete-message")
                             : dialogText("notice.transfer-rejected-message"),
-                    dialogText("common.return-main"), "MAIN", null);
+                    dialogText("common.back"), "MAIN", null);
         }));
     }
 
@@ -2354,7 +2357,7 @@ final class TownUiController implements Listener {
             openNotice(player, dialogText("notice.vote-recorded-title"),
                     dialogText("notice.vote-recorded-message", Map.of(
                             "yes", vote.yesVotes(), "required", vote.requiredYes(),
-                            "status", vote.status())), dialogText("common.return-votes"),
+                            "status", vote.status())), dialogText("common.back"),
                     "VOTES", vote.townId().toString());
         }));
     }
@@ -2364,7 +2367,7 @@ final class TownUiController implements Listener {
                 handleOutcome(player, outcome, vote -> {
                     openNotice(player, dialogText("notice.vote-cancelled-title"),
                             dialogText("notice.vote-cancelled-message"),
-                            dialogText("common.return-votes"), "VOTES",
+                            dialogText("common.back"), "VOTES",
                             vote.townId().toString());
                 }));
     }
@@ -2431,7 +2434,7 @@ final class TownUiController implements Listener {
             if (application.territory() == null) {
                 openNotice(player, dialogText("notice.site-missing-title"),
                         dialogText("notice.site-missing-message"),
-                        dialogText("common.return-application"), "APPLICATION",
+                        dialogText("common.back"), "APPLICATION",
                         applicationId.toString());
             } else {
                 sitePolicy.teleportAndPreview(player, application.territory());
@@ -2472,7 +2475,7 @@ final class TownUiController implements Listener {
                 handleOutcome(player, outcome, application -> {
             openNotice(player, dialogText("notice.application-cancelled-title"),
                     dialogText("notice.application-cancelled-message"),
-                    dialogText("common.return-town-service"), "MAIN", null);
+                    dialogText("common.back"), "MAIN", null);
         }));
     }
 
@@ -2495,7 +2498,7 @@ final class TownUiController implements Listener {
             playSound(player, Sound.UI_BUTTON_CLICK);
             openNotice(player, dialogText("notice.join-cancelled-title"),
                     dialogText("notice.join-cancelled-message"),
-                    dialogText("common.return-my-applications"),
+                    dialogText("common.back"),
                     "MY_JOIN_APPLICATIONS", null);
         }));
     }
@@ -2507,7 +2510,7 @@ final class TownUiController implements Listener {
             notifyJoinDecision(application, true);
             openNotice(mayor, dialogText("notice.join-approved-title"),
                     dialogText("notice.join-approved-message"),
-                    dialogText("common.return-application-list"), "JOIN_APPLICATIONS",
+                    dialogText("common.back"), "JOIN_APPLICATIONS",
                     application.townId().toString());
         }));
     }
@@ -2519,7 +2522,7 @@ final class TownUiController implements Listener {
             notifyJoinDecision(application, false);
             openNotice(mayor, dialogText("notice.join-rejected-title"),
                     dialogText("notice.join-rejected-message"),
-                    dialogText("common.return-application-list"), "JOIN_APPLICATIONS",
+                    dialogText("common.back"), "JOIN_APPLICATIONS",
                     application.townId().toString());
         }));
     }
@@ -2597,26 +2600,21 @@ final class TownUiController implements Listener {
         }
         runtime.read(admin, () -> runtime.repository().findApplication(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("申请不存在")), application -> {
-            Component explanation = Component.text(requestChanges
-                            ? dialogText("review.change-heading")
-                            : dialogText("review.reject-heading"),
-                             requestChanges ? NamedTextColor.YELLOW : NamedTextColor.RED)
+            Component explanation = dialogComponent(requestChanges
+                            ? "review.change-heading" : "review.reject-heading")
                     .append(Component.newline())
-                    .append(Component.text(dialogText("review.town", Map.of(
-                            "town", application.text().name())), NamedTextColor.GRAY))
+                    .append(dialogComponent("review.town", Map.of(
+                            "town", application.text().name())))
                     .append(Component.newline())
-                    .append(Component.text(requestChanges
-                            ? dialogText("review.change-guidance")
-                            : dialogText("review.reject-guidance"),
-                            NamedTextColor.WHITE));
+                    .append(dialogComponent(requestChanges
+                            ? "review.change-guidance" : "review.reject-guidance"));
             if (error != null) {
                 explanation = explanation.append(Component.newline()).append(Component.newline())
-                        .append(Component.text(error, NamedTextColor.RED));
+                        .append(dialogComponent("review.error", Map.of("error", error)));
             }
             DialogInput reasonInput = DialogInput.text("review_reason", 400,
-                    Component.text(requestChanges ? dialogText("review.change-label")
-                                    : dialogText("review.reject-label"),
-                            NamedTextColor.GOLD), true, initialReason, 500,
+                    dialogComponent(requestChanges ? "review.change-label" : "review.reject-label"),
+                    true, initialReason, 500,
                     TextDialogInput.MultilineOptions.create(6, 110));
             openDialogPage(admin, requestChanges ? dialogText("review.change-title")
                             : dialogText("review.reject-title"),
@@ -2626,16 +2624,12 @@ final class TownUiController implements Listener {
                                     false, false, 48, 48)),
                     List.of(reasonInput), DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                     session -> DialogType.confirmation(
-                            ActionButton.create(Component.text(requestChanges
-                                            ? dialogText("review.send-change")
-                                            : dialogText("review.confirm-reject"),
-                                    requestChanges ? NamedTextColor.YELLOW : NamedTextColor.RED),
-                                    Component.text(dialogText("review.submit-tooltip"),
-                                            NamedTextColor.GRAY), 190,
+                            ActionButton.create(dialogComponent(requestChanges
+                                            ? "review.send-change" : "review.confirm-reject"),
+                                    dialogComponent("review.submit-tooltip"), 190,
                                     dialogAction(admin, session, response -> applyReviewReason(
                                             admin, applicationId, requestChanges, response))),
-                            ActionButton.create(Component.text(dialogText("common.cancel"),
-                                            NamedTextColor.GRAY),
+                            ActionButton.create(dialogComponent("common.cancel"),
                                     null, 150, dialogAction(admin, session,
                                             "ADMIN_APPLICATION", applicationId.toString()))));
         });
@@ -2670,7 +2664,7 @@ final class TownUiController implements Listener {
                             : dialogText("notice.review-rejected-title"),
                     requestChanges ? dialogText("notice.review-change-sent-message")
                             : dialogText("notice.review-rejected-message"),
-                    dialogText("common.return-review-list"), "ADMIN_APPLICATIONS", null);
+                    dialogText("common.back"), "ADMIN_APPLICATIONS", null);
         }));
     }
 
@@ -2686,7 +2680,7 @@ final class TownUiController implements Listener {
             if (application.territory() == null) {
                 openNotice(admin, dialogText("notice.review-site-missing-title"),
                         dialogText("notice.review-site-missing-message"),
-                        dialogText("common.return-review"), "ADMIN_APPLICATION",
+                        dialogText("common.back"), "ADMIN_APPLICATION",
                         applicationId.toString());
                 return;
             }
@@ -2712,7 +2706,7 @@ final class TownUiController implements Listener {
         actions.leaveTown(player, townId, outcome -> handleOutcome(player, outcome, result -> {
             openNotice(player, dialogText("notice.left-town-title"),
                     dialogText("notice.left-town-message"),
-                    dialogText("common.return-town-service"), "MAIN", null);
+                    dialogText("common.back"), "MAIN", null);
         }));
     }
 
@@ -2726,7 +2720,7 @@ final class TownUiController implements Listener {
                 openNotice(mayor, dialogText("notice.disbanded-title"),
                         dialogText("notice.disbanded-message", Map.of(
                                 "town", completed.profile().name())),
-                        dialogText("common.return-town-service"), "MAIN", null);
+                        dialogText("common.back"), "MAIN", null);
             }));
     }
 
@@ -2793,30 +2787,24 @@ final class TownUiController implements Listener {
         ApplicationText text = form.text();
         List<DialogInput> inputs = List.of(
                 DialogInput.text("town_name", 380,
-                        Component.text(dialogText("application.name-label"),
-                                NamedTextColor.GOLD), true,
+                        dialogComponent("application.name-label"), true,
                         text.name(), 24, null),
                 DialogInput.text("residence_name", 380,
-                        Component.text(dialogText("application.code-label"),
-                                NamedTextColor.GOLD), true,
+                        dialogComponent("application.code-label"), true,
                         text.residenceName(), 12, null));
-        Component guidance = Component.text(dialogText("application.basics-heading"),
-                        NamedTextColor.GOLD)
+        Component guidance = dialogComponent("application.basics-heading")
                 .append(Component.newline())
-                .append(Component.text(dialogText("application.basics-guidance"),
-                        NamedTextColor.GRAY));
+                .append(dialogComponent("application.basics-guidance"));
         openDialogPage(player, dialogText("application.title"), List.of(
                         DialogBody.item(new ItemStack(Material.WRITABLE_BOOK),
                                 DialogBody.plainMessage(guidance, 400), false, false, 48, 48)),
                 inputs, DialogBase.DialogAfterAction.NONE, session ->
                         DialogType.confirmation(
-                                ActionButton.create(Component.text(dialogText("common.next-step"),
-                                                NamedTextColor.GREEN),
+                                ActionButton.create(dialogComponent("common.next-step"),
                                         null, 170, dialogAction(player, session,
                                                 response -> applyApplicationBasics(
                                                         player, form.id(), response))),
-                                ActionButton.create(Component.text(dialogText("common.cancel-edit"),
-                                                NamedTextColor.RED),
+                                ActionButton.create(dialogComponent("common.cancel-edit"),
                                         null, 170, dialogAction(player, session,
                                                 response -> cancelApplicationForm(player, form.id())))));
     }
@@ -2839,7 +2827,7 @@ final class TownUiController implements Listener {
         errors.addAll(fieldErrors(player, candidate, ApplicationField.RESIDENCE_NAME));
         if (!errors.isEmpty()) {
             openNotice(player, dialogText("notice.basics-invalid-title"),
-                    String.join("\n", errors), dialogText("common.return-edit"),
+                    String.join("\n", errors), dialogText("common.back"),
                     "APPLICATION_BASICS_FORM", form.id().toString());
             return;
         }
@@ -2853,36 +2841,29 @@ final class TownUiController implements Listener {
                 .create(20, 150);
         List<DialogInput> inputs = List.of(
                 DialogInput.text("description", 400,
-                        Component.text(dialogText("application.description-label"),
-                                NamedTextColor.GOLD), true,
+                        dialogComponent("application.description-label"), true,
                         form.text().description(), 500, descriptionLines),
                 DialogInput.text("rules", 400,
-                        Component.text(dialogText("application.rules-label"),
-                                NamedTextColor.GOLD), true,
+                        dialogComponent("application.rules-label"), true,
                         String.join("\n", form.text().rules()), 5000, ruleLines));
-        Component guidance = Component.text(dialogText("application.content-heading"),
-                        NamedTextColor.GOLD)
+        Component guidance = dialogComponent("application.content-heading")
                 .append(Component.newline())
-                .append(Component.text(dialogText("application.content-guidance"),
-                        NamedTextColor.GRAY));
+                .append(dialogComponent("application.content-guidance"));
         openDialogPage(player, dialogText("application.title"), List.of(
                         DialogBody.item(new ItemStack(Material.BOOK),
                                 DialogBody.plainMessage(guidance, 420), false, false, 48, 48)),
                 inputs, DialogBase.DialogAfterAction.NONE, session -> {
                     List<ActionButton> actions = List.of(
-                            ActionButton.create(Component.text(dialogText("common.previous-step"),
-                                            NamedTextColor.GRAY),
+                            ActionButton.create(dialogComponent("common.previous-step"),
                                     null, 150, dialogAction(player, session,
                                             response -> renderApplicationBasicsDialog(player, form))),
-                            ActionButton.create(Component.text(dialogText("common.next-step"),
-                                            NamedTextColor.GREEN),
+                            ActionButton.create(dialogComponent("common.next-step"),
                                     null, 150, dialogAction(player, session,
                                             response -> applyApplicationContent(
                                                     player, form.id(), response))));
                     return DialogType.multiAction(actions)
                             .exitAction(ActionButton.create(
-                                    Component.text(dialogText("common.cancel-edit"),
-                                            NamedTextColor.RED), null, 140,
+                                    dialogComponent("common.cancel-edit"), null, 140,
                                     dialogAction(player, session,
                                             response -> cancelApplicationForm(player, form.id()))))
                             .columns(2).build();
@@ -2907,7 +2888,7 @@ final class TownUiController implements Listener {
         errors.addAll(fieldErrors(player, candidate, ApplicationField.RULES));
         if (!errors.isEmpty()) {
             openNotice(player, dialogText("notice.content-invalid-title"),
-                    String.join("\n", errors), dialogText("common.return-edit"),
+                    String.join("\n", errors), dialogText("common.back"),
                     "APPLICATION_CONTENT_FORM", form.id().toString());
             return;
         }
@@ -2919,23 +2900,23 @@ final class TownUiController implements Listener {
         String first = form.initialMemberNames().get(0);
         String second = form.initialMemberNames().get(1);
         items.add(new MenuItem(10, button(Material.PLAYER_HEAD,
-                first.isBlank() ? "§e" + dialogText("application.member-one-placeholder")
+                first.isBlank() ? dialogText("application.member-one-placeholder")
                         : "§a" + first,
-                List.of("§7" + dialogText("application.member-select-hint")),
+                List.of(dialogText("application.member-select-hint")),
                 "SELECT_INITIAL_MEMBER",
                 form.id() + ":0")));
         items.add(new MenuItem(12, button(Material.PLAYER_HEAD,
-                second.isBlank() ? "§e" + dialogText("application.member-two-placeholder")
+                second.isBlank() ? dialogText("application.member-two-placeholder")
                         : "§a" + second,
-                List.of("§7" + dialogText("application.member-select-hint")),
+                List.of(dialogText("application.member-select-hint")),
                 "SELECT_INITIAL_MEMBER",
                 form.id() + ":1")));
         items.add(new MenuItem(20, button(Material.ARROW,
-                "§7" + dialogText("common.previous-step"), List.of(),
+                dialogText("common.previous-step"), List.of(),
                 "APPLICATION_CONTENT_FORM", form.id().toString())));
         items.add(new MenuItem(22, button(Material.WRITABLE_BOOK,
-                "§a" + dialogText("application.save"),
-                List.of("§7" + dialogText("application.save-hint")),
+                dialogText("application.save"),
+                List.of(dialogText("application.save-hint")),
                 "SAVE_APPLICATION_DRAFT",
                 form.id().toString())));
         openMenu(player, 27, dialogText("application.members-title"), items);
@@ -2955,7 +2936,7 @@ final class TownUiController implements Listener {
         if (candidates.isEmpty()) {
             openNotice(player, dialogText("notice.no-candidates-title"),
                     dialogText("notice.no-candidates-message"),
-                    dialogText("application.return-members"), "APPLICATION_MEMBERS_FORM",
+                    dialogText("common.back"), "APPLICATION_MEMBERS_FORM",
                     formId.toString());
             return;
         }
@@ -2967,7 +2948,7 @@ final class TownUiController implements Listener {
                     formId + ":" + memberIndex + ":" + candidate.getUniqueId())));
         }
         items.add(new MenuItem(53, button(Material.ARROW,
-                "§7" + dialogText("application.return-members"), List.of(),
+                dialogText("common.back"), List.of(),
                 "APPLICATION_MEMBERS_FORM", formId.toString())));
         openMenu(player, 54, memberIndex == 0
                 ? dialogText("application.select-member-one-title")
@@ -3002,30 +2983,26 @@ final class TownUiController implements Listener {
     private void renderTownProfileDialog(Player player, ApplicationFormSession form) {
         List<DialogInput> inputs = List.of(
                 DialogInput.text("description", 400,
-                        Component.text(dialogText("application.description-label"),
-                                NamedTextColor.GOLD), true,
+                        dialogComponent("application.description-label"), true,
                         form.text().description(), 500,
                         TextDialogInput.MultilineOptions.create(6, 100)),
                 DialogInput.text("rules", 400,
-                        Component.text(dialogText("application.rules-label"),
-                                NamedTextColor.GOLD), true,
+                        dialogComponent("application.rules-label"), true,
                         String.join("\n", form.text().rules()), 5000,
                         TextDialogInput.MultilineOptions.create(20, 170)));
-        Component guidance = Component.text(form.text().name(), NamedTextColor.GOLD)
+        Component guidance = dialogComponent("application.profile-name",
+                        Map.of("name", form.text().name()))
                 .append(Component.newline())
-                .append(Component.text(dialogText("application.profile-guidance"),
-                        NamedTextColor.GRAY));
+                .append(dialogComponent("application.profile-guidance"));
         openDialogPage(player, dialogText("application.profile-title"),
                 List.of(DialogBody.plainMessage(guidance, 420)),
                 inputs, DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                 session -> DialogType.confirmation(
-                        ActionButton.create(Component.text(dialogText("common.save-changes"),
-                                        NamedTextColor.GREEN),
+                        ActionButton.create(dialogComponent("common.save-changes"),
                                 null, 170, dialogAction(player, session,
                                         response -> applyTownProfileDialog(
                                                 player, form.id(), response))),
-                        ActionButton.create(Component.text(dialogText("common.cancel"),
-                                        NamedTextColor.RED),
+                        ActionButton.create(dialogComponent("common.cancel"),
                                 null, 170, dialogAction(player, session,
                                         response -> cancelApplicationForm(player, form.id())))));
     }
@@ -3064,7 +3041,7 @@ final class TownUiController implements Listener {
         if (!runtime.consumptionEnabled()) {
             openNotice(player, dialogText("donation.unavailable-title"),
                     dialogText("donation.unavailable-message"),
-                    dialogText("common.return-finance"), "FINANCE", "0");
+                    dialogText("common.back"), "FINANCE", "0");
             return;
         }
         openDonationDialog(player, null, "");
@@ -3074,32 +3051,29 @@ final class TownUiController implements Listener {
         runtime.read(player, () -> runtime.finance().findFinanceByPlayer(player.getUniqueId())
                 .orElseThrow(() -> new IllegalArgumentException("你不属于任何小镇")), account -> {
             List<String> description = new ArrayList<>(List.of(
-                    "§7" + dialogText("donation.town", Map.of("town", account.townName())),
-                    "§7" + dialogText("donation.balance", Map.of(
+                    dialogText("donation.town", Map.of("town", account.townName())),
+                    dialogText("donation.balance", Map.of(
                             "balance", runtime.money(account.balanceMinor()))),
-                    "§7" + dialogText("donation.amount-hint", Map.of(
+                    dialogText("donation.amount-hint", Map.of(
                             "scale", runtime.settlement().scale()))));
             if (error != null && !error.isBlank()) {
-                description.add("§c" + error);
+                description.add(dialogText("donation.error", Map.of("error", error)));
             }
             ItemStack summary = button(Material.SUNFLOWER,
-                    "§6" + dialogText("donation.title"),
+                    dialogText("donation.title"),
                     description, null, null);
             DialogInput amount = DialogInput.text("donation_amount", 360,
-                    Component.text(dialogText("donation.amount-label"), NamedTextColor.GOLD), true,
+                    dialogComponent("donation.amount-label"), true,
                     initial, 64, null);
             openDialogPage(player, dialogText("donation.title"),
                     List.of(dialogTextBody(summary)), List.of(amount),
                     DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                             DialogType.confirmation(
-                                    ActionButton.create(Component.text(dialogText("donation.confirm"),
-                                                    NamedTextColor.GREEN),
-                                            Component.text(dialogText("donation.confirm-tooltip"),
-                                                    NamedTextColor.GRAY),
+                                    ActionButton.create(dialogComponent("donation.confirm"),
+                                            dialogComponent("donation.confirm-tooltip"),
                                             170, dialogAction(player, session,
                                                     response -> applyDonationDialog(player, response))),
-                                    ActionButton.create(Component.text(dialogText("common.cancel"),
-                                                    NamedTextColor.RED),
+                                    ActionButton.create(dialogComponent("common.cancel"),
                                             null, 170,
                                             dialogAction(player, session, "FINANCE", "0"))));
         });
@@ -3120,7 +3094,7 @@ final class TownUiController implements Listener {
                                             "amount", runtime.money(amount.minorUnits()),
                                             "balance", runtime.money(
                                                     mutation.balanceAfterMinor()))),
-                                    dialogText("common.return-finance"), "FINANCE", "0")));
+                                    dialogText("common.back"), "FINANCE", "0")));
         } catch (ArithmeticException | NumberFormatException exception) {
             openDonationDialog(player, dialogText("donation.invalid-amount"), value);
         } catch (IllegalArgumentException exception) {
@@ -3150,7 +3124,7 @@ final class TownUiController implements Listener {
             }
         } catch (IllegalArgumentException exception) {
             openNotice(player, dialogText("notice.draft-incomplete-title"),
-                    exception.getMessage(), dialogText("common.return-edit"),
+                    exception.getMessage(), dialogText("common.back"),
                     "APPLICATION_MEMBERS_FORM", form.id().toString());
             return;
         }
@@ -3160,7 +3134,7 @@ final class TownUiController implements Listener {
                     handleOutcome(player, outcome, town -> {
                 openNotice(player, dialogText("notice.profile-saved-title"),
                         dialogText("notice.profile-saved-message"),
-                        dialogText("common.return-town-details"), "TOWN", town.id().toString());
+                        dialogText("common.back"), "TOWN", town.id().toString());
             }));
             return;
         }
@@ -3280,7 +3254,7 @@ final class TownUiController implements Listener {
             long remaining = Math.max(1, Duration.between(now, availableAt).toSeconds());
             openNotice(applicant, dialogText("notice.reminder-cooldown-title"), plugin.messages().text(
                             "application.reminder-cooldown", Map.of("seconds", remaining)),
-                    dialogText("common.return-application"), "APPLICATION",
+                    dialogText("common.back"), "APPLICATION",
                     applicationId.toString());
             return;
         }
@@ -3296,7 +3270,7 @@ final class TownUiController implements Listener {
                     member.status() == InitialMemberConfirmation.Status.PENDING)) {
                 openNotice(applicant, dialogText("notice.reminder-unneeded-title"),
                         dialogText("notice.reminder-unneeded-message"),
-                        dialogText("common.return-application"), "APPLICATION",
+                        dialogText("common.back"), "APPLICATION",
                         applicationId.toString());
                 return;
             }
@@ -3304,25 +3278,23 @@ final class TownUiController implements Listener {
             initialMemberReminderCooldowns.put(applicationId, now.plus(Duration.ofMinutes(5)));
             openNotice(applicant, dialogText("notice.reminder-sent-title"),
                     plugin.messages().text("application.reminder-sent"),
-                    dialogText("common.return-application"),
+                    dialogText("common.back"),
                     "APPLICATION", applicationId.toString());
         });
     }
 
     private void sendInitialMemberReminder(Player member, ApplicationSnapshot application) {
-        Component message = Component.text(dialogText("invitation.message", Map.of(
-                "town", application.text().name())), NamedTextColor.GOLD);
+        Component message = dialogComponent("invitation.message", Map.of(
+                "town", application.text().name()));
         openDialogPage(member, dialogText("invitation.title"),
                 List.of(DialogBody.plainMessage(message, 400)), List.of(),
                 DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                         DialogType.confirmation(
-                                ActionButton.create(Component.text(dialogText("invitation.accept"),
-                                                NamedTextColor.GREEN),
+                                ActionButton.create(dialogComponent("invitation.accept"),
                                         null, 170, dialogAction(member, session,
                                                 response -> respondInitialMember(member,
                                                         application.id(), true))),
-                                ActionButton.create(Component.text(dialogText("invitation.reject"),
-                                                NamedTextColor.RED),
+                                ActionButton.create(dialogComponent("invitation.reject"),
                                         null, 170, dialogAction(member, session,
                                                 response -> respondInitialMember(member,
                                                         application.id(), false)))));
@@ -3409,7 +3381,7 @@ final class TownUiController implements Listener {
                 } : detail;
         openNotice(player, dialogText("notice.operation-failed-title"),
                 plugin.messages().text("system.operation-failed", Map.of("detail", friendly)),
-                dialogText("common.return-town-service"), "MAIN", null);
+                dialogText("common.back"), "MAIN", null);
     }
 
     private void openConfirmation(Player player, String title, String confirmedAction,
@@ -3425,22 +3397,20 @@ final class TownUiController implements Listener {
                         || confirmedAction.equals("KICK_MEMBER")
                         || confirmedAction.equals("CANCEL_VOTE") ? Material.BARRIER
                 : Material.PAPER;
-        ItemStack summary = button(material, "§6" + title,
-                List.of("§7" + consequence,
-                        irreversible ? "§c" + dialogText("confirmation.irreversible")
-                                : "§7" + dialogText("confirmation.check-details")),
+        ItemStack summary = button(material, title,
+                List.of(consequence,
+                        irreversible ? dialogText("confirmation.irreversible")
+                                : dialogText("confirmation.check-details")),
                 null, null);
         DialogBody summaryBody = disband
                 ? dialogTextBody(summary) : dialogBody(summary);
         openDialogPage(player, title, List.of(summaryBody), List.of(),
                 DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                         DialogType.confirmation(
-                                ActionButton.create(Component.text(dialogText("common.confirm"),
-                                                NamedTextColor.GREEN),
-                                        Component.text(consequence, NamedTextColor.GRAY), 170,
+                                ActionButton.create(dialogComponent("common.confirm"),
+                                        legacyComponent(consequence), 170,
                                         dialogAction(player, session, confirmedAction, target)),
-                                ActionButton.create(Component.text(dialogText("common.cancel"),
-                                                NamedTextColor.RED),
+                                ActionButton.create(dialogComponent("common.cancel"),
                                         null, 170,
                                         dialogAction(player, session, returnAction, returnTarget))));
     }
@@ -3449,16 +3419,19 @@ final class TownUiController implements Listener {
         List<MenuItem> ordered = items.stream()
                 .sorted(java.util.Comparator.comparingInt(MenuItem::slot))
                 .toList();
+        title = dialogMenuTitle(title);
+        String plainTitle = PlainTextComponentSerializer.plainText().serialize(
+                legacyComponent(title));
         List<DialogBody> bodies = ordered.stream()
                 .filter(item -> itemAction(item.item()) == null)
-                .map(item -> title.equals("小镇服务") || title.equals("小镇详情")
-                        || title.equals("小镇申请摘要") || title.equals("公共资产")
-                        || title.startsWith("小镇账本") || title.equals("公共 Buff 商店")
-                        || title.equals("成员治理") || title.startsWith("小镇治理投票")
-                        || title.equals("访客管理") || title.startsWith("小镇访客")
-                        || title.startsWith("邀请访客")
-                        || title.startsWith("入镇申请") || title.equals("待办中心")
-                        || title.equals("个人与帮助") || title.startsWith("申请审核")
+                .map(item -> plainTitle.equals("小镇服务") || plainTitle.equals("小镇详情")
+                        || plainTitle.equals("小镇申请摘要") || plainTitle.equals("公共资产")
+                        || plainTitle.startsWith("小镇账本") || plainTitle.equals("公共 Buff 商店")
+                        || plainTitle.equals("成员治理") || plainTitle.startsWith("小镇治理投票")
+                        || plainTitle.equals("访客管理") || plainTitle.startsWith("小镇访客")
+                        || plainTitle.startsWith("邀请访客")
+                        || plainTitle.startsWith("入镇申请") || plainTitle.equals("待办中心")
+                        || plainTitle.equals("个人与帮助") || plainTitle.startsWith("申请审核")
                         ? dialogTextBody(item.item()) : dialogBody(item.item()))
                 .toList();
         List<MenuItem> actions = ordered.stream()
@@ -3500,9 +3473,10 @@ final class TownUiController implements Listener {
         UUID session = UUID.randomUUID();
         menuSessions.put(player.getUniqueId(), session);
         DialogType dialogType = typeFactory.apply(session);
+        Component titleComponent = legacyComponent(title);
         Dialog dialog = Dialog.create(factory -> factory.empty()
-                .base(DialogBase.builder(Component.text(title, NamedTextColor.GOLD))
-                        .externalTitle(Component.text(title))
+                .base(DialogBase.builder(titleComponent)
+                        .externalTitle(titleComponent)
                         .canCloseWithEscape(true)
                         .pause(false)
                         .afterAction(afterAction)
@@ -3523,10 +3497,9 @@ final class TownUiController implements Listener {
     private void openNotice(Player player, String title, String message, String actionLabel,
                             String action, String target) {
         openDialogPage(player, title,
-                List.of(DialogBody.plainMessage(LegacyComponentSerializer.legacySection()
-                        .deserialize(message), 380)), List.of(),
+                List.of(DialogBody.plainMessage(legacyComponent(message), 380)), List.of(),
                 DialogBase.DialogAfterAction.NONE, session -> DialogType.notice(
-                        ActionButton.create(Component.text(actionLabel, NamedTextColor.GREEN),
+                        ActionButton.create(legacyComponent(actionLabel),
                                 null, 200, dialogAction(player, session, action, target))));
     }
 
@@ -3554,8 +3527,7 @@ final class TownUiController implements Listener {
     }
 
     private ActionButton exitButton(Player player, UUID session, String label, String tooltip) {
-        return ActionButton.create(Component.text(label, NamedTextColor.GRAY),
-                Component.text(tooltip, NamedTextColor.GRAY), 140,
+        return ActionButton.create(legacyComponent(label), legacyComponent(tooltip), 140,
                 dialogAction(player, session, "CLOSE", null));
     }
 
@@ -3564,8 +3536,9 @@ final class TownUiController implements Listener {
         String action = itemAction(item);
         String target = meta == null ? null : meta.getPersistentDataContainer()
                 .get(targetKey, PersistentDataType.STRING);
-        return ActionButton.create(Component.text(dialogText("common.back"), NamedTextColor.GRAY),
-                Component.text(dialogText("common.back-tooltip"), NamedTextColor.GRAY), 140,
+        // 返回按钮只显示统一文案，具体导航目标仍从原菜单项的动作数据中读取。
+        return ActionButton.create(dialogComponent("common.back"),
+                dialogComponent("common.back-tooltip"), 140,
                 dialogAction(player, session, action, target));
     }
 
@@ -3626,12 +3599,54 @@ final class TownUiController implements Listener {
     }
 
     private String dialogText(String key) {
-        // Dialog 文案不转换颜色码；每个组件仍可按语义设置自己的颜色。
-        return plugin.messages().plainText("dialog." + key);
+        // Dialog 文案保留配置中的 & 颜色码，由各个渲染入口统一转换。
+        return plugin.messages().rawText("dialog." + key);
     }
 
     private String dialogText(String key, Map<String, ?> placeholders) {
-        return plugin.messages().plainText("dialog." + key, placeholders);
+        return plugin.messages().rawText("dialog." + key, placeholders);
+    }
+
+    private String dialogFormat(String key) {
+        return plugin.messages().text("dialog." + key);
+    }
+
+    private Component dialogComponent(String key) {
+        return plugin.messages().component("dialog." + key);
+    }
+
+    private Component dialogComponent(String key, Map<String, ?> placeholders) {
+        return plugin.messages().component("dialog." + key, placeholders);
+    }
+
+    private String dialogMenuTitle(String title) {
+        // 兼容未迁移到 messages.yml 的动态菜单标题，同时让默认标题色可配置。
+        if (title.indexOf('&') >= 0 || title.indexOf('§') >= 0) {
+            return title;
+        }
+        return plugin.messages().text("dialog.colors.menu-title") + title;
+    }
+
+    private static Component legacyComponent(String value) {
+        return LegacyComponentSerializer.legacySection().deserialize(value.replace('&', '§'));
+    }
+
+    private String dialogItemText(String value) {
+        // 菜单中的旧式 § 颜色按配置表替换；配置文案的 & 代码最后再转换，避免二次覆盖自定义颜色。
+        StringBuilder result = new StringBuilder(value.length());
+        for (int index = 0; index < value.length(); index++) {
+            if (value.charAt(index) == '§' && index + 1 < value.length()) {
+                String code = value.substring(index, index + 2);
+                String colorKey = DIALOG_COLOR_KEYS.get(code);
+                if (colorKey != null) {
+                    result.append(plugin.messages().text("dialog.colors." + colorKey));
+                    index++;
+                    continue;
+                }
+            }
+            result.append(value.charAt(index));
+        }
+        return result.toString().replace('&', '§');
     }
 
     private String itemAction(ItemStack item) {
@@ -3680,8 +3695,8 @@ final class TownUiController implements Listener {
                              String action, String target) {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName(name);
-        meta.setLore(lore);
+        meta.setDisplayName(dialogItemText(name));
+        meta.setLore(lore.stream().map(this::dialogItemText).toList());
         if (action != null) {
             meta.getPersistentDataContainer().set(actionKey, PersistentDataType.STRING, action);
         }

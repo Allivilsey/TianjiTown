@@ -7,7 +7,6 @@ import io.papermc.paper.registry.data.dialog.type.DialogType;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.object.ObjectContents;
-import net.kyori.adventure.text.format.NamedTextColor;
 
 import java.util.List;
 import java.util.Map;
@@ -30,7 +29,7 @@ final class TerritoryDialogRenderer {
                              PluginMessages messages,
                              Function<TerritoryService.TerritoryCell, DialogAction> actionFactory,
                              ActionButton exitAction) {
-        // 领地格子的状态名称、坐标和操作提示都从 messages.yml 读取，保持地图界面可配置。
+        // 领地格子的状态名称、颜色、坐标和操作提示都从 messages.yml 读取，保持地图界面可配置。
         Objects.requireNonNull(map, "map");
         Objects.requireNonNull(formattedPrice, "formattedPrice");
         Objects.requireNonNull(messages, "messages");
@@ -67,45 +66,35 @@ final class TerritoryDialogRenderer {
 
     private static Component tooltip(TerritoryService.TerritoryCell cell,
                                      String formattedPrice, PluginMessages messages) {
-        Component tooltip = Component.text(name(cell.state(), messages), color(cell.state()))
+        Component tooltip = messages.component(nameKey(cell.state()))
                 .append(Component.newline())
-                .append(Component.text(messages.plainText("dialog.territory.cell.grid", Map.of(
-                        "x", cell.gridX(), "z", cell.gridZ())), NamedTextColor.GRAY));
+                .append(messages.component("dialog.territory.cell.grid", Map.of(
+                        "x", cell.gridX(), "z", cell.gridZ())));
         if (cell.state() == TerritoryCellState.EXPANDABLE && cell.preview() != null) {
             tooltip = tooltip.append(Component.newline())
-                    .append(Component.text(messages.plainText("dialog.territory.cell.price",
-                            Map.of("price", formattedPrice)), NamedTextColor.GOLD))
+                    .append(messages.component("dialog.territory.cell.price",
+                            Map.of("price", formattedPrice)))
                     .append(Component.newline())
-                    .append(Component.text(messages.plainText(
+                    .append(messages.component(
                             "dialog.territory.cell.units-after-expansion",
-                            Map.of("units", cell.preview().totalUnits())), NamedTextColor.GRAY))
+                            Map.of("units", cell.preview().totalUnits())))
                     .append(Component.newline())
-                    .append(Component.text(messages.plainText(
-                            "dialog.territory.cell.expand-hint"), NamedTextColor.GREEN));
+                    .append(messages.component("dialog.territory.cell.expand-hint"));
         } else if (cell.detail() != null && !cell.detail().isBlank()) {
             tooltip = tooltip.append(Component.newline())
-                    .append(Component.text(cell.detail(), NamedTextColor.GRAY));
+                    .append(messages.component("dialog.territory.cell.detail",
+                            Map.of("detail", cell.detail())));
         }
         return tooltip;
     }
 
-    private static String name(TerritoryCellState state, PluginMessages messages) {
+    private static String nameKey(TerritoryCellState state) {
         return switch (state) {
-            case CENTER -> messages.plainText("dialog.territory.cell.center");
-            case OWNED -> messages.plainText("dialog.territory.cell.owned");
-            case EXPANDABLE -> messages.plainText("dialog.territory.cell.expandable");
-            case BLOCKED -> messages.plainText("dialog.territory.cell.blocked");
-            case OTHER_TOWN -> messages.plainText("dialog.territory.cell.other-town");
-        };
-    }
-
-    private static NamedTextColor color(TerritoryCellState state) {
-        return switch (state) {
-            case CENTER -> NamedTextColor.GOLD;
-            case OWNED -> NamedTextColor.GREEN;
-            case EXPANDABLE -> NamedTextColor.AQUA;
-            case BLOCKED -> NamedTextColor.DARK_GRAY;
-            case OTHER_TOWN -> NamedTextColor.RED;
+            case CENTER -> "dialog.territory.cell.center";
+            case OWNED -> "dialog.territory.cell.owned";
+            case EXPANDABLE -> "dialog.territory.cell.expandable";
+            case BLOCKED -> "dialog.territory.cell.blocked";
+            case OTHER_TOWN -> "dialog.territory.cell.other-town";
         };
     }
 }

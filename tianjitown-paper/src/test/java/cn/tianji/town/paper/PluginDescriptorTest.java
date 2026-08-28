@@ -1,5 +1,6 @@
 package cn.tianji.town.paper;
 
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -88,8 +89,11 @@ class PluginDescriptorTest {
                 assertNotNull(messages.getConfigurationSection("dialog." + section),
                         "messages.yml 缺少 Dialog 文案分组: " + section);
             }
+            assertNotNull(messages.getConfigurationSection("dialog.colors"),
+                    "messages.yml 缺少 Dialog 颜色配置");
             for (String key : List.of("dialog.common.cancel", "dialog.tax.title",
-                    "dialog.territory.cell.expand-hint", "dialog.application.title",
+                    "dialog.colors.menu-title", "dialog.territory.cell.expand-hint",
+                    "dialog.application.title",
                     "dialog.notice.operation-failed-title")) {
                 assertFalse(messages.getString(key, "").isBlank(),
                         "messages.yml 缺少 Dialog 文案: " + key);
@@ -103,14 +107,19 @@ class PluginDescriptorTest {
         Files.writeString(dataFolder.resolve("messages.yml"), """
                 dialog:
                   common:
-                    cancel: '自定义取消'
+                    cancel: '&b自定义取消'
                 """, StandardCharsets.UTF_8);
 
         PluginMessages messages = new PluginMessages(dataFolder.toFile());
 
+        assertEquals("§b自定义取消", messages.text("dialog.common.cancel"));
         assertEquals("自定义取消", messages.plainText("dialog.common.cancel"));
+        assertEquals(NamedTextColor.AQUA, messages.component("dialog.common.cancel").color());
         assertEquals("设置收入税率", messages.plainText("dialog.tax.title"));
+        assertEquals(NamedTextColor.GOLD, messages.component("dialog.tax.title").color());
         assertEquals("领地单元: 9/25", messages.plainText("dialog.territory.summary",
+                Map.of("current", 9, "maximum", 25)));
+        assertEquals("§7领地单元: 9/25", messages.text("dialog.territory.summary",
                 Map.of("current", 9, "maximum", 25)));
     }
 

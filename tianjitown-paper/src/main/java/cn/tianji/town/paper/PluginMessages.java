@@ -1,5 +1,8 @@
 package cn.tianji.town.paper;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -40,8 +43,27 @@ final class PluginMessages {
     }
 
     String text(String key, Map<String, ?> placeholders) {
-        return resolve(key, placeholders, "&c缺少消息配置: " + key)
+        // 玩家消息和 Dialog 都在这里统一把 & 颜色码转换为 Minecraft legacy 颜色码。
+        return rawText(key, placeholders)
                 .replace('&', '§');
+    }
+
+    String rawText(String key) {
+        return rawText(key, Map.of());
+    }
+
+    String rawText(String key, Map<String, ?> placeholders) {
+        // Dialog 菜单需要在应用颜色表前保留配置中的 & 代码，因此提供未转换的读取入口。
+        return resolve(key, placeholders, "&c缺少消息配置: " + key);
+    }
+
+    Component component(String key) {
+        return component(key, Map.of());
+    }
+
+    Component component(String key, Map<String, ?> placeholders) {
+        // Dialog 与聊天消息使用同一套 & 颜色码；这里转换为 Adventure 组件供 Paper 渲染。
+        return LegacyComponentSerializer.legacySection().deserialize(text(key, placeholders));
     }
 
     String plainText(String key) {
@@ -49,8 +71,8 @@ final class PluginMessages {
     }
 
     String plainText(String key, Map<String, ?> placeholders) {
-        // Dialog 的颜色由调用方控制，避免把配置中的颜色码当作可见字符显示。
-        return resolve(key, placeholders, "缺少消息配置: " + key);
+        // 兼容仍需要纯文本的调用方；颜色码不会作为可见字符返回。
+        return PlainTextComponentSerializer.plainText().serialize(component(key, placeholders));
     }
 
     private String resolve(String key, Map<String, ?> placeholders, String fallback) {
