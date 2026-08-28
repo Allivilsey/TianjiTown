@@ -28,7 +28,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * 玩家界面与 TestCommand 的共享业务入口。此类不负责页面跳转或玩家可见文案。
+ * 玩家界面的共享业务入口。此类不负责页面跳转或玩家可见文案。
  */
 final class TownActions {
     private final TianjiTownPlugin plugin;

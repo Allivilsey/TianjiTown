@@ -10,9 +10,6 @@ commands:
   townadmin:
     description: TianjiTown 管理命令
     usage: /townadmin help
-  testcommand:
-    description: TianjiTown 自动化测试接口（仅测试环境）
-    usage: /testcommand query <player> | /testcommand action <player> ...
 permissions:
   tianjitown.admin:
     description: TianjiTown 全部管理权限
@@ -42,7 +39,4 @@ permissions:
   tianjitown.admin.operations:
     description: 执行统一诊断与在线备份
     default: op
-  tianjitown.testcommand:
-    description: 使用仅测试环境开放的自动化业务接口
-    default: false
 

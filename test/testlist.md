@@ -15,7 +15,7 @@
 - `P0`：发布阻断项，涉及启动门禁、权限、资金、数据一致性、领地保护或恢复。
 - `P1`：主要业务流程与重要回归项。
 - `P2`：体验、容量、兼容性和长期运行项。
-- `AUTO`：Maven/JUnit 自动化测试；`CMD`：隔离服 `/testcommand`，默认由 MinecraftConsoleClient 登录真实在线 actor 并驱动；`MANUAL`：真实 Paper/Dialog/多人目视或交互验证；`OPS`：部署、故障注入、迁移、备份或性能演练。
+- `AUTO`：Maven/JUnit 自动化测试；`CMD`：隔离服游戏命令测试，由 MinecraftConsoleClient 登录真实在线 actor 并驱动；`MANUAL`：真实 Paper/Dialog/多人目视或交互验证；`OPS`：部署、故障注入、迁移、备份或性能演练。
 
 ### 0.2 通用执行规则
 
@@ -25,10 +25,9 @@
 4. 资金用例必须同时核对玩家余额、Vault 清算账户、`town_accounts`、`ledger_entries`、税务/待处理记录及唯一 `business_key`。
 5. 领地用例必须同时核对 SQLite 单元与区块、Residence area、实际边界、成员权限、投影状态和审计。
 6. 故障注入、迁移、回滚和恢复仅在隔离服或生产数据副本执行，操作前创建可校验、可恢复的完整备份。
-7. 除专门的生产发布检查外，`test-command.enabled` 只能在隔离测试服开启。
-8. `CMD` 用例优先使用项目根目录的 `MinecraftConsoleClient`：按角色启动相互隔离的客户端实例，使 actor 保持真实在线；服务端控制台只负责布置权限、位置、WorldBorder 和故障条件。证据至少保存客户端命令时间线、服务端单行 `RESULT`、数据库前后快照及相关日志，不保存登录凭据、会话缓存或完整客户端配置。
-9. MinecraftConsoleClient 可自动化登录、聊天/命令、移动、重连、多人并发和 `/testcommand` 业务断言，但不能替代 Dialog 的排版、悬浮文本、音效、粒子及原生按钮点击目视验收；这些项目继续标为 `MANUAL`。
-10. 如果以后新增的 `AUTO`、`CMD` 或 `OPS` 项目尚未通过，先放入 `manualtest.md` 跟踪；取得完整证据并通过后再移回本文件。
+7. `CMD` 用例优先使用项目根目录的 `MinecraftConsoleClient`：按角色启动相互隔离的客户端实例，使 actor 保持真实在线；服务端控制台只负责布置权限、位置、WorldBorder 和故障条件。证据至少保存客户端操作时间线、服务端日志、数据库前后快照及相关日志，不保存登录凭据、会话缓存或完整客户端配置。
+8. MinecraftConsoleClient 可自动化登录、聊天/命令、移动、重连和多人并发，但不能替代 Dialog 的排版、悬浮文本、音效、粒子及原生按钮点击目视验收；这些项目继续标为 `MANUAL`。
+9. 如果以后新增的 `AUTO`、`CMD` 或 `OPS` 项目尚未通过，先放入 `manualtest.md` 跟踪；取得完整证据并通过后再移回本文件。
 
 ### 0.3 建议测试数据
 
@@ -43,11 +42,11 @@
 | 状态 | ID | 优先级/类型 | 功能 | 测试方法 | 预期结果 |
 |---|---|---|---|---|---|
 | [x] | BLD-01 | P0/AUTO | 干净构建 | 使用 JDK 25+、Maven 3.9+ 在干净工作区执行 `mvn -B clean verify`。 | Reactor 四个模块全部成功，无失败、错误或意外跳过。 |
-| [x] | BLD-02 | P1/AUTO | 测试发现 | 核对 Surefire 报告与源码中的测试类、`@Test` 数量；当前基线为 44 个测试类、135 个测试。 | 所有测试均被发现并执行；Core 19、Storage 38、Integrations 18、Paper 60，失败、错误和跳过均为 0。 |
+| [x] | BLD-02 | P1/AUTO | 测试发现 | 核对 Surefire 报告与源码中的测试类、`@Test` 数量；当前基线为 44 个测试类、132 个测试。 | 所有测试均被发现并执行；Core 19、Storage 37、Integrations 18、Paper 58，失败、错误和跳过均为 0。 |
 | [x] | BLD-03 | P1/AUTO | 核心规则 | 执行 application、economy、governance、land、consumption 的核心单测。 | 文本边界、状态机、金额精度、投票门槛、5×5 单元、5×5 网格、Buff 定价均通过。 |
 | [x] | BLD-04 | P0/AUTO | 存储层 | 执行五类 SQLite Repository 与 DatabaseGate 测试。 | WAL、外键、busy timeout、事务、唯一约束、幂等键和异常映射符合契约。 |
 | [x] | BLD-05 | P1/AUTO | 集成适配器 | 执行 Residence、Vault、QuickShop、WorldBorder 适配器测试。 | 能力探测、精度换算、交易识别和命令保护正确；WorldBorder 从插件 ClassLoader 解析经典 API，检查含缓冲的四个角，并对未配置边界和非主线程调用安全失败。 |
-| [x] | BLD-06 | P1/AUTO | Paper 业务层 | 执行命令解析、权限、Tab 补全、确认令牌、重试队列、建镇协调及设置测试。 | 玩家界面统一使用 Paper Dialog；玩家界面/TestCommand 共用业务入口，权限和并发约束正确。 |
+| [x] | BLD-06 | P1/AUTO | Paper 业务层 | 执行命令解析、权限、Tab 补全、确认令牌、重试队列、建镇协调及设置测试。 | 玩家界面统一使用 Paper Dialog；命令解析、权限、并发约束正确。 |
 | [x] | BLD-07 | P0/OPS | 唯一产物 | 检查各模块 `target` 目录与根 POM。 | 唯一安装包为 `tianjitown-paper/target/TianjiTown-1.4.0.jar`，版本与 POM、`plugin.yml` 一致。 |
 | [x] | BLD-08 | P0/OPS | JAR 内容 | 列出 JAR 内容并搜索测试类、数据库、密钥、本机绝对路径和临时文件。 | 包含四模块运行类、`plugin.yml`、默认配置、V0_1～V7_0 迁移；不含测试类、数据或敏感信息。 |
 | [x] | BLD-09 | P0/OPS | 依赖打包 | 检查 shaded JAR 的类与依赖清单。 | HikariCP、Flyway、SQLite JDBC 已合并；Paper、Residence、Vault、WorldBorder 等运行时 API 未被打入。 |
@@ -71,7 +70,6 @@
 | [x] | CFG-10 | P0/OPS | YAML 与类型校验 | 对每个配置分组注入语法错误、错误类型、NaN/Infinity、越界值、无效枚举/材料/时区/世界名。 | 配置错误可定位，并在运行时激活前锁定插件。 |
 | [x] | CFG-11 | P1/OPS | 默认配置 | 删除自定义配置后核对所有默认值。 | 冷却、预留、治理、税率、扩张、Buff、返还、信标、诊断、备份与 `config.yml`/文档一致。 |
 | [x] | CFG-12 | P1/OPS | 热重载 | 修改维护、tax、consumption、Buff 商店、建筑返还和信标开关后执行 `reload`。 | 可热更新项立即生效；数据库路径、清算账户、金额精度、Buff 目录等明确提示需重启。 |
-| [x] | CFG-13 | P0/OPS | 测试接口默认关闭 | 首次安装、升级配置和发布包启动后检查 `test-command.enabled`。 | 默认始终为 `false`，无人因 OP 或管理员权限自动获得测试权限。 |
 | [x] | CFG-17 | P1/OPS | Dialog 界面启动 | 使用干净默认配置和升级后配置启动，并查看 `status`。 | 玩家界面固定使用 Paper Dialog，`status` 报告 `DIALOG`，不加载或回退到旧箱子界面。 |
 
 ## 3. SQLite、迁移、约束与事务
@@ -170,7 +168,7 @@
 | [x] | LAND-03 | P0/CMD | 5×5 网格 | 扩张到 grid -2～2 边界并尝试越界、飞地和重复单元。 | 最多 25 单元/225 区块；越界、飞地和已占目标拒绝。 |
 | [x] | LAND-04 | P0/CMD | 扩张价格 | 验证第 2～7 次扩张及金额精度。 | 每次价格均为 300000 次级货币单位（即 3000.00），显示与扣款相同。 |
 | [x] | LAND-05 | P0/CMD | 余额边界 | 使用不足、恰好和超过所需公共余额执行扩张。 | 不足时零占位/零扣款；恰好与充足时一次扣款并产生 EXPANSION。 |
-| [x] | LAND-07 | P0/CMD | WorldBorder 扩张 | 用 MinecraftConsoleClient 登录镇长并通过 `/testcommand town expand` 驱动；在矩形/椭圆 WorldBorder 的正、负坐标边缘分别让目标 5×5 单元及缓冲刚好在内、贴线和单角越界。 | 仅四角及缓冲全部在边界内时允许扩张；越界返回稳定失败，不占位、不扣款、不改 Residence；与本镇已有 Residence 相接不被误判为外部冲突。 |
+| [x] | LAND-07 | P0/CMD | WorldBorder 扩张 | 用 MinecraftConsoleClient 登录镇长并通过玩家界面驱动；在矩形/椭圆 WorldBorder 的正、负坐标边缘分别让目标 5×5 单元及缓冲刚好在内、贴线和单角越界。 | 仅四角及缓冲全部在边界内时允许扩张；越界返回稳定失败，不占位、不扣款、不改 Residence；与本镇已有 Residence 相接不被误判为外部冲突。 |
 | [x] | LAND-12 | P0/OPS | 扩张重启恢复 | 保留 PREPARED、REFUNDED、COMPENSATION_REQUIRED 等状态后重启。 | 启动恢复至一致终态；需人工处理项明确报告；重复启动幂等。 |
 | [x] | LAND-19 | P0/CMD | 第 8 次扩张价格闭环 | 修复 `LAND-03` 后执行默认第 8 次扩张，核对显示价格、Vault 扣款、账户和账本。 | 第 8 次价格仍为 300000；Vault、内部账户和账本金额一致，领地写入完整。 |
 
@@ -194,25 +192,7 @@
 |---|---|---|---|---|---|
 | [x] | BONUS-07 | P1/OPS | 周切换与清理 | 在 Asia/Shanghai 周一 00:00 边界前后测试，制造 12 周以上计数。 | 新周独立计数；旧数据按 retention 清理；时区/DST 不造成重复周。 |
 
-## 12. 管理命令、权限与 MinecraftConsoleClient/TestCommand
-
-| 状态 | ID | 优先级/类型 | 功能 | 测试方法 | 预期结果 |
-|---|---|---|---|---|---|
-| [x] | TC-01 | P0/CMD | 测试接口门禁 | 分别关闭开关、移除权限、令系统非 READY 后执行 query/action。 | 依次返回稳定 `TEST_INTERFACE_DISABLED`、`PERMISSION_DENIED`、`SYSTEM_NOT_READY`。 |
-| [x] | TC-02 | P0/CMD | actor 身份 | 使用在线名称/UUID、离线 UUID、未知玩家和非法 UUID。 | 只接受在线玩家；业务校验完全使用该玩家身份。 |
-| [x] | TC-03 | P1/CMD | 语法与类型 | 测试未知 domain/verb、参数缺失/多余、long/int/bool/enum 非法值。 | 仅输出一行稳定失败 RESULT；`true/yes`、`false/no` 不区分大小写，其他布尔值拒绝。 |
-| [x] | TC-04 | P1/CMD | query 输出 | 对无业务数据、申请人、成员和镇长查询。 | actor、town、role、application、balance 等字段稳定；无值使用 `NONE`，不泄露他人敏感数据。 |
-| [x] | TC-05 | P0/CMD | 结果契约 | 对成功/失败动作使用含空格、引号、反斜杠、换行的值。 | 每次只产生一行最终 RESULT；字段按名称排序并正确转义；失败断言可依赖稳定 reason。 |
-| [x] | TC-06 | P0/AUTO | 共用业务层 | 以自动化架构约束检查玩家界面和 TestCommand 的依赖路径，并用同一 actor/action fixture 比较业务结果契约。 | 两者直接调用同一 `TownActions`；玩家界面不转发命令；TestCommand 不调用 `/townadmin`；等价输入产生等价业务结果。 |
-| [x] | TC-07 | P1/CMD | action 覆盖 | 逐一执行文档列出的 application、join、member、transfer、rules、vote、town、finance、buff 动作。 | 每个动作可到达对应玩家业务并返回正确 action、reason 和关键 ID/状态字段。 |
-| [x] | TC-08 | P1/CMD | 补全开关门禁与域 | 在关闭、开启 `test-command.enabled` 时由有权限客户端请求 `/testcommand action` 的 domain 补全。 | 关闭时返回空列表；开启时只列出当前支持的业务域。 |
-| [x] | TC-09 | P0/CMD | 维护模式 | 开启维护模式后执行所有写 action，再关闭维护并提交新请求。 | 写 action 统一返回维护失败且无副作用；关闭后新请求可成功，不重放维护期间的请求。 |
-| [x] | TC-10 | P0/OPS | 生产隔离 | 检查生产配置、权限系统、帮助、日志和网络控制台。 | 测试命令默认不可见不可用，不能被管理员父权限或 OP 意外继承。 |
-| [x] | TC-11 | P1/CMD | MinecraftConsoleClient 驱动 | 使用一个实例完成登录、query/action、移动和重连，再以两个独立身份实例并发提交同一冲突业务；只归档脱敏命令时间线和 RESULT。 | 客户端始终被识别为真实在线 actor，重连后旧会话不复用；并发约束与幂等结果稳定，自动化证据不包含密码、Token、SessionCache 或 ProfileKeyCache。 |
-| [x] | TC-12 | P0/OPS | 存储中断与恢复 | 在隔离服令运行中的 SQLite 不可写或不可用，通过 TestCommand 执行全部写 action，恢复存储后再提交新请求。 | 中断期间统一返回存储失败且无副作用；恢复后新请求可成功，旧失败请求不被重放。 |
-| [x] | TC-13 | P1/CMD | 补全权限与上下文隔离 | 在有/无测试权限、不同在线 actor 和不同 domain/verb 前缀下请求补全。 | 无权限时为空；只列在线 actor、当前支持动作及与已输入上下文匹配的 verb，不泄露离线或无关身份。 |
-
-## 13. 诊断、备份、恢复与安全
+## 12. 诊断、备份、恢复与安全
 
 | 状态 | ID | 优先级/类型 | 功能 | 测试方法 | 预期结果 |
 |---|---|---|---|---|---|
@@ -228,14 +208,14 @@
 | [x] | OPS-11 | P1/OPS | 定时与手动诊断竞争 | 将定时诊断触发点与手动请求安排在同一时间窗口。 | 两个入口共用同一互斥控制，最多一个实际运行；另一请求有明确提示且不产生半份报告。 |
 | [x] | SEC-01 | P0/AUTO | SQL 注入 | 在名称、简介、规则、原因、actor name 和 business key 中输入 SQL 元字符。 | 所有查询参数绑定；结构和其他记录不受影响。 |
 
-## 14. 容量、兼容性、长期运行与发布门槛
+## 13. 容量、兼容性、长期运行与发布门槛
 
 | 状态 | ID | 优先级/类型 | 功能 | 测试方法 | 预期结果 |
 |---|---|---|---|---|---|
 | [x] | REL-06 | P0/OPS | Paper/Java 兼容 | 在声明支持的 Paper 26.2、Java 25 组合执行完整冒烟和关键事件，重点覆盖 Paper Dialog API。 | 无已移除 API、类加载、Dialog 注册/响应、线程模型或序列化错误。 |
 | [x] | REL-12 | P0/OPS | 候选包一致性 | 比较预发验收 JAR 与生产待部署 JAR SHA-256。 | 两者完全相同；生产不重新构建未知产物。 |
 
-## 15. 测试轮次记录模板与报告索引
+## 14. 测试轮次记录模板与报告索引
 
 > 注：历史报告已独立存放于 `reports` 目录；其中早期轮次及发布门槛沿用拆分前的完整清单统计口径，需结合 `manualtest.md` 一并查看。
 
@@ -269,7 +249,7 @@ MinecraftConsoleClient / 自动化脚本版本：
 |---|---|---|
 | `<ID 或无>` | `<缺少的步骤、证据、环境或故障注入>` | `<下一轮可执行步骤、所需前置条件及改为 [x] 的验收依据>` |
 
-### 15.1 自动测试报告索引
+### 14.1 自动测试报告索引
 
 当前报告均为 AUTO；需要真人观察或操作的 MANUAL 报告请归档到 reports/manual/。
 
@@ -287,6 +267,6 @@ MinecraftConsoleClient / 自动化脚本版本：
 - [2026-08-22 23:09:44 未完成项目增量复测与生命周期修复](reports/auto/AUTO-R12_2026-08-22_23-09-44.md)
 
 
-## 16. 最小发布阻断检查
+## 15. 最小发布阻断检查
 
 发布阻断检查尚未全部通过，现统一在 [manualtest.md 的“最小发布阻断检查”](manualtest.md#16-最小发布阻断检查) 中继续记录。本文件只保留已经通过的测试项目及其历史证据索引。

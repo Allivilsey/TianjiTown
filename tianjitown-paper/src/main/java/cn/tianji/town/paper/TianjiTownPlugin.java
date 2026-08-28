@@ -62,12 +62,6 @@ public final class TianjiTownPlugin extends JavaPlugin {
         townAdminTabCompleter = completer;
         adminCommand.setExecutor(new TownAdminCommand(this));
         adminCommand.setTabCompleter(completer);
-        org.bukkit.command.PluginCommand testCommand = java.util.Objects.requireNonNull(
-                getCommand("testcommand"), "plugin.yml 缺少 testcommand");
-        TestCommand testExecutor = new TestCommand(this);
-        testCommand.setExecutor(testExecutor);
-        testCommand.setTabCompleter(testExecutor);
-        configureTestCommandVisibility();
 
         List<String> synchronousChecks = new ArrayList<>();
         if (!prepareConfigSchema(synchronousChecks)) {
@@ -260,14 +254,6 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 getLogger().warning("主线程回调提交失败: " + safeMessage(exception));
             }
             return false;
-        }
-    }
-
-    void configureTestCommandVisibility() {
-        org.bukkit.command.PluginCommand command = getCommand("testcommand");
-        if (command != null) {
-            command.setPermission(getConfig().getBoolean("test-command.enabled", false)
-                    ? null : TestCommand.PERMISSION);
         }
     }
 

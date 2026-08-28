@@ -6,10 +6,6 @@ database:
   connection-timeout-ms: 5000
   busy-timeout-ms: 5000
 
-# 仅在隔离的自动化测试服务器开启；命令还会额外检查 tianjitown.testcommand 权限。
-test-command:
-  enabled: false
-
 town:
   # 可通过 /townadmin maintenance on|off 即时切换；开启时玩家 UI 和表单全部暂停。
   maintenance-mode: false

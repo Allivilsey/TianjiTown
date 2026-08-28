@@ -426,7 +426,6 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 | `tianjitown.admin.expand` | 扩张查询和预览 |
 | `tianjitown.admin.buff` | Buff 查询和代购 |
 | `tianjitown.admin.operations` | 状态、统一诊断和在线备份 |
-| `tianjitown.testcommand` | 仅隔离测试服的自动化接口，默认关闭且无人拥有 |
 
 小镇生命周期、成员、投票、领地重建、服务台、重载、维护和审计等命令要求完整的 `tianjitown.admin` 权限。
 
@@ -448,4 +447,3 @@ QuickShop 历史最多读取 1000 条；超过时报告为 `INCOMPLETE`，不会
 ## 16. 功能边界
 
 - 插件不提供跨服小镇、联盟、战争、领地税、成员日常税或玩家自定义 Residence flag。
-- `testcommand` 只用于明确开启的隔离自动化测试环境，不是生产管理命令。

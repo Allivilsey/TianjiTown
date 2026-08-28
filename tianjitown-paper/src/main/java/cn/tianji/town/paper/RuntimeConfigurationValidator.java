@@ -18,7 +18,6 @@ final class RuntimeConfigurationValidator {
                                      Predicate<String> loadedWorld) {
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(loadedWorld, "loadedWorld");
-        ConfigurationValues.bool(config, "test-command.enabled", false);
         ConfigurationValues.bool(config, "town.maintenance-mode", false);
         ConfigurationValues.list(config, "town.service-stations");
         validateTown(config, loadedWorld);

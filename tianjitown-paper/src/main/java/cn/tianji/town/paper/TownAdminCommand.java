@@ -78,7 +78,6 @@ final class TownAdminCommand implements CommandExecutor {
             if (root.equals("reload")) {
                 plugin.reloadConfig();
                 plugin.reloadMessages();
-                plugin.configureTestCommandVisibility();
                 sender.sendMessage("§a配置与 messages.yml 已重新读取；税收/消费、Buff 商店和领地加成开关立即生效。"
                         + "SQLite、清算账户、金额精度和商品定义需重启后生效。");
                 return true;
