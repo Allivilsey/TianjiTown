@@ -55,6 +55,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BookMeta;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -622,7 +623,9 @@ final class TownUiController implements Listener {
         if (event.isCancelled()) {
             return;
         }
-        if (block != null && block.getState() instanceof Lectern lectern
+        if (event.getAction() == Action.RIGHT_CLICK_BLOCK
+                && event.getHand() == EquipmentSlot.HAND
+                && block != null && block.getState() instanceof Lectern lectern
                 && lectern.getPersistentDataContainer().has(stationKey, PersistentDataType.STRING)) {
             String stationId = lectern.getPersistentDataContainer().get(stationKey,
                     PersistentDataType.STRING);
