@@ -1422,9 +1422,8 @@ final class TownUiController implements Listener {
 
     private void openApplication(Player player, ApplicationSnapshot application) {
         List<String> summary = new ArrayList<>(List.of("§7名称: " + application.text().name(),
-                "§7小镇代码: " + application.text().residenceName(),
-                "§7Residence 领地名: " + application.text().normalizedResidenceName(),
-                "§7建镇申请费: §f2000（批准后转为初始公共资金）"));
+                "§7小镇领地名: " + application.text().normalizedResidenceName(),
+                "§7建镇申请费: §f2000"));
         for (InitialMemberConfirmation member : application.initialMembers()) {
             summary.add("§7初始成员: " + displayName(member.playerId()));
         }
@@ -1452,7 +1451,7 @@ final class TownUiController implements Listener {
                         List.of("§7重新发送确认邀请", "§7冷却时间: 5 分钟"),
                         "REMIND_INITIAL_MEMBERS", application.id().toString())));
             }
-            items.add(new MenuItem(12, button(Material.COMPASS, "§e选择当前区块",
+            items.add(new MenuItem(12, button(Material.COMPASS, "§e选择小镇领地",
                     List.of("§7当前区块将成为 5×5 初始领地中心"), "SELECT_SITE",
                     application.id().toString())));
             if (application.territory() != null) {
@@ -1468,12 +1467,12 @@ final class TownUiController implements Listener {
                         confirmed ? "CONFIRM_SUBMIT" : null,
                         confirmed ? application.id().toString() : null)));
             }
-            items.add(new MenuItem(22, button(Material.BARRIER, "§c撤回申请",
+            items.add(new MenuItem(22, button(Material.BARRIER, "§c撤回小镇申请",
                     List.of("§7撤回后进入申请冷却"), "CONFIRM_CANCEL",
                     application.id().toString())));
         } else if (application.status() == ApplicationStatus.SUBMITTED
                 || application.status() == ApplicationStatus.UNDER_REVIEW) {
-            items.add(new MenuItem(22, button(Material.BARRIER, "§c撤回申请",
+            items.add(new MenuItem(22, button(Material.BARRIER, "§c撤回小镇申请",
                     List.of("§7批准建镇前仍可撤回"), "CONFIRM_CANCEL",
                     application.id().toString())));
         }
@@ -2430,7 +2429,7 @@ final class TownUiController implements Listener {
     private void selectSite(Player player, UUID applicationId) {
         actions.selectApplicationSite(player, applicationId, outcome ->
                 handleOutcome(player, outcome, application -> {
-            sitePolicy.preview(player, application.territory());
+            sitePolicy.previewSilently(player, application.territory());
             openApplication(player, application);
         }));
     }
@@ -2626,10 +2625,7 @@ final class TownUiController implements Listener {
                     TextDialogInput.MultilineOptions.create(6, 110));
             openDialogPage(admin, requestChanges ? dialogText("review.change-title")
                             : dialogText("review.reject-title"),
-                    List.of(DialogBody.item(new ItemStack(requestChanges
-                                            ? Material.WRITABLE_BOOK : Material.BARRIER),
-                                    DialogBody.plainMessage(explanation, 420),
-                                    false, false, 48, 48)),
+                    List.of(DialogBody.plainMessage(explanation, 420)),
                     List.of(reasonInput), DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                     session -> DialogType.confirmation(
                             ActionButton.create(dialogComponent(requestChanges
@@ -2693,7 +2689,7 @@ final class TownUiController implements Listener {
                 return;
             }
             closeUi(admin);
-            sitePolicy.teleportAndPreview(admin, application.territory());
+            sitePolicy.teleportAndPreviewSilently(admin, application.territory());
         });
     }
 
@@ -2804,8 +2800,7 @@ final class TownUiController implements Listener {
                 .append(Component.newline())
                 .append(dialogComponent("application.basics-guidance"));
         openDialogPage(player, dialogText("application.title"), List.of(
-                        DialogBody.item(new ItemStack(Material.WRITABLE_BOOK),
-                                DialogBody.plainMessage(guidance, 400), false, false, 48, 48)),
+                        DialogBody.plainMessage(guidance, 400)),
                 inputs, DialogBase.DialogAfterAction.NONE, session ->
                         DialogType.confirmation(
                                 ActionButton.create(dialogComponent("common.next-step"),
@@ -2858,8 +2853,7 @@ final class TownUiController implements Listener {
                 .append(Component.newline())
                 .append(dialogComponent("application.content-guidance"));
         openDialogPage(player, dialogText("application.title"), List.of(
-                        DialogBody.item(new ItemStack(Material.BOOK),
-                                DialogBody.plainMessage(guidance, 420), false, false, 48, 48)),
+                        DialogBody.plainMessage(guidance, 420)),
                 inputs, DialogBase.DialogAfterAction.NONE, session -> {
                     List<ActionButton> actions = List.of(
                             ActionButton.create(dialogComponent("common.previous-step"),
@@ -3412,7 +3406,11 @@ final class TownUiController implements Listener {
                         irreversible ? dialogText("confirmation.irreversible")
                                 : dialogText("confirmation.check-details")),
                 null, null);
-        DialogBody summaryBody = disband
+        boolean applicationConfirmation = switch (confirmedAction) {
+            case "SUBMIT", "CANCEL", "APPLY_JOIN", "CANCEL_JOIN" -> true;
+            default -> false;
+        };
+        DialogBody summaryBody = disband || applicationConfirmation
                 ? dialogTextBody(summary) : dialogBody(summary);
         openDialogPage(player, title, List.of(summaryBody), List.of(),
                 DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
@@ -3440,8 +3438,10 @@ final class TownUiController implements Listener {
                         || plainTitle.equals("成员治理") || plainTitle.startsWith("小镇治理投票")
                         || plainTitle.equals("访客管理") || plainTitle.startsWith("小镇访客")
                         || plainTitle.startsWith("邀请访客")
+                        || plainTitle.startsWith("申请加入")
                         || plainTitle.startsWith("入镇申请") || plainTitle.equals("待办中心")
                         || plainTitle.equals("个人与帮助") || plainTitle.startsWith("申请审核")
+                        || plainTitle.startsWith("审核")
                         ? dialogTextBody(item.item()) : dialogBody(item.item()))
                 .toList();
         List<MenuItem> actions = ordered.stream()

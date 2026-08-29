@@ -107,8 +107,18 @@ final class SitePolicy {
         teleportAndPreview(player, territory, List.of(territory));
     }
 
+    void teleportAndPreviewSilently(Player player, InitialTerritory territory) {
+        teleportAndPreview(player, territory, List.of(territory), false);
+    }
+
     void teleportAndPreview(Player player, InitialTerritory focus,
                             List<InitialTerritory> territories) {
+        teleportAndPreview(player, focus, territories, true);
+    }
+
+    private void teleportAndPreview(Player player, InitialTerritory focus,
+                                    List<InitialTerritory> territories,
+                                    boolean announcePreview) {
         List<InitialTerritory> areas = previewAreas(focus, territories);
         World world = plugin.getServer().getWorld(focus.center().worldId());
         if (world == null) {
@@ -130,14 +140,23 @@ final class SitePolicy {
             return;
         }
         plugin.messages().send(player, "chat.site.teleported");
-        preview(player, areas);
+        preview(player, areas, announcePreview);
     }
 
     void preview(Player player, InitialTerritory territory) {
         preview(player, List.of(territory));
     }
 
+    void previewSilently(Player player, InitialTerritory territory) {
+        preview(player, List.of(territory), false);
+    }
+
     void preview(Player player, List<InitialTerritory> territories) {
+        preview(player, territories, true);
+    }
+
+    private void preview(Player player, List<InitialTerritory> territories,
+                         boolean announce) {
         List<InitialTerritory> areas = previewAreas(null, territories);
         UUID worldId = areas.getFirst().center().worldId();
         if (!player.getWorld().getUID().equals(worldId)) {
@@ -185,9 +204,11 @@ final class SitePolicy {
         };
         BukkitTask task = runnable.runTaskTimer(plugin, 0L, intervalTicks);
         previews.put(playerId, task);
-        String scope = areas.size() == 1 ? "5×5 区块" : areas.size() + " 个领地单元";
-        plugin.messages().send(player, "chat.site.preview-started", Map.of(
-                "scope", scope, "duration", durationSeconds));
+        if (announce) {
+            String scope = areas.size() == 1 ? "5×5 区块" : areas.size() + " 个领地单元";
+            plugin.messages().send(player, "chat.site.preview-started", Map.of(
+                    "scope", scope, "duration", durationSeconds));
+        }
     }
 
     void stopPreview(UUID playerId) {

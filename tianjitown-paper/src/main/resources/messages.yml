@@ -108,7 +108,7 @@ chat:
     visitor-added: '&a你已被加入一个小镇的访客名单，并获得该镇领地权限。'
     visitor-removed: '&e你已被移出一个小镇的访客名单，并失去该镇领地权限。'
     transfer-request: '&6你收到了一项镇长转让请求。 '
-    transfer-accepted: '&e镇长转让已被接受，你现在是普通成员。'
+    transfer-accepted: '&e镇长转让已被接受。'
     transfer-rejected: '&e候选成员拒绝了镇长转让。'
     join-request: '&6{applicant} 申请加入“{town}” '
     join-approved: '&a你加入“{town}”的申请已获批准 '
@@ -358,7 +358,7 @@ dialog:
     view-my-applications: '&a查看我的申请'
     select-again: '&e重新选择'
     reopen: '&e重新打开'
-    continue-processing: '&a继续办理'
+    continue-processing: '&a继续'
 
   # Dialog 菜单。
   colors:
@@ -417,9 +417,9 @@ dialog:
     leave-town-title: '&6确认退出小镇'
     leave-town-consequence: '&7退出后 24 小时内不能申请加入新镇'
     disband-town-title: '&6确认解散小镇'
-    disband-town-consequence: '&7将删除 Residence 领地并释放名称，此操作不可撤销'
+    disband-town-consequence: '&7将删除小镇领地并释放名称，此操作不可撤销'
     admin-approve-title: '&6确认批准申请'
-    admin-approve-consequence: '&7将创建小镇并建立 Residence 投影'
+    admin-approve-consequence: '&7将创建小镇并建立领地投影'
 
   # 操作结果、权限和数据状态提示页。
   notice:
@@ -645,13 +645,13 @@ dialog:
     error: '&c{error}'
     confirm: '&a确认捐款'
     confirm-tooltip: '&8从个人余额转入公共资金'
-    invalid-amount: '&c金额格式无效，请输入有效正数。'
+    invalid-amount: '&c金额格式无效，请输入有效数额。'
     unavailable-title: '&6捐款暂不可用'
     unavailable-message: '&f新的公共资金写入目前暂停。'
 
   # 初始成员邀请确认。
   invitation:
     title: '&6小镇初始成员邀请'
-    message: '&f“{town}”邀请你成为建镇初始成员。确认前请先与申请人核对小镇计划。'
+    message: '&f“{town}”邀请你成为建镇初始成员。'
     accept: '&a接受邀请'
     reject: '&c拒绝邀请'
