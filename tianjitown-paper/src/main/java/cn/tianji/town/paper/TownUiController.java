@@ -2518,7 +2518,6 @@ final class TownUiController implements Listener {
     private void cancelJoin(Player player, UUID applicationId) {
         actions.cancelJoinApplication(player, applicationId, outcome ->
                 handleOutcome(player, outcome, ignored -> {
-            playSound(player, Sound.UI_BUTTON_CLICK);
             openNotice(player, dialogText("notice.join-cancelled-title"),
                     dialogText("notice.join-cancelled-message"),
                     dialogText("common.back"),
@@ -2541,7 +2540,6 @@ final class TownUiController implements Listener {
     private void rejectJoin(Player mayor, UUID applicationId) {
         actions.rejectJoinApplication(mayor, applicationId, outcome ->
                 handleOutcome(mayor, outcome, application -> {
-            playSound(mayor, Sound.UI_BUTTON_CLICK);
             notifyJoinDecision(application, false);
             openNotice(mayor, dialogText("notice.join-rejected-title"),
                     dialogText("notice.join-rejected-message"),
@@ -2678,7 +2676,6 @@ final class TownUiController implements Listener {
                                String reason) {
         actions.reviewApplication(admin, applicationId, requestChanges, reason, outcome ->
                 handleOutcome(admin, outcome, application -> {
-            playSound(admin, Sound.UI_BUTTON_CLICK);
             notifyApplicationDecision(application);
             openNotice(admin, requestChanges
                             ? dialogText("notice.review-change-sent-title")
@@ -3614,7 +3611,6 @@ final class TownUiController implements Listener {
                 }
                 // 首次有效响应立即消耗会话，避免重复数据包产生两个业务幂等键。
                 menuSessions.remove(clicked.getUniqueId(), session);
-                playSound(clicked, Sound.UI_BUTTON_CLICK);
                 handler.accept(response);
             });
         }, ClickCallback.Options.builder().uses(1)
