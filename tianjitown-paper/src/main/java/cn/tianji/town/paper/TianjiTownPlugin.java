@@ -463,10 +463,11 @@ public final class TianjiTownPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(runtime.buffs(), this);
         getServer().getPluginManager().registerEvents(runtime.bonuses(), this);
         getServer().getPluginManager().registerEvents(
-                new ResidenceCommandGuard(this, managedResidenceNames::contains), this);
+                new ResidenceCommandGuard(this, managedResidenceNames::contains,
+                        messages()::text), this);
         getServer().getPluginManager().registerEvents(new ResidenceDeletionGuard(this,
                 managedResidenceNames::contains, residenceProtection::internalMutation,
-                runtime::reconcileAll), this);
+                runtime::reconcileAll, messages()::text), this);
         runAsync(() -> {
             try {
                 runtime.repository().listTowns(true).stream().map(town -> town.residenceName())

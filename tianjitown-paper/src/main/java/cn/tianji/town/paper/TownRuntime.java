@@ -487,13 +487,13 @@ final class TownRuntime {
 
     void provision(CommandSender sender, UUID applicationId, UUID reviewerId,
                    String reviewerName, String reason, String idempotencyKey,
-                   Consumer<ApplicationSnapshot> completion) {
+        Consumer<ApplicationSnapshot> completion) {
         if (!databaseAvailable.get()) {
-            sender.sendMessage("§cSQLite 当前不可用，写操作已锁定；现有 Residence 保护不受影响。");
+            plugin.messages().send(sender, "chat.runtime.storage-locked");
             return;
         }
         if (!provisions.tryBegin(applicationId)) {
-            sender.sendMessage("§e该申请正在执行建镇流程，本次重复请求已合并。");
+            plugin.messages().send(sender, "chat.runtime.provision-duplicate");
             return;
         }
         plugin.runAsync(() -> {
@@ -524,8 +524,8 @@ final class TownRuntime {
                     plugin.getServer().getOfflinePlayer(application.applicantId()), feeMinor);
             if (!payment.success()) {
                 provisions.finish(application.id());
-                sender.sendMessage("§c申请人无法支付建镇申请费 " + money(feeMinor)
-                        + ": " + payment.message());
+                plugin.messages().send(sender, "chat.runtime.fee-failed", Map.of(
+                        "amount", money(feeMinor), "detail", payment.message()));
                 return;
             }
         }
@@ -560,7 +560,7 @@ final class TownRuntime {
                                   Consumer<ApplicationSnapshot> completion) {
         if (provisioning.town().status() == TownStatus.ACTIVE) {
             provisions.finish(applicationId);
-            sender.sendMessage("§a该申请已完成建镇，无需重复批准。");
+            plugin.messages().send(sender, "chat.runtime.provision-already-complete");
             return;
         }
         try {
@@ -592,8 +592,9 @@ final class TownRuntime {
             }
             databaseAvailable.set(true);
             plugin.runMain(() -> {
-                sender.sendMessage(completed ? "§a小镇已批准并完成 5×5 领地投影。"
-                        : "§c自动创建失败，申请已进入 PROVISION_FAILED: " + completedDetail);
+                plugin.messages().send(sender, completed ? "chat.runtime.provision-success"
+                        : "chat.runtime.provision-failed", completed
+                        ? Map.of() : Map.of("detail", completedDetail));
                 completion.accept(application);
             });
         } catch (RuntimeException exception) {
@@ -604,9 +605,10 @@ final class TownRuntime {
     }
 
     void reconcile(CommandSender sender, TownSnapshot town, List<UUID> members, boolean repair) {
-        reconcileAction(sender, town, members, repair, result -> sender.sendMessage(
-                        (result.success() ? "§a" : "§c") + town.profile().name() + ": "
-                                + result.message()),
+        reconcileAction(sender, town, members, repair, result -> plugin.messages().send(sender,
+                        "chat.runtime.reconcile", Map.of(
+                                "color", result.success() ? "§a" : "§c",
+                                "town", town.profile().name(), "detail", result.message())),
                 exception -> handleFailure(sender, exception));
     }
 
@@ -732,9 +734,9 @@ final class TownRuntime {
         pendingIncomeTaxes.submit(tax);
         Player receiver = earning.player().getPlayer();
         if (receiver != null) {
-            receiver.sendMessage("§e全球市场收入 " + money(tax.grossMinor())
-                    + "，已扣小镇税 " + money(tax.taxMinor())
-                    + "，实际到账 " + money(tax.grossMinor() - tax.taxMinor()) + "。");
+            plugin.messages().send(receiver, "chat.runtime.global-market-income", Map.of(
+                    "gross", money(tax.grossMinor()), "tax", money(tax.taxMinor()),
+                    "net", money(tax.grossMinor() - tax.taxMinor())));
         }
     }
 
@@ -821,13 +823,13 @@ final class TownRuntime {
                         "ADMIN_ADJUSTMENT", amountMinor, actorId(sender), sender.getName(),
                         "admin-adjustment:" + UUID.randomUUID(), reason),
                 operation -> settlement.adjustSettlement(operation.amountMinor()),
-                mutation -> sender.sendMessage("§a资金调整已完成，小镇余额: "
-                        + money(mutation.balanceAfterMinor())));
+                mutation -> plugin.messages().send(sender, "chat.runtime.funds-adjusted",
+                        Map.of("balance", money(mutation.balanceAfterMinor()))));
     }
 
     void changeTaxRate(Player mayor, UUID townId, int basisPoints) {
         if (!taxEnabled()) {
-            mayor.sendMessage("§c新税收入口已由功能开关暂停。");
+            plugin.messages().send(mayor, "chat.runtime.tax-paused");
             return;
         }
         if (!economySettings.allowsTaxRate(basisPoints)) {
@@ -840,8 +842,8 @@ final class TownRuntime {
             refreshTaxPolicies();
             return change;
         }, change -> {
-            mayor.sendMessage("§a小镇税率已更新为 " + percent(change.basisPoints())
-                    + "；成员将在登录和资金界面收到版本告知。");
+            plugin.messages().send(mayor, "chat.runtime.tax-changed", Map.of(
+                    "rate", percent(change.basisPoints())));
             TownUiController ui = plugin.townUi();
             if (ui != null) {
                 ui.openFinance(mayor, 0);
@@ -859,8 +861,8 @@ final class TownRuntime {
                     actorId(sender), basisPoints, sender.getName(), reason);
             refreshTaxPolicies();
             return change;
-        }, change -> sender.sendMessage("§a税率已强制调整为 "
-                + percent(change.basisPoints())));
+        }, change -> plugin.messages().send(sender, "chat.runtime.tax-forced", Map.of(
+                "rate", percent(change.basisPoints()))));
     }
 
     TerritoryService.ExpansionPreview expansionPreview(UUID playerId,
@@ -1169,13 +1171,13 @@ final class TownRuntime {
     }
 
     private void sendTaxRangeError(CommandSender sender) {
-        sender.sendMessage("§c税率必须在 5%~25% 之间，并按 1% 递增。");
+        plugin.messages().send(sender, "chat.runtime.tax-range");
     }
 
     private <T> void execute(CommandSender sender, boolean write, Supplier<T> operation,
                              Consumer<T> success) {
         if (write && !databaseAvailable.get()) {
-            sender.sendMessage("§cSQLite 当前不可用，写操作已锁定；现有 Residence 保护不受影响。");
+            plugin.messages().send(sender, "chat.runtime.storage-locked");
             return;
         }
         plugin.runAsync(() -> {
@@ -1211,7 +1213,8 @@ final class TownRuntime {
     private void handleFailure(CommandSender sender, RuntimeException exception) {
         markStorageFailure(exception);
         plugin.runMain(
-                () -> sender.sendMessage("§c操作失败: " + safeMessage(exception)));
+                () -> plugin.messages().send(sender, "chat.runtime.operation-failed",
+                        Map.of("detail", safeMessage(exception))));
     }
 
     private void reportActionFailure(RuntimeException exception,

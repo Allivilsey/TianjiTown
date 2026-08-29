@@ -115,7 +115,7 @@ final class SitePolicy {
             world = plugin.getServer().getWorld(focus.center().worldName());
         }
         if (world == null) {
-            player.sendMessage("§c领地所在世界当前未加载。");
+            plugin.messages().send(player, "chat.site.world-unloaded");
             return;
         }
         int centerX = Math.addExact(Math.multiplyExact(focus.center().x(), 16), 8);
@@ -126,10 +126,10 @@ final class SitePolicy {
         Location destination = new Location(world, centerX + 0.5, targetY, centerZ + 0.5,
                 player.getYaw(), player.getPitch());
         if (!player.teleport(destination)) {
-            player.sendMessage("§c无法传送到领地传送点。");
+            plugin.messages().send(player, "chat.site.teleport-failed");
             return;
         }
-        player.sendMessage("§a已传送至领地中心传送点。");
+        plugin.messages().send(player, "chat.site.teleported");
         preview(player, areas);
     }
 
@@ -141,7 +141,7 @@ final class SitePolicy {
         List<InitialTerritory> areas = previewAreas(null, territories);
         UUID worldId = areas.getFirst().center().worldId();
         if (!player.getWorld().getUID().equals(worldId)) {
-            player.sendMessage("§c预览领地不在当前世界。");
+            plugin.messages().send(player, "chat.site.wrong-world");
             return;
         }
         UUID playerId = player.getUniqueId();
@@ -186,8 +186,8 @@ final class SitePolicy {
         BukkitTask task = runnable.runTaskTimer(plugin, 0L, intervalTicks);
         previews.put(playerId, task);
         String scope = areas.size() == 1 ? "5×5 区块" : areas.size() + " 个领地单元";
-        player.sendMessage("§e已显示 " + scope + " 的完整三维边界，粒子将持续约 "
-                + durationSeconds + " 秒。");
+        plugin.messages().send(player, "chat.site.preview-started", Map.of(
+                "scope", scope, "duration", durationSeconds));
     }
 
     void stopPreview(UUID playerId) {

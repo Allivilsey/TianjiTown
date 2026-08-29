@@ -32,6 +32,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Predicate;
 
@@ -44,12 +45,20 @@ final class TownAdminCommand implements CommandExecutor {
         this.plugin = plugin;
     }
 
+    private void send(CommandSender recipient, String key) {
+        plugin.messages().send(recipient, key);
+    }
+
+    private void send(CommandSender recipient, String key, Map<String, ?> placeholders) {
+        plugin.messages().send(recipient, key, placeholders);
+    }
+
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
         if (args.length == 0) {
             if (!TownAdminPermissions.hasAny(sender::hasPermission)) {
-                sender.sendMessage("§c没有权限。");
+                send(sender, "chat.admin.no-permission");
                 return true;
             }
             help(sender, null);
@@ -57,7 +66,7 @@ final class TownAdminCommand implements CommandExecutor {
         }
         String root = args[0].toLowerCase(Locale.ROOT);
         if (!TownAdminPermissions.canUseRoot(sender::hasPermission, root)) {
-            sender.sendMessage("§c没有权限。");
+            send(sender, "chat.admin.no-permission");
             return true;
         }
         if (root.equals("help")) {
@@ -78,8 +87,7 @@ final class TownAdminCommand implements CommandExecutor {
             if (root.equals("reload")) {
                 plugin.reloadConfig();
                 plugin.reloadMessages();
-                sender.sendMessage("§a配置与 messages.yml 已重新读取；税收/消费、Buff 商店和领地加成开关立即生效。"
-                        + "SQLite、清算账户、金额精度和商品定义需重启后生效。");
+                send(sender, "chat.admin.reload");
                 return true;
             }
             if (root.equals("maintenance")) {
@@ -107,44 +115,51 @@ final class TownAdminCommand implements CommandExecutor {
                 case "diagnose" -> diagnose(sender, runtime, args);
                 case "backup" -> backup(sender, runtime, args);
                 default -> {
-                    sender.sendMessage("§c未知子命令：" + args[0]
-                            + "。使用 /townadmin help 查看帮助。");
+                    send(sender, "chat.admin.unknown-command", Map.of("command", args[0]));
                     yield true;
                 }
             };
         } catch (IllegalArgumentException exception) {
-            sender.sendMessage("§c参数错误: " + exception.getMessage());
+            String detail = exception instanceof TownCommandParser.ParseException parse
+                    ? plugin.messages().text(parse.messageKey(), parse.placeholders())
+                    : safeMessage(exception);
+            send(sender, "chat.admin.argument-error", Map.of(
+                    "detail", detail));
             return true;
         }
     }
 
     private void status(CommandSender sender) {
         GateStatus status = plugin.gateStatus();
-        sender.sendMessage("§6TianjiTown " + plugin.getPluginMeta().getVersion()
-                + ": §f" + status.state());
-        status.details().forEach(detail -> sender.sendMessage("§7- " + detail));
+        send(sender, "chat.admin.status-header", Map.of(
+                "version", plugin.getPluginMeta().getVersion(), "state", status.state()));
+        status.details().forEach(detail -> send(sender, "chat.admin.status-detail",
+                Map.of("detail", detail)));
         TownRuntime runtime = plugin.townRuntime();
         if (runtime != null) {
-            sender.sendMessage("§7- SQLite 运行状态: "
-                    + (runtime.databaseAvailable() ? "READY" : "WRITE_LOCKED"));
-            sender.sendMessage("§7- Buff 商店: "
-                    + (runtime.buffs().buffShopEnabled() ? "OPEN" : "PAUSED")
-                    + "，配置商品=" + runtime.buffs().settings().buffs().size());
-            sender.sendMessage("§7- 建筑返还: "
-                    + (runtime.bonuses().buildingRefundEnabled() ? "ENABLED" : "PAUSED")
-                    + "，黑名单=" + runtime.bonuses().settings().buildingRefund()
-                    .blacklist().size() + "，周上限=" + runtime.bonuses().settings()
-                    .buildingRefund().weeklyLimit());
-            sender.sendMessage("§7- 信标增强: "
-                    + (runtime.bonuses().beaconEnabled() ? "ENABLED" : "PAUSED"));
+            send(sender, "chat.admin.status-sqlite", Map.of("state",
+                    runtime.databaseAvailable() ? "READY" : "WRITE_LOCKED"));
+            send(sender, "chat.admin.status-buffs", Map.of(
+                    "state", runtime.buffs().buffShopEnabled() ? "OPEN" : "PAUSED",
+                    "count", runtime.buffs().settings().buffs().size()));
+            send(sender, "chat.admin.status-refund", Map.of(
+                    "state", runtime.bonuses().buildingRefundEnabled() ? "ENABLED" : "PAUSED",
+                    "blacklist", runtime.bonuses().settings().buildingRefund()
+                            .blacklist().size(),
+                    "limit", runtime.bonuses().settings().buildingRefund().weeklyLimit()));
+            send(sender, "chat.admin.status-beacon", Map.of("state",
+                    runtime.bonuses().beaconEnabled() ? "ENABLED" : "PAUSED"));
             TownBonusRuntime.DiagnosticResult diagnostic = runtime.bonuses().lastDiagnostic();
-            sender.sendMessage("§7- 最近统一诊断: " + diagnostic.detail()
-                    + (diagnostic.report() == null ? "" : "，报告=" + diagnostic.report()));
+            send(sender, "chat.admin.status-diagnostic", Map.of(
+                    "detail", diagnostic.detail(), "report", diagnostic.report() == null
+                            ? "" : "，报告=" + diagnostic.report()));
             OnlineBackupService.Result backup = runtime.bonuses().lastBackup();
-            sender.sendMessage("§7- 最近在线备份: " + backup.detail()
-                    + (backup.databaseFile() == null ? "" : "，文件=" + backup.databaseFile()));
+            send(sender, "chat.admin.status-backup", Map.of(
+                    "detail", backup.detail(), "file", backup.databaseFile() == null
+                            ? "" : "，文件=" + backup.databaseFile()));
         }
-        sender.sendMessage("§7- 玩家入口: " + (maintenanceMode() ? "MAINTENANCE" : "OPEN"));
+        send(sender, "chat.admin.status-player-entry", Map.of("state",
+                maintenanceMode() ? "MAINTENANCE" : "OPEN"));
     }
 
     private boolean diagnose(CommandSender sender, TownRuntime runtime, String[] args) {
@@ -167,14 +182,16 @@ final class TownAdminCommand implements CommandExecutor {
 
     private boolean maintenance(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            sender.sendMessage("§6维护模式: §f" + (maintenanceMode() ? "已开启" : "已关闭"));
+            send(sender, "chat.admin.maintenance-status", Map.of("state",
+                    maintenanceMode() ? "已开启" : "已关闭"));
             return true;
         }
         if (args.length != 2) {
             throw new IllegalArgumentException("用法: /townadmin maintenance <on|off|status>");
         }
         if (args[1].equalsIgnoreCase("status")) {
-            sender.sendMessage("§6维护模式: §f" + (maintenanceMode() ? "已开启" : "已关闭"));
+            send(sender, "chat.admin.maintenance-status", Map.of("state",
+                    maintenanceMode() ? "已开启" : "已关闭"));
             return true;
         }
         boolean enabled;
@@ -187,46 +204,48 @@ final class TownAdminCommand implements CommandExecutor {
         }
         plugin.getConfig().set("town.maintenance-mode", enabled);
         plugin.saveConfig();
-        sender.sendMessage(enabled
-                ? "§e维护模式已开启；服务台、手册、玩家界面和表单提交现已暂停。"
-                : "§a维护模式已关闭；玩家入口已恢复。");
+        send(sender, enabled ? "chat.admin.maintenance-enabled"
+                : "chat.admin.maintenance-disabled");
         return true;
     }
 
     private boolean confirm(CommandSender sender, String[] args) {
         if (args.length != 2) {
-            sender.sendMessage("§c确认链接无效，请重新发出危险操作命令。");
+            send(sender, "chat.admin.confirm-invalid");
             return true;
         }
         CommandConfirmationManager.Result result = confirmations.consume(ownerKey(sender), args[1]);
         switch (result.status()) {
             case CONFIRMED -> {
-                sender.sendMessage("§e已确认：" + result.description());
+                send(sender, "chat.admin.confirm-success", Map.of(
+                        "description", result.description()));
                 try {
                     result.action().run();
                 } catch (RuntimeException exception) {
-                    sender.sendMessage("§c确认后的操作启动失败: " + safeMessage(exception));
+                    send(sender, "chat.admin.confirm-start-failed", Map.of(
+                            "detail", safeMessage(exception)));
                     plugin.getLogger().warning("危险操作启动失败: " + safeMessage(exception));
                 }
             }
-            case EXPIRED -> sender.sendMessage("§c确认已过期，请重新发出危险操作命令。");
-            case NOT_OWNER -> sender.sendMessage("§c该确认不属于你，未执行任何操作。");
-            case NOT_FOUND, CANCELLED -> sender.sendMessage("§c确认不存在或已经使用。");
+            case EXPIRED -> send(sender, "chat.admin.confirm-expired");
+            case NOT_OWNER -> send(sender, "chat.admin.confirm-not-owner");
+            case NOT_FOUND, CANCELLED -> send(sender, "chat.admin.confirm-unavailable");
         }
         return true;
     }
 
     private boolean cancel(CommandSender sender, String[] args) {
         if (args.length != 2) {
-            sender.sendMessage("§c取消链接无效。");
+            send(sender, "chat.admin.cancel-invalid");
             return true;
         }
         CommandConfirmationManager.Result result = confirmations.cancel(ownerKey(sender), args[1]);
         switch (result.status()) {
-            case CANCELLED -> sender.sendMessage("§a已取消：" + result.description());
-            case EXPIRED -> sender.sendMessage("§c确认已过期，无需取消。");
-            case NOT_OWNER -> sender.sendMessage("§c该确认不属于你。");
-            case NOT_FOUND, CONFIRMED -> sender.sendMessage("§c确认不存在或已经使用。");
+            case CANCELLED -> send(sender, "chat.admin.cancel-success", Map.of(
+                    "description", result.description()));
+            case EXPIRED -> send(sender, "chat.admin.cancel-expired");
+            case NOT_OWNER -> send(sender, "chat.admin.cancel-not-owner");
+            case NOT_FOUND, CONFIRMED -> send(sender, "chat.admin.confirm-unavailable");
         }
         return true;
     }
@@ -236,17 +255,18 @@ final class TownAdminCommand implements CommandExecutor {
                 ownerKey(sender), description, action);
         String confirmCommand = "/townadmin confirm " + confirmation.token();
         String cancelCommand = "/townadmin cancel " + confirmation.token();
-        Component message = Component.text("危险操作：" + description + " ", NamedTextColor.YELLOW)
-                .append(Component.text("[确认执行]", NamedTextColor.RED)
+        Component message = plugin.messages().component("chat.admin.confirmation-prompt", Map.of(
+                        "description", description))
+                .append(plugin.messages().component("chat.buttons.confirm")
                         .decorate(TextDecoration.BOLD)
                         .clickEvent(ClickEvent.runCommand(confirmCommand))
-                        .hoverEvent(HoverEvent.showText(Component.text(
-                                "60 秒内点击确认", NamedTextColor.RED))))
+                        .hoverEvent(HoverEvent.showText(
+                                plugin.messages().component("chat.buttons.confirm-tooltip"))))
                 .append(Component.space())
-                .append(Component.text("[取消]", NamedTextColor.GREEN)
+                .append(plugin.messages().component("chat.buttons.cancel")
                         .clickEvent(ClickEvent.runCommand(cancelCommand))
-                        .hoverEvent(HoverEvent.showText(Component.text(
-                                "取消本次操作", NamedTextColor.GREEN))));
+                        .hoverEvent(HoverEvent.showText(
+                                plugin.messages().component("chat.buttons.cancel-tooltip"))));
         sender.sendMessage(message);
     }
 
@@ -264,11 +284,12 @@ final class TownAdminCommand implements CommandExecutor {
             throw new IllegalArgumentException("audit 数量必须在 1~200");
         }
         runtime.read(sender, () -> runtime.repository().auditLog(limit), records -> {
-            sender.sendMessage("§6最近审计记录:");
+            send(sender, "chat.admin.audit-title");
             for (AuditSnapshot record : records) {
-                sender.sendMessage("§7#" + record.id() + " " + record.createdAt() + " "
-                        + record.actorName() + " " + record.action() + " " + record.targetType()
-                        + "/" + record.targetId() + " 原因=" + record.reason());
+                send(sender, "chat.admin.audit-record", Map.of("id", record.id(),
+                        "created", record.createdAt(), "actor", record.actorName(),
+                        "action", record.action(), "target-type", record.targetType(),
+                        "target-id", record.targetId(), "reason", record.reason()));
             }
         });
         return true;
@@ -285,7 +306,7 @@ final class TownAdminCommand implements CommandExecutor {
             return true;
         }
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("§c该服务台操作需要游戏内管理员看向讲台执行。");
+            send(sender, "chat.admin.station-player-only");
             return true;
         }
         switch (action) {
@@ -297,9 +318,9 @@ final class TownAdminCommand implements CommandExecutor {
         return true;
     }
 
-    private static void stationHelp(CommandSender sender) {
-        sender.sendMessage("§e/townadmin station create|remove|info（玩家看向讲台）");
-        sender.sendMessage("§e/townadmin station list");
+    private void stationHelp(CommandSender sender) {
+        send(sender, "chat.admin.station-help-create");
+        send(sender, "chat.admin.station-help-list");
     }
 
     private boolean handbook(CommandSender sender, String[] args) {
@@ -310,14 +331,14 @@ final class TownAdminCommand implements CommandExecutor {
             target = sender instanceof Player player ? player : null;
         }
         if (target == null) {
-            sender.sendMessage("§c目标玩家必须在线。用法: /townadmin handbook <player>");
+            send(sender, "chat.admin.handbook-target");
             return true;
         }
         boolean delivered = plugin.townUi().giveHandbook(target, true);
         if (!sender.equals(target) && delivered) {
-            sender.sendMessage("§a已向 " + target.getName() + " 发放小镇手册。");
+            send(sender, "chat.admin.handbook-delivered", Map.of("player", target.getName()));
         } else if (!sender.equals(target)) {
-            sender.sendMessage("§e未向 " + target.getName() + " 发放手册：该玩家仍在领取冷却中。");
+            send(sender, "chat.admin.handbook-cooldown", Map.of("player", target.getName()));
         }
         return true;
     }
@@ -359,13 +380,13 @@ final class TownAdminCommand implements CommandExecutor {
             } else if (action.equals("reject")) {
                 runtime.write(sender, () -> runtime.repository().reject(application.id(), actorId(sender),
                         sender.getName(), request.reason()), updated -> {
-                    sender.sendMessage("§a申请已拒绝，选址预留已释放。");
+                    send(sender, "chat.admin.application-rejected");
                     plugin.townUi().notifyApplicationDecision(updated);
                 });
             } else {
                 runtime.write(sender, () -> runtime.repository().requestChanges(application.id(),
                         actorId(sender), sender.getName(), request.reason()), updated -> {
-                    sender.sendMessage("§a已要求申请人补充资料。");
+                    send(sender, "chat.admin.application-change-sent");
                     plugin.townUi().notifyApplicationDecision(updated);
                 });
             }
@@ -379,15 +400,17 @@ final class TownAdminCommand implements CommandExecutor {
         if (action.equals("view")) {
             String townName = TownCommandParser.townName(args, 2);
             runtime.read(sender, () -> requireTown(runtime, townName), town -> {
-                sender.sendMessage("§6" + town.profile().name() + " [代码 "
-                        + town.profile().residenceName() + "]");
-                sender.sendMessage("§7status=" + town.status() + " mayor=" + town.mayorId()
-                        + " version=" + town.version());
+                send(sender, "chat.admin.town-title", Map.of("town", town.profile().name(),
+                        "code", town.profile().residenceName()));
+                send(sender, "chat.admin.town-status", Map.of("status", town.status(),
+                        "mayor", town.mayorId(), "version", town.version()));
                 if (town.territory() != null) {
-                    sender.sendMessage("§7领地=" + town.territory().center().worldName() + " "
-                            + town.territory().center().x() + "," + town.territory().center().z()
-                            + " Residence=" + town.residenceName()
-                            + " projection=" + town.projectionStatus());
+                    send(sender, "chat.admin.town-territory", Map.of(
+                            "world", town.territory().center().worldName(),
+                            "x", town.territory().center().x(),
+                            "z", town.territory().center().z(),
+                            "residence", town.residenceName(),
+                            "projection", town.projectionStatus()));
                 }
             });
             return true;
@@ -428,12 +451,11 @@ final class TownAdminCommand implements CommandExecutor {
                     runtime.repository().completeTownDeletion(deleted.id(), actorId(sender),
                             sender.getName(), request.reason());
                     return deleted;
-                }, completed -> sender.sendMessage("§a小镇“" + completed.profile().name()
-                        + "”已删除，成员、名称和区块占位已释放；Residence: "
-                        + result.message()));
+                }, completed -> send(sender, "chat.admin.town-deleted", Map.of(
+                        "town", completed.profile().name(), "detail", result.message())));
             } else {
-                sender.sendMessage("§c小镇已安全归档，但 Residence 移除失败："
-                        + result.message() + "。名称、小镇代码和区块仍保持锁定；处理后可重复执行删除命令。");
+                send(sender, "chat.admin.town-delete-residence-failed", Map.of(
+                        "detail", result.message()));
                 plugin.getLogger().warning("删除小镇后 Residence 移除失败 "
                         + deleted.profile().name() + "/" + deleted.residenceName()
                         + ": " + result.message());
@@ -455,7 +477,7 @@ final class TownAdminCommand implements CommandExecutor {
                 try {
                     role = MemberRole.valueOf(request.reason().toUpperCase(Locale.ROOT));
                 } catch (IllegalArgumentException exception) {
-                    sender.sendMessage("§c角色只支持 DEPUTY_MAYOR 或 MEMBER；MAYOR 请使用镇长转移流程。");
+                    send(sender, "chat.admin.role-invalid");
                     return;
                 }
                 runtime.write(sender, () -> {
@@ -464,7 +486,7 @@ final class TownAdminCommand implements CommandExecutor {
                             actorId(sender), sender.getName(), "管理员调整成员角色");
                     return town;
                 }, town -> {
-                    sender.sendMessage("§a成员角色已调整为 " + role + "，正在复核 Residence 权限。");
+                    send(sender, "chat.admin.role-updated", Map.of("role", role));
                     reconcileOne(sender, runtime, town.id(), true);
                 });
             } else if (action.equals("add")) {
@@ -474,7 +496,7 @@ final class TownAdminCommand implements CommandExecutor {
                             sender.getName(), request.reason());
                     return town;
                 }, town -> {
-                    sender.sendMessage("§a成员已添加，正在同步 Residence 权限。");
+                    send(sender, "chat.admin.member-added");
                     Player added = Bukkit.getPlayer(playerId);
                     if (added != null) {
                         runtime.buffs().refreshPlayer(added);
@@ -488,7 +510,7 @@ final class TownAdminCommand implements CommandExecutor {
                             sender.getName(), request.reason());
                     return town;
                 }, town -> {
-                    sender.sendMessage("§a成员已移除，正在同步 Residence 权限。");
+                    send(sender, "chat.admin.member-removed");
                     Player removed = Bukkit.getPlayer(playerId);
                     if (removed != null) {
                         runtime.buffs().refreshPlayer(removed);
@@ -508,8 +530,8 @@ final class TownAdminCommand implements CommandExecutor {
             UUID voteId = UUID.fromString(args[2]);
             runtime.write(sender, () -> runtime.governance().settleVote(voteId,
                     actorId(sender), sender.getName(), false), vote -> {
-                sender.sendMessage("§a投票状态: " + vote.status() + "，赞成/门槛: "
-                        + vote.yesVotes() + "/" + vote.requiredYes());
+                send(sender, "chat.admin.vote-status", Map.of("status", vote.status(),
+                        "yes", vote.yesVotes(), "required", vote.requiredYes()));
                 if (vote.passed() && vote.type() == VoteType.KICK_MEMBER) {
                     reconcileOne(sender, runtime, vote.townId(), true);
                 }
@@ -522,7 +544,7 @@ final class TownAdminCommand implements CommandExecutor {
             String reason = String.join(" ", java.util.Arrays.copyOfRange(args, 3, args.length));
             runtime.write(sender, () -> runtime.governance().cancelVote(voteId,
                     actorId(sender), sender.getName(), reason), vote ->
-                    sender.sendMessage("§a投票已取消: " + vote.id()));
+                    send(sender, "chat.admin.vote-cancelled", Map.of("id", vote.id())));
             return true;
         }
         if (!action.equals("create-kick") && !action.equals("create-mayor")) {
@@ -534,7 +556,8 @@ final class TownAdminCommand implements CommandExecutor {
         try {
             settings = GovernanceSettings.load(plugin.getConfig());
         } catch (IllegalArgumentException exception) {
-            sender.sendMessage("§c治理配置无效: " + exception.getMessage());
+            send(sender, "chat.admin.governance-invalid", Map.of(
+                    "detail", exception.getMessage()));
             plugin.getLogger().warning("拒绝创建治理投票: " + exception.getMessage());
             return true;
         }
@@ -552,9 +575,9 @@ final class TownAdminCommand implements CommandExecutor {
             runtime.write(sender, () -> runtime.governance().createVote(request.townId(),
                     request.type(), request.targetId(), actorId(sender),
                     settings.activeMemberWindow(), settings.minimumMembership(),
-                    settings.voteDuration(), true), vote -> sender.sendMessage(
-                    "§a投票已创建: " + vote.id() + "，有效选民=" + vote.eligibleVoters()
-                            + "，通过门槛=" + vote.requiredYes()));
+                    settings.voteDuration(), true), vote -> send(sender, "chat.admin.vote-created",
+                    Map.of("id", vote.id(), "voters", vote.eligibleVoters(),
+                            "required", vote.requiredYes())));
         });
         return true;
     }
@@ -586,7 +609,7 @@ final class TownAdminCommand implements CommandExecutor {
                         sender.getName(), request.reason());
                 return town;
             }, town -> {
-                sender.sendMessage("§a镇长已紧急转移。");
+                send(sender, "chat.admin.mayor-emergency-transfer");
                 reconcileOne(sender, runtime, town.id(), true);
             });
         });
@@ -598,7 +621,7 @@ final class TownAdminCommand implements CommandExecutor {
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("preview")) {
             if (!(sender instanceof Player player)) {
-                sender.sendMessage("§c领地粒子预览只能由游戏内玩家执行。");
+                send(sender, "chat.admin.land-player-only");
                 return true;
             }
             String townName = TownCommandParser.townName(args, 2);
@@ -647,7 +670,7 @@ final class TownAdminCommand implements CommandExecutor {
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("reconcile")) {
             runtime.reconcileSettlement();
-            sender.sendMessage("§a已提交清算账户对账；差额不足会立即锁定全部小镇消费。");
+            send(sender, "chat.admin.settlement-reconcile-submitted");
             return true;
         }
         requireLength(args, 3, "money <view|adjust> <小镇全名> [金额 原因]");
@@ -656,9 +679,10 @@ final class TownAdminCommand implements CommandExecutor {
             runtime.read(sender, () -> {
                 TownSnapshot town = requireTown(runtime, townName);
                 return runtime.finance().findFinanceByTown(town.id()).orElseThrow();
-            }, account -> sender.sendMessage("§6" + account.townName() + " 公共余额: §f"
-                    + runtime.money(account.balanceMinor()) + (account.locked()
-                    ? " §c[LOCKED] " + account.lockReason() : " §a[READY]")));
+            }, account -> send(sender, "chat.admin.finance-balance", Map.of(
+                    "town", account.townName(), "balance", runtime.money(account.balanceMinor()),
+                    "locked", account.locked() ? "[LOCKED]" : "[READY]",
+                    "reason", account.locked() ? account.lockReason() : "")));
             return true;
         }
         if (action.equals("adjust")) {
@@ -715,11 +739,12 @@ final class TownAdminCommand implements CommandExecutor {
             TownSnapshot town = requireTown(runtime, townName);
             return runtime.finance().ledger(town.id(), 0, 45);
         }, entries -> {
-            sender.sendMessage("§6完整公共账本（最新 " + entries.size() + " 条）");
+            send(sender, "chat.admin.ledger-title", Map.of("count", entries.size()));
             for (cn.tianji.town.storage.economy.EconomyRepository.LedgerEntry entry : entries) {
-                sender.sendMessage("§7" + entry.createdAt() + " §f" + entry.entryType()
-                        + " §e" + runtime.money(entry.amountMinor()) + " §8余额="
-                        + runtime.money(entry.balanceAfterMinor()) + " " + entry.note());
+                send(sender, "chat.admin.ledger-record", Map.of("created", entry.createdAt(),
+                        "type", entry.entryType(), "amount", runtime.money(entry.amountMinor()),
+                        "balance", runtime.money(entry.balanceAfterMinor()),
+                        "note", entry.note()));
             }
         });
         return true;
@@ -730,7 +755,7 @@ final class TownAdminCommand implements CommandExecutor {
         requireLength(args, 3, "expand <view|preview> <小镇全名> [方向]");
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("preview") && !(sender instanceof Player)) {
-            sender.sendMessage("§c扩张预览只能由游戏内玩家执行。");
+            send(sender, "chat.admin.expand-player-only");
             return true;
         }
         runtime.read(sender, () -> {
@@ -758,17 +783,18 @@ final class TownAdminCommand implements CommandExecutor {
             }
             throw new IllegalArgumentException("expand 只支持 view 或 preview");
         }, view -> {
-            sender.sendMessage("§6" + view.town().profile().name() + " 领地单元: "
-                    + view.units().size() + "/" + runtime.economySettings().maximumUnits());
-            view.units().forEach(unit -> sender.sendMessage("§7- grid=" + unit.unit().gridX()
-                    + "," + unit.unit().gridZ() + " area=" + unit.residenceAreaName()
-                    + " projection=" + unit.projectionStatus()));
+            send(sender, "chat.admin.expand-title", Map.of("town", view.town().profile().name(),
+                    "current", view.units().size(),
+                    "maximum", runtime.economySettings().maximumUnits()));
+            view.units().forEach(unit -> send(sender, "chat.admin.expand-unit", Map.of(
+                    "x", unit.unit().gridX(), "z", unit.unit().gridZ(),
+                    "area", unit.residenceAreaName(), "projection", unit.projectionStatus())));
             if (view.preview() != null) {
                 Player player = (Player) sender;
                 long price = ExpansionPricing.price(runtime.economySettings().expansionCost(),
                         runtime.settlement().scale()).minorUnits();
                 runtime.sitePolicy().preview(player, view.preview().territory());
-                player.sendMessage("§e预估价格: " + runtime.money(price));
+                send(player, "chat.admin.expand-price", Map.of("price", runtime.money(price)));
             }
         });
         return true;
@@ -786,10 +812,10 @@ final class TownAdminCommand implements CommandExecutor {
                 return runtime.buffs().repository().activeBuffsForTown(town.id(),
                         java.time.Instant.now());
             }, buffs -> {
-                sender.sendMessage("§6生效中的公共 Buff: " + buffs.size());
-                buffs.forEach(value -> sender.sendMessage("§7" + value.buffId() + " §d"
-                        + value.buffKey() + " §f等级=" + value.level() + " 层数="
-                        + value.stackCount() + " 到期=" + value.expiresAt()));
+                send(sender, "chat.admin.buff-title", Map.of("count", buffs.size()));
+                buffs.forEach(value -> send(sender, "chat.admin.buff-record", Map.of(
+                        "id", value.buffId(), "key", value.buffKey(), "level", value.level(),
+                        "stacks", value.stackCount(), "expires", value.expiresAt())));
             });
             return true;
         }
@@ -817,11 +843,11 @@ final class TownAdminCommand implements CommandExecutor {
                                             sender.getName(), request.definition(),
                                             runtime.settlement().scale(),
                                             BuffDurationOption.ONE_HOUR,
-                                            "admin-buff-purchase:" + UUID.randomUUID(),
-                                            java.time.Instant.now(), request.reason()),
+                            "admin-buff-purchase:" + UUID.randomUUID(),
+                            java.time.Instant.now(), request.reason()),
                             purchase -> {
-                                sender.sendMessage("§aBuff 代购完成，公共余额: "
-                                        + runtime.money(purchase.balanceAfterMinor()));
+                                send(sender, "chat.admin.buff-purchase-complete", Map.of(
+                                        "balance", runtime.money(purchase.balanceAfterMinor())));
                                 runtime.buffs().refreshAllPlayers();
                             })));
             return true;
@@ -845,8 +871,9 @@ final class TownAdminCommand implements CommandExecutor {
         }, states -> states.forEach(state -> {
             LandProtectionService.Result removal = runtime.landProtection()
                     .remove(state.town().residenceName(), state.town().territory());
-            sender.sendMessage((removal.success() ? "§a" : "§c")
-                    + state.town().profile().name() + ": " + removal.message());
+            send(sender, removal.success() ? "chat.admin.land-rebuild-success"
+                    : "chat.admin.land-rebuild-failure", Map.of(
+                    "town", state.town().profile().name(), "detail", removal.message()));
             if (removal.success()) {
                 runtime.reconcile(sender, state.town(), state.members(), true);
             }
@@ -891,7 +918,7 @@ final class TownAdminCommand implements CommandExecutor {
     private TownRuntime requireRuntime(CommandSender sender) {
         TownRuntime runtime = plugin.townRuntime();
         if (runtime == null) {
-            sender.sendMessage("§c小镇系统尚未就绪。请先使用 /townadmin status 查看启动门禁。");
+            send(sender, "chat.admin.runtime-not-ready");
         }
         return runtime;
     }
@@ -965,21 +992,22 @@ final class TownAdminCommand implements CommandExecutor {
         return plugin.getConfig().getBoolean("town.maintenance-mode", false);
     }
 
-    private static void applicationHelp(CommandSender sender) {
-        sender.sendMessage("§e/townadmin application list");
-        sender.sendMessage("§e/townadmin application approve|reject|change <小镇全名> <原因>");
+    private void applicationHelp(CommandSender sender) {
+        send(sender, "chat.admin.help-application-list");
+        send(sender, "chat.admin.help-application-review");
     }
 
     private void help(CommandSender sender, String topic) {
         if (topic == null || topic.isBlank()) {
-            sender.sendMessage("§6TianjiTown " + plugin.getPluginMeta().getVersion() + " 管理帮助");
-            sender.sendMessage("§7用法: §f/townadmin help <分类>");
-            rootHelpEntries(sender::hasPermission).forEach(sender::sendMessage);
-            sender.sendMessage("§8Tab 补全中的 <原因> 是位置提示，请替换为实际内容。");
+            send(sender, "chat.admin.help-title", Map.of(
+                    "version", plugin.getPluginMeta().getVersion()));
+            send(sender, "chat.admin.help-usage");
+            configuredRootHelpEntries(sender::hasPermission).forEach(sender::sendMessage);
+            send(sender, "chat.admin.help-placeholder-hint");
             return;
         }
         if (!TownAdminPermissions.canViewHelpTopic(sender::hasPermission, topic)) {
-            sender.sendMessage("§c没有该帮助分类的权限。");
+            send(sender, "chat.admin.help-forbidden");
             return;
         }
         switch (topic.toLowerCase(Locale.ROOT)) {
@@ -993,10 +1021,41 @@ final class TownAdminCommand implements CommandExecutor {
             case "money", "tax", "ledger", "expand" -> economyHelp(sender, topic);
             case "buff" -> buffsHelp(sender);
             default -> {
-                sender.sendMessage("§c未知帮助分类：" + topic);
+                send(sender, "chat.admin.help-unknown", Map.of("topic", topic));
                 help(sender, null);
             }
         }
+    }
+
+    private List<String> configuredRootHelpEntries(Predicate<String> hasPermission) {
+        List<String> entries = new ArrayList<>();
+        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.OPERATIONS)) {
+            entries.add(plugin.messages().text("chat.admin.help-entry-system"));
+        }
+        if (hasPermission.test(TownAdminPermissions.ROOT)) {
+            entries.add(plugin.messages().text("chat.admin.help-entry-station"));
+            entries.add(plugin.messages().text("chat.admin.help-entry-application"));
+            entries.add(plugin.messages().text("chat.admin.help-entry-town"));
+            entries.add(plugin.messages().text("chat.admin.help-entry-member"));
+            entries.add(plugin.messages().text("chat.admin.help-entry-vote"));
+            entries.add(plugin.messages().text("chat.admin.help-entry-land"));
+        }
+        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.MONEY)) {
+            entries.add(plugin.messages().text("chat.admin.help-entry-money"));
+        }
+        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.TAX)) {
+            entries.add(plugin.messages().text("chat.admin.help-entry-tax"));
+        }
+        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.LEDGER)) {
+            entries.add(plugin.messages().text("chat.admin.help-entry-ledger"));
+        }
+        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.EXPAND)) {
+            entries.add(plugin.messages().text("chat.admin.help-entry-expand"));
+        }
+        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.BUFF)) {
+            entries.add(plugin.messages().text("chat.admin.help-entry-buff"));
+        }
+        return List.copyOf(entries);
     }
 
     static List<String> rootHelpEntries(Predicate<String> hasPermission) {
@@ -1030,70 +1089,65 @@ final class TownAdminCommand implements CommandExecutor {
         return List.copyOf(entries);
     }
 
-    private static void systemHelp(CommandSender sender) {
-        sender.sendMessage("§6系统与运维");
-        sender.sendMessage("§e/townadmin status §7查看依赖、SQLite 和玩家入口状态");
-        sender.sendMessage("§e/townadmin reload §7重载可热更新的配置");
-        sender.sendMessage("§e/townadmin maintenance <on|off|status> §7管理维护模式");
-        sender.sendMessage("§e/townadmin audit [1~200] §7查看最近审计记录");
-        sender.sendMessage("§e/townadmin diagnose [1~180天] §7生成统一对账诊断报告");
-        sender.sendMessage("§e/townadmin backup §7立即创建 SQLite 在线备份与配置快照");
+    private void systemHelp(CommandSender sender) {
+        send(sender, "chat.admin.help-system-title");
+        send(sender, "chat.admin.help-system-status");
+        send(sender, "chat.admin.help-system-reload");
+        send(sender, "chat.admin.help-system-maintenance");
+        send(sender, "chat.admin.help-system-audit");
+        send(sender, "chat.admin.help-system-diagnose");
+        send(sender, "chat.admin.help-system-backup");
     }
 
-    private static void economyHelp(CommandSender sender, String topic) {
-        sender.sendMessage("§6公共经济与领地扩张");
+    private void economyHelp(CommandSender sender, String topic) {
+        send(sender, "chat.admin.help-economy-title");
         switch (topic.toLowerCase(Locale.ROOT)) {
             case "money" -> {
-                sender.sendMessage("§e/townadmin money view <小镇全名>");
-                sender.sendMessage("§e/townadmin money adjust <小镇全名> <带符号金额> <原因>");
-                sender.sendMessage("§e/townadmin money reconcile");
+                send(sender, "chat.admin.help-economy-money-view");
+                send(sender, "chat.admin.help-economy-money-adjust");
+                send(sender, "chat.admin.help-economy-money-reconcile");
             }
-            case "tax" -> sender.sendMessage(
-                    "§e/townadmin tax set <小镇全名> <百分比> <原因>");
-            case "ledger" -> sender.sendMessage(
-                    "§e/townadmin ledger view <小镇全名>");
-            case "expand" -> sender.sendMessage(
-                    "§e/townadmin expand view|preview <小镇全名> [方向]");
+            case "tax" -> send(sender, "chat.admin.help-economy-tax");
+            case "ledger" -> send(sender, "chat.admin.help-economy-ledger");
+            case "expand" -> send(sender, "chat.admin.help-economy-expand");
             default -> throw new IllegalArgumentException("未知经济帮助分类");
         }
     }
 
-    private static void buffsHelp(CommandSender sender) {
-        sender.sendMessage("§6公共 Buff 管理");
-        sender.sendMessage("§e/townadmin buff list <小镇全名>");
-        sender.sendMessage("§e/townadmin buff grant <小镇全名> <buffKey> <原因>");
-        sender.sendMessage("§7公共 Buff 购买后不接受退款；管理员代购默认持续一小时。");
+    private void buffsHelp(CommandSender sender) {
+        send(sender, "chat.admin.help-buff-title");
+        send(sender, "chat.admin.help-buff-list");
+        send(sender, "chat.admin.help-buff-grant");
+        send(sender, "chat.admin.help-buff-note");
     }
 
-    private static void townHelp(CommandSender sender) {
-        sender.sendMessage("§6小镇管理");
-        sender.sendMessage("§e/townadmin town view <小镇全名> §7查看小镇资料与投影状态");
-        sender.sendMessage("§e/townadmin town delete <小镇全名> <原因> §7随后点击聊天确认按钮");
+    private void townHelp(CommandSender sender) {
+        send(sender, "chat.admin.help-town-title");
+        send(sender, "chat.admin.help-town-view");
+        send(sender, "chat.admin.help-town-delete");
     }
 
-    private static void memberHelp(CommandSender sender) {
-        sender.sendMessage("§6成员与镇长管理");
-        sender.sendMessage("§e/townadmin member add|remove <小镇全名>"
-                + " <玩家> <原因>");
-        sender.sendMessage("§e/townadmin member role <小镇全名> <玩家> <DEPUTY_MAYOR|MEMBER>");
-        sender.sendMessage("§7普通玩家加入小镇使用申请制；管理员这里只保留直接添加和移除。");
-        sender.sendMessage("§e/townadmin mayor transfer <小镇全名>"
-                + " <玩家> <原因>");
+    private void memberHelp(CommandSender sender) {
+        send(sender, "chat.admin.help-member-title");
+        send(sender, "chat.admin.help-member-add-remove");
+        send(sender, "chat.admin.help-member-role");
+        send(sender, "chat.admin.help-member-note");
+        send(sender, "chat.admin.help-member-mayor");
     }
 
-    private static void voteHelp(CommandSender sender) {
-        sender.sendMessage("§6治理投票管理");
-        sender.sendMessage("§e/townadmin vote create-kick <小镇全名> <目标玩家>");
-        sender.sendMessage("§e/townadmin vote create-mayor <小镇全名> <候选玩家>");
-        sender.sendMessage("§e/townadmin vote settle <voteId>");
-        sender.sendMessage("§e/townadmin vote cancel <voteId> <原因>");
+    private void voteHelp(CommandSender sender) {
+        send(sender, "chat.admin.help-vote-title");
+        send(sender, "chat.admin.help-vote-kick");
+        send(sender, "chat.admin.help-vote-mayor");
+        send(sender, "chat.admin.help-vote-settle");
+        send(sender, "chat.admin.help-vote-cancel");
     }
 
-    private static void landHelp(CommandSender sender) {
-        sender.sendMessage("§6领地管理");
-        sender.sendMessage("§e/townadmin land preview <小镇全名> §7在游戏内显示边界");
-        sender.sendMessage("§e/townadmin land reconcile <小镇全名|all> [repair]");
-        sender.sendMessage("§e/townadmin land rebuild <小镇全名|all> §7随后点击聊天确认按钮");
+    private void landHelp(CommandSender sender) {
+        send(sender, "chat.admin.help-land-title");
+        send(sender, "chat.admin.help-land-preview");
+        send(sender, "chat.admin.help-land-reconcile");
+        send(sender, "chat.admin.help-land-rebuild");
     }
 
     private record ApplicationRequest(ApplicationSnapshot application, String reason) {

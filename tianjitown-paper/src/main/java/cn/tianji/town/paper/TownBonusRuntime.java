@@ -67,8 +67,7 @@ final class TownBonusRuntime implements Listener {
     private final AtomicBoolean diagnosticRunning = new AtomicBoolean();
     private final AtomicBoolean beaconPlayerFailureLogged = new AtomicBoolean();
     private final AtomicBoolean beaconCleanupFailureLogged = new AtomicBoolean();
-    private final AtomicReference<DiagnosticResult> lastDiagnostic = new AtomicReference<>(
-            new DiagnosticResult(false, null, "尚未执行", null));
+    private final AtomicReference<DiagnosticResult> lastDiagnostic;
 
     TownBonusRuntime(TianjiTownPlugin plugin, TownRuntime host,
                      TownBonusRepository repository, TownBonusSettings settings,
@@ -81,6 +80,8 @@ final class TownBonusRuntime implements Listener {
                 host.settlement().accountId(), host.settlement().scale());
         this.backups = new OnlineBackupService(plugin, host.database(),
                 settings.operations().backup());
+        this.lastDiagnostic = new AtomicReference<>(new DiagnosticResult(false, null,
+                plugin.messages().text("chat.bonus.diagnostic-not-run"), null));
     }
 
     TownBonusSettings settings() {
@@ -137,16 +138,19 @@ final class TownBonusRuntime implements Listener {
 
     void createBackup(CommandSender sender) {
         if (!settings.operations().backup().enabled()) {
-            sender.sendMessage("§c定时备份已在配置中关闭。");
+            plugin.messages().send(sender, "chat.bonus.backup-disabled");
             return;
         }
-        sender.sendMessage("§e正在创建 SQLite 在线备份与配置快照……");
+        plugin.messages().send(sender, "chat.bonus.backup-started");
         plugin.runAsync(() -> {
             OnlineBackupService.Result result = backups.create();
-            plugin.runMain(() -> sender.sendMessage(
-                    (result.success() ? "§a" : "§c") + result.detail()
-                            + (result.databaseFile() == null ? ""
-                            : "；文件=" + result.databaseFile())));
+            plugin.runMain(() -> plugin.messages().send(sender, result.success()
+                            ? "chat.bonus.backup-result-success"
+                            : "chat.bonus.backup-result-failure",
+                    result.success() ? Map.of("detail", result.detail(), "file",
+                                    result.databaseFile() == null ? ""
+                                            : "；文件=" + result.databaseFile())
+                            : Map.of("detail", result.detail())));
         });
     }
 
@@ -166,10 +170,11 @@ final class TownBonusRuntime implements Listener {
 
     void diagnose(CommandSender sender, int days) {
         if (days < 1 || days > 180) {
-            throw new IllegalArgumentException("诊断范围必须在 1~180 天之间");
+            throw new IllegalArgumentException(plugin.messages().plainText(
+                    "chat.bonus.diagnostic-range"));
         }
         if (!diagnosticRunning.compareAndSet(false, true)) {
-            sender.sendMessage("§e已有统一诊断正在运行，请稍后查看结果。");
+            plugin.messages().send(sender, "chat.bonus.diagnostic-running");
             return;
         }
         long externalBalance;
@@ -178,7 +183,7 @@ final class TownBonusRuntime implements Listener {
         } catch (RuntimeException exception) {
             externalBalance = -1;
         }
-        sender.sendMessage("§e正在检查 SQLite、Residence、Vault 与 QuickShop 历史……");
+        plugin.messages().send(sender, "chat.bonus.diagnostic-started");
         long capturedExternal = externalBalance;
         Instant since = Instant.now().minus(java.time.Duration.ofDays(days));
         boolean submitted = plugin.runAsync(() -> {
@@ -194,10 +199,12 @@ final class TownBonusRuntime implements Listener {
             } catch (RuntimeException | LinkageError exception) {
                 diagnosticRunning.set(false);
                 DiagnosticResult failed = new DiagnosticResult(false, Instant.now(),
-                        "统一诊断失败: " + safeMessage(exception), null);
+                        plugin.messages().text("chat.bonus.diagnostic-failed", Map.of(
+                                "detail", safeMessage(exception))), null);
                 lastDiagnostic.set(failed);
                 plugin.runMain(
-                        () -> sender.sendMessage("§c" + failed.detail()));
+                        () -> plugin.messages().send(sender, "chat.bonus.diagnostic-failed",
+                                Map.of("detail", safeMessage(exception))));
             }
         });
         if (!submitted) {
@@ -350,9 +357,7 @@ final class TownBonusRuntime implements Listener {
         }
         event.setUseInteractedBlock(Event.Result.DENY);
         event.setCancelled(true);
-        player.sendActionBar(net.kyori.adventure.text.Component.text(
-                "只有本镇镇长或副镇长可以编辑信标效果",
-                net.kyori.adventure.text.format.NamedTextColor.RED));
+        player.sendActionBar(plugin.messages().component("chat.bonus.beacon-edit-forbidden"));
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -515,12 +520,15 @@ final class TownBonusRuntime implements Listener {
             healthy = false;
             lines.add("QuickShop reconciliation=INCOMPLETE（历史不可用或超过 1000 条上限）");
         }
-        String detail = healthy ? "统一诊断通过" : "统一诊断发现异常，请查看报告";
+        String summaryKey = healthy ? "chat.bonus.diagnostic-summary-success"
+                : "chat.bonus.diagnostic-summary-failure";
+        String detail = plugin.messages().text(summaryKey);
         DiagnosticResult result = new DiagnosticResult(healthy, Instant.now(), detail, null);
         lastDiagnostic.set(result);
         diagnosticRunning.set(false);
-        sender.sendMessage((healthy ? "§a" : "§c") + detail);
-        lines.forEach(line -> sender.sendMessage("§7- " + line));
+        plugin.messages().send(sender, summaryKey);
+        lines.forEach(line -> plugin.messages().send(sender, "chat.bonus.diagnostic-line",
+                Map.of("line", line)));
         writeDiagnosticReport(lines, result);
     }
 

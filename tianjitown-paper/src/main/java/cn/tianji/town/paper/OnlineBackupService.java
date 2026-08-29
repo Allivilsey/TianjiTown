@@ -16,6 +16,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -26,14 +27,15 @@ final class OnlineBackupService {
     private final TianjiTownPlugin plugin;
     private final DatabaseGate database;
     private final TownBonusSettings.Backup settings;
-    private final AtomicReference<Result> lastResult = new AtomicReference<>(
-            new Result(false, null, "尚未执行", null));
+    private final AtomicReference<Result> lastResult;
 
     OnlineBackupService(TianjiTownPlugin plugin, DatabaseGate database,
                            TownBonusSettings.Backup settings) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.database = Objects.requireNonNull(database, "database");
         this.settings = Objects.requireNonNull(settings, "settings");
+        this.lastResult = new AtomicReference<>(new Result(false, null,
+                plugin.messages().text("chat.backup.not-run"), null));
     }
 
     Result create() {
@@ -63,13 +65,15 @@ final class OnlineBackupService {
             Files.deleteIfExists(reservationFile);
             prune(directory);
             Result result = new Result(true, startedAt,
-                    "SQLite 在线备份与配置快照已完成，SHA-256=" + checksum, databaseFile);
+                    plugin.messages().text("chat.backup.success-detail", Map.of(
+                            "checksum", checksum)), databaseFile);
             lastResult.set(result);
             return result;
         } catch (IOException | RuntimeException exception) {
             cleanup(databaseFile, configFile, checksumFile, reservationFile);
             Result result = new Result(false, startedAt,
-                    "备份失败: " + safeMessage(exception), null);
+                    plugin.messages().text("chat.backup.failure-detail", Map.of(
+                            "detail", safeMessage(exception))), null);
             lastResult.set(result);
             return result;
         }

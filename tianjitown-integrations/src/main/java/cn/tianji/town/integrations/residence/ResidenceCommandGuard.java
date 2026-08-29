@@ -11,28 +11,43 @@ import org.bukkit.plugin.Plugin;
 
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
+import java.util.function.BiFunction;
 
 public final class ResidenceCommandGuard implements Listener {
     private final Predicate<String> managedName;
     private final java.util.function.Consumer<String> failureLogger;
+    private final BiFunction<String, Map<String, ?>, String> messageResolver;
     private final AtomicBoolean failureLogged = new AtomicBoolean();
 
     public ResidenceCommandGuard(Predicate<String> managedName) {
-        this(managedName, ignored -> {
-        });
+        this(managedName, ignored -> { }, ResidenceCommandGuard::fallbackMessage);
     }
 
     public ResidenceCommandGuard(Plugin owner, Predicate<String> managedName) {
-        this(managedName, message -> owner.getLogger().severe(message));
+        this(managedName, message -> owner.getLogger().severe(message),
+                ResidenceCommandGuard::fallbackMessage);
+    }
+
+    public ResidenceCommandGuard(Plugin owner, Predicate<String> managedName,
+                                 BiFunction<String, Map<String, ?>, String> messageResolver) {
+        this(managedName, message -> owner.getLogger().severe(message), messageResolver);
     }
 
     ResidenceCommandGuard(Predicate<String> managedName,
                           java.util.function.Consumer<String> failureLogger) {
+        this(managedName, failureLogger, ResidenceCommandGuard::fallbackMessage);
+    }
+
+    private ResidenceCommandGuard(Predicate<String> managedName,
+                                  java.util.function.Consumer<String> failureLogger,
+                                  BiFunction<String, Map<String, ?>, String> messageResolver) {
         this.managedName = Objects.requireNonNull(managedName, "managedName");
         this.failureLogger = Objects.requireNonNull(failureLogger, "failureLogger");
+        this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -57,14 +72,15 @@ public final class ResidenceCommandGuard implements Listener {
             };
             if (insideSystemResidence || mentionsManagedName(command, protectedName)) {
                 event.setCancelled(true);
-                event.getPlayer().sendMessage(
-                        "§cTianjiTown 系统领地不能通过 Residence 命令管理。");
+                event.getPlayer().sendMessage(messageResolver.apply(
+                        "chat.residence.command-blocked", Map.of()));
             }
         } catch (RuntimeException | LinkageError exception) {
             // 依赖失效时按保护优先原则拒绝 Residence 写命令。
             try {
                 event.setCancelled(true);
-                event.getPlayer().sendMessage("§cResidence 当前不可用，领地命令已安全拒绝。");
+                event.getPlayer().sendMessage(messageResolver.apply(
+                        "chat.residence.unavailable", Map.of()));
             } catch (RuntimeException | LinkageError ignored) {
                 // 事件对象本身已经失效时只能停止继续处理。
             }
@@ -83,6 +99,10 @@ public final class ResidenceCommandGuard implements Listener {
         String message = throwable.getMessage();
         return message == null || message.isBlank()
                 ? throwable.getClass().getSimpleName() : message;
+    }
+
+    private static String fallbackMessage(String key, Map<String, ?> placeholders) {
+        return key;
     }
 
     static boolean mentionsManagedName(String command, Predicate<String> managedName) {

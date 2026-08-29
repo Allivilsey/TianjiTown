@@ -145,7 +145,7 @@ final class TownUiController implements Listener {
     boolean createStation(Player player) {
         Block block = player.getTargetBlockExact(6);
         if (block == null || !(block.getState() instanceof Lectern lectern)) {
-            player.sendMessage("§c请看向 6 格内的讲台后重试。");
+            plugin.messages().send(player, "chat.station.target-lectern");
             return false;
         }
         List<StationRecord> stations = stationRecords();
@@ -153,10 +153,10 @@ final class TownUiController implements Listener {
                 PersistentDataType.STRING);
         if (existingId != null && !existingId.isBlank()) {
             if (registeredStation(block, existingId, stations) != null) {
-                player.sendMessage("§e该讲台已经是小镇服务台，未重复创建。ID: " + existingId);
+                plugin.messages().send(player, "chat.station.already-exists",
+                        Map.of("id", existingId));
             } else {
-                player.sendMessage("§c该讲台携带了复制或移动后的服务台标记，但 ID 与登记坐标不一致；"
-                        + "请在原登记位置操作或先由管理员清理异常方块。");
+                plugin.messages().send(player, "chat.station.invalid-copy");
             }
             return false;
         }
@@ -168,29 +168,29 @@ final class TownUiController implements Listener {
             lectern.getPersistentDataContainer().set(stationKey, PersistentDataType.STRING,
                     registeredLocation.id());
             lectern.update(true);
-            player.sendMessage("§a已恢复原登记坐标的小镇服务台标记，ID: "
-                    + registeredLocation.id());
+            plugin.messages().send(player, "chat.station.restored",
+                    Map.of("id", registeredLocation.id()));
             return true;
         }
         String stationId = UUID.randomUUID().toString();
         lectern.getPersistentDataContainer().set(stationKey, PersistentDataType.STRING, stationId);
         lectern.update(true);
         registerStation(block, stationId, null, null);
-        player.sendMessage("§a已创建小镇服务台，ID: " + stationId);
+        plugin.messages().send(player, "chat.station.created", Map.of("id", stationId));
         return true;
     }
 
     boolean removeStation(Player player) {
         Block block = player.getTargetBlockExact(6);
         if (block == null || !(block.getState() instanceof Lectern lectern)) {
-            player.sendMessage("§c请看向 6 格内的小镇服务台后重试。");
+            plugin.messages().send(player, "chat.station.target-station");
             return false;
         }
         String stationId = lectern.getPersistentDataContainer().get(stationKey,
                 PersistentDataType.STRING);
         StationRecord registeredLocation = stationAt(block);
         if ((stationId == null || stationId.isBlank()) && registeredLocation == null) {
-            player.sendMessage("§c当前讲台未注册为小镇服务台。");
+            plugin.messages().send(player, "chat.station.unregistered");
             return false;
         }
         lectern.getPersistentDataContainer().remove(stationKey);
@@ -203,31 +203,33 @@ final class TownUiController implements Listener {
     void showStationInfo(Player player) {
         Block block = player.getTargetBlockExact(6);
         if (block == null || !(block.getState() instanceof Lectern lectern)) {
-            player.sendMessage("§c请看向 6 格内的讲台后重试。");
+            plugin.messages().send(player, "chat.station.target-lectern");
             return;
         }
         String stationId = lectern.getPersistentDataContainer().get(stationKey,
                 PersistentDataType.STRING);
         if (stationId == null || stationId.isBlank()) {
-            player.sendMessage("§e当前讲台未注册为小镇服务台。位置: "
-                    + stationLocation(block));
+            plugin.messages().send(player, "chat.station.unregistered-location",
+                    Map.of("location", stationLocation(block)));
             return;
         }
         if (registeredStation(block, stationId, stationRecords()) == null) {
-            player.sendMessage("§c当前讲台携带无效的服务台标记：ID 与登记坐标不一致。");
+            plugin.messages().send(player, "chat.station.invalid-marker");
             return;
         }
-        player.sendMessage("§6小镇服务台详情");
-        player.sendMessage("§7ID: §f" + stationId);
-        player.sendMessage("§7位置: §f" + stationLocation(block));
-        player.sendMessage("§7状态: §a有效");
+        plugin.messages().send(player, "chat.station.info-title");
+        plugin.messages().send(player, "chat.station.info-id", Map.of("id", stationId));
+        plugin.messages().send(player, "chat.station.info-location",
+                Map.of("location", stationLocation(block)));
+        plugin.messages().send(player, "chat.station.info-status");
     }
 
     void listStations(CommandSender sender) {
         List<StationRecord> stations = stationRecords();
-        sender.sendMessage("§6小镇服务台列表（" + stations.size() + "）");
+        plugin.messages().send(sender, "chat.station.list-title",
+                Map.of("count", stations.size()));
         if (stations.isEmpty()) {
-            sender.sendMessage("§7当前没有已登记的服务台。");
+            plugin.messages().send(sender, "chat.station.list-empty");
             return;
         }
         for (StationRecord station : stations) {
@@ -236,13 +238,15 @@ final class TownUiController implements Listener {
             String owner = station.townId() == null ? "公共"
                     : Objects.requireNonNullElse(station.townName(), station.townId().toString());
             if (sender instanceof Player player) {
-                player.sendMessage(Component.text(station.id() + " " + location + " · " + owner + " ["
-                                + plainStationStatus(station) + "] ", NamedTextColor.YELLOW)
-                        .append(callbackButton(player, "[传送]",
+                player.sendMessage(plugin.messages().component("chat.station.list-entry", Map.of(
+                                "id", station.id(), "location", location, "owner", owner,
+                                "status", plainStationStatus(station)))
+                        .append(callbackButton(player, "chat.buttons.teleport",
                                 () -> teleportToStation(player, station))));
             } else {
-                sender.sendMessage("§e" + station.id() + " §7" + location + " · " + owner + " §8["
-                        + stationStatus(station) + "§8]");
+                plugin.messages().send(sender, "chat.station.list-entry", Map.of(
+                        "id", station.id(), "location", location, "owner", owner,
+                        "status", stationStatus(station)));
             }
         }
     }
@@ -253,28 +257,29 @@ final class TownUiController implements Listener {
             world = Bukkit.getWorld(station.worldName());
         }
         if (world == null) {
-            player.sendMessage("§c服务台所在世界当前未加载。");
+            plugin.messages().send(player, "chat.station.world-unloaded");
             return;
         }
         Block block = world.getBlockAt(station.x(), station.y(), station.z());
         if (!(block.getState() instanceof Lectern lectern)
                 || !station.id().equals(lectern.getPersistentDataContainer().get(
                 stationKey, PersistentDataType.STRING))) {
-            player.sendMessage("§c服务台方块已变化或登记不一致，无法传送。");
+            plugin.messages().send(player, "chat.station.block-changed");
             return;
         }
         org.bukkit.Location destination = block.getLocation().add(0.5, 1.0, 0.5);
         destination.setYaw(player.getYaw());
         destination.setPitch(player.getPitch());
         if (player.teleport(destination)) {
-            player.sendMessage("§a已传送至小镇服务台。");
+            plugin.messages().send(player, "chat.station.teleported");
         } else {
-            player.sendMessage("§c无法传送至小镇服务台。");
+            plugin.messages().send(player, "chat.station.teleport-failed");
         }
     }
 
     private String plainStationStatus(StationRecord station) {
-        return stationStatus(station).replace("§a", "");
+        return PlainTextComponentSerializer.plainText().serialize(
+                LegacyComponentSerializer.legacySection().deserialize(stationStatus(station)));
     }
 
     private void registerStation(Block block, String stationId, UUID townId, String townName) {
@@ -350,18 +355,20 @@ final class TownUiController implements Listener {
             world = Bukkit.getWorld(station.worldName());
         }
         if (world == null) {
-            return "世界未加载";
+            return plugin.messages().text("chat.station.status-world-unloaded");
         }
         if (!world.isChunkLoaded(station.x() >> 4, station.z() >> 4)) {
-            return "区块未加载";
+            return plugin.messages().text("chat.station.status-chunk-unloaded");
         }
         Block block = world.getBlockAt(station.x(), station.y(), station.z());
         if (!(block.getState() instanceof Lectern lectern)) {
-            return "方块已变化";
+            return plugin.messages().text("chat.station.status-block-changed");
         }
         String actualId = lectern.getPersistentDataContainer().get(stationKey,
                 PersistentDataType.STRING);
-        return station.id().equals(actualId) ? "§a有效" : "登记不一致";
+        return station.id().equals(actualId)
+                ? plugin.messages().text("chat.station.status-valid")
+                : plugin.messages().text("chat.station.status-mismatch");
     }
 
     private static int number(Map<?, ?> raw, String key) {
@@ -474,7 +481,7 @@ final class TownUiController implements Listener {
 
     void openMain(Player player) {
         if (maintenanceMode()) {
-            player.sendMessage("§c小镇系统正在维护，玩家操作暂时停用。");
+            plugin.messages().send(player, "system.maintenance");
             return;
         }
         UUID request = openMenu(player, 9, "小镇服务 · 正在读取", List.of());
@@ -506,30 +513,31 @@ final class TownUiController implements Listener {
                 return;
             }
             if (governance.requiresRulesConfirmation()) {
-                player.sendMessage(Component.text("小镇规则已有更新，请阅读并重新确认后继续使用小镇菜单。 ",
-                                NamedTextColor.YELLOW)
-                        .append(callbackButton(player, "[查看新规则]", () -> openMain(player))));
+                player.sendMessage(plugin.messages().component("chat.notification.rules-updated")
+                        .append(callbackButton(player, "chat.buttons.view-rules",
+                                () -> openMain(player))));
             }
             if (governance.pendingTransfer() != null) {
-                player.sendMessage(Component.text("镇长邀请你接任“" + governance.townName() + "”。 ",
-                                NamedTextColor.GOLD)
-                        .append(callbackButton(player, "[处理转让]", () -> openMain(player))));
+                player.sendMessage(plugin.messages().component("chat.notification.mayor-transfer",
+                                Map.of("town", governance.townName()))
+                        .append(callbackButton(player, "chat.buttons.handle-transfer",
+                                () -> openMain(player))));
             }
             long pendingVotes = governance.votes().stream()
                     .filter(vote -> vote.viewerEligible() && !vote.viewerVoted()).count();
             if (pendingVotes > 0) {
-                player.sendMessage(Component.text("你有 " + pendingVotes + " 个小镇治理投票待处理。 ",
-                                NamedTextColor.AQUA)
-                        .append(callbackButton(player, "[前往投票]", () -> openMain(player))));
+                player.sendMessage(plugin.messages().component("chat.notification.pending-votes",
+                                Map.of("count", pendingVotes))
+                        .append(callbackButton(player, "chat.buttons.view-votes",
+                                () -> openMain(player))));
             }
         });
         runtime.read(player, () -> runtime.finance().findFinanceByPlayer(player.getUniqueId())
                 .orElse(null), finance -> {
             if (runtime.taxEnabled() && finance != null && finance.hasUnreadTaxChange()) {
-                player.sendMessage(Component.text("小镇税率已更新为 "
-                                + TownRuntime.percent(finance.taxRateBps())
-                                + "，同步用于 QuickShop、Jobs 与全球市场收入。 ", NamedTextColor.YELLOW)
-                        .append(callbackButton(player, "[查看公共资金]",
+                player.sendMessage(plugin.messages().component("chat.notification.tax-updated", Map.of(
+                                "rate", TownRuntime.percent(finance.taxRateBps())))
+                        .append(callbackButton(player, "chat.buttons.view-finance",
                                 () -> openFinance(player, 0))));
             }
         });
@@ -544,12 +552,13 @@ final class TownUiController implements Listener {
     }
 
     void showAdminApplicationList(CommandSender sender, List<ApplicationSnapshot> applications) {
-        sender.sendMessage("§6待处理申请: " + applications.size());
+        plugin.messages().send(sender, "chat.admin.pending-applications",
+                Map.of("count", applications.size()));
         for (ApplicationSnapshot application : applications) {
-            sender.sendMessage("§e" + application.text().name() + " §7["
-                    + application.status() + "] 申请人=" + application.applicantId());
+            plugin.messages().send(sender, "chat.admin.application-entry", Map.of(
+                    "town", application.text().name(), "applicant", application.applicantId()));
             if (sender instanceof Player admin) {
-                admin.sendMessage(callbackButton(admin, "[打开审核界面]",
+                admin.sendMessage(callbackButton(admin, "chat.buttons.review-application",
                         () -> openAdminApplication(admin, application.id())));
             }
         }
@@ -565,28 +574,34 @@ final class TownUiController implements Listener {
         }
         switch (application.status()) {
             case ACTIVE -> {
-                applicant.sendMessage(Component.text("你的小镇“" + application.text().name()
-                        + "”已获批准并创建完成。", NamedTextColor.GREEN));
+                applicant.sendMessage(plugin.messages().component(
+                        "chat.notification.application-approved",
+                        Map.of("town", application.text().name())));
                 playSound(applicant, Sound.ENTITY_PLAYER_LEVELUP);
             }
             case NEED_CHANGES -> {
-                applicant.sendMessage(Component.text("你的小镇申请需要补充资料："
-                                + Objects.requireNonNullElse(application.reviewMessage(), "请查看申请详情") + " ",
-                        NamedTextColor.YELLOW).append(callbackButton(applicant, "[修改申请]",
+                applicant.sendMessage(plugin.messages().component(
+                                "chat.notification.application-needs-changes", Map.of(
+                                        "reason", Objects.requireNonNullElse(
+                                                application.reviewMessage(), "请查看申请详情")))
+                        .append(callbackButton(applicant, "chat.buttons.edit-application",
                         () -> loadApplication(applicant, application.id()))));
                 playSound(applicant, Sound.BLOCK_NOTE_BLOCK_PLING);
             }
             case REJECTED -> {
-                applicant.sendMessage(Component.text("你的小镇申请已被拒绝："
-                                + Objects.requireNonNullElse(application.reviewMessage(), "未提供原因") + " ",
-                        NamedTextColor.RED).append(callbackButton(applicant, "[打开小镇系统]",
+                applicant.sendMessage(plugin.messages().component(
+                                "chat.notification.application-rejected", Map.of(
+                                        "reason", Objects.requireNonNullElse(
+                                                application.reviewMessage(), "未提供原因")))
+                        .append(callbackButton(applicant, "chat.buttons.open-system",
                         () -> openMain(applicant))));
                 playSound(applicant, Sound.ENTITY_VILLAGER_NO);
             }
             case PROVISION_FAILED -> {
-                applicant.sendMessage(Component.text("你的小镇已通过审核，但自动创建暂时失败；管理员会处理。 ",
-                                NamedTextColor.RED)
-                        .append(callbackButton(applicant, "[查看状态]", () -> openMain(applicant))));
+                applicant.sendMessage(plugin.messages().component(
+                                "chat.notification.application-provision-failed")
+                        .append(callbackButton(applicant, "chat.buttons.open-system",
+                                () -> openMain(applicant))));
                 playSound(applicant, Sound.BLOCK_NOTE_BLOCK_BASS);
             }
             default -> {
@@ -630,7 +645,7 @@ final class TownUiController implements Listener {
                     PersistentDataType.STRING);
             if (stationId == null || stationId.isBlank()
                     || registeredStation(block, stationId, stationRecords()) == null) {
-                event.getPlayer().sendMessage("§c该讲台是复制或移动后的无效服务台，登记坐标校验未通过。");
+                plugin.messages().send(event.getPlayer(), "chat.station.invalid-interaction");
                 return;
             }
             event.setCancelled(true);
@@ -716,14 +731,12 @@ final class TownUiController implements Listener {
                     List.of("§7领取手册、退出或解散小镇"), "PERSONAL_CENTER", null)));
         } else if (dashboard.application() != null) {
             ApplicationSnapshot application = dashboard.application();
-            items.add(new MenuItem(0, button(Material.PAPER, "§6小镇申请办理中",
-                    List.of("§7当前状态: §f" + application.status(),
-                            application.reviewMessage() == null ? "§7请继续完成申请流程"
-                                    : "§c管理员意见: " + application.reviewMessage()), null, null)));
+            items.add(new MenuItem(0, button(Material.PAPER, "§6小镇申请",
+                    List.of(application.reviewMessage() == null ? "§7请继续完成申请流程"
+                            : "§c管理员意见: " + application.reviewMessage()), null, null)));
             items.add(new MenuItem(11, button(Material.MAP, "§e继续小镇申请",
-                    List.of("§7状态: " + application.status(),
-                            application.reviewMessage() == null ? "§7点击查看摘要"
-                                    : "§c管理员意见: " + application.reviewMessage()),
+                    List.of(application.reviewMessage() == null ? "§7点击查看摘要"
+                            : "§c管理员意见: " + application.reviewMessage()),
                     "APPLICATION", application.id().toString())));
         } else {
             items.add(new MenuItem(0, button(Material.BELL, "§6小镇服务",
@@ -1411,11 +1424,9 @@ final class TownUiController implements Listener {
         List<String> summary = new ArrayList<>(List.of("§7名称: " + application.text().name(),
                 "§7小镇代码: " + application.text().residenceName(),
                 "§7Residence 领地名: " + application.text().normalizedResidenceName(),
-                "§7状态: " + application.status(),
                 "§7建镇申请费: §f2000（批准后转为初始公共资金）"));
         for (InitialMemberConfirmation member : application.initialMembers()) {
-            summary.add("§7初始成员: " + displayName(member.playerId()) + " · "
-                    + member.status());
+            summary.add("§7初始成员: " + displayName(member.playerId()));
         }
         if (application.territory() != null) {
             summary.add("§7中心区块: " + application.territory().center().x() + ", "
@@ -1896,11 +1907,10 @@ final class TownUiController implements Listener {
             List<ApplicationSnapshot> visible = page(applications, page, 8);
             for (int index = 0; index < visible.size(); index++) {
                 ApplicationSnapshot application = visible.get(index);
-                Material material = application.status() == ApplicationStatus.PROVISION_FAILED
-                        ? Material.REDSTONE_BLOCK : Material.WRITABLE_BOOK;
-                items.add(new MenuItem(index, button(material, "§e" + application.text().name(),
+                items.add(new MenuItem(index, button(Material.WRITABLE_BOOK,
+                        "§e" + application.text().name(),
                         List.of("§7小镇代码: " + application.text().residenceName(),
-                                "§7状态: " + application.status(), "§7点击查看并处理"),
+                                "§7点击查看并处理"),
                         "ADMIN_APPLICATION", application.id().toString())));
             }
             if (applications.isEmpty()) {
@@ -1937,11 +1947,9 @@ final class TownUiController implements Listener {
                     "§7Residence 领地名: " + application.text().normalizedResidenceName(),
                     "§7简介: " + application.text().description(),
                     "§7规则: " + String.join(" | ", application.text().rules()),
-                    "§7状态: " + application.status(),
                     "§7申请费: 2000（批准后成为初始公共资金）"));
             for (InitialMemberConfirmation member : application.initialMembers()) {
-                summary.add("§7初始成员: " + displayName(member.playerId()) + " · "
-                        + member.status());
+                summary.add("§7初始成员: " + displayName(member.playerId()));
             }
             if (application.territory() != null) {
                 summary.add("§7选址: " + application.territory().center().worldName() + " "
@@ -2237,7 +2245,7 @@ final class TownUiController implements Listener {
                 handleOutcome(mayor, outcome, changedTown -> {
             Player removed = Bukkit.getPlayer(playerId);
             if (removed != null) {
-                removed.sendMessage("§c你已被小镇管理组移出小镇。");
+                plugin.messages().send(removed, "chat.notification.member-removed");
             }
             openNotice(mayor, dialogText("notice.member-removed-title"),
                     dialogText("notice.member-removed-message"),
@@ -2253,7 +2261,7 @@ final class TownUiController implements Listener {
                 handleOutcome(manager, outcome, visitor -> {
             Player invited = Bukkit.getPlayer(playerId);
             if (invited != null) {
-                invited.sendMessage("§a你已被加入一个小镇的访客名单，并获得该镇领地权限。");
+                plugin.messages().send(invited, "chat.notification.visitor-added");
                 playSound(invited, Sound.BLOCK_NOTE_BLOCK_PLING);
             }
             openNotice(manager, dialogText("notice.visitor-added-title"),
@@ -2272,7 +2280,7 @@ final class TownUiController implements Listener {
                 handleOutcome(manager, outcome, removed -> {
             Player visitor = Bukkit.getPlayer(playerId);
             if (visitor != null) {
-                visitor.sendMessage("§e你已被移出一个小镇的访客名单，并失去该镇领地权限。");
+                plugin.messages().send(visitor, "chat.notification.visitor-removed");
             }
             openNotice(manager, dialogText("notice.visitor-removed-title"),
                     dialogText("notice.visitor-removed-message", Map.of(
@@ -2289,9 +2297,9 @@ final class TownUiController implements Listener {
                 handleOutcome(mayor, outcome, transfer -> {
             Player candidate = Bukkit.getPlayer(candidateId);
             if (candidate != null) {
-                candidate.sendMessage(Component.text("你收到了一项镇长转让请求。 ",
-                                NamedTextColor.GOLD)
-                        .append(callbackButton(candidate, "[处理]",
+                candidate.sendMessage(plugin.messages().component(
+                                "chat.notification.transfer-request")
+                        .append(callbackButton(candidate, "chat.buttons.handle",
                                 () -> openTransferRequest(candidate, transfer.id()))));
             }
             openNotice(mayor, dialogText("notice.transfer-requested-title"),
@@ -2309,8 +2317,9 @@ final class TownUiController implements Listener {
                 handleOutcome(candidate, outcome, transfer -> {
             Player oldMayor = Bukkit.getPlayer(transfer.requestedBy());
             if (oldMayor != null) {
-                oldMayor.sendMessage(accept ? "§e镇长转让已被接受，你现在是普通成员。"
-                        : "§e候选成员拒绝了镇长转让。");
+                plugin.messages().send(oldMayor, accept
+                        ? "chat.notification.transfer-accepted"
+                        : "chat.notification.transfer-rejected");
             }
             openNotice(candidate, accept ? dialogText("notice.transfer-complete-title")
                             : dialogText("notice.transfer-rejected-title"),
@@ -2380,14 +2389,12 @@ final class TownUiController implements Listener {
                 if (member == null) {
                     continue;
                 }
-                member.sendMessage(Component.text("小镇税率已更新为 "
-                                + TownRuntime.percent(change.basisPoints())
-                                + "，同步用于 QuickShop、Jobs 与全球市场收入。 ",
-                                NamedTextColor.YELLOW)
-                        .append(callbackButton(member, "[查看税率]",
+                member.sendMessage(plugin.messages().component("chat.notification.tax-updated", Map.of(
+                                "rate", TownRuntime.percent(change.basisPoints())))
+                        .append(callbackButton(member, "chat.buttons.view-tax",
                                 () -> openTaxMenu(member)))
                         .append(Component.space())
-                        .append(callbackButton(member, "[查看公共资金]",
+                        .append(callbackButton(member, "chat.buttons.view-finance",
                                 () -> openFinance(member, 0))));
                 playSound(member, Sound.BLOCK_BELL_USE);
             }
@@ -2542,9 +2549,9 @@ final class TownUiController implements Listener {
                 if (manager == null) {
                     continue;
                 }
-                manager.sendMessage(Component.text(applicant + " 申请加入“"
-                                + application.townName() + "” ", NamedTextColor.GOLD)
-                        .append(callbackButton(manager, "[立即审核]",
+                manager.sendMessage(plugin.messages().component("chat.notification.join-request", Map.of(
+                                "applicant", applicant, "town", application.townName()))
+                        .append(callbackButton(manager, "chat.buttons.review-join",
                                 () -> openTownJoinApplication(manager, application.id()))));
                 playSound(manager, Sound.BLOCK_AMETHYST_BLOCK_CHIME);
             }
@@ -2556,11 +2563,12 @@ final class TownUiController implements Listener {
         if (applicant == null) {
             return;
         }
-        applicant.sendMessage(Component.text(approved
-                        ? "你加入“" + application.townName() + "”的申请已获批准 "
-                        : "你加入“" + application.townName() + "”的申请已被拒绝，24 小时后可再次申请 ",
-                approved ? NamedTextColor.GREEN : NamedTextColor.RED)
-                .append(callbackButton(applicant, "[打开小镇系统]", () -> openMain(applicant))));
+        applicant.sendMessage(plugin.messages().component(approved
+                        ? "chat.notification.join-approved"
+                        : "chat.notification.join-rejected",
+                Map.of("town", application.townName()))
+                .append(callbackButton(applicant, "chat.buttons.open-system",
+                        () -> openMain(applicant))));
         playSound(applicant, approved ? Sound.ENTITY_PLAYER_LEVELUP : Sound.ENTITY_VILLAGER_NO);
     }
 
@@ -2694,9 +2702,9 @@ final class TownUiController implements Listener {
             if (!admin.hasPermission("tianjitown.admin")) {
                 continue;
             }
-            admin.sendMessage(Component.text("收到新的小镇申请：“" + application.text().name() + "” ",
-                            NamedTextColor.GOLD)
-                    .append(callbackButton(admin, "[立即审核]",
+            admin.sendMessage(plugin.messages().component("chat.notification.new-application", Map.of(
+                            "town", application.text().name()))
+                    .append(callbackButton(admin, "chat.buttons.review-join",
                             () -> openAdminApplication(admin, application.id()))));
             playSound(admin, Sound.BLOCK_BELL_USE);
         }
@@ -3311,8 +3319,10 @@ final class TownUiController implements Listener {
                             dialogText("common.close"), "CLOSE", null);
                     Player applicant = Bukkit.getPlayer(application.applicantId());
                     if (applicant != null) {
-                        applicant.sendMessage((confirm ? "§a" : "§e") + member.getName()
-                                + (confirm ? " 已确认" : " 已拒绝") + "成为建镇初始成员。");
+                        plugin.messages().send(applicant, confirm
+                                        ? "chat.notification.initial-member-response-confirmed"
+                                        : "chat.notification.initial-member-response-rejected",
+                                Map.of("member", member.getName()));
                     }
                 }));
     }
@@ -3665,10 +3675,11 @@ final class TownUiController implements Listener {
         return label.startsWith("返回") || label.equals("上一步");
     }
 
-    private Component callbackButton(Player recipient, String label, Runnable action) {
-        return Component.text(label, NamedTextColor.AQUA, TextDecoration.BOLD)
+    private Component callbackButton(Player recipient, String labelKey, Runnable action) {
+        return plugin.messages().component(labelKey).decorate(TextDecoration.BOLD)
                 .clickEvent(callbackEvent(recipient, action))
-                .hoverEvent(HoverEvent.showText(Component.text("点击打开", NamedTextColor.GRAY)));
+                .hoverEvent(HoverEvent.showText(
+                        plugin.messages().component("chat.buttons.open-tooltip")));
     }
 
     private ClickEvent callbackEvent(Player recipient, Runnable action) {

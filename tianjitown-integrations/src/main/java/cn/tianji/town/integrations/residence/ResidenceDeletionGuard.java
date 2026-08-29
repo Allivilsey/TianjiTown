@@ -11,9 +11,11 @@ import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
 
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
+import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
 public final class ResidenceDeletionGuard implements Listener {
@@ -21,14 +23,23 @@ public final class ResidenceDeletionGuard implements Listener {
     private final Predicate<String> managedName;
     private final BooleanSupplier internalMutation;
     private final Runnable recovery;
+    private final BiFunction<String, Map<String, ?>, String> messageResolver;
     private final AtomicBoolean failureLogged = new AtomicBoolean();
 
     public ResidenceDeletionGuard(Plugin owner, Predicate<String> managedName,
                                   BooleanSupplier internalMutation, Runnable recovery) {
+        this(owner, managedName, internalMutation, recovery,
+                ResidenceDeletionGuard::fallbackMessage);
+    }
+
+    public ResidenceDeletionGuard(Plugin owner, Predicate<String> managedName,
+                                  BooleanSupplier internalMutation, Runnable recovery,
+                                  BiFunction<String, Map<String, ?>, String> messageResolver) {
         this.owner = Objects.requireNonNull(owner, "owner");
         this.managedName = Objects.requireNonNull(managedName, "managedName");
         this.internalMutation = Objects.requireNonNull(internalMutation, "internalMutation");
         this.recovery = Objects.requireNonNull(recovery, "recovery");
+        this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
@@ -56,11 +67,11 @@ public final class ResidenceDeletionGuard implements Listener {
             return;
         }
         cancellation.accept(true);
-        String message = "TianjiTown 小镇领地不能从外部删除，系统已自动恢复保护。";
         if (source != null) {
-            source.sendMessage("§c" + message);
+            source.sendMessage(messageResolver.apply("chat.residence.deletion-blocked", Map.of()));
         } else {
-            owner.getLogger().warning(message + " 来源=非玩家，领地=" + residence.getName());
+            owner.getLogger().warning("系统领地删除保护事件已取消；来源=非玩家，领地="
+                    + residence.getName());
         }
         Server server = owner.getServer();
         if (owner.isEnabled()) {
@@ -102,5 +113,9 @@ public final class ResidenceDeletionGuard implements Listener {
         String message = throwable.getMessage();
         return message == null || message.isBlank()
                 ? throwable.getClass().getSimpleName() : message;
+    }
+
+    private static String fallbackMessage(String key, Map<String, ?> placeholders) {
+        return key;
     }
 }
