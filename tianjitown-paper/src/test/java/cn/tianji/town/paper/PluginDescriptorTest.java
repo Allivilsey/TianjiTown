@@ -89,10 +89,8 @@ class PluginDescriptorTest {
                 assertNotNull(messages.getConfigurationSection("dialog." + section),
                         "messages.yml 缺少 Dialog 文案分组: " + section);
             }
-            assertNotNull(messages.getConfigurationSection("dialog.colors"),
-                    "messages.yml 缺少 Dialog 颜色配置");
             for (String key : List.of("dialog.common.cancel", "dialog.tax.title",
-                    "dialog.colors.menu-title", "dialog.territory.cell.expand-hint",
+                    "dialog.territory.cell.expand-hint",
                     "dialog.application.title",
                     "dialog.notice.operation-failed-title")) {
                 assertFalse(messages.getString(key, "").isBlank(),

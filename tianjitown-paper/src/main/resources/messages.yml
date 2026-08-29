@@ -479,26 +479,6 @@ dialog:
       select: '&7点击后从在线玩家列表中选择'
       save: '&8保存后系统会邀请两名成员确认'
 
-  # Dialog 菜单。
-  colors:
-    menu-title: '&6'
-    black: '&0'
-    dark-blue: '&1'
-    dark-green: '&2'
-    dark-aqua: '&3'
-    dark-red: '&4'
-    dark-purple: '&5'
-    gold: '&6'
-    gray: '&7'
-    dark-gray: '&8'
-    blue: '&9'
-    green: '&a'
-    aqua: '&b'
-    red: '&c'
-    light-purple: '&d'
-    yellow: '&e'
-    white: '&f'
-
   # 二次确认页的标题和操作后果。
   confirmation:
     irreversible: '&c此操作不可撤销'

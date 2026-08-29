@@ -78,23 +78,6 @@ import java.util.function.Function;
 
 final class TownUiController implements Listener {
     private static final int MENU_TIMEOUT_TICKS = 20 * 60;
-    private static final Map<String, String> DIALOG_COLOR_KEYS = Map.ofEntries(
-            Map.entry("§0", "black"),
-            Map.entry("§1", "dark-blue"),
-            Map.entry("§2", "dark-green"),
-            Map.entry("§3", "dark-aqua"),
-            Map.entry("§4", "dark-red"),
-            Map.entry("§5", "dark-purple"),
-            Map.entry("§6", "gold"),
-            Map.entry("§7", "gray"),
-            Map.entry("§8", "dark-gray"),
-            Map.entry("§9", "blue"),
-            Map.entry("§a", "green"),
-            Map.entry("§b", "aqua"),
-            Map.entry("§c", "red"),
-            Map.entry("§d", "light-purple"),
-            Map.entry("§e", "yellow"),
-            Map.entry("§f", "white"));
     private final TianjiTownPlugin plugin;
     private final TownRuntime runtime;
     private final TownActions actions;
@@ -3664,11 +3647,11 @@ final class TownUiController implements Listener {
     }
 
     private String dialogMenuTitle(String title) {
-        // 兼容未迁移到 messages.yml 的动态菜单标题，同时让默认标题色可配置。
+        // 动态菜单标题仍由菜单代码统一使用金色；已带颜色的文案保持原样。
         if (title.indexOf('&') >= 0 || title.indexOf('§') >= 0) {
             return title;
         }
-        return plugin.messages().text("dialog.colors.menu-title") + title;
+        return "§6" + title;
     }
 
     private static Component legacyComponent(String value) {
@@ -3676,21 +3659,8 @@ final class TownUiController implements Listener {
     }
 
     private String dialogItemText(String value) {
-        // 菜单中的旧式 § 颜色按配置表替换；配置文案的 & 代码最后再转换，避免二次覆盖自定义颜色。
-        StringBuilder result = new StringBuilder(value.length());
-        for (int index = 0; index < value.length(); index++) {
-            if (value.charAt(index) == '§' && index + 1 < value.length()) {
-                String code = value.substring(index, index + 2);
-                String colorKey = DIALOG_COLOR_KEYS.get(code);
-                if (colorKey != null) {
-                    result.append(plugin.messages().text("dialog.colors." + colorKey));
-                    index++;
-                    continue;
-                }
-            }
-            result.append(value.charAt(index));
-        }
-        return result.toString().replace('&', '§');
+        // 菜单代码中的 § 颜色和 messages.yml 中的 & 颜色各自直接生效。
+        return value.replace('&', '§');
     }
 
     private String itemAction(ItemStack item) {
