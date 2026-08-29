@@ -19,13 +19,15 @@ import java.util.UUID;
 final class TerritoryService {
     private final EconomyRepository finance;
     private final SitePolicy sitePolicy;
+    private final PluginMessages messages;
     private final EconomySettings settings;
     private final int moneyScale;
 
     TerritoryService(EconomyRepository finance, SitePolicy sitePolicy,
-                     EconomySettings settings, int moneyScale) {
+                     PluginMessages messages, EconomySettings settings, int moneyScale) {
         this.finance = Objects.requireNonNull(finance, "finance");
         this.sitePolicy = Objects.requireNonNull(sitePolicy, "sitePolicy");
+        this.messages = Objects.requireNonNull(messages, "messages");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.moneyScale = moneyScale;
     }
@@ -74,7 +76,8 @@ final class TerritoryService {
                             ? TerritoryCellState.CENTER : TerritoryCellState.OWNED;
                     cells.add(new TerritoryCell(gridX, gridZ, state, occupied.territory(),
                             null, state == TerritoryCellState.CENTER
-                            ? "小镇初始中心" : "已属于当前小镇"));
+                            ? messages.plainText("dialog.territory.cell.center-detail")
+                            : messages.plainText("dialog.territory.cell.owned-detail")));
                     continue;
                 }
 
@@ -83,12 +86,14 @@ final class TerritoryService {
                 if (foreignTown != null) {
                     cells.add(new TerritoryCell(gridX, gridZ,
                             TerritoryCellState.OTHER_TOWN, territory, null,
-                            "属于其他小镇: " + foreignTown));
+                            messages.plainText("dialog.territory.cell.other-town-detail",
+                                    Map.of("town", foreignTown))));
                     continue;
                 }
                 if (context.units().size() >= settings.maximumUnits()) {
                     cells.add(new TerritoryCell(gridX, gridZ, TerritoryCellState.BLOCKED,
-                            territory, null, "领地单元已达到配置上限"));
+                            territory, null,
+                            messages.plainText("dialog.territory.cell.capacity-detail")));
                     continue;
                 }
                 try {
@@ -97,10 +102,10 @@ final class TerritoryService {
                     ExpansionPreview preview = preview(context, candidate);
                     cells.add(new TerritoryCell(gridX, gridZ,
                             TerritoryCellState.EXPANDABLE, territory, preview,
-                            "可使用公共资金扩张"));
+                            messages.plainText("dialog.territory.cell.expandable-detail")));
                 } catch (IllegalArgumentException exception) {
                     cells.add(new TerritoryCell(gridX, gridZ, TerritoryCellState.BLOCKED,
-                            territory, null, exception.getMessage()));
+                            territory, null, cellDetail(exception)));
                 }
             }
         }
@@ -156,6 +161,13 @@ final class TerritoryService {
 
     private long price() {
         return ExpansionPricing.price(settings.expansionCost(), moneyScale).minorUnits();
+    }
+
+    private String cellDetail(IllegalArgumentException exception) {
+        if ("目标必须与已有领地四方向相邻".equals(exception.getMessage())) {
+            return messages.plainText("dialog.territory.cell.not-adjacent-detail");
+        }
+        return exception.getMessage();
     }
 
     private void requireCapacity(Context context) {

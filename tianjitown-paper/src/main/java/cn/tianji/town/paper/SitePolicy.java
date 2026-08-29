@@ -49,11 +49,14 @@ final class SitePolicy {
         try {
             collision = landProtection.findCollision(territory);
         } catch (RuntimeException | LinkageError exception) {
-            return Validation.failure("Residence 碰撞检查不可用: " + safeMessage(exception));
+            return Validation.failure(plugin.messages().plainText(
+                    "chat.site-validation.residence-unavailable",
+                    Map.of("detail", safeMessage(exception))));
         }
         if (collision.occupied()) {
-            return Validation.failure("5×5 区块与现有 Residence 冲突: "
-                    + collision.residenceName());
+            return Validation.failure(plugin.messages().plainText(
+                    "chat.site-validation.residence-collision",
+                    Map.of("name", String.valueOf(collision.residenceName()))));
         }
         return environment;
     }
@@ -67,12 +70,15 @@ final class SitePolicy {
         try {
             collision = landProtection.findCollision(territory);
         } catch (RuntimeException | LinkageError exception) {
-            return Validation.failure("Residence 碰撞检查不可用: " + safeMessage(exception));
+            return Validation.failure(plugin.messages().plainText(
+                    "chat.site-validation.residence-unavailable",
+                    Map.of("detail", safeMessage(exception))));
         }
         if (collision.occupied() && (collision.residenceName() == null
                 || !collision.residenceName().equalsIgnoreCase(residenceName))) {
-            return Validation.failure("5×5 区块与其他 Residence 冲突: "
-                    + collision.residenceName());
+            return Validation.failure(plugin.messages().plainText(
+                    "chat.site-validation.expansion-collision",
+                    Map.of("name", String.valueOf(collision.residenceName()))));
         }
         return environment;
     }
@@ -80,11 +86,13 @@ final class SitePolicy {
     Validation validateEnvironment(InitialTerritory territory) {
         World world = plugin.getServer().getWorld(territory.center().worldId());
         if (world == null) {
-            return Validation.failure("目标世界当前未加载");
+            return Validation.failure(plugin.messages().plainText(
+                    "chat.site-validation.world-unloaded"));
         }
         if (rectangles("town.site.blacklist", world.getName()).stream()
                 .anyMatch(area -> area.overlaps(territory))) {
-            return Validation.failure("5×5 区块与出生点、活动区或管理黑名单重叠");
+            return Validation.failure(plugin.messages().plainText(
+                    "chat.site-validation.blacklist-collision"));
         }
         int bufferChunks = Math.max(0,
                 plugin.getConfig().getInt("town.site.minimum-buffer-chunks", 1));
@@ -92,13 +100,17 @@ final class SitePolicy {
         try {
             boundary = worldBoundaries.check(territory, bufferChunks);
         } catch (RuntimeException | LinkageError exception) {
-            return Validation.failure("WorldBorder 边界检查不可用: " + safeMessage(exception));
+            return Validation.failure(plugin.messages().plainText(
+                    "chat.site-validation.worldborder-unavailable",
+                    Map.of("detail", safeMessage(exception))));
         }
         if (!boundary.configured()) {
-            return Validation.failure("WorldBorder 未配置目标世界的边界");
+            return Validation.failure(plugin.messages().plainText(
+                    "chat.site-validation.worldborder-unconfigured"));
         }
         if (!boundary.inside()) {
-            return Validation.failure("5×5 区块或其缓冲范围会超出 WorldBorder 边界");
+            return Validation.failure(plugin.messages().plainText(
+                    "chat.site-validation.worldborder-outside"));
         }
         return Validation.success(territory);
     }

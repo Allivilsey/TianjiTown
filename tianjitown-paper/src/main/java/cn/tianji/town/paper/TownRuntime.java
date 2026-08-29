@@ -72,8 +72,8 @@ final class TownRuntime {
         this.economySettings = EconomySettings.load(plugin.getConfig());
         this.settlement = new VaultSettlementService(plugin.getServer(),
                 economySettings.settlementAccount(), economySettings.fallbackScale());
-        this.territories = new TerritoryService(finance, sitePolicy, economySettings,
-                settlement.scale());
+        this.territories = new TerritoryService(finance, sitePolicy, plugin.messages(),
+                economySettings, settlement.scale());
         this.buffs = new BuffRuntime(plugin, this,
                 new CommerceRepository(database.dataSource(),
                         plugin.getServer()::isPrimaryThread),

@@ -719,24 +719,26 @@ final class TownUiController implements Listener {
             items.add(new MenuItem(0, button(Material.BELL, "§6" + town.profile().name(),
                     summary, null, null)));
             items.add(new MenuItem(10, button(Material.WRITTEN_BOOK, "§e小镇资料",
-                    List.of("§7简介、规则、领地和基础资料"), "TOWN", town.id().toString())));
+                    List.of(dialogText("tooltip.main.town")), "TOWN", town.id().toString())));
             items.add(new MenuItem(12, button(Material.EMERALD_BLOCK, "§6公共资产",
-                    List.of("§7资金、账本、Buff、税率和扩张"), "FINANCE", "0")));
+                    List.of(dialogText("tooltip.main.finance")), "FINANCE", "0")));
             items.add(new MenuItem(14, button(Material.GOLDEN_HELMET, "§e成员治理",
-                    List.of("§7成员、申请、投票和资料管理"), "GOVERNANCE_CENTER", null)));
+                    List.of(dialogText("tooltip.main.governance")), "GOVERNANCE_CENTER", null)));
             items.add(new MenuItem(16, button(pendingTotal > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
                     pendingTotal > 0 ? "§b待办中心 · " + pendingTotal : "§7待办中心",
-                    List.of("§7集中处理需要你决定的事项"), "PENDING_CENTER", null)));
+                    List.of(dialogText("tooltip.main.pending")), "PENDING_CENTER", null)));
             items.add(new MenuItem(18, button(Material.PLAYER_HEAD, "§f个人与帮助",
-                    List.of("§7领取手册、退出或解散小镇"), "PERSONAL_CENTER", null)));
+                    List.of(dialogText("tooltip.main.personal")), "PERSONAL_CENTER", null)));
         } else if (dashboard.application() != null) {
             ApplicationSnapshot application = dashboard.application();
             items.add(new MenuItem(0, button(Material.PAPER, "§6小镇申请",
                     List.of(application.reviewMessage() == null ? "§7请继续完成申请流程"
                             : "§c管理员意见: " + application.reviewMessage()), null, null)));
             items.add(new MenuItem(11, button(Material.MAP, "§e继续小镇申请",
-                    List.of(application.reviewMessage() == null ? "§7点击查看摘要"
-                            : "§c管理员意见: " + application.reviewMessage()),
+                    List.of(application.reviewMessage() == null
+                            ? dialogText("tooltip.main.application-summary")
+                            : dialogText("tooltip.main.application-review",
+                            Map.of("message", application.reviewMessage()))),
                     "APPLICATION", application.id().toString())));
         } else {
             items.add(new MenuItem(0, button(Material.BELL, "§6小镇服务",
@@ -744,24 +746,27 @@ final class TownUiController implements Listener {
                             "§7可以申请建立小镇或加入现有小镇"), null, null)));
             if (dashboard.joinApplications().isEmpty()) {
                 items.add(new MenuItem(11, button(Material.WRITABLE_BOOK, "§a申请建立小镇",
-                        List.of("§7使用 Dialog 表单填写申请资料"),
+                        List.of(dialogText("tooltip.main.create-application")),
                         "CREATE_APPLICATION", null)));
             }
             items.add(new MenuItem(13, button(Material.COMPASS, "§a申请加入小镇",
-                    List.of("§7浏览小镇并提交 48 小时有效申请"), "JOIN_TOWNS", null)));
+                    List.of(dialogText("tooltip.main.join-towns")), "JOIN_TOWNS", null)));
             if (!dashboard.joinApplications().isEmpty()) {
                 items.add(new MenuItem(15, button(Material.PAPER, "§e我的入镇申请",
-                        List.of("§7待处理: " + dashboard.joinApplications().size(),
-                                "§7同时最多申请 3 个小镇"), "MY_JOIN_APPLICATIONS", null)));
+                        List.of(dialogText("tooltip.main.my-applications-count",
+                                        Map.of("count", dashboard.joinApplications().size())),
+                                dialogText("tooltip.main.my-applications-limit")),
+                        "MY_JOIN_APPLICATIONS", null)));
             }
             items.add(new MenuItem(31, button(Material.WRITTEN_BOOK, "§6领取小镇手册",
-                    List.of("§7手册丢失后可在服务台重新领取"), "GIVE_HANDBOOK", null)));
+                    List.of(dialogText("tooltip.main.handbook")), "GIVE_HANDBOOK", null)));
         }
         if (player.hasPermission("tianjitown.admin")) {
             boolean pending = !view.reviewQueue().isEmpty();
             items.add(new MenuItem(30, button(pending ? Material.ENCHANTED_BOOK : Material.BOOK,
                     pending ? "§e管理员审核 · " + view.reviewQueue().size() : "§7管理员审核",
-                    pending ? List.of("§6有未完成的建镇申请") : List.of("§7查看建镇申请列表"),
+                    pending ? List.of(dialogText("tooltip.main.admin-review-pending"))
+                            : List.of(dialogText("tooltip.main.admin-review-empty")),
                     "ADMIN_APPLICATIONS", null)));
         }
         openMenu(player, 36, "小镇服务", items);
@@ -790,20 +795,20 @@ final class TownUiController implements Listener {
                             "§7待处理入镇申请: §f" + pendingJoins,
                             "§7待参与治理投票: §f" + pendingVotes), null, null)));
             items.add(new MenuItem(10, button(Material.PLAYER_HEAD, "§e小镇成员",
-                    List.of("§7分页查看成员并进入治理详情"),
+                    List.of(dialogText("tooltip.governance.members")),
                     "MEMBERS", town.id() + ":0")));
             items.add(new MenuItem(12, button(Material.BOOK, "§e治理投票",
-                    List.of("§7查看、参与或终止治理投票"),
+                    List.of(dialogText("tooltip.governance.votes")),
                     "VOTES", town.id().toString())));
             if (governance.canReviewApplications()) {
                 items.add(new MenuItem(14, button(pendingJoins > 0
                                 ? Material.ENCHANTED_BOOK : Material.BOOK,
                         pendingJoins > 0 ? "§b入镇申请 · " + pendingJoins : "§7入镇申请",
-                        List.of("§7审核玩家的入镇申请"),
+                        List.of(dialogText("tooltip.governance.applications")),
                         "JOIN_APPLICATIONS", town.id().toString())));
                 items.add(new MenuItem(16, button(Material.NAME_TAG, "§e访客管理",
-                        List.of("§7查看访客名单或邀请新访客",
-                                "§7访客拥有与普通成员相同的领地权限"),
+                        List.of(dialogText("tooltip.governance.visitors"),
+                                dialogText("tooltip.governance.visitor-permission")),
                         "VISITOR_CENTER", town.id().toString())));
             }
             items.add(new MenuItem(22, button(Material.ARROW, "§7返回主菜单",
@@ -825,10 +830,10 @@ final class TownUiController implements Listener {
                             "§7访客只获得本镇 Residence 领地权限",
                             "§7不计入成员、投票、税务或公共 Buff"), null, null)));
             items.add(new MenuItem(11, button(Material.PLAYER_HEAD, "§e访客列表",
-                    List.of("§7查看访客并将其移出名单"),
+                    List.of(dialogText("tooltip.visitor.list")),
                     "VISITOR_LIST", townId + ":0")));
             items.add(new MenuItem(15, button(Material.WRITABLE_BOOK, "§a邀请",
-                    List.of("§7从在线的非本镇成员中选择访客"),
+                    List.of(dialogText("tooltip.visitor.invite")),
                     "VISITOR_INVITE", townId + ":0")));
             items.add(new MenuItem(22, button(Material.ARROW, "§7返回成员治理",
                     List.of(), "GOVERNANCE_CENTER", null)));
@@ -850,9 +855,11 @@ final class TownUiController implements Listener {
                 String inviterName = displayName(visitor.invitedBy());
                 items.add(new MenuItem(slot++, button(Material.PLAYER_HEAD,
                         "§f" + visitorName,
-                        List.of("§7邀请人: " + inviterName,
-                                "§7加入访客名单: " + visitor.addedAt(),
-                                "§c点击移出访客名单"),
+                        List.of(dialogText("tooltip.visitor.entry.inviter",
+                                        Map.of("player", inviterName)),
+                                dialogText("tooltip.visitor.entry.added",
+                                        Map.of("time", visitor.addedAt())),
+                                dialogText("tooltip.visitor.entry.remove")),
                         "CONFIRM_REMOVE_VISITOR",
                         townId + ":" + visitor.playerId() + ":" + page)));
             }
@@ -894,8 +901,8 @@ final class TownUiController implements Listener {
             for (Player candidate : visible) {
                 items.add(new MenuItem(slot++, button(Material.PLAYER_HEAD,
                         "§e" + candidate.getName(),
-                        List.of("§7点击后确认加入访客名单",
-                                "§7可属于其他小镇，但不能是本镇成员"),
+                        List.of(dialogText("tooltip.visitor.invite-entry.click"),
+                                dialogText("tooltip.visitor.invite-entry.constraint")),
                         "CONFIRM_ADD_VISITOR",
                         townId + ":" + candidate.getUniqueId() + ":" + page)));
             }
@@ -956,18 +963,18 @@ final class TownUiController implements Listener {
             if (pendingJoins > 0) {
                 items.add(new MenuItem(10, button(Material.ENCHANTED_BOOK,
                         "§b入镇申请 · " + pendingJoins,
-                        List.of("§7查看并审批待处理申请"),
+                        List.of(dialogText("tooltip.pending.applications")),
                         "JOIN_APPLICATIONS", town.id().toString())));
             }
             if (pendingVotes > 0) {
                 items.add(new MenuItem(12, button(Material.ENCHANTED_BOOK,
                         "§b治理投票 · " + pendingVotes,
-                        List.of("§7参与尚未投票的治理事项"),
+                        List.of(dialogText("tooltip.pending.votes")),
                         "VOTES", town.id().toString())));
             }
             if (governance.pendingTransfer() != null) {
                 items.add(new MenuItem(14, button(Material.NETHER_STAR, "§e镇长转让邀请",
-                        List.of("§7接受或拒绝接任本镇镇长"),
+                        List.of(dialogText("tooltip.pending.transfer")),
                         "TRANSFER_REQUEST", governance.pendingTransfer().id().toString())));
             }
             items.add(new MenuItem(22, button(Material.ARROW, "§7返回主菜单",
@@ -985,15 +992,16 @@ final class TownUiController implements Listener {
                             : "§7所在小镇: §f" + town.profile().name(),
                             "§7手册丢失后可以在这里重新领取"), null, null)));
             items.add(new MenuItem(10, button(Material.WRITTEN_BOOK, "§6领取小镇手册",
-                    List.of("§7将手册放入背包；背包已满时掉落在脚下"),
+                    List.of(dialogText("tooltip.personal.handbook")),
                     "GIVE_HANDBOOK", null)));
             if (town != null && town.mayorId().equals(player.getUniqueId())) {
                 items.add(new MenuItem(16, button(Material.TNT, "§4解散小镇",
-                        List.of("§c仅剩镇长一人时可执行", "§c此操作不可撤销"),
+                        List.of(dialogText("tooltip.personal.disband-only"),
+                                dialogText("tooltip.personal.disband-irreversible")),
                         "CONFIRM_DISBAND", town.id() + ":" + town.version())));
             } else if (town != null) {
                 items.add(new MenuItem(16, button(Material.OAK_DOOR, "§c退出小镇",
-                        List.of("§7退出后 24 小时内不能申请新镇"),
+                        List.of(dialogText("tooltip.personal.leave")),
                         "CONFIRM_LEAVE", town.id().toString())));
             }
             items.add(new MenuItem(22, button(Material.ARROW, "§7返回主菜单",
@@ -1029,25 +1037,25 @@ final class TownUiController implements Listener {
                 : Material.EMERALD_BLOCK, "§6公共资产", summary, null, null)));
         if (runtime.consumptionEnabled()) {
             items.add(new MenuItem(10, button(Material.SUNFLOWER, "§a自定义金额捐款",
-                    List.of("§7在 Dialog 中输入捐款金额",
-                            "§7从个人 Vault 余额转入公共资金"),
+                    List.of(dialogText("tooltip.finance.donation"),
+                            dialogText("tooltip.finance.donation-vault")),
                     "DONATION_INPUT", null)));
         }
         if (account.role().equals("MAYOR") && runtime.taxEnabled()) {
             items.add(new MenuItem(12, button(Material.GOLD_NUGGET, "§e税率设置",
-                    List.of("§7进入独立表单调整统一收入税率"), "TAX_MENU", null)));
+                    List.of(dialogText("tooltip.finance.tax")), "TAX_MENU", null)));
         }
         items.add(new MenuItem(14, button(Material.WRITTEN_BOOK, "§6小镇账本",
-                List.of("§7在 Dialog 中分页查看公共资金流水",
-                        "§7玩家税收与服务器补贴合并显示"), "LEDGER", "0")));
+                List.of(dialogText("tooltip.finance.ledger"),
+                        dialogText("tooltip.finance.ledger-subsidy")), "LEDGER", "0")));
         items.add(new MenuItem(15, button(Material.BREWING_STAND, "§d公共 Buff",
                 List.of(runtime.buffs().buffShopEnabled()
-                                ? "§7查看效果、等级、时长和购买价格"
-                                : "§7商店已暂停，可查看仍在生效的 Buff"),
+                                ? dialogText("tooltip.finance.buff-active")
+                                : dialogText("tooltip.finance.buff-paused")),
                 "BUFF_SHOP", null)));
         if (account.role().equals("MAYOR") && runtime.consumptionEnabled()) {
             items.add(new MenuItem(16, button(Material.FILLED_MAP, "§b领地扩张",
-                    List.of("§75×5 领地地图、固定 3000 价格和公共余额扣款"), "EXPANSION_MENU", null)));
+                    List.of(dialogText("tooltip.finance.expansion")), "EXPANSION_MENU", null)));
         }
         items.add(new MenuItem(22, button(Material.ARROW, "§7返回主菜单", List.of(),
                 "MAIN", null)));
@@ -1443,37 +1451,39 @@ final class TownUiController implements Listener {
                 || application.status() == ApplicationStatus.SITE_SELECTED
                 || application.status() == ApplicationStatus.NEED_CHANGES) {
             items.add(new MenuItem(10, button(Material.WRITABLE_BOOK, "§e编辑申请资料",
-                    List.of("§7使用分步 Dialog 表单修改资料"), "EDIT_APPLICATION",
+                    List.of(dialogText("tooltip.application.edit")), "EDIT_APPLICATION",
                     application.id().toString())));
             if (application.initialMembers().stream().anyMatch(member ->
                     member.status() == InitialMemberConfirmation.Status.PENDING)) {
                 items.add(new MenuItem(11, button(Material.BELL, "§e提醒初始成员",
-                        List.of("§7重新发送确认邀请", "§7冷却时间: 5 分钟"),
+                        List.of(dialogText("tooltip.application.remind"),
+                                dialogText("tooltip.application.remind-cooldown")),
                         "REMIND_INITIAL_MEMBERS", application.id().toString())));
             }
             items.add(new MenuItem(12, button(Material.COMPASS, "§e选择小镇领地",
-                    List.of("§7当前区块将成为 5×5 初始领地中心"), "SELECT_SITE",
+                    List.of(dialogText("tooltip.application.select-site")), "SELECT_SITE",
                     application.id().toString())));
             if (application.territory() != null) {
                 items.add(new MenuItem(14, button(Material.ENDER_EYE, "§b预览已选领地",
-                        List.of("§7传送至领地中心并显示火焰边界"), "PREVIEW_SITE",
+                        List.of(dialogText("tooltip.application.preview-site")), "PREVIEW_SITE",
                         application.id().toString())));
                 boolean confirmed = application.initialMembersConfirmed();
                 items.add(new MenuItem(16, button(confirmed ? Material.LIME_CONCRETE
                                 : Material.GRAY_CONCRETE,
                         confirmed ? "§a提交申请" : "§7等待初始成员确认",
-                        confirmed ? List.of("§7进入确认页面", "§7批准时申请人需支付 2000")
-                                : List.of("§c两名初始成员均确认后才可提交"),
+                        confirmed ? List.of(dialogText("tooltip.application.submit-ready"),
+                                        dialogText("tooltip.application.submit-fee"))
+                                : List.of(dialogText("tooltip.application.submit-waiting")),
                         confirmed ? "CONFIRM_SUBMIT" : null,
                         confirmed ? application.id().toString() : null)));
             }
             items.add(new MenuItem(22, button(Material.BARRIER, "§c撤回小镇申请",
-                    List.of("§7撤回后进入申请冷却"), "CONFIRM_CANCEL",
+                    List.of(dialogText("tooltip.application.cancel-draft")), "CONFIRM_CANCEL",
                     application.id().toString())));
         } else if (application.status() == ApplicationStatus.SUBMITTED
                 || application.status() == ApplicationStatus.UNDER_REVIEW) {
             items.add(new MenuItem(22, button(Material.BARRIER, "§c撤回小镇申请",
-                    List.of("§7批准建镇前仍可撤回"), "CONFIRM_CANCEL",
+                    List.of(dialogText("tooltip.application.cancel-submitted")), "CONFIRM_CANCEL",
                     application.id().toString())));
         }
         items.add(new MenuItem(26, button(Material.ARROW, "§7返回", List.of(), "MAIN", null)));
@@ -1494,20 +1504,22 @@ final class TownUiController implements Listener {
                             "§7规则数: " + town.profile().rules().size(),
                             "§7状态: " + town.status()), null, null)));
             items.add(new MenuItem(10, button(Material.WRITTEN_BOOK, "§e阅读小镇规则",
-                    List.of("§7完整查看当前规则"), "TOWN_RULES",
+                    List.of(dialogText("tooltip.town.rules")), "TOWN_RULES",
                     town.id().toString())));
             items.add(new MenuItem(12, button(Material.PLAYER_HEAD, "§e成员列表",
-                    List.of("§7分页查看全部成员"), "MEMBERS", town.id() + ":0")));
+                    List.of(dialogText("tooltip.town.members")), "MEMBERS", town.id() + ":0")));
             if (governance != null && governance.role().isLeader()) {
                 items.add(new MenuItem(13, button(Material.WRITABLE_BOOK, "§e修改简介和规则",
-                        List.of("§7使用 Dialog 表单编辑小镇资料"),
+                        List.of(dialogText("tooltip.town.edit")),
                         "EDIT_TOWN", town.id().toString())));
             }
             if (town.territory() != null) {
                 items.add(new MenuItem(14, button(Material.MAP, "§e小镇领地",
-                        List.of("§7包含初始领地与已扩张区域", "§7初始中心: "
-                                + town.territory().center().x() + ", "
-                                + town.territory().center().z(), "§a点击传送并显示火焰边界"),
+                        List.of(dialogText("tooltip.town.territory"),
+                                dialogText("tooltip.town.territory-center", Map.of(
+                                        "x", town.territory().center().x(),
+                                        "z", town.territory().center().z())),
+                                dialogText("tooltip.town.territory-preview")),
                         "PREVIEW_TOWN",
                         town.id().toString())));
             }
@@ -1557,8 +1569,12 @@ final class TownUiController implements Listener {
                         && view.governance().townId().equals(townId);
                 items.add(new MenuItem(slot++, button(Material.PLAYER_HEAD,
                         color + name,
-                        List.of("§7身份: " + member.role(), "§7加入: " + member.joinedAt(),
-                                sameTown ? "§e点击查看治理操作" : "§7只读"),
+                        List.of(dialogText("tooltip.members.role",
+                                        Map.of("role", member.role())),
+                                dialogText("tooltip.members.joined",
+                                        Map.of("time", member.joinedAt())),
+                                sameTown ? dialogText("tooltip.members.manage")
+                                        : dialogText("tooltip.members.readonly")),
                         sameTown ? "MEMBER_DETAIL" : null,
                         sameTown ? townId + ":" + member.playerId() : null)));
             }
@@ -1600,29 +1616,31 @@ final class TownUiController implements Listener {
                 items.add(new MenuItem(10, button(Material.GOLDEN_HELMET,
                         nextRole == MemberRole.DEPUTY_MAYOR
                                 ? "§a任命为副镇长" : "§e降为普通镇员",
-                        List.of("§7每个小镇最多 3 名副镇长"), "CONFIRM_ROLE",
+                        List.of(dialogText("tooltip.member-detail.max-deputies")), "CONFIRM_ROLE",
                         townId + ":" + targetId + ":" + nextRole)));
             }
             boolean viewerCanRemove = view.viewer().role().isLeader() && !targetIsMayor
                     && (viewerIsMayor || view.targetRole() == MemberRole.MEMBER);
             if (viewerCanRemove) {
                 items.add(new MenuItem(12, button(Material.RED_CONCRETE, "§c移除成员",
-                        List.of("§c立即移出小镇并同步 Residence", "§7需要再次确认"),
+                        List.of(dialogText("tooltip.member-detail.kick-now"),
+                                dialogText("tooltip.member-detail.kick-confirm")),
                         "CONFIRM_KICK_MEMBER", townId + ":" + targetId)));
             }
             if (viewerIsMayor && !targetIsMayor) {
                 items.add(new MenuItem(14, button(Material.NETHER_STAR, "§e发起镇长转让",
-                        List.of("§7候选成员必须在 24 小时内接受"), "CONFIRM_TRANSFER_MAYOR",
+                        List.of(dialogText("tooltip.member-detail.transfer-expiry")),
+                        "CONFIRM_TRANSFER_MAYOR",
                         townId + ":" + targetId)));
             }
             if (!targetIsMayor && !targetId.equals(player.getUniqueId())) {
                 items.add(new MenuItem(16, button(Material.PAPER, "§e发起投票移除",
-                        List.of("§7赞成票必须严格超过有效选民的 50%"),
+                        List.of(dialogText("tooltip.member-detail.vote-kick-threshold")),
                         "CONFIRM_CREATE_VOTE", townId + ":KICK_MEMBER:" + targetId)));
             }
             if (!targetIsMayor && view.viewer().role().isLeader()) {
                 items.add(new MenuItem(22, button(Material.ENCHANTED_BOOK, "§e提名为新镇长",
-                        List.of("§7发起 2/3 强制更换镇长投票"),
+                        List.of(dialogText("tooltip.member-detail.replace-mayor-threshold")),
                         "CONFIRM_CREATE_VOTE", townId + ":REPLACE_MAYOR:" + targetId)));
             }
             items.add(new MenuItem(26, button(Material.ARROW, "§7返回成员列表", List.of(),
@@ -1647,10 +1665,12 @@ final class TownUiController implements Listener {
                                     "§7有效期至: " + transfer.expiresAt(),
                                     "§c接受后原镇长降为普通成员"), null, null)),
                     new MenuItem(11, button(Material.LIME_CONCRETE, "§a接受并接任",
-                            List.of("§7需要再次确认"), "CONFIRM_TRANSFER_DECISION",
+                            List.of(dialogText("tooltip.transfer.accept-confirm")),
+                            "CONFIRM_TRANSFER_DECISION",
                             transfer.id() + ":true")),
                     new MenuItem(15, button(Material.RED_CONCRETE, "§c拒绝",
-                            List.of("§7本次请求将立即关闭"), "CONFIRM_TRANSFER_DECISION",
+                            List.of(dialogText("tooltip.transfer.reject-close")),
+                            "CONFIRM_TRANSFER_DECISION",
                             transfer.id() + ":false")),
                     new MenuItem(22, button(Material.ARROW, "§7返回", List.of(), "MAIN", null)));
             openMenu(player, 27, "镇长转让确认", items);
@@ -1675,8 +1695,12 @@ final class TownUiController implements Listener {
                 items.add(new MenuItem(index, button(
                         pending ? Material.ENCHANTED_BOOK : Material.PAPER,
                         (pending ? "§b待投票 · " : "§e") + voteLabel(vote.type()) + " · " + target,
-                        List.of("§7赞成: " + vote.yesVotes() + "/" + vote.requiredYes(),
-                                "§7反对: " + vote.noVotes(), "§7到期: " + vote.endsAt()),
+                        List.of(dialogText("tooltip.votes.entry.yes", Map.of(
+                                        "yes", vote.yesVotes(), "required", vote.requiredYes())),
+                                dialogText("tooltip.votes.entry.no",
+                                        Map.of("no", vote.noVotes())),
+                                dialogText("tooltip.votes.entry.expires",
+                                        Map.of("time", vote.endsAt()))),
                         "VOTE_DETAIL", vote.id().toString())));
             }
             if (votes.isEmpty()) {
@@ -1720,9 +1744,9 @@ final class TownUiController implements Listener {
                             "§7到期: " + vote.endsAt()), null, null)));
             if (vote.viewerEligible() && !vote.viewerVoted()) {
                 items.add(new MenuItem(11, button(Material.LIME_CONCRETE, "§a赞成",
-                        List.of("§7每个 UUID 只能投一次"), "CAST_VOTE", vote.id() + ":true")));
+                        List.of(dialogText("tooltip.votes.once")), "CAST_VOTE", vote.id() + ":true")));
                 items.add(new MenuItem(15, button(Material.RED_CONCRETE, "§c反对",
-                        List.of("§7每个 UUID 只能投一次"), "CAST_VOTE", vote.id() + ":false")));
+                        List.of(dialogText("tooltip.votes.once")), "CAST_VOTE", vote.id() + ":false")));
             } else {
                 items.add(new MenuItem(13, button(Material.GRAY_DYE,
                         vote.viewerVoted() ? "§7你已经投票" : "§7你不在冻结选民快照中",
@@ -1730,7 +1754,8 @@ final class TownUiController implements Listener {
             }
             if (vote.createdBy().equals(player.getUniqueId())) {
                 items.add(new MenuItem(18, button(Material.BARRIER, "§c终止本次投票",
-                        List.of("§7仅发起人可操作", "§c终止后不可恢复"),
+                        List.of(dialogText("tooltip.votes.cancel-only"),
+                                dialogText("tooltip.votes.cancel-irreversible")),
                         "CONFIRM_CANCEL_VOTE", vote.id().toString())));
             }
             items.add(new MenuItem(22, button(Material.ARROW, "§7返回投票列表", List.of(),
@@ -1765,9 +1790,11 @@ final class TownUiController implements Listener {
             for (int index = 0; index < visible.size(); index++) {
                 TownSnapshot town = visible.get(index);
                 items.add(new MenuItem(index, button(Material.BELL, "§6" + town.profile().name(),
-                        List.of("§7小镇代码: " + town.profile().residenceName(),
-                                "§7简介: " + preview(town.profile().description(), 80),
-                                "§7点击查看规则并申请加入"),
+                        List.of(dialogText("tooltip.join.town-code", Map.of(
+                                        "code", town.profile().residenceName())),
+                                dialogText("tooltip.join.town-description", Map.of(
+                                        "description", preview(town.profile().description(), 80))),
+                                dialogText("tooltip.join.town-apply")),
                         "JOIN_TOWN", town.id().toString())));
             }
             if (towns.isEmpty()) {
@@ -1799,7 +1826,8 @@ final class TownUiController implements Listener {
                                     "§7规则:", "§f" + String.join(" | ", town.profile().rules())),
                             null, null)),
                     new MenuItem(13, button(Material.LIME_CONCRETE, "§a提交入镇申请",
-                            List.of("§7申请有效期 48 小时", "§7同时最多申请 3 个小镇"),
+                            List.of(dialogText("tooltip.join.submit-expiry"),
+                                    dialogText("tooltip.join.submit-limit")),
                             "CONFIRM_APPLY_JOIN", town.id().toString())),
                     new MenuItem(22, button(Material.ARROW, "§7返回小镇列表", List.of(),
                             "JOIN_TOWNS", null)));
@@ -1815,8 +1843,9 @@ final class TownUiController implements Listener {
                         JoinApplicationSnapshot application = applications.get(index);
                         items.add(new MenuItem(index, button(Material.PAPER,
                                 "§e" + application.townName(),
-                                List.of("§7到期: " + application.expiresAt(),
-                                        "§7点击可撤回申请"),
+                                List.of(dialogText("tooltip.my-join.expires", Map.of(
+                                                "time", application.expiresAt())),
+                                        dialogText("tooltip.my-join.withdraw")),
                                 "CONFIRM_CANCEL_JOIN", application.id().toString())));
                     }
                     items.add(new MenuItem(48, button(Material.ARROW, "§7返回主菜单", List.of(),
@@ -1841,8 +1870,11 @@ final class TownUiController implements Listener {
                         Bukkit.getOfflinePlayer(application.applicantId()).getName(),
                         application.applicantId().toString());
                 items.add(new MenuItem(index, button(Material.PLAYER_HEAD, "§e" + name,
-                        List.of("§7申请时间: " + application.createdAt(),
-                                "§7到期: " + application.expiresAt(), "§7点击审核"),
+                        List.of(dialogText("tooltip.town-join.entry-created", Map.of(
+                                        "time", application.createdAt())),
+                                dialogText("tooltip.town-join.entry-expires", Map.of(
+                                        "time", application.expiresAt())),
+                                dialogText("tooltip.town-join.entry-review")),
                         "JOIN_APPLICATION", application.id().toString())));
             }
             if (applications.isEmpty()) {
@@ -1878,10 +1910,11 @@ final class TownUiController implements Listener {
                                     "§7申请时间: " + application.createdAt(),
                                     "§7到期: " + application.expiresAt()), null, null)),
                     new MenuItem(11, button(Material.LIME_CONCRETE, "§a批准加入",
-                            List.of("§7批准后立即成为小镇成员"), "CONFIRM_APPROVE_JOIN",
+                            List.of(dialogText("tooltip.town-join.approve")),
+                            "CONFIRM_APPROVE_JOIN",
                             application.id().toString())),
                     new MenuItem(15, button(Material.RED_CONCRETE, "§c拒绝申请",
-                            List.of("§7拒绝后 24 小时内不能再次申请本镇"),
+                            List.of(dialogText("tooltip.town-join.reject")),
                             "CONFIRM_REJECT_JOIN", application.id().toString())),
                     new MenuItem(22, button(Material.ARROW, "§7返回申请列表", List.of(),
                             "JOIN_APPLICATIONS", application.townId().toString())));
@@ -1908,8 +1941,9 @@ final class TownUiController implements Listener {
                 ApplicationSnapshot application = visible.get(index);
                 items.add(new MenuItem(index, button(Material.WRITABLE_BOOK,
                         "§e" + application.text().name(),
-                        List.of("§7小镇代码: " + application.text().residenceName(),
-                                "§7点击查看并处理"),
+                        List.of(dialogText("tooltip.admin.entry-code", Map.of(
+                                        "code", application.text().residenceName())),
+                                dialogText("tooltip.admin.entry-review")),
                         "ADMIN_APPLICATION", application.id().toString())));
             }
             if (applications.isEmpty()) {
@@ -1963,22 +1997,22 @@ final class TownUiController implements Listener {
             if (application.status() == ApplicationStatus.SUBMITTED
                     || application.status() == ApplicationStatus.UNDER_REVIEW) {
                 items.add(new MenuItem(10, button(Material.LIME_CONCRETE, "§a批准",
-                        List.of("§7创建小镇并投影 5×5 Residence"), "CONFIRM_ADMIN_APPROVE",
+                        List.of(dialogText("tooltip.admin.approve")), "CONFIRM_ADMIN_APPROVE",
                         application.id().toString())));
                 items.add(new MenuItem(12, button(Material.RED_CONCRETE, "§c拒绝",
-                        List.of("§7在 Dialog 中填写拒绝原因"), "CONFIRM_ADMIN_REJECT",
+                        List.of(dialogText("tooltip.admin.reject")), "CONFIRM_ADMIN_REJECT",
                         application.id().toString())));
                 items.add(new MenuItem(14, button(Material.ORANGE_CONCRETE, "§e要求补件",
-                        List.of("§7在 Dialog 中填写修改要求"), "CONFIRM_ADMIN_CHANGE",
+                        List.of(dialogText("tooltip.admin.change")), "CONFIRM_ADMIN_CHANGE",
                         application.id().toString())));
             } else if (application.status() == ApplicationStatus.PROVISION_FAILED) {
                 items.add(new MenuItem(12, button(Material.LIME_CONCRETE, "§a重试批准",
-                        List.of("§7重新执行 Residence 投影"), "CONFIRM_ADMIN_APPROVE",
+                        List.of(dialogText("tooltip.admin.retry")), "CONFIRM_ADMIN_APPROVE",
                         application.id().toString())));
             }
             if (application.territory() != null) {
                 items.add(new MenuItem(16, button(Material.ENDER_EYE, "§b预览选址",
-                        List.of("§7传送至领地中心并显示火焰边界"), "ADMIN_PREVIEW_SITE",
+                        List.of(dialogText("tooltip.admin.preview")), "ADMIN_PREVIEW_SITE",
                         application.id().toString())));
             }
             items.add(new MenuItem(22, button(Material.ARROW, "§7返回审核列表", List.of(),

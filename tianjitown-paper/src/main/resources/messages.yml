@@ -360,6 +360,125 @@ dialog:
     reopen: '&e重新打开'
     continue-processing: '&a继续'
 
+  # Dialog 操作按钮的悬浮提示。动态内容使用 {placeholder} 替换。
+  tooltip:
+    main:
+      town: '&7简介、规则、领地和基础资料'
+      finance: '&7资金、账本、Buff、税率和扩张'
+      governance: '&7成员、申请、投票和资料管理'
+      pending: '&7集中处理需要你作出决定的事项'
+      personal: '&7领取手册、退出或解散小镇'
+      application-summary: '&7点击查看摘要'
+      application-review: '&c管理员意见: {message}'
+      create-application: '&7使用分步表单填写申请资料'
+      join-towns: '&7浏览小镇并提交 48 小时有效申请'
+      my-applications-count: '&7待处理: {count}'
+      my-applications-limit: '&7同时最多申请 3 个小镇'
+      handbook: '&7手册丢失后可在服务台重新领取'
+      admin-review-pending: '&6有未完成的建镇申请'
+      admin-review-empty: '&7查看建镇申请列表'
+    governance:
+      members: '&7查看成员及可用的管理操作'
+      votes: '&7查看、参与或终止治理投票'
+      applications: '&7审核玩家的入镇申请'
+      visitors: '&7查看访客名单或邀请新访客'
+      visitor-permission: '&7访客拥有与普通成员相同的领地权限'
+    visitor:
+      list: '&7查看访客并将其移出名单'
+      invite: '&7从在线的非本镇成员中选择访客'
+      entry:
+        inviter: '&7邀请人: {player}'
+        added: '&7加入访客名单: {time}'
+        remove: '&c点击移出访客名单'
+      invite-entry:
+        click: '&7点击后确认加入访客名单'
+        constraint: '&7可属于其他小镇，但不能是本镇成员'
+    pending:
+      applications: '&7查看并审批待处理申请'
+      votes: '&7参与尚未投票的治理事项'
+      transfer: '&7接受或拒绝接任本镇镇长'
+    personal:
+      handbook: '&7将手册放入背包；背包已满时掉落在脚下'
+      disband-only: '&c仅剩镇长一人时可执行'
+      disband-irreversible: '&c此操作不可撤销'
+      leave: '&7退出后 24 小时内不能申请新镇'
+    finance:
+      donation: '&7输入捐款金额'
+      donation-vault: '&7从个人余额转入小镇公共资金'
+      tax: '&7进入独立表单调整统一收入税率'
+      ledger: '&7查看小镇公共资金的收支记录'
+      ledger-subsidy: '&7查看税收与服务器补贴的合计收入'
+      buff-active: '&7查看效果、等级、时长和购买价格'
+      buff-paused: '&7商店已暂停，可查看仍在生效的 Buff'
+      expansion: '&7在 5×5 地图上扩张领地，每块区域花费 3000 公共资金'
+    application:
+      edit: '&7使用分步表单修改申请资料'
+      remind: '&7重新发送确认邀请'
+      remind-cooldown: '&7冷却时间: 5 分钟'
+      select-site: '&7你脚下的区域将成为 5×5 初始领地中心'
+      preview-site: '&7传送至领地中心并显示火焰边界'
+      submit-ready: '&7进入确认页面'
+      submit-fee: '&7批准时将从申请人余额扣除 2000'
+      submit-waiting: '&c两名初始成员均确认后才可提交'
+      cancel-draft: '&7撤回后需等待一段时间才能再次申请'
+      cancel-submitted: '&7批准建镇前仍可撤回'
+    town:
+      rules: '&7完整查看当前规则'
+      members: '&7查看全部成员'
+      edit: '&7在表单中编辑小镇资料'
+      territory: '&7包含初始领地与已扩张区域'
+      territory-center: '&7初始中心: {x}, {z}'
+      territory-preview: '&a点击传送并显示火焰边界'
+    members:
+      role: '&7身份: {role}'
+      joined: '&7加入: {time}'
+      manage: '&e点击查看治理操作'
+      readonly: '&7仅可查看'
+    member-detail:
+      max-deputies: '&7每个小镇最多 3 名副镇长'
+      kick-now: '&c立即移出小镇并收回领地权限'
+      kick-confirm: '&7需要再次确认'
+      transfer-expiry: '&7候选成员必须在 24 小时内接受'
+      vote-kick-threshold: '&7赞成票必须严格超过有效选民的 50%'
+      replace-mayor-threshold: '&7发起 2/3 强制更换镇长投票'
+    transfer:
+      accept-confirm: '&7需要再次确认'
+      reject-close: '&7本次请求将立即关闭'
+    votes:
+      entry:
+        yes: '&7赞成: {yes}/{required}'
+        no: '&7反对: {no}'
+        expires: '&7到期: {time}'
+      once: '&7每位玩家只能投一次'
+      cancel-only: '&7仅发起人可操作'
+      cancel-irreversible: '&c终止后不可恢复'
+    join:
+      town-code: '&7小镇代码: {code}'
+      town-description: '&7简介: {description}'
+      town-apply: '&7点击查看规则并申请加入'
+      submit-expiry: '&7申请有效期 48 小时'
+      submit-limit: '&7同时最多申请 3 个小镇'
+    my-join:
+      expires: '&7到期: {time}'
+      withdraw: '&7点击可撤回申请'
+    town-join:
+      entry-created: '&7申请时间: {time}'
+      entry-expires: '&7到期: {time}'
+      entry-review: '&7点击审核'
+      approve: '&7批准后立即成为小镇成员'
+      reject: '&7拒绝后 24 小时内不能再次申请本镇'
+    admin:
+      entry-code: '&7小镇代码: {code}'
+      entry-review: '&7点击查看并处理'
+      approve: '&7创建小镇及其 5×5 初始领地'
+      reject: '&7填写拒绝原因'
+      change: '&7填写需要申请人修改的内容'
+      retry: '&7重新创建小镇初始领地'
+      preview: '&7传送至领地中心并显示火焰边界'
+    application-members:
+      select: '&7点击后从在线玩家列表中选择'
+      save: '&8保存后系统会邀请两名成员确认'
+
   # Dialog 菜单。
   colors:
     menu-title: '&6'
@@ -548,6 +667,12 @@ dialog:
       expandable: '&b可扩张区域'
       blocked: '&8不可扩张区域'
       other-town: '&c其他小镇区域'
+      center-detail: '小镇初始中心'
+      owned-detail: '已属于当前小镇'
+      other-town-detail: '属于其他小镇：{town}'
+      capacity-detail: '可拥有的领地区域已达到上限'
+      expandable-detail: '可使用公共资金扩张'
+      not-adjacent-detail: '只能扩张与已有领地边缘相连的区域'
       grid: '&7区域坐标: {x},{z}'
       price: '&6价格: {price}'
       units-after-expansion: '&7扩张后拥有区域: {units}'
