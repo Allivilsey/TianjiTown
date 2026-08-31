@@ -113,6 +113,8 @@ public final class QuickShopTaxAdapter {
             boolean selling = (boolean) call(shop, "isSelling");
             Object receiver = selling ? call(shop, "getOwner") : interacting;
             UUID receiverId = (UUID) call(receiver, "getUniqueId");
+            String receiverName = Objects.toString(call(receiver, "getUsername"),
+                    receiverId.toString());
             UUID interactingId = (UUID) call(interacting, "getUniqueId");
             TaxPolicy policy = policyLookup.apply(receiverId);
             int basisPoints = policy == null ? 0 : policy.basisPoints();
@@ -122,7 +124,7 @@ public final class QuickShopTaxAdapter {
                 pending.remove();
                 return;
             }
-            pending.set(new PendingTax(policy.townId(), receiverId, interactingId,
+            pending.set(new PendingTax(policy.townId(), receiverId, receiverName, interactingId,
                     (UUID) call(shop, "getRuntimeRandomUniqueId"),
                     ((Number) call(shop, "getShopId")).longValue(),
                     selling ? "SELLING" : "BUYING", basisPoints));
@@ -186,7 +188,8 @@ public final class QuickShopTaxAdapter {
             String businessKey = "quickshop:" + startupId + ":"
                     + successSequence.incrementAndGet();
             successConsumer.accept(new SuccessfulTax(tax.townId(), businessKey, tax.shopId(),
-                    tax.shopType(), tax.receiverId(), tax.interactingId(), gross.minorUnits(),
+                    tax.shopType(), tax.receiverId(), tax.receiverName(), tax.interactingId(),
+                    gross.minorUnits(),
                     tax.basisPoints(), taxAmount.minorUnits(), location.getWorld().getName()));
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             logEventFailure("成功交易入账事件处理失败", exception);
@@ -227,6 +230,7 @@ public final class QuickShopTaxAdapter {
         shopType.getMethod("getShopId");
         shopType.getMethod("getLocation");
         qUserType.getMethod("getUniqueId");
+        qUserType.getMethod("getUsername");
 
         Class<?> transactionType = transactionEvent.getMethod("getTransaction").getReturnType();
         transactionType.getMethod("to");
@@ -307,7 +311,8 @@ public final class QuickShopTaxAdapter {
                 : throwable.getMessage();
     }
 
-    private record PendingTax(UUID townId, UUID receiverId, UUID interactingId,
+    private record PendingTax(UUID townId, UUID receiverId, String receiverName,
+                              UUID interactingId,
                               UUID shopRuntimeId, long shopId, String shopType,
                               int basisPoints) {
     }
@@ -316,7 +321,8 @@ public final class QuickShopTaxAdapter {
     }
 
     public record SuccessfulTax(UUID townId, String businessKey, long shopId, String shopType,
-                                UUID receiverId, UUID interactingId, long grossMinor,
+                                UUID receiverId, String receiverName, UUID interactingId,
+                                long grossMinor,
                                 int basisPoints, long taxMinor, String worldName) {
     }
 

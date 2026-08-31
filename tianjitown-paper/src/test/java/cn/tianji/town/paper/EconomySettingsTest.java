@@ -22,6 +22,8 @@ class EconomySettingsTest {
         assertEquals(2500, settings.maximumTaxBps());
         assertEquals(new BigDecimal("3000.00"), settings.expansionCost());
         assertEquals(25, settings.maximumUnits());
+        assertEquals(new BigDecimal("50000.00"), settings.weeklySubsidyLimit());
+        assertEquals(new BigDecimal("5000.00"), settings.twelveHourSubsidyLimit());
         assertTrue(settings.allowsTaxRate(500));
         assertTrue(settings.allowsTaxRate(600));
         assertTrue(settings.allowsTaxRate(2500));

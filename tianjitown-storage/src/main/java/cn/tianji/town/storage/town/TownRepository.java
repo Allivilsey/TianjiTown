@@ -258,6 +258,13 @@ public final class TownRepository {
     public Provisioning beginProvision(UUID applicationId, UUID reviewerId, String reviewerName,
                                        String reason, String idempotencyKey,
                                        long applicationFeeMinor) {
+        return beginProvision(applicationId, reviewerId, reviewerName, reason, idempotencyKey,
+                applicationFeeMinor, null);
+    }
+
+    public Provisioning beginProvision(UUID applicationId, UUID reviewerId, String reviewerName,
+                                       String reason, String idempotencyKey,
+                                       long applicationFeeMinor, String applicantName) {
         requireWorkerThread();
         requireReason(reason);
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
@@ -308,11 +315,12 @@ public final class TownRepository {
             UUID unitId = UUID.randomUUID();
             String residenceName = TownResidenceName.initial(application.text().residenceName());
             insertTown(connection, townId, application, residenceName, unitId,
-                    applicationFeeMinor);
+                    applicationFeeMinor, applicantName);
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE town_applications
                        SET status = 'APPROVED_PROVISIONING', town_id = ?, review_message = ?,
                            application_fee_minor = ?,
+                           application_fee_status = 'ESCROWED',
                            version = version + 1
                      WHERE application_id = ? AND version = ?
                     """)) {
@@ -346,6 +354,15 @@ public final class TownRepository {
             ApplicationWorkflow.requireAllowed(application.status(), target, ApplicationActor.SYSTEM);
             updateStatus(connection, applicationId, application.version(), target, null,
                     success ? null : safeDetail(detail));
+            if (success) {
+                try (PreparedStatement fee = connection.prepareStatement("""
+                        UPDATE town_applications SET application_fee_status = 'CONSUMED'
+                         WHERE application_id = ? AND application_fee_status = 'ESCROWED'
+                        """)) {
+                    fee.setBytes(1, uuid(applicationId));
+                    fee.executeUpdate();
+                }
+            }
             try (PreparedStatement town = connection.prepareStatement(
                     "UPDATE towns SET status = ?, version = version + 1 WHERE town_id = ?");
                  PreparedStatement unit = connection.prepareStatement("""
@@ -441,6 +458,141 @@ public final class TownRepository {
         });
     }
 
+    public Provisioning failedProvision(UUID applicationId) {
+        requireWorkerThread();
+        return query(connection -> {
+            ApplicationSnapshot application = requireApplication(connection, applicationId);
+            if (application.status() != ApplicationStatus.PROVISION_FAILED
+                    || application.townId() == null) {
+                throw new ConflictException("申请当前不是可恢复的创建失败状态");
+            }
+            return requireProvisioningTownStatus(connection, application,
+                    TownStatus.PROVISIONING);
+        });
+    }
+
+    public ApplicationSnapshot recoverFailedProvision(UUID applicationId, UUID reviewerId,
+                                                       String reviewerName, String reason,
+                                                       RecoveryMode mode) {
+        requireWorkerThread();
+        requireReason(reason);
+        Objects.requireNonNull(mode, "mode");
+        return transaction(connection -> {
+            ApplicationSnapshot application = requireApplication(connection, applicationId);
+            if (application.status() != ApplicationStatus.PROVISION_FAILED
+                    || application.townId() == null) {
+                throw new ConflictException("申请当前不是可恢复的创建失败状态");
+            }
+            TownSnapshot town = requireTown(connection, application.townId());
+            if (town.status() != TownStatus.PROVISIONING) {
+                throw new ConflictException("临时小镇已不处于 PROVISIONING，拒绝解除锁定");
+            }
+            ApplicationStatus target = mode == RecoveryMode.UNLOCK_FOR_CHANGES
+                    ? ApplicationStatus.NEED_CHANGES : ApplicationStatus.CANCELLED;
+            ApplicationWorkflow.requireAllowed(application.status(), target,
+                    ApplicationActor.ADMINISTRATOR);
+            String feeStatus = target == ApplicationStatus.NEED_CHANGES
+                    ? "ESCROWED" : "REFUND_PENDING";
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE town_applications
+                       SET status = ?, town_id = NULL, review_message = ?, last_error = NULL,
+                           application_fee_status = ?, version = version + 1
+                     WHERE application_id = ? AND version = ?
+                    """)) {
+                statement.setString(1, target.name());
+                statement.setString(2, reason);
+                statement.setString(3, feeStatus);
+                statement.setBytes(4, uuid(applicationId));
+                statement.setLong(5, application.version());
+                requireUpdated(statement, "失败申请已被其他管理员处理");
+            }
+            deleteProvisioningTown(connection, town.id());
+            insertReview(connection, applicationId, reviewerId,
+                    mode == RecoveryMode.UNLOCK_FOR_CHANGES ? "UNLOCK_FOR_CHANGES"
+                            : mode.name(), reason);
+            audit(connection, null, reviewerId, reviewerName,
+                    mode == RecoveryMode.UNLOCK_FOR_CHANGES
+                            ? "PROVISION_UNLOCK_FOR_CHANGES"
+                            : mode == RecoveryMode.CANCEL_AND_REFUND
+                            ? "PROVISION_CANCEL_AND_REFUND" : "PROVISION_FORCE_CLEANUP",
+                    "APPLICATION", applicationId.toString(), reason,
+                    "已事务回滚临时小镇、成员、领地和初始资金账本；申请费="
+                            + application.applicationFeeMinor() + "，状态=" + feeStatus);
+            return requireApplication(connection, applicationId);
+        });
+    }
+
+    public ApplicationSnapshot completeApplicationFeeRefund(UUID applicationId, UUID reviewerId,
+                                                              String reviewerName,
+                                                              String detail) {
+        requireWorkerThread();
+        return transaction(connection -> {
+            ApplicationSnapshot application = requireApplication(connection, applicationId);
+            if (application.status() != ApplicationStatus.CANCELLED
+                    || application.applicationFeeStatus()
+                    != ApplicationSnapshot.FeeStatus.REFUND_PENDING) {
+                if (application.applicationFeeStatus()
+                        == ApplicationSnapshot.FeeStatus.REFUNDED) {
+                    return application;
+                }
+                throw new ConflictException("申请费当前不在待退款状态");
+            }
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE town_applications
+                       SET application_fee_status = 'REFUNDED', version = version + 1
+                     WHERE application_id = ? AND version = ?
+                    """)) {
+                statement.setBytes(1, uuid(applicationId));
+                statement.setLong(2, application.version());
+                requireUpdated(statement, "退款状态已被其他操作修改");
+            }
+            audit(connection, "application-fee-refund:" + applicationId, reviewerId,
+                    reviewerName, "APPLICATION_FEE_REFUND", "APPLICATION",
+                    applicationId.toString(), "管理员取消失败申请并退款", safeDetail(detail));
+            return requireApplication(connection, applicationId);
+        });
+    }
+
+    private void deleteProvisioningTown(Connection connection, UUID townId) throws SQLException {
+        String[] statements = {
+                "DELETE FROM governance_vote_ballots WHERE vote_id IN "
+                        + "(SELECT vote_id FROM governance_votes WHERE town_id = ?)",
+                "DELETE FROM governance_vote_voters WHERE vote_id IN "
+                        + "(SELECT vote_id FROM governance_votes WHERE town_id = ?)",
+                "DELETE FROM governance_votes WHERE town_id = ?",
+                "DELETE FROM territory_chunks WHERE unit_id IN "
+                        + "(SELECT unit_id FROM territory_units WHERE town_id = ?)",
+                "DELETE FROM territory_expansions WHERE town_id = ?",
+                "DELETE FROM territory_expansion_batches WHERE town_id = ?",
+                "DELETE FROM territory_units WHERE town_id = ?",
+                "DELETE FROM active_buffs WHERE town_id = ?",
+                "DELETE FROM building_refund_weekly WHERE town_id = ?",
+                "DELETE FROM economy_operations WHERE town_id = ?",
+                "DELETE FROM external_income_tax_records WHERE town_id = ?",
+                "DELETE FROM mayor_transfer_requests WHERE town_id = ?",
+                "DELETE FROM quickshop_tax_records WHERE town_id = ?",
+                "DELETE FROM quickshop_subsidy_reservations WHERE town_id = ?",
+                "DELETE FROM resource_orders WHERE town_id = ?",
+                "DELETE FROM town_archived_members WHERE town_id = ?",
+                "DELETE FROM town_beacon_effects WHERE town_id = ?",
+                "DELETE FROM town_member_departures WHERE town_id = ?",
+                "DELETE FROM town_profile_sync WHERE town_id = ?",
+                "DELETE FROM town_visitors WHERE town_id = ?",
+                "DELETE FROM town_invitations WHERE town_id = ?",
+                "DELETE FROM town_join_applications WHERE town_id = ?",
+                "DELETE FROM town_members WHERE town_id = ?",
+                "DELETE FROM ledger_entries WHERE town_id = ?",
+                "DELETE FROM town_accounts WHERE town_id = ?",
+                "DELETE FROM towns WHERE town_id = ?"
+        };
+        for (String sql : statements) {
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setBytes(1, uuid(townId));
+                statement.executeUpdate();
+            }
+        }
+    }
+
     public Optional<ApplicationSnapshot> findReviewApplicationByName(String townName) {
         requireWorkerThread();
         String normalizedName = ApplicationText.normalizeNameKey(townName);
@@ -475,6 +627,94 @@ public final class TownRepository {
                             : Optional.empty();
                 }
             }
+        });
+    }
+
+    public Optional<ApplicationFormDraft> findFormDraft(UUID applicantId) {
+        requireWorkerThread();
+        Objects.requireNonNull(applicantId, "applicantId");
+        return query(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT * FROM application_form_drafts WHERE applicant_uuid = ?
+                    """)) {
+                statement.setBytes(1, uuid(applicantId));
+                try (ResultSet result = statement.executeQuery()) {
+                    return result.next() ? Optional.of(readFormDraft(result)) : Optional.empty();
+                }
+            }
+        });
+    }
+
+    public ApplicationFormDraft saveFormDraft(ApplicationFormDraft draft) {
+        requireWorkerThread();
+        Objects.requireNonNull(draft, "draft");
+        return transaction(connection -> {
+            if (draft.applicationId() != null) {
+                ApplicationSnapshot application = requireApplication(connection,
+                        draft.applicationId());
+                requireApplicant(application, draft.applicantId());
+                if (application.version() != draft.applicationVersion()) {
+                    throw new ConflictException("正式申请已被其他操作修改，请重新打开后继续编辑");
+                }
+            }
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    INSERT INTO application_form_drafts
+                        (applicant_uuid, application_id, application_version, current_step,
+                         name, short_name, residence_name, description, rules_text,
+                         member_one_uuid, member_one_name, member_two_uuid, member_two_name)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (applicant_uuid) DO UPDATE SET
+                        application_id = excluded.application_id,
+                        application_version = excluded.application_version,
+                        current_step = excluded.current_step,
+                        name = excluded.name,
+                        short_name = excluded.short_name,
+                        residence_name = excluded.residence_name,
+                        description = excluded.description,
+                        rules_text = excluded.rules_text,
+                        member_one_uuid = excluded.member_one_uuid,
+                        member_one_name = excluded.member_one_name,
+                        member_two_uuid = excluded.member_two_uuid,
+                        member_two_name = excluded.member_two_name
+                    """)) {
+                statement.setBytes(1, uuid(draft.applicantId()));
+                if (draft.applicationId() == null) {
+                    statement.setNull(2, java.sql.Types.BLOB);
+                } else {
+                    statement.setBytes(2, uuid(draft.applicationId()));
+                }
+                statement.setLong(3, draft.applicationVersion());
+                statement.setInt(4, draft.currentStep());
+                statement.setString(5, draft.name());
+                statement.setString(6, draft.shortName());
+                statement.setString(7, draft.residenceName());
+                statement.setString(8, draft.description());
+                statement.setString(9, String.join(RULE_SEPARATOR, draft.rules()));
+                setNullableUuid(statement, 10, draft.memberOneId());
+                statement.setString(11, draft.memberOneName());
+                setNullableUuid(statement, 12, draft.memberTwoId());
+                statement.setString(13, draft.memberTwoName());
+                statement.executeUpdate();
+            }
+            audit(connection, null, draft.applicantId(), draft.applicantId().toString(),
+                    "APPLICATION_DRAFT_SAVE", "APPLICATION",
+                    draft.applicationId() == null ? draft.applicantId().toString()
+                            : draft.applicationId().toString(),
+                    "保存第 " + draft.currentStep() + " 步申请草稿", "");
+            return requireFormDraft(connection, draft.applicantId());
+        });
+    }
+
+    public void deleteFormDraft(UUID applicantId) {
+        requireWorkerThread();
+        Objects.requireNonNull(applicantId, "applicantId");
+        transaction(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM application_form_drafts WHERE applicant_uuid = ?")) {
+                statement.setBytes(1, uuid(applicantId));
+                statement.executeUpdate();
+            }
+            return null;
         });
     }
 
@@ -646,6 +886,26 @@ public final class TownRepository {
                 }
             }
             return List.copyOf(members);
+        });
+    }
+
+    public List<MemberConflict> initialMemberConflicts(List<UUID> playerIds) {
+        requireWorkerThread();
+        if (playerIds == null) {
+            return List.of();
+        }
+        return query(connection -> {
+            List<MemberConflict> conflicts = new ArrayList<>();
+            for (UUID playerId : playerIds.stream().filter(Objects::nonNull).distinct().toList()) {
+                Optional<UUID> townId = memberTownId(connection, playerId);
+                if (townId.isEmpty()) {
+                    continue;
+                }
+                TownSnapshot town = requireTown(connection, townId.get());
+                conflicts.add(new MemberConflict(playerId, "ALREADY_MEMBER", town.id(),
+                        town.profile().name()));
+            }
+            return List.copyOf(conflicts);
         });
     }
 
@@ -1691,7 +1951,8 @@ public final class TownRepository {
     }
 
     private void insertTown(Connection connection, UUID townId, ApplicationSnapshot application,
-                            String residenceName, UUID unitId, long applicationFeeMinor)
+                            String residenceName, UUID unitId, long applicationFeeMinor,
+                            String applicantName)
             throws SQLException {
         ApplicationText text = application.text();
         try (PreparedStatement town = connection.prepareStatement("""
@@ -1763,7 +2024,8 @@ public final class TownRepository {
             ledger.setLong(3, applicationFeeMinor);
             ledger.setLong(4, applicationFeeMinor);
             ledger.setBytes(5, uuid(application.applicantId()));
-            ledger.setString(6, application.applicantId().toString());
+            ledger.setString(6, applicantName == null || applicantName.isBlank()
+                    ? application.applicantId().toString() : applicantName);
             ledger.setString(7, "application-fee:" + application.id());
             ledger.setString(8, "建镇申请费转为小镇初始公共资金");
             ledger.executeUpdate();
@@ -1949,7 +2211,9 @@ public final class TownRepository {
                 application.text(), application.status(), application.territory(),
                 application.reservationExpiresAt(), application.townId(),
                 application.reviewMessage(), application.lastError(), members,
-                application.applicationFeeMinor(), application.version(),
+                application.applicationFeeMinor(), application.applicationFeeStatus(),
+                application.version(),
+                application.submittedAt(),
                 application.createdAt(), application.updatedAt());
     }
 
@@ -1964,8 +2228,11 @@ public final class TownRepository {
             if (memberId == null || memberId.equals(applicantId)) {
                 throw new ConflictException("初始成员不能包含申请人");
             }
-            if (memberTownId(connection, memberId).isPresent()) {
-                throw new ConflictException("初始成员 " + memberId + " 已经属于其他小镇");
+            Optional<UUID> existingTownId = memberTownId(connection, memberId);
+            if (existingTownId.isPresent()) {
+                TownSnapshot existingTown = requireTown(connection, existingTownId.get());
+                throw new MemberConflictException(new MemberConflict(memberId,
+                        "ALREADY_MEMBER", existingTown.id(), existingTown.profile().name()));
             }
         }
         try (PreparedStatement delete = connection.prepareStatement("""
@@ -2023,9 +2290,44 @@ public final class TownRepository {
                 reservationExpiry == null ? null : reservationExpiry.toInstant(),
                 townBytes == null ? null : uuid(townBytes), result.getString("review_message"),
                 result.getString("last_error"), List.of(),
-                result.getLong("application_fee_minor"), result.getLong("version"),
+                result.getLong("application_fee_minor"),
+                ApplicationSnapshot.FeeStatus.valueOf(
+                        result.getString("application_fee_status")), result.getLong("version"),
+                result.getTimestamp("submitted_at") == null ? null
+                        : result.getTimestamp("submitted_at").toInstant(),
                 result.getTimestamp("created_at").toInstant(),
                 result.getTimestamp("updated_at").toInstant());
+    }
+
+    private ApplicationFormDraft requireFormDraft(Connection connection, UUID applicantId)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT * FROM application_form_drafts WHERE applicant_uuid = ?")) {
+            statement.setBytes(1, uuid(applicantId));
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) {
+                    throw new NotFoundException("找不到申请表单草稿");
+                }
+                return readFormDraft(result);
+            }
+        }
+    }
+
+    private static ApplicationFormDraft readFormDraft(ResultSet result) throws SQLException {
+        byte[] application = result.getBytes("application_id");
+        byte[] memberOne = result.getBytes("member_one_uuid");
+        byte[] memberTwo = result.getBytes("member_two_uuid");
+        String rulesText = result.getString("rules_text");
+        List<String> rules = rulesText == null || rulesText.isEmpty() ? List.of()
+                : List.of(rulesText.split(RULE_SEPARATOR, -1));
+        return new ApplicationFormDraft(readUuid(result, "applicant_uuid"),
+                application == null ? null : uuid(application),
+                result.getLong("application_version"), result.getInt("current_step"),
+                result.getString("name"), result.getString("short_name"),
+                result.getString("residence_name"), result.getString("description"), rules,
+                memberOne == null ? null : uuid(memberOne), result.getString("member_one_name"),
+                memberTwo == null ? null : uuid(memberTwo), result.getString("member_two_name"),
+                Instant.ofEpochMilli(result.getLong("updated_at")));
     }
 
     private Optional<TownSnapshot> findTown(Connection connection, UUID townId) throws SQLException {
@@ -2375,6 +2677,15 @@ public final class TownRepository {
                 .putLong(value.getLeastSignificantBits()).array();
     }
 
+    private static void setNullableUuid(PreparedStatement statement, int index, UUID value)
+            throws SQLException {
+        if (value == null) {
+            statement.setNull(index, java.sql.Types.BLOB);
+        } else {
+            statement.setBytes(index, uuid(value));
+        }
+    }
+
     private static UUID uuid(byte[] value) {
         ByteBuffer buffer = ByteBuffer.wrap(value);
         return new UUID(buffer.getLong(), buffer.getLong());
@@ -2406,6 +2717,12 @@ public final class TownRepository {
         }
     }
 
+    public enum RecoveryMode {
+        UNLOCK_FOR_CHANGES,
+        CANCEL_AND_REFUND,
+        FORCE_CLEANUP
+    }
+
     public record PlayerDashboard(TownSnapshot town, ApplicationSnapshot application,
                                   List<JoinApplicationSnapshot> joinApplications,
                                   List<JoinApplicationSnapshot> incomingJoinApplications) {
@@ -2422,6 +2739,23 @@ public final class TownRepository {
 
         public ConflictException(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    public record MemberConflict(UUID playerId, String conflictType, UUID townId,
+                                 String townName) {
+    }
+
+    public static final class MemberConflictException extends ConflictException {
+        private final MemberConflict conflict;
+
+        public MemberConflictException(MemberConflict conflict) {
+            super("初始成员已经属于小镇“" + conflict.townName() + "”");
+            this.conflict = Objects.requireNonNull(conflict, "conflict");
+        }
+
+        public MemberConflict conflict() {
+            return conflict;
         }
     }
 

@@ -19,6 +19,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -183,6 +184,104 @@ class EconomyRepositorySqliteTest {
             assertTrue(displayedTax.note().contains("服务器等额补贴"));
             assertFalse(repository.displayLedger(townId, 0, 45).stream()
                     .anyMatch(entry -> entry.entryType().equals("SERVER_TAX_SUBSIDY")));
+        }
+    }
+
+    @Test
+    void reservesQuickShopSubsidyAgainstBothLimitsAndResetsByPeriod() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("quickshop-subsidy.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID townId = UUID.randomUUID();
+            UUID mayorId = UUID.randomUUID();
+            UUID worldId = UUID.randomUUID();
+            insertTown(gate, townId, mayorId, worldId);
+            EconomyRepository repository = new EconomyRepository(gate.dataSource(), () -> false);
+            repository.initializeAccounts();
+            ZoneId zone = ZoneId.of("Asia/Shanghai");
+            Instant firstPeriod = Instant.parse("2026-08-31T03:15:00Z");
+
+            EconomyRepository.SubsidyReservation first = repository.reserveQuickShopSubsidy(
+                    townId, "qs:quota:1", 500, 1_000, 300, firstPeriod, zone);
+            assertEquals(300, first.grantedMinor());
+            EconomyRepository.QuickShopTax firstTax = new EconomyRepository.QuickShopTax(
+                    townId, "qs:quota:1", 1, "SELLING", mayorId, "Mayor", UUID.randomUUID(),
+                    10_000, 500, 500, "world");
+            assertEquals(800, repository.recordQuickShopTax(firstTax).balanceAfterMinor());
+
+            EconomyRepository.SubsidyReservation second = repository.reserveQuickShopSubsidy(
+                    townId, "qs:quota:2", 500, 1_000, 300, firstPeriod, zone);
+            assertEquals(0, second.grantedMinor());
+            EconomyRepository.QuickShopTax secondTax = new EconomyRepository.QuickShopTax(
+                    townId, "qs:quota:2", 2, "SELLING", mayorId, "Mayor", UUID.randomUUID(),
+                    10_000, 500, 500, "world");
+            assertEquals(1_300, repository.recordQuickShopTax(secondTax).balanceAfterMinor());
+
+            EconomyRepository.SubsidyQuota beforeReset = repository.quickShopSubsidyQuota(
+                    townId, 1_000, 300, firstPeriod, zone);
+            assertEquals(700, beforeReset.weeklyRemainingMinor());
+            assertEquals(0, beforeReset.twelveHourRemainingMinor());
+
+            EconomyRepository.SubsidyQuota afterTwelveHours = repository.quickShopSubsidyQuota(
+                    townId, 1_000, 300, firstPeriod.plusSeconds(13 * 60 * 60), zone);
+            assertEquals(700, afterTwelveHours.weeklyRemainingMinor());
+            assertEquals(300, afterTwelveHours.twelveHourRemainingMinor());
+        }
+    }
+
+    @Test
+    void preparesCompletesAndRefundsExpansionBatchAsOneIdempotentUnit() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("expansion-batch.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID townId = UUID.randomUUID();
+            UUID mayorId = UUID.randomUUID();
+            UUID worldId = UUID.randomUUID();
+            insertTown(gate, townId, mayorId, worldId);
+            EconomyRepository repository = new EconomyRepository(gate.dataSource(), () -> false);
+            repository.initializeAccounts();
+            EconomyRepository.EconomyOperation seed = repository.prepareOperation(townId,
+                    "DONATION", 1_000, mayorId, "Mayor", "batch:seed", "批量扩张测试资金");
+            repository.markOperationExternalApplied(seed.operationId());
+            repository.completeOperation(seed.operationId());
+
+            TerritoryUnit origin = repository.territoryUnits(townId).getFirst().unit();
+            TerritoryUnit east = TerritoryRules.target(List.of(origin), 1, 0);
+            TerritoryUnit northEast = TerritoryRules.target(List.of(origin, east), 1, 1);
+            List<EconomyRepository.ExpansionBatchItem> items = List.of(
+                    new EconomyRepository.ExpansionBatchItem(east, "SKY", "unit_p1_p0", 200),
+                    new EconomyRepository.ExpansionBatchItem(northEast, "SKY", "unit_p1_p1", 200));
+            EconomyRepository.ExpansionBatchRequest request =
+                    new EconomyRepository.ExpansionBatchRequest(townId, items, 400, mayorId,
+                            "Mayor", "batch:rollback");
+
+            EconomyRepository.ExpansionBatchOperation prepared =
+                    repository.prepareExpansionBatch(request);
+            assertEquals("PREPARED", prepared.status());
+            assertEquals(prepared.batchId(), repository.prepareExpansionBatch(request).batchId());
+            assertEquals(600, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
+            assertEquals(3, repository.territoryUnits(townId).size());
+            repository.refundExpansionBatch(prepared.batchId(), "Residence 批量测试失败");
+            repository.refundExpansionBatch(prepared.batchId(), "重复退款不应重复入账");
+            assertEquals(1_000, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
+            assertEquals(1, repository.territoryUnits(townId).size());
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM territory_expansions"));
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM territory_units "
+                    + "WHERE grid_x <> 0 OR grid_z <> 0"));
+
+            EconomyRepository.ExpansionBatchOperation completed =
+                    repository.prepareExpansionBatch(new EconomyRepository.ExpansionBatchRequest(
+                            townId, items, 400, mayorId, "Mayor", "batch:complete"));
+            assertEquals("COMPLETED", repository.completeExpansionBatch(completed.batchId())
+                    .status());
+            assertEquals("COMPLETED", repository.completeExpansionBatch(completed.batchId())
+                    .status());
+            assertEquals(3, repository.territoryUnits(townId).size());
+            assertEquals(2, scalar(gate, "SELECT COUNT(*) FROM territory_expansions "
+                    + "WHERE status = 'COMPLETED'"));
+            assertTrue(repository.pendingExpansionBatches().isEmpty());
         }
     }
 

@@ -428,6 +428,25 @@ public final class GovernanceRepository {
         return query(connection -> listVotes(connection, townId, viewerId, onlyOpen));
     }
 
+    public List<UUID> listVoteVoterIds(UUID voteId) {
+        requireWorkerThread();
+        return query(connection -> {
+            List<UUID> voters = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT player_uuid FROM governance_vote_voters
+                     WHERE vote_id = ? ORDER BY player_uuid
+                    """)) {
+                statement.setBytes(1, uuid(voteId));
+                try (ResultSet result = statement.executeQuery()) {
+                    while (result.next()) {
+                        voters.add(readUuid(result, "player_uuid"));
+                    }
+                }
+            }
+            return List.copyOf(voters);
+        });
+    }
+
     public MemberRole memberRole(UUID townId, UUID playerId) {
         requireWorkerThread();
         return query(connection -> {

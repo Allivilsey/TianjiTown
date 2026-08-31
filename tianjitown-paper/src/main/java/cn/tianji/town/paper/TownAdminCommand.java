@@ -373,10 +373,14 @@ final class TownAdminCommand implements CommandExecutor {
             ApplicationSnapshot application = request.application();
             if (action.equals("approve")) {
                 String key = application.status() == cn.tianji.town.core.application.ApplicationStatus.PROVISION_FAILED
-                        ? "town:retry:" + application.id() + ":" + UUID.randomUUID()
+                        ? "town:retry:" + application.id() + ":" + application.version()
                         : "town:approve:" + application.id();
                 runtime.provision(sender, application.id(), actorId(sender), sender.getName(),
-                        request.reason(), key, plugin.townUi()::notifyApplicationDecision);
+                        request.reason(), key, result -> {
+                            if (result.application() != null) {
+                                plugin.townUi().notifyApplicationDecision(result.application());
+                            }
+                        });
             } else if (action.equals("reject")) {
                 runtime.write(sender, () -> runtime.repository().reject(application.id(), actorId(sender),
                         sender.getName(), request.reason()), updated -> {

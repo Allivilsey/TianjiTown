@@ -25,12 +25,14 @@ public final class ApplicationWorkflow {
         result.put(ApplicationStatus.SITE_SELECTED, EnumSet.of(ApplicationActor.APPLICANT));
         result.put(ApplicationStatus.SUBMITTED, EnumSet.of(ApplicationActor.APPLICANT));
         result.put(ApplicationStatus.UNDER_REVIEW, EnumSet.of(ApplicationActor.ADMINISTRATOR));
-        result.put(ApplicationStatus.NEED_CHANGES, EnumSet.of(ApplicationActor.ADMINISTRATOR));
+        result.put(ApplicationStatus.NEED_CHANGES,
+                EnumSet.of(ApplicationActor.ADMINISTRATOR));
         result.put(ApplicationStatus.APPROVED_PROVISIONING,
                 EnumSet.of(ApplicationActor.ADMINISTRATOR));
         result.put(ApplicationStatus.ACTIVE, EnumSet.of(ApplicationActor.SYSTEM));
         result.put(ApplicationStatus.REJECTED, EnumSet.of(ApplicationActor.ADMINISTRATOR));
-        result.put(ApplicationStatus.CANCELLED, EnumSet.of(ApplicationActor.APPLICANT));
+        result.put(ApplicationStatus.CANCELLED,
+                EnumSet.of(ApplicationActor.APPLICANT, ApplicationActor.ADMINISTRATOR));
         result.put(ApplicationStatus.PROVISION_FAILED, EnumSet.of(ApplicationActor.SYSTEM));
         return Map.copyOf(result);
     }

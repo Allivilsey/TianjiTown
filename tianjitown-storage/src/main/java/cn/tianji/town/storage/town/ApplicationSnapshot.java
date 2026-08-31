@@ -20,16 +20,28 @@ public record ApplicationSnapshot(
         String lastError,
         List<InitialMemberConfirmation> initialMembers,
         long applicationFeeMinor,
+        FeeStatus applicationFeeStatus,
         long version,
+        Instant submittedAt,
         Instant createdAt,
         Instant updatedAt
 ) {
     public ApplicationSnapshot {
         initialMembers = initialMembers == null ? List.of() : List.copyOf(initialMembers);
+        applicationFeeStatus = applicationFeeStatus == null
+                ? FeeStatus.UNPAID : applicationFeeStatus;
     }
 
     public boolean initialMembersConfirmed() {
         return initialMembers.size() == 2 && initialMembers.stream().allMatch(member ->
                 member.status() == InitialMemberConfirmation.Status.CONFIRMED);
+    }
+
+    public enum FeeStatus {
+        UNPAID,
+        ESCROWED,
+        CONSUMED,
+        REFUND_PENDING,
+        REFUNDED
     }
 }

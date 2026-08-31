@@ -36,6 +36,66 @@ final class PluginMessages {
             }
         }
         configuration = loaded;
+        validateRequiredMessages();
+    }
+
+    private void validateRequiredMessages() {
+        for (String key : java.util.List.of(
+                "chat.notification.vote-created", "chat.buttons.view-votes",
+                "dialog.votes.type-kick", "dialog.votes.type-replace-mayor",
+                "dialog.votes.governance-title", "dialog.votes.main-pending",
+                "dialog.votes.governance-pending-votes", "dialog.votes.visitor-member-scope",
+                "dialog.votes.pending-summary", "dialog.votes.pending-empty-hint",
+                "dialog.votes.pending-title", "dialog.votes.action-kick-member",
+                "dialog.votes.action-replace-mayor",
+                "dialog.votes.status-open", "dialog.votes.status-passed",
+                "dialog.votes.status-rejected", "dialog.votes.status-cancelled",
+                "dialog.votes.approve", "dialog.votes.reject", "dialog.votes.cancel",
+                "dialog.votes.target", "dialog.votes.threshold", "dialog.votes.tally",
+                "dialog.votes.expires", "dialog.votes.already-voted",
+                "dialog.votes.ineligible",
+                "dialog.votes.pending", "dialog.votes.previous", "dialog.votes.next",
+                "dialog.votes.back-governance", "dialog.votes.back-list",
+                "dialog.votes.detail-type",
+                "dialog.votes.once", "dialog.votes.cancel-only",
+                "dialog.votes.cancel-irreversible", "dialog.votes.status-line",
+                "dialog.votes.empty", "dialog.votes.empty-hint",
+                "dialog.votes.list-title", "dialog.votes.detail-title",
+                "dialog.tooltip.votes.entry.approve-count",
+                "dialog.tooltip.votes.entry.oppose-count",
+                "dialog.tooltip.votes.entry.deadline")) {
+            String value = configuration.getString(key);
+            if (value == null || value.isBlank()) {
+                throw new IllegalStateException("缺少必需的投票消息配置: " + key);
+            }
+        }
+        validateRangeFormat("dialog.buff.duration-format");
+        validateRangeFormat("dialog.buff.intensity-format");
+    }
+
+    private void validateRangeFormat(String key) {
+        String format = configuration.getString(key);
+        if (format == null || format.isBlank()) {
+            throw new IllegalStateException("缺少范围输入格式配置: " + key);
+        }
+        boolean placeholder = false;
+        for (int index = 0; index < format.length(); index++) {
+            if (format.charAt(index) != '%') {
+                continue;
+            }
+            if (index + 1 < format.length() && format.charAt(index + 1) == '%') {
+                index++;
+                continue;
+            }
+            if (index + 1 >= format.length() || format.charAt(index + 1) != 's') {
+                throw new IllegalStateException(key + " 只支持 %s 占位符，不支持浮点格式");
+            }
+            placeholder = true;
+            index++;
+        }
+        if (!placeholder) {
+            throw new IllegalStateException(key + " 必须包含 %s 占位符");
+        }
     }
 
     String text(String key) {

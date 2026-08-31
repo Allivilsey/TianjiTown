@@ -58,6 +58,10 @@ economy:
   # 可立即停止新税收；已存在账本查询和清算对账仍保持可用。
   tax:
     enabled: true
+    subsidy:
+      # QuickShop 等额补贴按小镇分别计数；每周一 00:00 与每天 00:00/12:00 刷新。
+      weekly-limit: '50000.00'
+      twelve-hour-limit: '5000.00'
   # 可立即停止捐款、扩张等新资金写入，不影响税款入账、退款和查询。
   consumption:
     enabled: true

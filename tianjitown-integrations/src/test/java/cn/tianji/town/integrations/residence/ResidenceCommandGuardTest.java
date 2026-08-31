@@ -4,7 +4,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ResidenceCommandGuardTest {
@@ -20,5 +22,26 @@ class ResidenceCommandGuardTest {
                 "/res remove skycity", managedNames::contains));
         assertFalse(ResidenceCommandGuard.mentionsManagedName(
                 "/res list", managedNames::contains));
+    }
+
+    @Test
+    void parsesOnlyResidenceCommandsAndSeparatesTeleportFromWrites() {
+        ResidenceCommandGuard.ParsedCommand allowed = ResidenceCommandGuard.parse(
+                "  /RES tp SKY  ");
+        assertTrue(allowed.protectedOperation());
+        assertTrue(allowed.teleport());
+        assertEquals("sky", allowed.targetName());
+
+        ResidenceCommandGuard.ParsedCommand write = ResidenceCommandGuard.parse(
+                "/res pset sky container true");
+        assertTrue(write.protectedOperation());
+        assertFalse(write.teleport());
+
+        assertNull(ResidenceCommandGuard.parse("/resadmin tp sky"));
+        ResidenceCommandGuard.ParsedCommand list = ResidenceCommandGuard.parse("/res list");
+        assertFalse(list.protectedOperation());
+        assertTrue(ResidenceCommandGuard.parse("/res future-write sky").protectedOperation());
+        assertTrue(ResidenceCommandGuard.parse("/res tp sky extra").protectedOperation());
+        assertTrue(ResidenceCommandGuard.parse("/res tp").protectedOperation());
     }
 }

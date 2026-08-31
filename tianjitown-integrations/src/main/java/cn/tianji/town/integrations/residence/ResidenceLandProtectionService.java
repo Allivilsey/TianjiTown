@@ -13,6 +13,7 @@ import org.bukkit.Location;
 import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.util.Vector;
 
 import java.util.Collection;
 import java.util.List;
@@ -24,6 +25,8 @@ import java.util.UUID;
 public final class ResidenceLandProtectionService implements LandProtectionService {
     private static final String SYSTEM_OWNER_HINT = "TianjiTownSystem";
     private static final String IGNITE_FLAG = "ignite";
+    private static final List<String> PROTECTED_EXPLOSION_FLAGS = List.of(
+            "explode", "tnt", "creeper");
     private final Server server;
     private final Set<String> managedNames;
     private final ThreadLocal<Integer> internalMutations = ThreadLocal.withInitial(() -> 0);
@@ -35,6 +38,19 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
 
     public boolean internalMutation() {
         return internalMutations.get() > 0;
+    }
+
+    @Override
+    public Collision findNameCollision(String residenceName) {
+        requireMainThread();
+        String name = TownResidenceName.initial(residenceName);
+        try {
+            ClaimedResidence existing = manager().getByName(name);
+            return existing == null ? Collision.none()
+                    : new Collision(true, existing.getName());
+        } catch (RuntimeException | LinkageError exception) {
+            return new Collision(true, dependencyError(exception));
+        }
     }
 
     @Override
@@ -165,12 +181,55 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             return false;
         }
         try {
-            ClaimedResidence residence = manager().getByName(name);
+            ResidenceManager manager = manager();
+            ClaimedResidence residence = manager.getByName(name);
             return residence != null && residence.isServerLand()
                     && residence.containsLoc(new Location(world, blockX + 0.5D,
                     blockY + 0.5D, blockZ + 0.5D));
         } catch (RuntimeException | LinkageError exception) {
             return false;
+        }
+    }
+
+    @Override
+    public boolean isControlledProjection(String residenceName) {
+        requireMainThread();
+        String name = TownResidenceName.initial(residenceName);
+        ClaimedResidence residence = manager().getByName(name);
+        return residence != null && residence.isServerLand();
+    }
+
+    @Override
+    public Result setTeleportPoint(String residenceName, UUID worldId, String worldName,
+                                   double x, double y, double z, float yaw, float pitch) {
+        requireMainThread();
+        String name = registerManagedName(residenceName);
+        try {
+            World world = server.getWorld(worldId);
+            if (world == null) {
+                world = server.getWorld(worldName);
+            }
+            if (world == null) {
+                return Result.failure("目标世界未加载: " + worldName);
+            }
+            ResidenceManager manager = manager();
+            ClaimedResidence residence = manager.getByName(name);
+            if (residence == null || !residence.isServerLand()) {
+                return Result.failure("缺少受控 Residence 投影 " + name);
+            }
+            Location location = new Location(world, x, y, z, yaw, pitch);
+            if (!residence.containsLoc(location)) {
+                return Result.failure("传送点不在本镇 Residence 内");
+            }
+            // Residence 6 的公开 API 只提供基于 Player 当前位置的 setTpLoc；公开的
+            // tpLoc 数据字段是同一 API 对非玩家调用方提供的坐标入口。
+            residence.tpLoc = location.toVector();
+            residence.PitchYaw = new Vector(location.getPitch(), location.getYaw(), 0.0D);
+            // 立即持久化，避免仅修改内存对象在 Residence 重载或崩溃后丢失传送点。
+            manager.save();
+            return Result.ok("Residence 传送点已更新: " + name);
+        } catch (RuntimeException | LinkageError exception) {
+            return Result.failure(dependencyError(exception));
         }
     }
 
@@ -268,6 +327,14 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         } catch (RuntimeException | LinkageError exception) {
             return Result.failure(dependencyError(exception));
         }
+    }
+
+    @Override
+    public boolean hasArea(String residenceName, String areaName) {
+        requireMainThread();
+        String name = registerManagedName(residenceName);
+        ClaimedResidence residence = manager().getByName(name);
+        return residence != null && residence.getArea(areaName) != null;
     }
 
     @Override
@@ -420,6 +487,16 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
 
     private Result verifyPermissions(String name, ClaimedResidence residence,
                                      Collection<UUID> members, boolean applyPermissions) {
+        for (String flag : PROTECTED_EXPLOSION_FLAGS) {
+            if (!applyPermissions && residence.getPermissions().has(flag, true)) {
+                return Result.failure("Residence 爆炸保护标记不一致: " + flag);
+            }
+            if (applyPermissions && !residence.getPermissions().setFlag(
+                    server.getConsoleSender(), flag, FlagPermissions.FlagState.FALSE, true,
+                    false)) {
+                return Result.failure("无法写入 Residence 爆炸保护标记: " + flag);
+            }
+        }
         java.util.Set<UUID> existingPlayers = java.util.Set.copyOf(
                 residence.getPermissions().getPlayerFlags().keySet());
         if (!applyPermissions && !existingPlayers.equals(java.util.Set.copyOf(members))) {

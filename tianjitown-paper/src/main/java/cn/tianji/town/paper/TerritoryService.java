@@ -11,10 +11,12 @@ import cn.tianji.town.storage.economy.EconomyRepository;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.Set;
 
 final class TerritoryService {
     private final EconomyRepository finance;
@@ -44,6 +46,60 @@ final class TerritoryService {
         requireCapacity(context);
         TerritoryUnit candidate = TerritoryRules.target(context.units(), gridX, gridZ);
         return preview(context, candidate);
+    }
+
+    ExpansionBatchPreview batchPreview(UUID playerId, Set<GridSelection> selections) {
+        Context context = context(playerId);
+        if (selections == null || selections.isEmpty()) {
+            throw new IllegalArgumentException("请至少选择一个领地单元");
+        }
+        if (context.units().size() + selections.size() > settings.maximumUnits()
+                || context.units().size() + selections.size() > TerritoryRules.MAXIMUM_UNITS) {
+            throw new IllegalArgumentException("批量扩张后超过领地单元上限");
+        }
+        Set<Grid> requested = new HashSet<>();
+        for (GridSelection selection : selections) {
+            if (selection == null || Math.abs((long) selection.gridX()) > TerritoryRules.GRID_RADIUS
+                    || Math.abs((long) selection.gridZ()) > TerritoryRules.GRID_RADIUS) {
+                throw new IllegalArgumentException("选中的领地单元超出 5×5 扩张网格");
+            }
+            if (!requested.add(new Grid(selection.gridX(), selection.gridZ()))) {
+                throw new IllegalArgumentException("批量扩张包含重复领地单元");
+            }
+        }
+        Set<Grid> occupied = new HashSet<>();
+        context.units().forEach(unit -> occupied.add(new Grid(unit.gridX(), unit.gridZ())));
+        if (requested.stream().anyMatch(occupied::contains)) {
+            throw new IllegalArgumentException("选中的领地单元已经被占领");
+        }
+        List<GridSelection> remaining = new ArrayList<>(selections);
+        List<TerritoryUnit> working = new ArrayList<>(context.units());
+        List<ExpansionPreview> candidates = new ArrayList<>();
+        while (!remaining.isEmpty()) {
+            boolean progressed = false;
+            for (int index = 0; index < remaining.size(); index++) {
+                GridSelection selection = remaining.get(index);
+                try {
+                    TerritoryUnit candidate = TerritoryRules.target(working,
+                            selection.gridX(), selection.gridZ());
+                    ExpansionPreview preview = preview(context, candidate,
+                            context.units().size() + candidates.size() + 1);
+                    candidates.add(preview);
+                    working.add(candidate);
+                    remaining.remove(index);
+                    progressed = true;
+                    break;
+                } catch (IllegalArgumentException ignored) {
+                    // 允许先选外围单元；下一轮会在其相邻单元已加入后重试。
+                }
+            }
+            if (!progressed) {
+                throw new IllegalArgumentException("批量选区必须与现有领地四方向连通");
+            }
+        }
+        long totalPrice = Math.multiplyExact(price(), candidates.size());
+        return new ExpansionBatchPreview(context.account(), candidates, totalPrice,
+                context.units().size() + candidates.size());
     }
 
     TerritoryMap map(UUID playerId) {
@@ -152,11 +208,15 @@ final class TerritoryService {
     }
 
     private ExpansionPreview preview(Context context, TerritoryUnit candidate) {
+        return preview(context, candidate, context.units().size() + 1);
+    }
+
+    private ExpansionPreview preview(Context context, TerritoryUnit candidate, int totalUnits) {
         String areaName = "unit_" + coordinate(candidate.gridX()) + "_"
                 + coordinate(candidate.gridZ());
         return new ExpansionPreview(context.account(), candidate,
                 context.origin().residenceName(), areaName, price(),
-                context.units().size() + 1);
+                totalUnits);
     }
 
     private long price() {
@@ -204,6 +264,17 @@ final class TerritoryService {
     record ExpansionPreview(EconomyRepository.TownFinance account, TerritoryUnit candidate,
                             String residenceName, String areaName, long priceMinor,
                             int totalUnits) {
+    }
+
+    record GridSelection(int gridX, int gridZ) {
+    }
+
+    record ExpansionBatchPreview(EconomyRepository.TownFinance account,
+                                 List<ExpansionPreview> candidates, long totalPriceMinor,
+                                 int totalUnits) {
+        ExpansionBatchPreview {
+            candidates = List.copyOf(candidates);
+        }
     }
 
     record TerritoryCell(int gridX, int gridZ, TerritoryCellState state,

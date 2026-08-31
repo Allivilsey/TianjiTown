@@ -11,6 +11,7 @@ import net.kyori.adventure.text.object.ObjectContents;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 
 final class TerritoryDialogRenderer {
@@ -29,14 +30,34 @@ final class TerritoryDialogRenderer {
                              PluginMessages messages,
                              Function<TerritoryService.TerritoryCell, DialogAction> actionFactory,
                              ActionButton exitAction) {
+        return render(map, formattedPrice, messages, Set.of(), actionFactory, exitAction);
+    }
+
+    static DialogType render(TerritoryService.TerritoryMap map, String formattedPrice,
+                             PluginMessages messages,
+                             Set<TerritoryService.GridSelection> selected,
+                             Function<TerritoryService.TerritoryCell, DialogAction> actionFactory,
+                             ActionButton exitAction) {
+        return render(map, formattedPrice, messages, selected, actionFactory, exitAction,
+                List.of());
+    }
+
+    static DialogType render(TerritoryService.TerritoryMap map, String formattedPrice,
+                             PluginMessages messages,
+                             Set<TerritoryService.GridSelection> selected,
+                             Function<TerritoryService.TerritoryCell, DialogAction> actionFactory,
+                             ActionButton exitAction, List<ActionButton> footerActions) {
         // 领地格子的状态名称、颜色、坐标和操作提示都从 messages.yml 读取，保持地图界面可配置。
         Objects.requireNonNull(map, "map");
         Objects.requireNonNull(formattedPrice, "formattedPrice");
         Objects.requireNonNull(messages, "messages");
+        Objects.requireNonNull(selected, "selected");
         Objects.requireNonNull(actionFactory, "actionFactory");
-        List<ActionButton> buttons = map.cells().stream()
-                .map(cell -> button(cell, formattedPrice, messages, actionFactory))
-                .toList();
+        Objects.requireNonNull(footerActions, "footerActions");
+        List<ActionButton> buttons = new java.util.ArrayList<>(map.cells().stream()
+                .map(cell -> button(cell, formattedPrice, messages, selected, actionFactory))
+                .toList());
+        buttons.addAll(footerActions);
         return DialogType.multiAction(buttons)
                 .exitAction(exitAction)
                 .columns(COLUMNS)
@@ -45,16 +66,23 @@ final class TerritoryDialogRenderer {
 
     private static ActionButton button(
             TerritoryService.TerritoryCell cell, String formattedPrice,
-            PluginMessages messages,
+            PluginMessages messages, Set<TerritoryService.GridSelection> selected,
             Function<TerritoryService.TerritoryCell, DialogAction> actionFactory) {
         TerritoryCellState state = cell.state();
+        boolean isSelected = state == TerritoryCellState.EXPANDABLE
+                && selected.contains(new TerritoryService.GridSelection(cell.gridX(), cell.gridZ()));
         DialogAction action = state == TerritoryCellState.EXPANDABLE
                 ? actionFactory.apply(cell) : null;
-        return ActionButton.create(sprite(state), tooltip(cell, formattedPrice, messages),
+        return ActionButton.create(sprite(state, isSelected),
+                tooltip(cell, formattedPrice, messages, isSelected),
                 CELL_SIZE, action);
     }
 
-    private static Component sprite(TerritoryCellState state) {
+    private static Component sprite(TerritoryCellState state, boolean selected) {
+        if (selected) {
+            return Component.object(ObjectContents.sprite(BLOCK_ATLAS,
+                    Key.key("minecraft:block/lime_stained_glass")));
+        }
         Key sprite = switch (state) {
             case CENTER -> CENTER_SPRITE;
             case OWNED -> OWNED_SPRITE;
@@ -65,12 +93,17 @@ final class TerritoryDialogRenderer {
     }
 
     private static Component tooltip(TerritoryService.TerritoryCell cell,
-                                     String formattedPrice, PluginMessages messages) {
+                                     String formattedPrice, PluginMessages messages,
+                                     boolean selected) {
         Component tooltip = messages.component(nameKey(cell.state()))
                 .append(Component.newline())
                 .append(messages.component("dialog.territory.cell.grid", Map.of(
                         "x", cell.gridX(), "z", cell.gridZ())));
         if (cell.state() == TerritoryCellState.EXPANDABLE && cell.preview() != null) {
+            if (selected) {
+                tooltip = tooltip.append(Component.newline())
+                        .append(messages.component("dialog.territory.cell.selected"));
+            }
             tooltip = tooltip.append(Component.newline())
                     .append(messages.component("dialog.territory.cell.price",
                             Map.of("price", formattedPrice)))

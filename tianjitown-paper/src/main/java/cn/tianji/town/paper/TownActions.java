@@ -90,12 +90,26 @@ final class TownActions {
         }
         long minutes = plugin.getConfig().getLong("town.application.reservation-minutes", 60);
         int buffer = plugin.getConfig().getInt("town.site.minimum-buffer-chunks", 1);
-        writeUnchecked(action, actor, () -> runtime.repository().selectSite(applicationId,
-                        actor.getUniqueId(), validation.territory(),
-                        Instant.now().plusSeconds(minutes * 60), buffer),
-                application -> Map.of("application_id", application.id(),
-                        "status", application.status(), "expires_at",
-                        application.reservationExpiresAt()), completion);
+        runtime.readAction(actor, () -> runtime.repository().findApplication(applicationId)
+                        .orElseThrow(() -> new IllegalArgumentException("申请不存在")),
+                application -> {
+                    LandProtectionService.Collision nameCollision = runtime.landProtection()
+                            .findNameCollision(application.text().normalizedResidenceName());
+                    if (nameCollision.occupied()) {
+                        completion.accept(TownActionOutcome.failure(TownActionResult.failure(
+                                action, "RESIDENCE_NAME_CONFLICT", Map.of("detail",
+                                        "领地名与已存在的领地重复。"))));
+                        return;
+                    }
+                    writeUnchecked(action, actor,
+                            () -> runtime.repository().selectSite(applicationId,
+                                    actor.getUniqueId(), validation.territory(),
+                                    Instant.now().plusSeconds(minutes * 60), buffer),
+                            selected -> Map.of("application_id", selected.id(),
+                                    "status", selected.status(), "expires_at",
+                                    selected.reservationExpiresAt()), completion);
+                }, exception -> completion.accept(TownActionOutcome.failure(
+                        TownActionFailures.from(action, exception))));
     }
 
     void submitApplication(Player actor, UUID applicationId,
@@ -353,6 +367,7 @@ final class TownActions {
                                 actor.getName(), "镇长通过共享业务入口解散");
                         return town;
                     }, completed -> {
+                        runtime.deactivateResidence(completed.residenceName());
                         runtime.buffs().refreshAllPlayers();
                         return Map.of("town_id", completed.id(), "status", "DELETED");
                     }, completion);

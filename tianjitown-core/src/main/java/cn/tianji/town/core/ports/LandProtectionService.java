@@ -7,6 +7,10 @@ import java.util.List;
 import java.util.UUID;
 
 public interface LandProtectionService {
+    default Collision findNameCollision(String residenceName) {
+        return Collision.none();
+    }
+
     Collision findCollision(InitialTerritory territory);
 
     Inspection inspect(String residenceName, InitialTerritory territory,
@@ -24,6 +28,20 @@ public interface LandProtectionService {
         return false;
     }
 
+    /**
+     * Distinguishes a malformed system projection from an unrelated player
+     * Residence that happens to use the same name.  Recovery may remove only
+     * the former.
+     */
+    default boolean isControlledProjection(String residenceName) {
+        return false;
+    }
+
+    default Result setTeleportPoint(String residenceName, UUID worldId, String worldName,
+                                    double x, double y, double z, float yaw, float pitch) {
+        return Result.failure("当前领地适配器不支持设置传送点");
+    }
+
     default Inspection inspect(String residenceName, List<Area> areas,
                                Collection<UUID> members) {
         if (areas.size() != 1) {
@@ -34,6 +52,15 @@ public interface LandProtectionService {
 
     default Result addArea(String residenceName, Area area, Collection<UUID> members) {
         return Result.failure("当前领地适配器不支持扩张区域");
+    }
+
+    /**
+     * Returns whether the named Residence area already exists.  Batch
+     * projection uses this to avoid deleting an area that pre-dated the
+     * current database operation when a later area fails.
+     */
+    default boolean hasArea(String residenceName, String areaName) {
+        return false;
     }
 
     default Result removeArea(String residenceName, String areaName) {

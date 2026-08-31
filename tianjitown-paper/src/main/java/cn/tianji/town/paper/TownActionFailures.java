@@ -15,6 +15,15 @@ final class TownActionFailures {
 
     static TownActionResult from(String action, RuntimeException exception) {
         String detail = safeMessage(exception);
+        if (exception instanceof TownRepository.MemberConflictException memberConflict) {
+            TownRepository.MemberConflict conflict = memberConflict.conflict();
+            return TownActionResult.failure(action, "MEMBER_CONFLICT", Map.of(
+                    "detail", detail,
+                    "player_id", conflict.playerId(),
+                    "conflict_type", conflict.conflictType(),
+                    "town_id", conflict.townId(),
+                    "town_name", conflict.townName()));
+        }
         return TownActionResult.failure(action, reason(exception, detail),
                 Map.of("detail", detail));
     }

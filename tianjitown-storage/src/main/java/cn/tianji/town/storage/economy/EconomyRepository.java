@@ -13,7 +13,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.time.Instant;
+import java.time.DayOfWeek;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -24,6 +29,10 @@ import java.util.function.BooleanSupplier;
 public final class EconomyRepository {
     private static final String RECONCILIATION_LOCK = "SETTLEMENT_RECONCILIATION:";
     private static final String COMPENSATION_LOCK = "ECONOMY_COMPENSATION:";
+    // 兼容旧版直接调用 recordQuickShopTax 的插件入口；新的 Paper 入口会传入配置后的
+    // 限额并先显式预留。兼容路径也必须受默认限额约束，不能成为绕过限额的后门。
+    private static final long LEGACY_WEEKLY_SUBSIDY_LIMIT_MINOR = 5_000_000L;
+    private static final long LEGACY_TWELVE_HOUR_SUBSIDY_LIMIT_MINOR = 500_000L;
     private final DataSource dataSource;
     private final BooleanSupplier forbiddenThread;
 
@@ -179,6 +188,88 @@ public final class EconomyRepository {
         });
     }
 
+    public SubsidyReservation reserveQuickShopSubsidy(UUID townId, String businessKey,
+                                                       long requestedMinor,
+                                                       long weeklyLimitMinor,
+                                                       long twelveHourLimitMinor,
+                                                       Instant now, ZoneId zoneId) {
+        requireWorkerThread();
+        Objects.requireNonNull(townId, "townId");
+        Objects.requireNonNull(businessKey, "businessKey");
+        Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(zoneId, "zoneId");
+        if (requestedMinor <= 0 || weeklyLimitMinor < 0 || twelveHourLimitMinor < 0) {
+            throw new IllegalArgumentException("补贴请求和限额无效");
+        }
+        Periods periods = periods(now, zoneId);
+        return transaction(connection -> {
+            Optional<SubsidyReservation> existing = findSubsidyReservation(connection,
+                    businessKey);
+            if (existing.isPresent()) {
+                return existing.get();
+            }
+            long usedWeekly = subsidyUsed(connection, townId, "week_start",
+                    periods.weekStart().toEpochMilli());
+            long usedTwelveHours = subsidyUsed(connection, townId, "period_12h_start",
+                    periods.twelveHourStart().toEpochMilli());
+            long weeklyRemaining = Math.max(0L, weeklyLimitMinor - usedWeekly);
+            long twelveHourRemaining = Math.max(0L,
+                    twelveHourLimitMinor - usedTwelveHours);
+            long granted = Math.min(requestedMinor,
+                    Math.min(weeklyRemaining, twelveHourRemaining));
+            UUID reservationId = UUID.randomUUID();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    INSERT INTO quickshop_subsidy_reservations
+                        (reservation_id, town_id, business_key, requested_minor, granted_minor,
+                         period_12h_start, week_start, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED')
+                    """)) {
+                statement.setBytes(1, uuid(reservationId));
+                statement.setBytes(2, uuid(townId));
+                statement.setString(3, businessKey);
+                statement.setLong(4, requestedMinor);
+                statement.setLong(5, granted);
+                statement.setLong(6, periods.twelveHourStart().toEpochMilli());
+                statement.setLong(7, periods.weekStart().toEpochMilli());
+                statement.executeUpdate();
+            }
+            return requireSubsidyReservation(connection, businessKey);
+        });
+    }
+
+    public void cancelQuickShopSubsidy(String businessKey, String error) {
+        requireWorkerThread();
+        Objects.requireNonNull(businessKey, "businessKey");
+        transaction(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE quickshop_subsidy_reservations
+                       SET status = 'CANCELLED', last_error = ?
+                     WHERE business_key = ? AND status = 'RESERVED'
+                    """)) {
+                statement.setString(1, safe(error));
+                statement.setString(2, businessKey);
+                statement.executeUpdate();
+            }
+            return null;
+        });
+    }
+
+    public SubsidyQuota quickShopSubsidyQuota(UUID townId, long weeklyLimitMinor,
+                                               long twelveHourLimitMinor, Instant now,
+                                               ZoneId zoneId) {
+        requireWorkerThread();
+        Periods periods = periods(now, zoneId);
+        return query(connection -> {
+            long weeklyUsed = subsidyUsed(connection, townId, "week_start",
+                    periods.weekStart().toEpochMilli());
+            long twelveHourUsed = subsidyUsed(connection, townId, "period_12h_start",
+                    periods.twelveHourStart().toEpochMilli());
+            return new SubsidyQuota(Math.max(0, weeklyLimitMinor - weeklyUsed),
+                    Math.max(0, twelveHourLimitMinor - twelveHourUsed),
+                    periods.nextWeek(), periods.nextTwelveHour());
+        });
+    }
+
     public LedgerMutation recordQuickShopTax(QuickShopTax tax) {
         requireWorkerThread();
         Objects.requireNonNull(tax, "tax");
@@ -187,17 +278,27 @@ public final class EconomyRepository {
         }
         requireTaxRate(tax.taxRateBps());
         return transaction(connection -> {
-            String subsidyKey = tax.businessKey() + ":subsidy";
-            Optional<LedgerMutation> existing = findLedgerByBusinessKey(connection, subsidyKey);
+            Optional<LedgerMutation> existing = findLedgerByBusinessKey(connection,
+                    tax.businessKey());
             if (existing.isPresent()) {
-                return existing.get();
+                // 返回整笔交易最后一条已落账的变更，保证重试与首次处理得到相同的余额快照。
+                return findLedgerByBusinessKey(connection, tax.businessKey() + ":subsidy")
+                        .orElse(existing.get());
+            }
+            SubsidyReservation subsidy = findSubsidyReservation(connection, tax.businessKey())
+                    .orElseGet(() -> legacySubsidyReservation(connection, tax));
+            if (!subsidy.townId().equals(tax.townId())
+                    || subsidy.requestedMinor() != tax.taxMinor()
+                    || subsidy.status().equals("CANCELLED")) {
+                throw new ConflictException("QuickShop 补贴预留与税款不一致");
             }
             UUID taxId = UUID.randomUUID();
             try (PreparedStatement statement = connection.prepareStatement("""
                     INSERT INTO quickshop_tax_records
                         (tax_id, town_id, business_key, shop_id, shop_type, receiver_uuid,
-                         interacting_uuid, gross_minor, tax_rate_bps, tax_minor, world_name)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         interacting_uuid, gross_minor, tax_rate_bps, tax_minor, world_name,
+                         receiver_name)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """)) {
                 statement.setBytes(1, uuid(taxId));
                 statement.setBytes(2, uuid(tax.townId()));
@@ -210,13 +311,30 @@ public final class EconomyRepository {
                 statement.setInt(9, tax.taxRateBps());
                 statement.setLong(10, tax.taxMinor());
                 statement.setString(11, tax.worldName());
+                statement.setString(12, tax.receiverName());
                 statement.executeUpdate();
             }
-            postLedger(connection, tax.townId(), "QUICKSHOP_TAX", tax.taxMinor(),
-                    tax.receiverId(), tax.receiverId().toString(), tax.businessKey(),
+            LedgerMutation taxMutation = postLedger(connection, tax.townId(), "QUICKSHOP_TAX",
+                    tax.taxMinor(), tax.receiverId(), tax.receiverName(), tax.businessKey(),
                     tax.shopType() + " 商店税，shop=" + tax.shopId(), false);
-            return postLedger(connection, tax.townId(), "SERVER_TAX_SUBSIDY", tax.taxMinor(),
-                    null, "SERVER", subsidyKey, "QuickShop 税收等额服务器补贴", false);
+            LedgerMutation result = taxMutation;
+            if (subsidy.grantedMinor() > 0) {
+                result = postLedger(connection, tax.townId(), "SERVER_TAX_SUBSIDY",
+                        subsidy.grantedMinor(), null, "SERVER",
+                        tax.businessKey() + ":subsidy",
+                        subsidy.grantedMinor() == tax.taxMinor()
+                                ? "QuickShop 税收等额服务器补贴"
+                                : "QuickShop 税收限额内部分补贴", false);
+            }
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE quickshop_subsidy_reservations
+                       SET status = 'APPLIED', last_error = NULL
+                     WHERE business_key = ? AND status IN ('RESERVED', 'APPLIED')
+                    """)) {
+                statement.setString(1, tax.businessKey());
+                requireUpdated(statement, "QuickShop 补贴预留已失效");
+            }
+            return result;
         });
     }
 
@@ -547,6 +665,58 @@ public final class EconomyRepository {
         });
     }
 
+    public List<UUID> unresolvedLedgerActorIds() {
+        requireWorkerThread();
+        return query(connection -> {
+            List<UUID> ids = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT DISTINCT actor_uuid, actor_name FROM ledger_entries
+                     WHERE actor_uuid IS NOT NULL
+                    """); ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    UUID actorId = readUuid(result, "actor_uuid");
+                    try {
+                        if (UUID.fromString(result.getString("actor_name")).equals(actorId)) {
+                            ids.add(actorId);
+                        }
+                    } catch (IllegalArgumentException ignored) {
+                        // 已经是历史玩家名，不覆盖。
+                    }
+                }
+            }
+            return ids.stream().distinct().toList();
+        });
+    }
+
+    public int backfillLedgerActorName(UUID actorId, String confirmedName) {
+        requireWorkerThread();
+        Objects.requireNonNull(actorId, "actorId");
+        if (confirmedName == null || confirmedName.isBlank()) {
+            return 0;
+        }
+        return transaction(connection -> {
+            int updated;
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE ledger_entries SET actor_name = ?
+                     WHERE actor_uuid = ? AND actor_name = ?
+                    """)) {
+                statement.setString(1, confirmedName);
+                statement.setBytes(2, uuid(actorId));
+                statement.setString(3, actorId.toString());
+                updated = statement.executeUpdate();
+            }
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE quickshop_tax_records SET receiver_name = ?
+                     WHERE receiver_uuid = ? AND receiver_name = ''
+                    """)) {
+                statement.setString(1, confirmedName);
+                statement.setBytes(2, uuid(actorId));
+                updated += statement.executeUpdate();
+            }
+            return updated;
+        });
+    }
+
     public List<TerritoryUnitSnapshot> territoryUnits(UUID townId) {
         requireWorkerThread();
         return query(connection -> listTerritoryUnits(connection, townId));
@@ -682,7 +852,261 @@ public final class EconomyRepository {
             postLedger(connection, request.townId(), "EXPANSION", -request.priceMinor(),
                     request.actorId(), request.actorName(), request.businessKey(),
                     "扩张至网格 " + request.unit().gridX() + "," + request.unit().gridZ(), false);
+            audit(connection, request.actorId(), request.actorName(), "EXPANSION_PREPARE",
+                    request.townId(), request.businessKey(),
+                    "扩张至网格 " + request.unit().gridX() + "," + request.unit().gridZ());
             return requireExpansion(connection, expansionId);
+        });
+    }
+
+    /**
+     * 在同一个 SQLite 事务中预留一批领地、写入所有单元并只扣除一次总价。
+     * Residence 投影在事务提交后由 Paper 主线程执行，失败时调用 refundExpansionBatch
+     * 整体回滚，不能通过重复调用单格接口模拟批量操作。
+     */
+    public ExpansionBatchOperation prepareExpansionBatch(ExpansionBatchRequest request) {
+        requireWorkerThread();
+        Objects.requireNonNull(request, "request");
+        validateBatchRequest(request);
+        return transaction(connection -> {
+            Optional<ExpansionBatchOperation> existing = findExpansionBatch(connection,
+                    request.businessKey());
+            if (existing.isPresent()) {
+                return existing.get();
+            }
+            AccountState account = requireAccount(connection, request.townId());
+            requireUnlocked(account);
+            if (account.balanceMinor() < request.totalPriceMinor()) {
+                throw new ConflictException("小镇余额不足");
+            }
+            List<TerritoryUnitSnapshot> snapshots = listTerritoryUnits(connection,
+                    request.townId());
+            List<TerritoryUnit> units = new ArrayList<>(snapshots.stream()
+                    .map(TerritoryUnitSnapshot::unit).toList());
+            if (units.size() + request.items().size() > TerritoryRules.MAXIMUM_UNITS) {
+                throw new ConflictException("批量扩张后超过领地单元上限");
+            }
+            TerritoryUnit origin = units.stream()
+                    .filter(unit -> unit.gridX() == 0 && unit.gridZ() == 0)
+                    .findFirst().orElseThrow(() -> new ConflictException("初始领地单元缺失"));
+            Set<Grid> occupied = new HashSet<>();
+            units.forEach(unit -> occupied.add(new Grid(unit.gridX(), unit.gridZ())));
+            List<TerritoryUnit> candidates = new ArrayList<>();
+            for (ExpansionBatchItem item : request.items()) {
+                TerritoryUnit candidate = item.unit();
+                if (!occupied.add(new Grid(candidate.gridX(), candidate.gridZ()))) {
+                    throw new ConflictException("批量扩张包含已占用或重复的领地单元");
+                }
+                if (Math.abs((long) candidate.gridX()) > TerritoryRules.GRID_RADIUS
+                        || Math.abs((long) candidate.gridZ()) > TerritoryRules.GRID_RADIUS) {
+                    throw new ConflictException("目标超出 5×5 扩张网格");
+                }
+                ChunkPosition expectedCenter = new ChunkPosition(
+                        origin.territory().center().worldId(),
+                        origin.territory().center().worldName(),
+                        Math.addExact(origin.territory().center().x(), Math.multiplyExact(
+                                candidate.gridX(), InitialTerritory.CHUNKS_PER_SIDE)),
+                        Math.addExact(origin.territory().center().z(), Math.multiplyExact(
+                                candidate.gridZ(), InitialTerritory.CHUNKS_PER_SIDE)));
+                if (!candidate.territory().center().equals(expectedCenter)) {
+                    throw new ConflictException("目标领地不在固定 5×5 区块网格上");
+                }
+                candidates.add(candidate);
+            }
+            List<TerritoryUnit> all = new ArrayList<>(units);
+            all.addAll(candidates);
+            try {
+                TerritoryRules.requireConnected(all);
+            } catch (IllegalArgumentException exception) {
+                throw new ConflictException("批量选区必须与现有领地保持连通: "
+                        + exception.getMessage(), exception);
+            }
+            UUID batchId = UUID.randomUUID();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    INSERT INTO territory_expansion_batches
+                        (batch_id, town_id, business_key, actor_uuid, actor_name,
+                         total_price_minor, status)
+                    VALUES (?, ?, ?, ?, ?, ?, 'PREPARED')
+                    """)) {
+                statement.setBytes(1, uuid(batchId));
+                statement.setBytes(2, uuid(request.townId()));
+                statement.setString(3, request.businessKey());
+                statement.setBytes(4, uuid(request.actorId()));
+                statement.setString(5, request.actorName());
+                statement.setLong(6, request.totalPriceMinor());
+                statement.executeUpdate();
+            }
+            List<UUID> unitIds = new ArrayList<>();
+            try (PreparedStatement unit = connection.prepareStatement("""
+                    INSERT INTO territory_units
+                        (unit_id, town_id, world_uuid, world_name, grid_x, grid_z,
+                         center_chunk_x, center_chunk_z, residence_name, residence_area_name)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """);
+                 PreparedStatement chunk = connection.prepareStatement("""
+                    INSERT INTO territory_chunks (unit_id, world_uuid, chunk_x, chunk_z)
+                    VALUES (?, ?, ?, ?)
+                    """)) {
+                for (int index = 0; index < request.items().size(); index++) {
+                    ExpansionBatchItem item = request.items().get(index);
+                    TerritoryUnit territoryUnit = item.unit();
+                    InitialTerritory territory = territoryUnit.territory();
+                    UUID unitId = UUID.randomUUID();
+                    unitIds.add(unitId);
+                    unit.setBytes(1, uuid(unitId));
+                    unit.setBytes(2, uuid(request.townId()));
+                    unit.setBytes(3, uuid(territory.center().worldId()));
+                    unit.setString(4, territory.center().worldName());
+                    unit.setInt(5, territoryUnit.gridX());
+                    unit.setInt(6, territoryUnit.gridZ());
+                    unit.setInt(7, territory.center().x());
+                    unit.setInt(8, territory.center().z());
+                    unit.setString(9, item.residenceName());
+                    unit.setString(10, item.residenceAreaName());
+                    unit.executeUpdate();
+                    for (ChunkPosition chunkPosition : territory.chunks()) {
+                        chunk.setBytes(1, uuid(unitId));
+                        chunk.setBytes(2, uuid(chunkPosition.worldId()));
+                        chunk.setInt(3, chunkPosition.x());
+                        chunk.setInt(4, chunkPosition.z());
+                        chunk.addBatch();
+                    }
+                }
+                chunk.executeBatch();
+            }
+            try (PreparedStatement expansion = connection.prepareStatement("""
+                    INSERT INTO territory_expansions
+                        (expansion_id, town_id, unit_id, business_key, actor_uuid,
+                         price_minor, status, batch_id)
+                    VALUES (?, ?, ?, ?, ?, ?, 'PREPARED', ?)
+                    """)) {
+                for (int index = 0; index < request.items().size(); index++) {
+                    ExpansionBatchItem item = request.items().get(index);
+                    TerritoryUnit unit = item.unit();
+                    expansion.setBytes(1, uuid(UUID.randomUUID()));
+                    expansion.setBytes(2, uuid(request.townId()));
+                    expansion.setBytes(3, uuid(unitIds.get(index)));
+                    expansion.setString(4, request.businessKey() + ":" + unit.gridX()
+                            + ":" + unit.gridZ());
+                    expansion.setBytes(5, uuid(request.actorId()));
+                    expansion.setLong(6, item.priceMinor());
+                    expansion.setBytes(7, uuid(batchId));
+                    expansion.addBatch();
+                }
+                expansion.executeBatch();
+            }
+            postLedger(connection, request.townId(), "EXPANSION", -request.totalPriceMinor(),
+                    request.actorId(), request.actorName(), request.businessKey(),
+                    "批量扩张 " + request.items().size() + " 个领地单元", false);
+            audit(connection, request.actorId(), request.actorName(), "EXPANSION_BATCH_PREPARE",
+                    request.townId(), request.businessKey(),
+                    "批量扩张 " + request.items().size() + " 个领地单元，总价 "
+                            + request.totalPriceMinor());
+            return requireExpansionBatch(connection, batchId);
+        });
+    }
+
+    public ExpansionBatchOperation completeExpansionBatch(UUID batchId) {
+        requireWorkerThread();
+        Objects.requireNonNull(batchId, "batchId");
+        return transaction(connection -> {
+            ExpansionBatchOperation batch = requireExpansionBatch(connection, batchId);
+            if (batch.status().equals("COMPLETED")) {
+                return batch;
+            }
+            if (!batch.status().equals("PREPARED")) {
+                throw new ConflictException("当前批量扩张状态不能完成");
+            }
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE territory_units SET projection_status = 'ACTIVE',
+                           projection_error = NULL
+                     WHERE unit_id IN (SELECT unit_id FROM territory_expansions WHERE batch_id = ?)
+                    """)) {
+                statement.setBytes(1, uuid(batchId));
+                statement.executeUpdate();
+            }
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE territory_expansions SET status = 'COMPLETED', last_error = NULL
+                     WHERE batch_id = ? AND status = 'PREPARED'
+                    """)) {
+                statement.setBytes(1, uuid(batchId));
+                statement.executeUpdate();
+            }
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE territory_expansion_batches SET status = 'COMPLETED', last_error = NULL
+                     WHERE batch_id = ? AND status = 'PREPARED'
+                    """)) {
+                statement.setBytes(1, uuid(batchId));
+                requireUpdated(statement, "批量扩张状态已被其他操作修改");
+            }
+            audit(connection, batch.actorId(), batch.actorName(), "EXPANSION_BATCH_COMPLETE",
+                    batch.townId(), batch.businessKey(), "批量扩张 Residence 投影完成");
+            return requireExpansionBatch(connection, batchId);
+        });
+    }
+
+    public void refundExpansionBatch(UUID batchId, String error) {
+        requireWorkerThread();
+        Objects.requireNonNull(batchId, "batchId");
+        transaction(connection -> {
+            ExpansionBatchOperation batch = requireExpansionBatch(connection, batchId);
+            if (batch.status().equals("REFUNDED")) {
+                return null;
+            }
+            if (batch.status().equals("COMPLETED")) {
+                throw new ConflictException("已完成批量扩张不能退款");
+            }
+            String refundKey = batch.businessKey() + ":refund";
+            if (findLedgerByBusinessKey(connection, refundKey).isEmpty()) {
+                postLedger(connection, batch.townId(), "EXPANSION_REFUND",
+                        batch.totalPriceMinor(), batch.actorId(), batch.actorName(), refundKey,
+                        "批量 Residence 投影失败退款: " + safe(error), false);
+            }
+            List<UUID> unitIds = batch.expansions().stream()
+                    .map(ExpansionOperation::unitId)
+                    .toList();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM territory_expansions WHERE batch_id = ?")) {
+                statement.setBytes(1, uuid(batchId));
+                statement.executeUpdate();
+            }
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM territory_units WHERE unit_id = ?")) {
+                for (UUID unitId : unitIds) {
+                    statement.setBytes(1, uuid(unitId));
+                    statement.addBatch();
+                }
+                statement.executeBatch();
+            }
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE territory_expansion_batches
+                       SET status = 'REFUNDED', last_error = ?
+                     WHERE batch_id = ? AND status IN ('PREPARED', 'COMPENSATION_REQUIRED')
+                    """)) {
+                statement.setString(1, safe(error));
+                statement.setBytes(2, uuid(batchId));
+                requireUpdated(statement, "批量扩张状态已被其他操作修改");
+            }
+            audit(connection, batch.actorId(), batch.actorName(), "EXPANSION_BATCH_REFUND",
+                    batch.townId(), batch.businessKey(), "批量扩张已退款: " + safe(error));
+            return null;
+        });
+    }
+
+    public List<ExpansionBatchOperation> pendingExpansionBatches() {
+        requireWorkerThread();
+        return query(connection -> {
+            List<ExpansionBatchOperation> result = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT * FROM territory_expansion_batches
+                     WHERE status IN ('PREPARED', 'COMPENSATION_REQUIRED')
+                     ORDER BY created_at, batch_id
+                    """); ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    result.add(readExpansionBatch(connection, rows));
+                }
+            }
+            return List.copyOf(result);
         });
     }
 
@@ -704,6 +1128,9 @@ public final class EconomyRepository {
                 requireUpdated(unit, "领地单元不存在");
             }
             setExpansionStatus(connection, expansionId, "COMPLETED", null);
+            audit(connection, expansion.actorId(), expansion.actorId().toString(),
+                    "EXPANSION_COMPLETE", expansion.townId(), expansion.businessKey(),
+                    "Residence 扩张投影完成");
             return requireExpansion(connection, expansionId);
         });
     }
@@ -731,6 +1158,9 @@ public final class EconomyRepository {
                 statement.setBytes(1, uuid(expansion.unitId()));
                 statement.executeUpdate();
             }
+            audit(connection, expansion.actorId(), expansion.actorId().toString(),
+                    "EXPANSION_REFUND", expansion.townId(), expansion.businessKey(),
+                    "Residence 扩张投影失败，已退款: " + safe(error));
             return null;
         });
     }
@@ -828,6 +1258,103 @@ public final class EconomyRepository {
         }
     }
 
+    private static long subsidyUsed(Connection connection, UUID townId, String periodColumn,
+                                    long periodStart) throws SQLException {
+        if (!periodColumn.equals("week_start")
+                && !periodColumn.equals("period_12h_start")) {
+            throw new IllegalArgumentException("未知补贴周期列");
+        }
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT COALESCE(SUM(granted_minor), 0) AS used "
+                        + "FROM quickshop_subsidy_reservations WHERE town_id = ? AND "
+                        + periodColumn + " = ? AND status IN ('RESERVED', 'APPLIED')")) {
+            statement.setBytes(1, uuid(townId));
+            statement.setLong(2, periodStart);
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next() ? result.getLong("used") : 0L;
+            }
+        }
+    }
+
+    private static Optional<SubsidyReservation> findSubsidyReservation(Connection connection,
+                                                                        String businessKey)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT * FROM quickshop_subsidy_reservations WHERE business_key = ?
+                """)) {
+            statement.setString(1, businessKey);
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next() ? Optional.of(readSubsidyReservation(result))
+                        : Optional.empty();
+            }
+        }
+    }
+
+    private static SubsidyReservation requireSubsidyReservation(Connection connection,
+                                                                  String businessKey)
+            throws SQLException {
+        return findSubsidyReservation(connection, businessKey)
+                .orElseThrow(() -> new ConflictException("QuickShop 税款缺少补贴额度预留"));
+    }
+
+    private static SubsidyReservation legacySubsidyReservation(Connection connection,
+                                                                 QuickShopTax tax) {
+        try {
+            Instant now = Instant.now();
+            ZoneId zoneId = ZoneId.systemDefault();
+            Periods periods = periods(now, zoneId);
+            long weeklyUsed = subsidyUsed(connection, tax.townId(), "week_start",
+                    periods.weekStart().toEpochMilli());
+            long twelveHourUsed = subsidyUsed(connection, tax.townId(), "period_12h_start",
+                    periods.twelveHourStart().toEpochMilli());
+            long weeklyRemaining = Math.max(0L,
+                    LEGACY_WEEKLY_SUBSIDY_LIMIT_MINOR - weeklyUsed);
+            long twelveHourRemaining = Math.max(0L,
+                    LEGACY_TWELVE_HOUR_SUBSIDY_LIMIT_MINOR - twelveHourUsed);
+            long granted = Math.min(tax.taxMinor(), Math.min(weeklyRemaining,
+                    twelveHourRemaining));
+            UUID reservationId = UUID.randomUUID();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    INSERT INTO quickshop_subsidy_reservations
+                        (reservation_id, town_id, business_key, requested_minor, granted_minor,
+                         period_12h_start, week_start, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED')
+                    """)) {
+                statement.setBytes(1, uuid(reservationId));
+                statement.setBytes(2, uuid(tax.townId()));
+                statement.setString(3, tax.businessKey());
+                statement.setLong(4, tax.taxMinor());
+                statement.setLong(5, granted);
+                statement.setLong(6, periods.twelveHourStart().toEpochMilli());
+                statement.setLong(7, periods.weekStart().toEpochMilli());
+                statement.executeUpdate();
+            }
+            return requireSubsidyReservation(connection, tax.businessKey());
+        } catch (SQLException exception) {
+            throw new StorageUnavailableException("无法创建兼容补贴预留", exception);
+        }
+    }
+
+    private static SubsidyReservation readSubsidyReservation(ResultSet result)
+            throws SQLException {
+        return new SubsidyReservation(readUuid(result, "reservation_id"),
+                readUuid(result, "town_id"), result.getString("business_key"),
+                result.getLong("requested_minor"), result.getLong("granted_minor"),
+                Instant.ofEpochMilli(result.getLong("period_12h_start")),
+                Instant.ofEpochMilli(result.getLong("week_start")),
+                result.getString("status"));
+    }
+
+    private static Periods periods(Instant now, ZoneId zoneId) {
+        ZonedDateTime local = now.atZone(zoneId);
+        ZonedDateTime twelveHourStart = local.withMinute(0).withSecond(0).withNano(0)
+                .withHour(local.getHour() < 12 ? 0 : 12);
+        ZonedDateTime weekStart = local.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                .withHour(0).withMinute(0).withSecond(0).withNano(0);
+        return new Periods(twelveHourStart.toInstant(), weekStart.toInstant(),
+                weekStart.plusWeeks(1).toInstant(), twelveHourStart.plusHours(12).toInstant());
+    }
+
     private static Optional<EconomyOperation> findOperation(Connection connection,
                                                             String businessKey) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
@@ -886,6 +1413,102 @@ public final class EconomyRepository {
             try (ResultSet row = statement.executeQuery()) {
                 return row.next() ? Optional.of(readExpansion(row)) : Optional.empty();
             }
+        }
+    }
+
+    private static Optional<ExpansionBatchOperation> findExpansionBatch(Connection connection,
+                                                                          String businessKey)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT * FROM territory_expansion_batches WHERE business_key = ?
+                """)) {
+            statement.setString(1, businessKey);
+            try (ResultSet row = statement.executeQuery()) {
+                return row.next() ? Optional.of(readExpansionBatch(connection, row))
+                        : Optional.empty();
+            }
+        }
+    }
+
+    private static ExpansionBatchOperation requireExpansionBatch(Connection connection,
+                                                                  UUID batchId)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT * FROM territory_expansion_batches WHERE batch_id = ?
+                """)) {
+            statement.setBytes(1, uuid(batchId));
+            try (ResultSet row = statement.executeQuery()) {
+                if (!row.next()) {
+                    throw new ConflictException("批量扩张操作不存在");
+                }
+                return readExpansionBatch(connection, row);
+            }
+        }
+    }
+
+    private static ExpansionBatchOperation readExpansionBatch(Connection connection,
+                                                               ResultSet row) throws SQLException {
+        UUID batchId = readUuid(row, "batch_id");
+        return new ExpansionBatchOperation(batchId, readUuid(row, "town_id"),
+                row.getString("business_key"), readUuid(row, "actor_uuid"),
+                row.getString("actor_name"), row.getLong("total_price_minor"),
+                row.getString("status"), row.getString("last_error"),
+                listBatchExpansions(connection, batchId));
+    }
+
+    private static List<ExpansionOperation> listBatchExpansions(Connection connection,
+                                                                  UUID batchId)
+            throws SQLException {
+        List<ExpansionOperation> result = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT e.*, u.world_uuid, u.world_name, u.grid_x, u.grid_z,
+                       u.center_chunk_x, u.center_chunk_z, u.residence_name,
+                       u.residence_area_name
+                  FROM territory_expansions e JOIN territory_units u ON u.unit_id = e.unit_id
+                 WHERE e.batch_id = ? ORDER BY u.grid_z, u.grid_x
+                """)) {
+            statement.setBytes(1, uuid(batchId));
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    result.add(readExpansion(rows));
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static void validateBatchRequest(ExpansionBatchRequest request) {
+        Objects.requireNonNull(request.townId(), "townId");
+        Objects.requireNonNull(request.actorId(), "actorId");
+        if (request.actorName() == null || request.actorName().isBlank()) {
+            throw new IllegalArgumentException("批量扩张操作人名称不能为空");
+        }
+        if (request.businessKey() == null || request.businessKey().isBlank()) {
+            throw new IllegalArgumentException("批量扩张幂等键不能为空");
+        }
+        if (request.items() == null || request.items().isEmpty()
+                || request.items().size() > TerritoryRules.MAXIMUM_UNITS) {
+            throw new IllegalArgumentException("批量扩张至少需要一个且不能超过 25 个领地单元");
+        }
+        long total = 0;
+        Set<Grid> grids = new HashSet<>();
+        for (ExpansionBatchItem item : request.items()) {
+            Objects.requireNonNull(item, "batch item");
+            Objects.requireNonNull(item.unit(), "batch item unit");
+            if (item.priceMinor() <= 0) {
+                throw new IllegalArgumentException("批量扩张单元价格必须大于 0");
+            }
+            if (item.residenceName() == null || item.residenceName().isBlank()
+                    || item.residenceAreaName() == null || item.residenceAreaName().isBlank()) {
+                throw new IllegalArgumentException("批量扩张 Residence 名称不能为空");
+            }
+            if (!grids.add(new Grid(item.unit().gridX(), item.unit().gridZ()))) {
+                throw new IllegalArgumentException("批量扩张包含重复网格");
+            }
+            total = Math.addExact(total, item.priceMinor());
+        }
+        if (request.totalPriceMinor() <= 0 || total != request.totalPriceMinor()) {
+            throw new IllegalArgumentException("批量扩张总价与单元价格不一致");
         }
     }
 
@@ -1176,18 +1799,42 @@ public final class EconomyRepository {
     }
 
     public record QuickShopTax(UUID townId, String businessKey, long shopId, String shopType,
-                               UUID receiverId, UUID interactingId, long grossMinor,
+                               UUID receiverId, String receiverName, UUID interactingId, long grossMinor,
                                int taxRateBps, long taxMinor, String worldName) {
         public QuickShopTax {
             Objects.requireNonNull(townId, "townId");
             Objects.requireNonNull(businessKey, "businessKey");
             Objects.requireNonNull(receiverId, "receiverId");
+            receiverName = receiverName == null || receiverName.isBlank()
+                    ? receiverId.toString() : receiverName;
             Objects.requireNonNull(interactingId, "interactingId");
             Objects.requireNonNull(worldName, "worldName");
             if (!shopType.equals("SELLING") && !shopType.equals("BUYING")) {
                 throw new IllegalArgumentException("商店类型必须为 SELLING 或 BUYING");
             }
         }
+
+        public QuickShopTax(UUID townId, String businessKey, long shopId, String shopType,
+                            UUID receiverId, UUID interactingId, long grossMinor,
+                            int taxRateBps, long taxMinor, String worldName) {
+            this(townId, businessKey, shopId, shopType, receiverId,
+                    receiverId.toString(), interactingId, grossMinor, taxRateBps, taxMinor,
+                    worldName);
+        }
+    }
+
+    public record SubsidyReservation(UUID reservationId, UUID townId, String businessKey,
+                                     long requestedMinor, long grantedMinor,
+                                     Instant twelveHourStart, Instant weekStart,
+                                     String status) {
+    }
+
+    public record SubsidyQuota(long weeklyRemainingMinor, long twelveHourRemainingMinor,
+                               Instant weeklyRefreshAt, Instant twelveHourRefreshAt) {
+    }
+
+    private record Periods(Instant twelveHourStart, Instant weekStart, Instant nextWeek,
+                           Instant nextTwelveHour) {
     }
 
     public record ExternalIncomeTax(UUID townId, String businessKey, String source,
@@ -1230,6 +1877,27 @@ public final class EconomyRepository {
                                    String actorName, String businessKey) {
     }
 
+    public record ExpansionBatchItem(TerritoryUnit unit, String residenceName,
+                                     String residenceAreaName, long priceMinor) {
+    }
+
+    public record ExpansionBatchRequest(UUID townId, List<ExpansionBatchItem> items,
+                                        long totalPriceMinor, UUID actorId, String actorName,
+                                        String businessKey) {
+        public ExpansionBatchRequest {
+            items = items == null ? List.of() : List.copyOf(items);
+        }
+    }
+
+    public record ExpansionBatchOperation(UUID batchId, UUID townId, String businessKey,
+                                          UUID actorId, String actorName, long totalPriceMinor,
+                                          String status, String lastError,
+                                          List<ExpansionOperation> expansions) {
+        public ExpansionBatchOperation {
+            expansions = expansions == null ? List.of() : List.copyOf(expansions);
+        }
+    }
+
     public record ExpansionOperation(UUID expansionId, UUID townId, UUID unitId,
                                      String businessKey, UUID actorId, long priceMinor,
                                      String status, String lastError, TerritoryUnit unit,
@@ -1250,5 +1918,8 @@ public final class EconomyRepository {
         public StorageUnavailableException(String message, Throwable cause) {
             super(message, cause);
         }
+    }
+
+    private record Grid(int x, int z) {
     }
 }

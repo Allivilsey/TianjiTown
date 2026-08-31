@@ -409,6 +409,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
             return;
         }
         Set<String> managedResidenceNames = ConcurrentHashMap.newKeySet();
+        Set<String> activeResidenceNames = ConcurrentHashMap.newKeySet();
         TownRuntime runtime;
         TownActions actions;
         TownUiController ui;
@@ -417,7 +418,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         try {
             runtime = new TownRuntime(this, candidate,
                     residenceProtection,
-                    worldBoundaryService());
+                    worldBoundaryService(), activeResidenceNames);
             cn.tianji.town.integrations.vault.VaultSettlementService.Result settlement =
                     runtime.settlement().ensureAccount();
             if (!settlement.success()) {
@@ -464,19 +465,25 @@ public final class TianjiTownPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(runtime.bonuses(), this);
         getServer().getPluginManager().registerEvents(
                 new ResidenceCommandGuard(this, managedResidenceNames::contains,
+                        activeResidenceNames::contains,
                         messages()::text), this);
         getServer().getPluginManager().registerEvents(new ResidenceDeletionGuard(this,
                 managedResidenceNames::contains, residenceProtection::internalMutation,
                 runtime::reconcileAll, messages()::text), this);
         runAsync(() -> {
             try {
-                runtime.repository().listTowns(true).stream().map(town -> town.residenceName())
-                        .forEach(managedResidenceNames::add);
+                runtime.repository().listTowns(true).forEach(town -> {
+                    managedResidenceNames.add(town.residenceName());
+                    if (town.status() == cn.tianji.town.core.town.TownStatus.ACTIVE) {
+                        activeResidenceNames.add(town.residenceName());
+                    }
+                });
             } catch (RuntimeException exception) {
                 getLogger().severe("读取系统 Residence 名称清单失败: " + exception.getMessage());
             }
         });
         runtime.recoverStartupState();
+        runtime.backfillKnownPlayerNames();
         runtime.buffs().refreshAllPlayers();
         runtime.bonuses().recoverTaggedBeacons();
         runtime.bonuses().refreshIndex();

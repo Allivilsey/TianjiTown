@@ -16,45 +16,55 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.function.BiFunction;
+import java.util.Set;
 
 public final class ResidenceCommandGuard implements Listener {
     private final Predicate<String> managedName;
+    private final Predicate<String> activeName;
     private final java.util.function.Consumer<String> failureLogger;
     private final BiFunction<String, Map<String, ?>, String> messageResolver;
     private final AtomicBoolean failureLogged = new AtomicBoolean();
 
     public ResidenceCommandGuard(Predicate<String> managedName) {
-        this(managedName, ignored -> { }, ResidenceCommandGuard::fallbackMessage);
+        this(managedName, managedName, ignored -> { }, ResidenceCommandGuard::fallbackMessage);
     }
 
     public ResidenceCommandGuard(Plugin owner, Predicate<String> managedName) {
-        this(managedName, message -> owner.getLogger().severe(message),
+        this(managedName, managedName, message -> owner.getLogger().severe(message),
                 ResidenceCommandGuard::fallbackMessage);
     }
 
     public ResidenceCommandGuard(Plugin owner, Predicate<String> managedName,
                                  BiFunction<String, Map<String, ?>, String> messageResolver) {
-        this(managedName, message -> owner.getLogger().severe(message), messageResolver);
+        this(managedName, managedName, message -> owner.getLogger().severe(message), messageResolver);
+    }
+
+    public ResidenceCommandGuard(Plugin owner, Predicate<String> managedName,
+                                 Predicate<String> activeName,
+                                 BiFunction<String, Map<String, ?>, String> messageResolver) {
+        this(managedName, activeName, message -> owner.getLogger().severe(message),
+                messageResolver);
     }
 
     ResidenceCommandGuard(Predicate<String> managedName,
                           java.util.function.Consumer<String> failureLogger) {
-        this(managedName, failureLogger, ResidenceCommandGuard::fallbackMessage);
+        this(managedName, managedName, failureLogger, ResidenceCommandGuard::fallbackMessage);
     }
 
     private ResidenceCommandGuard(Predicate<String> managedName,
+                                  Predicate<String> activeName,
                                   java.util.function.Consumer<String> failureLogger,
                                   BiFunction<String, Map<String, ?>, String> messageResolver) {
         this.managedName = Objects.requireNonNull(managedName, "managedName");
+        this.activeName = Objects.requireNonNull(activeName, "activeName");
         this.failureLogger = Objects.requireNonNull(failureLogger, "failureLogger");
         this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
-        String command = event.getMessage().toLowerCase(Locale.ROOT);
-        if (!command.startsWith("/res ") && !command.equals("/res")
-                && !command.startsWith("/residence ") && !command.equals("/residence")) {
+        ParsedCommand parsed = parse(event.getMessage());
+        if (parsed == null || !parsed.protectedOperation()) {
             return;
         }
         try {
@@ -70,7 +80,20 @@ public final class ResidenceCommandGuard implements Listener {
                 ClaimedResidence residence = manager.getByName(name);
                 return residence != null && residence.isServerLand();
             };
-            if (insideSystemResidence || mentionsManagedName(command, protectedName)) {
+            if (parsed.teleport()) {
+                String target = parsed.targetName();
+                ClaimedResidence destination = target == null ? null : manager.getByName(target);
+                if (target != null && activeName.test(target) && managedName.test(target)
+                        && destination != null
+                        && destination.isServerLand()) {
+                    return;
+                }
+                event.setCancelled(true);
+                event.getPlayer().sendMessage(messageResolver.apply(
+                        "chat.residence.command-blocked", Map.of()));
+                return;
+            }
+            if (insideSystemResidence || mentionsManagedName(parsed.normalized(), protectedName)) {
                 event.setCancelled(true);
                 event.getPlayer().sendMessage(messageResolver.apply(
                         "chat.residence.command-blocked", Map.of()));
@@ -108,5 +131,36 @@ public final class ResidenceCommandGuard implements Listener {
     static boolean mentionsManagedName(String command, Predicate<String> managedName) {
         String normalized = command.toLowerCase(Locale.ROOT).strip();
         return Arrays.stream(normalized.split("\\s+")).skip(1).anyMatch(managedName);
+    }
+
+    static ParsedCommand parse(String command) {
+        if (command == null) {
+            return null;
+        }
+        String normalized = command.toLowerCase(Locale.ROOT).strip();
+        String[] tokens = normalized.split("\\s+");
+        if (tokens.length == 0 || (!tokens[0].equals("/res")
+                && !tokens[0].equals("/residence"))) {
+            return null;
+        }
+        if (tokens.length < 2) {
+            return new ParsedCommand(normalized, false, false, null);
+        }
+        String subcommand = tokens[1];
+        if (subcommand.equals("tp") || subcommand.equals("teleport")) {
+            return new ParsedCommand(normalized, true, true,
+                    tokens.length == 3 ? tokens[2] : null);
+        }
+        // Residence 子命令默认按写操作处理；只有明确列出的查询命令放行。
+        // 这样新增的修改子命令不会因为保护列表过时而绕过小镇领地保护。
+        boolean write = !READ_ONLY_SUBCOMMANDS.contains(subcommand);
+        return new ParsedCommand(normalized, write, false, null);
+    }
+
+    private static final Set<String> READ_ONLY_SUBCOMMANDS = Set.of(
+            "list", "info", "check", "limits", "version", "help");
+
+    record ParsedCommand(String normalized, boolean protectedOperation, boolean teleport,
+                         String targetName) {
     }
 }

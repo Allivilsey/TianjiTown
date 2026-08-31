@@ -43,7 +43,7 @@ public enum ApplicationStatus {
                 CANCELLED));
         result.put(NEED_CHANGES, EnumSet.of(SITE_SELECTED, SUBMITTED, CANCELLED));
         result.put(APPROVED_PROVISIONING, EnumSet.of(ACTIVE, PROVISION_FAILED));
-        result.put(PROVISION_FAILED, EnumSet.of(APPROVED_PROVISIONING));
+        result.put(PROVISION_FAILED, EnumSet.of(APPROVED_PROVISIONING, NEED_CHANGES, CANCELLED));
         return Map.copyOf(result);
     }
 }

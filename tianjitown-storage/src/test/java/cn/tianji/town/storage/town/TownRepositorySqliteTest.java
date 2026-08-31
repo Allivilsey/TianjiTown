@@ -92,6 +92,87 @@ class TownRepositorySqliteTest {
     }
 
     @Test
+    void recoversFailedProvisionAndReusesEscrowedFeeIdempotently() throws Exception {
+        DatabaseConfig config = new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("provision-recovery.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5));
+        try (DatabaseGate gate = new DatabaseGate(config)) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            TownRepository repository = new TownRepository(gate.dataSource(), () -> false);
+            UUID applicantId = UUID.randomUUID();
+            UUID firstMember = UUID.randomUUID();
+            UUID secondMember = UUID.randomUUID();
+            UUID reviewerId = UUID.randomUUID();
+            ApplicationText text = applicationText("恢复测试镇", "恢复测", "RECOVER");
+            ApplicationSnapshot draft = repository.createDraft(applicantId, text,
+                    List.of(firstMember, secondMember), Duration.ZERO);
+            repository.respondInitialMember(draft.id(), firstMember, true);
+            repository.respondInitialMember(draft.id(), secondMember, true);
+            ApplicationSnapshot selected = repository.selectSite(draft.id(), applicantId,
+                    new InitialTerritory(new ChunkPosition(UUID.randomUUID(), "world", 30, 40)),
+                    Instant.now().plus(Duration.ofHours(1)), 1);
+            ApplicationSnapshot submitted = repository.submit(selected.id(), applicantId);
+
+            TownRepository.Provisioning firstProvision = repository.beginProvision(
+                    submitted.id(), reviewerId, "审核员", "首次批准", "recovery:first",
+                    200_000, "申请人");
+            ApplicationSnapshot failed = repository.finishProvision(submitted.id(), false,
+                    "Residence 投影失败");
+            assertEquals(ApplicationStatus.PROVISION_FAILED, failed.status());
+            assertEquals(ApplicationSnapshot.FeeStatus.ESCROWED,
+                    failed.applicationFeeStatus());
+            assertEquals(TownStatus.PROVISIONING,
+                    repository.findTown(firstProvision.town().id()).orElseThrow().status());
+            assertEquals(firstProvision.town().id(), repository.failedProvision(submitted.id())
+                    .town().id());
+
+            ApplicationSnapshot unlocked = repository.recoverFailedProvision(submitted.id(),
+                    reviewerId, "审核员", "要求修改资料", TownRepository.RecoveryMode
+                            .UNLOCK_FOR_CHANGES);
+            assertEquals(ApplicationStatus.NEED_CHANGES, unlocked.status());
+            assertEquals(null, unlocked.townId());
+            assertEquals(ApplicationSnapshot.FeeStatus.ESCROWED,
+                    unlocked.applicationFeeStatus());
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM towns"));
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM town_accounts"));
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM territory_units"));
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM ledger_entries"));
+
+            ApplicationSnapshot selectedAgain = repository.selectSite(unlocked.id(), applicantId,
+                    new InitialTerritory(new ChunkPosition(UUID.randomUUID(), "world", 50, 60)),
+                    Instant.now().plus(Duration.ofHours(1)), 1);
+            ApplicationSnapshot submittedAgain = repository.submit(selectedAgain.id(), applicantId);
+            TownRepository.Provisioning secondProvision = repository.beginProvision(
+                    submittedAgain.id(), reviewerId, "审核员", "重新批准", "recovery:second",
+                    200_000, "申请人");
+            repository.finishProvision(submittedAgain.id(), false, "再次投影失败");
+            assertEquals(TownStatus.PROVISIONING,
+                    repository.findTown(secondProvision.town().id()).orElseThrow().status());
+
+            ApplicationSnapshot cancelled = repository.recoverFailedProvision(
+                    submittedAgain.id(), reviewerId, "审核员", "取消并退款",
+                    TownRepository.RecoveryMode.CANCEL_AND_REFUND);
+            assertEquals(ApplicationStatus.CANCELLED, cancelled.status());
+            assertEquals(ApplicationSnapshot.FeeStatus.REFUND_PENDING,
+                    cancelled.applicationFeeStatus());
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM towns"));
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM territory_units"));
+
+            ApplicationSnapshot refunded = repository.completeApplicationFeeRefund(
+                    cancelled.id(), reviewerId, "审核员", "Vault 已退款");
+            assertEquals(ApplicationSnapshot.FeeStatus.REFUNDED,
+                    refunded.applicationFeeStatus());
+            assertEquals(refunded, repository.completeApplicationFeeRefund(
+                    cancelled.id(), reviewerId, "审核员", "重复确认退款"));
+            assertEquals(3, scalar(gate, "SELECT COUNT(*) FROM audit_logs "
+                    + "WHERE action IN ('PROVISION_UNLOCK_FOR_CHANGES', "
+                    + "'PROVISION_CANCEL_AND_REFUND', 'APPLICATION_FEE_REFUND')"));
+            assertEquals(1, scalar(gate, "SELECT COUNT(*) FROM audit_logs "
+                    + "WHERE action = 'APPLICATION_FEE_REFUND'"));
+        }
+    }
+
+    @Test
     void enforcesJoinApplicationLimitsAndCooldowns() {
         DatabaseConfig config = new DatabaseConfig(
                 "jdbc:sqlite:" + temporaryDirectory.resolve("join-rules.db"),

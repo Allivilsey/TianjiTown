@@ -19,8 +19,10 @@ import cn.tianji.town.storage.commerce.CommerceRepository;
 import cn.tianji.town.storage.bonus.TownBonusRepository;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.Location;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -55,13 +57,17 @@ final class TownRuntime {
     private final AtomicBoolean quickShopTaxAvailable = new AtomicBoolean(false);
     private final ProvisionCoordinator provisions = new ProvisionCoordinator();
     private final Set<UUID> pendingLandRepairs = ConcurrentHashMap.newKeySet();
+    private final Set<String> activeResidenceNames;
 
     TownRuntime(TianjiTownPlugin plugin, DatabaseGate database,
                     LandProtectionService landProtection,
-                    WorldBoundaryService worldBoundaries) {
+                    WorldBoundaryService worldBoundaries,
+                    Set<String> activeResidenceNames) {
         this.plugin = plugin;
         this.database = database;
         this.landProtection = landProtection;
+        this.activeResidenceNames = java.util.Objects.requireNonNull(activeResidenceNames,
+                "activeResidenceNames");
         this.sitePolicy = new SitePolicy(plugin, landProtection, worldBoundaries);
         this.repository = new TownRepository(database.dataSource(),
                 plugin.getServer()::isPrimaryThread);
@@ -304,6 +310,11 @@ final class TownRuntime {
                     plugin.runMain(
                             () -> recoverExpansions(expansions));
                 }
+                List<EconomyRepository.ExpansionBatchOperation> batches =
+                        finance.pendingExpansionBatches();
+                if (!batches.isEmpty()) {
+                    plugin.runMain(() -> recoverExpansionBatches(batches));
+                }
             } catch (RuntimeException exception) {
                 if (exception instanceof TownRepository.StorageUnavailableException) {
                     databaseAvailable.set(false);
@@ -487,16 +498,21 @@ final class TownRuntime {
 
     void provision(CommandSender sender, UUID applicationId, UUID reviewerId,
                    String reviewerName, String reason, String idempotencyKey,
-        Consumer<ApplicationSnapshot> completion) {
+        Consumer<ProvisionResult> completion) {
+        plugin.getLogger().info("建镇审批开始 application=" + applicationId
+                + " at=" + Instant.now());
         if (!databaseAvailable.get()) {
             plugin.messages().send(sender, "chat.runtime.storage-locked");
+            completion.accept(ProvisionResult.failure(null, "SQLite 当前不可用。",
+                    "恢复数据库后返回审核列表重试"));
             return;
         }
         if (!provisions.tryBegin(applicationId)) {
             plugin.messages().send(sender, "chat.runtime.provision-duplicate");
+            completion.accept(ProvisionResult.busy("该申请已有创建流程正在执行。"));
             return;
         }
-        plugin.runAsync(() -> {
+        if (!plugin.runAsync(() -> {
             try {
                 ApplicationSnapshot application = repository.findApplication(applicationId)
                         .orElseThrow(() -> new IllegalArgumentException("申请不存在"));
@@ -504,20 +520,71 @@ final class TownRuntime {
                         ? application.applicationFeeMinor()
                         : APPLICATION_FEE.movePointRight(settlement.scale())
                         .longValueExact();
-                plugin.runMain(() -> chargeAndBeginProvision(
-                        sender, application, reviewerId, reviewerName, reason, idempotencyKey,
-                        feeMinor, completion));
+                Runnable start = () -> {
+                    try {
+                        chargeAndBeginProvision(sender, application, reviewerId, reviewerName,
+                                reason, idempotencyKey, feeMinor, completion);
+                    } catch (RuntimeException | LinkageError exception) {
+                        provisions.finish(application.id());
+                        handleFailure(sender, exception);
+                        completion.accept(ProvisionResult.failure(application,
+                                safeMessage(exception),
+                                "检查 Residence 和申请资料后返回审核列表重试"));
+                    }
+                };
+                if (!plugin.runMain(start)) {
+                    provisions.finish(application.id());
+                    completion.accept(ProvisionResult.failure(application,
+                            "插件生命周期已停止，未能启动建镇流程。",
+                            "重新启动服务端后返回审核列表重试"));
+                }
             } catch (RuntimeException exception) {
                 provisions.finish(applicationId);
                 handleFailure(sender, exception);
+                ProvisionResult result = ProvisionResult.failure(null, safeMessage(exception),
+                        "返回审核列表刷新申请状态后重试");
+                if (!plugin.runMain(() -> completion.accept(result))) {
+                    completion.accept(result);
+                }
             }
-        });
+        })) {
+            provisions.finish(applicationId);
+            completion.accept(ProvisionResult.failure(null,
+                    "插件生命周期已停止，未能启动建镇流程。",
+                    "重新启动服务端后返回审核列表重试"));
+        }
     }
 
     private void chargeAndBeginProvision(CommandSender sender, ApplicationSnapshot application,
                                          UUID reviewerId, String reviewerName, String reason,
                                          String idempotencyKey, long feeMinor,
-                                         Consumer<ApplicationSnapshot> completion) {
+                                         Consumer<ProvisionResult> completion) {
+        List<UUID> expectedMembers = new ArrayList<>();
+        expectedMembers.add(application.applicantId());
+        application.initialMembers().forEach(member -> expectedMembers.add(member.playerId()));
+        SitePolicy.Validation environment = sitePolicy.validateEnvironment(application.territory());
+        if (!environment.valid()) {
+            provisions.finish(application.id());
+            completion.accept(ProvisionResult.failure(application,
+                    "批准前选址复核失败: " + environment.error(),
+                    "要求申请人修改选址后重新提交"));
+            return;
+        }
+        LandProtectionService.Collision nameCollision = landProtection.findNameCollision(
+                application.text().normalizedResidenceName());
+        if (nameCollision.occupied()) {
+            LandProtectionService.Inspection inspection = application.townId() == null
+                    ? LandProtectionService.Inspection.invalid("尚未创建临时小镇")
+                    : landProtection.inspect(application.text().normalizedResidenceName(),
+                    application.territory(), expectedMembers);
+            if (inspection.state() != LandProtectionService.ProjectionState.HEALTHY) {
+                provisions.finish(application.id());
+                completion.accept(ProvisionResult.failure(application,
+                        "领地名与已存在的领地重复。",
+                        "解除锁定并要求申请人修改小镇代码"));
+                return;
+            }
+        }
         boolean needsCharge = application.applicationFeeMinor() == 0;
         if (needsCharge) {
             VaultSettlementService.Result payment = settlement.transferFromPlayer(
@@ -526,19 +593,29 @@ final class TownRuntime {
                 provisions.finish(application.id());
                 plugin.messages().send(sender, "chat.runtime.fee-failed", Map.of(
                         "amount", money(feeMinor), "detail", payment.message()));
+                completion.accept(ProvisionResult.failure(application,
+                        "申请费扣取失败: " + payment.message(),
+                        "确认申请人余额后返回审核列表重试"));
                 return;
             }
         }
-        plugin.runAsync(() -> {
+        if (!plugin.runAsync(() -> {
             try {
                 TownRepository.Provisioning provisioning = repository.beginProvision(
                         application.id(), reviewerId, reviewerName, reason, idempotencyKey,
-                        feeMinor);
+                        feeMinor, playerName(application.applicantId()));
                 databaseAvailable.set(true);
-                plugin.runMain(
-                        () -> projectProvision(sender, application.id(), provisioning, completion));
+                plugin.getLogger().info("建镇数据库准备完成 application=" + application.id()
+                        + " at=" + Instant.now());
+                if (!plugin.runMain(() -> projectProvision(sender, application.id(), provisioning,
+                        completion))) {
+                    provisions.finish(application.id());
+                    completion.accept(ProvisionResult.failure(application,
+                            "插件生命周期已停止，未能开始领地投影。",
+                            "重新启动服务端后返回审核列表重试"));
+                }
             } catch (RuntimeException exception) {
-                plugin.runMain(() -> {
+                Runnable failed = () -> {
                     if (needsCharge) {
                         VaultSettlementService.Result refund = settlement.transferToPlayer(
                                 plugin.getServer().getOfflinePlayer(application.applicantId()),
@@ -550,20 +627,45 @@ final class TownRuntime {
                     }
                     provisions.finish(application.id());
                     handleFailure(sender, exception);
-                });
+                    completion.accept(ProvisionResult.failure(application,
+                            safeMessage(exception),
+                            "修正申请资料或外部依赖后返回审核列表重试"));
+                };
+                if (!plugin.runMain(failed)) {
+                    failed.run();
+                }
             }
-        });
+        })) {
+            provisions.finish(application.id());
+            completion.accept(ProvisionResult.failure(application,
+                    "插件生命周期已停止，未能写入建镇准备状态。",
+                    "重新启动服务端后返回审核列表重试"));
+        }
     }
 
     private void projectProvision(CommandSender sender, UUID applicationId,
                                   TownRepository.Provisioning provisioning,
-                                  Consumer<ApplicationSnapshot> completion) {
+                                  Consumer<ProvisionResult> completion) {
         if (provisioning.town().status() == TownStatus.ACTIVE) {
             provisions.finish(applicationId);
             plugin.messages().send(sender, "chat.runtime.provision-already-complete");
+            if (!plugin.runAsync(() -> {
+                ApplicationSnapshot current = repository.findApplication(applicationId)
+                        .orElse(null);
+                ProvisionResult result = ProvisionResult.success(current);
+                if (!plugin.runMain(() -> completion.accept(result))) {
+                    completion.accept(result);
+                }
+            })) {
+                completion.accept(ProvisionResult.failure(null,
+                        "插件生命周期已停止，无法读取建镇结果。",
+                        "重新启动服务端后返回审核列表刷新状态"));
+            }
             return;
         }
         try {
+            plugin.getLogger().info("建镇领地投影开始 application=" + applicationId
+                    + " at=" + Instant.now());
             // 碰撞由创建服务检查，使重试能够识别并复用本镇已经创建的系统投影。
             SitePolicy.Validation validation = sitePolicy.validateEnvironment(
                     provisioning.town().territory());
@@ -572,36 +674,261 @@ final class TownRuntime {
                     provisioning.town().territory(),
                     provisioning.members())
                     : LandProtectionService.Result.failure("批准时选址复核失败: " + validation.error());
-            plugin.runAsync(() -> finishProvision(sender, applicationId, land, completion));
-        } catch (RuntimeException exception) {
-            provisions.finish(applicationId);
-            handleFailure(sender, exception);
+            LandProtectionService.Result completedLand = land.success()
+                    ? setDefaultTeleportPoint(provisioning.town(), land) : land;
+            if (!plugin.runAsync(() -> finishProvision(sender, applicationId, completedLand,
+                    completion))) {
+                provisions.finish(applicationId);
+                completion.accept(ProvisionResult.failure(null,
+                        "插件生命周期已停止，无法保存领地投影结果。",
+                        "重新启动服务端后返回审核列表刷新状态"));
+            }
+        } catch (RuntimeException | LinkageError exception) {
+            // create/set-default-tp 可能在主线程直接抛出；仍要把申请落到
+            // PROVISION_FAILED，再回调 UI，避免审核页一直停留在 APPROVED_PROVISIONING。
+            String detail = safeMessage(exception);
+            plugin.getLogger().severe("建镇领地投影异常 application=" + applicationId
+                    + ": " + detail);
+            LandProtectionService.Result failed = LandProtectionService.Result.failure(detail);
+            if (!plugin.runAsync(() -> finishProvision(sender, applicationId, failed, completion))) {
+                provisions.finish(applicationId);
+                completion.accept(ProvisionResult.failure(null,
+                        detail, "检查 Residence 后返回审核列表重试"));
+            }
         }
+    }
+
+    private LandProtectionService.Result setDefaultTeleportPoint(TownSnapshot town,
+                                                                  LandProtectionService.Result land) {
+        cn.tianji.town.core.land.ChunkPosition center = town.territory().center();
+        org.bukkit.World world = plugin.getServer().getWorld(center.worldId());
+        if (world == null) {
+            world = plugin.getServer().getWorld(center.worldName());
+        }
+        if (world == null) {
+            return LandProtectionService.Result.failure("默认传送点世界未加载");
+        }
+        int blockX = Math.addExact(Math.multiplyExact(center.x(), 16), 8);
+        int blockZ = Math.addExact(Math.multiplyExact(center.z(), 16), 8);
+        int blockY = world.getHighestBlockYAt(blockX, blockZ) + 1;
+        if (blockY <= world.getMinHeight() || blockY + 1 >= world.getMaxHeight()) {
+            return LandProtectionService.Result.failure("初始领地中心没有安全的默认传送高度");
+        }
+        Location location = new Location(world, blockX + 0.5D, blockY, blockZ + 0.5D);
+        if (!location.getBlock().isPassable()
+                || !location.getBlock().getRelative(0, 1, 0).isPassable()
+                || !location.getBlock().getRelative(0, -1, 0).getType().isSolid()) {
+            return LandProtectionService.Result.failure("初始领地中心没有安全的默认落脚空间");
+        }
+        LandProtectionService.Result teleport = landProtection.setTeleportPoint(
+                town.residenceName(), world.getUID(), world.getName(), location.getX(),
+                location.getY(), location.getZ(), 0.0F, 0.0F);
+        if (!teleport.success()) {
+            LandProtectionService.Result cleanup = landProtection.remove(town.residenceName(),
+                    town.territory());
+            return LandProtectionService.Result.failure("默认传送点设置失败: "
+                    + teleport.message() + (cleanup.success() ? "；新建投影已回滚"
+                    : "；新建投影回滚失败: " + cleanup.message()));
+        }
+        return LandProtectionService.Result.ok(land.message() + "；已设置安全默认传送点");
     }
 
     private void finishProvision(CommandSender sender, UUID applicationId,
                                  LandProtectionService.Result land,
-                                 Consumer<ApplicationSnapshot> completion) {
+                                 Consumer<ProvisionResult> completion) {
         try {
             boolean completed = land.success();
             String completedDetail = land.message();
             ApplicationSnapshot application = repository.finishProvision(
                     applicationId, completed, completedDetail);
             if (completed) {
+                repository.findApplication(applicationId).map(ApplicationSnapshot::townId)
+                        .flatMap(repository::findTown).map(TownSnapshot::residenceName)
+                        .ifPresent(activeResidenceNames::add);
                 refreshTaxPolicies();
             }
             databaseAvailable.set(true);
-            plugin.runMain(() -> {
+            Runnable callback = () -> {
                 plugin.messages().send(sender, completed ? "chat.runtime.provision-success"
                         : "chat.runtime.provision-failed", completed
                         ? Map.of() : Map.of("detail", completedDetail));
-                completion.accept(application);
-            });
+                plugin.getLogger().info("建镇 UI 回调 application=" + applicationId
+                        + " at=" + Instant.now() + " success=" + completed);
+                completion.accept(completed ? ProvisionResult.success(application)
+                        : ProvisionResult.failure(application, completedDetail,
+                        "可重试批准，或解除锁定后要求申请人修改"));
+            };
+            if (!plugin.runMain(callback)) {
+                completion.accept(completed ? ProvisionResult.success(application)
+                        : ProvisionResult.failure(application, completedDetail,
+                        "可重试批准，或解除锁定后要求申请人修改"));
+            }
         } catch (RuntimeException exception) {
             handleFailure(sender, exception);
+            ProvisionResult result = ProvisionResult.failure(null, safeMessage(exception),
+                    "返回审核列表刷新状态后重试");
+            if (!plugin.runMain(() -> completion.accept(result))) {
+                completion.accept(result);
+            }
         } finally {
             provisions.finish(applicationId);
         }
+    }
+
+    private String playerName(UUID playerId) {
+        String name = plugin.getServer().getOfflinePlayer(playerId).getName();
+        return name == null || name.isBlank() ? playerId.toString() : name;
+    }
+
+    void recoverFailedApplication(Player administrator, UUID applicationId,
+                                  TownRepository.RecoveryMode mode,
+                                  Consumer<ProvisionResult> completion) {
+        plugin.runAsync(() -> {
+            try {
+                TownRepository.Provisioning failed = repository.failedProvision(applicationId);
+                plugin.runMain(() -> verifyAndRecoverFailedApplication(administrator, failed,
+                        mode, completion));
+            } catch (RuntimeException exception) {
+                plugin.runMain(() -> completion.accept(ProvisionResult.failure(null,
+                        safeMessage(exception), "返回审核列表刷新状态")));
+            }
+        });
+    }
+
+    private void verifyAndRecoverFailedApplication(Player administrator,
+                                                   TownRepository.Provisioning failed,
+                                                   TownRepository.RecoveryMode mode,
+                                                   Consumer<ProvisionResult> completion) {
+        LandProtectionService.Inspection inspection;
+        try {
+            inspection = landProtection.inspect(failed.town().residenceName(),
+                    failed.town().territory(), failed.members());
+        } catch (RuntimeException | LinkageError exception) {
+            completion.accept(ProvisionResult.failure(null,
+                    "无法验证失败申请的 Residence 投影: " + safeMessage(exception),
+                    "Residence 恢复后再次执行安全恢复"));
+            return;
+        }
+        if (inspection.state() == LandProtectionService.ProjectionState.HEALTHY) {
+            completion.accept(ProvisionResult.failure(null,
+                    "检测到边界和所有权均正确的受控 Residence 投影，拒绝解锁。",
+                    "先执行领地对账并完成原创建流程"));
+            return;
+        }
+        if (inspection.state() == LandProtectionService.ProjectionState.INVALID) {
+            boolean controlled;
+            try {
+                controlled = landProtection.isControlledProjection(failed.town().residenceName());
+            } catch (RuntimeException | LinkageError exception) {
+                completion.accept(ProvisionResult.failure(null,
+                        "无法确认异常 Residence 是否属于系统: " + safeMessage(exception),
+                        "Residence 恢复后再次执行安全恢复"));
+                return;
+            }
+            if (!controlled) {
+                // 同名但属于玩家的 Residence 不是临时小镇投影，必须保留，
+                // 同时允许管理员清理 SQLite 临时数据并要求申请人换代码。
+                plugin.getLogger().warning("失败申请发现同名外部 Residence，保留外部领地并继续回滚申请数据 application="
+                        + failed.applicationId());
+            } else {
+                LandProtectionService.Result cleanup;
+                try {
+                    cleanup = landProtection.remove(failed.town().residenceName(),
+                            failed.town().territory());
+                } catch (RuntimeException | LinkageError exception) {
+                    cleanup = LandProtectionService.Result.failure(
+                            "清理失败投影时 Residence API 异常: " + safeMessage(exception));
+                }
+                if (!cleanup.success()) {
+                    completion.accept(ProvisionResult.failure(null,
+                            "检测到异常 Residence 投影，且无法安全移除: " + cleanup.message(),
+                            "请先人工恢复或移除该受控投影后再执行恢复"));
+                    return;
+                }
+                plugin.getLogger().warning("失败建镇投影已按受控边界安全清理 application="
+                        + failed.applicationId() + ": " + cleanup.message());
+            }
+        }
+        String reason = switch (mode) {
+            case UNLOCK_FOR_CHANGES -> "管理员解除失败锁定并要求申请人修改";
+            case CANCEL_AND_REFUND -> "管理员取消创建失败申请并退款";
+            case FORCE_CLEANUP -> "管理员强制清理创建失败申请";
+        };
+        plugin.runAsync(() -> {
+            try {
+                ApplicationSnapshot recovered = repository.recoverFailedProvision(
+                        failed.applicationId(), administrator.getUniqueId(),
+                        administrator.getName(), reason + "；外部检查=" + inspection.message(),
+                        mode);
+                if (mode == TownRepository.RecoveryMode.UNLOCK_FOR_CHANGES) {
+                    plugin.runMain(() -> completion.accept(ProvisionResult.success(recovered)));
+                    return;
+                }
+                plugin.runMain(() -> refundRecoveredApplication(administrator, recovered,
+                        completion));
+            } catch (RuntimeException exception) {
+                plugin.runMain(() -> completion.accept(ProvisionResult.failure(null,
+                        safeMessage(exception), "返回审核列表刷新状态后重试")));
+            }
+        });
+    }
+
+    private void refundRecoveredApplication(Player administrator,
+                                            ApplicationSnapshot application,
+                                            Consumer<ProvisionResult> completion) {
+        VaultSettlementService.Result refund = settlement.transferToPlayer(
+                plugin.getServer().getOfflinePlayer(application.applicantId()),
+                application.applicationFeeMinor());
+        if (!refund.success()) {
+            completion.accept(ProvisionResult.failure(application,
+                    "临时数据已安全清理，但申请费退款失败: " + refund.message(),
+                    "申请费保持 REFUND_PENDING；修复 Vault 后重试退款"));
+            return;
+        }
+        plugin.runAsync(() -> {
+            try {
+                ApplicationSnapshot completed = repository.completeApplicationFeeRefund(
+                        application.id(), administrator.getUniqueId(), administrator.getName(),
+                        refund.message());
+                plugin.runMain(() -> completion.accept(ProvisionResult.success(completed)));
+            } catch (RuntimeException exception) {
+                plugin.runMain(() -> completion.accept(ProvisionResult.failure(application,
+                        "Vault 已退款但数据库确认失败: " + safeMessage(exception),
+                        "停止重复退款并由管理员执行清算对账")));
+            }
+        });
+    }
+
+    void deactivateResidence(String residenceName) {
+        activeResidenceNames.remove(residenceName.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    void setTownTeleportPoint(Player actor, TownSnapshot town, Location location,
+                              Consumer<LandProtectionService.Result> completion) {
+        LandProtectionService.Result result;
+        try {
+            result = landProtection.setTeleportPoint(town.residenceName(),
+                    location.getWorld().getUID(), location.getWorld().getName(),
+                    location.getX(), location.getY(), location.getZ(),
+                    location.getYaw(), location.getPitch());
+        } catch (RuntimeException | LinkageError exception) {
+            result = LandProtectionService.Result.failure(
+                    "Residence API 不可用: " + safeMessage(exception));
+        }
+        LandProtectionService.Result completed = result;
+        plugin.runAsync(() -> {
+            try {
+                repository.recordAudit(actor.getUniqueId(), actor.getName(),
+                        "TOWN_TELEPORT_POINT_SET", "TOWN", town.id().toString(),
+                        completed.success() ? "镇长设置领地传送点" : "设置传送点失败",
+                        location.getWorld().getName() + " " + location.getX() + ","
+                                + location.getY() + "," + location.getZ() + " · "
+                                + completed.message());
+            } catch (RuntimeException exception) {
+                plugin.getLogger().warning("写入传送点审计失败: " + safeMessage(exception));
+            }
+        });
+        completion.accept(completed);
     }
 
     void reconcile(CommandSender sender, TownSnapshot town, List<UUID> members, boolean repair) {
@@ -655,13 +982,34 @@ final class TownRuntime {
     }
 
     void acceptQuickShopTax(QuickShopTaxAdapter.SuccessfulTax tax) {
-        VaultSettlementService.Result subsidy = settlement.adjustSettlement(tax.taxMinor());
-        if (!subsidy.success()) {
-            plugin.getLogger().severe("QuickShop 税收服务器补贴入账失败，暂不写入双倍账本: "
-                    + subsidy.message());
+        plugin.runAsync(() -> {
+            try {
+                EconomyRepository.SubsidyReservation reservation =
+                        finance.reserveQuickShopSubsidy(tax.townId(), tax.businessKey(),
+                                tax.taxMinor(), economySettings.weeklySubsidyLimitMinor(
+                                        settlement.scale()),
+                                economySettings.twelveHourSubsidyLimitMinor(settlement.scale()),
+                                Instant.now(), ZoneId.systemDefault());
+                plugin.runMain(() -> applyQuickShopSubsidy(tax, reservation));
+            } catch (RuntimeException exception) {
+                handleQuickShopTaxFailure(tax, exception);
+            }
+        });
+    }
+
+    private void applyQuickShopSubsidy(QuickShopTaxAdapter.SuccessfulTax tax,
+                                       EconomyRepository.SubsidyReservation reservation) {
+        VaultSettlementService.Result subsidy = reservation.grantedMinor() == 0
+                ? VaultSettlementService.Result.success("本周期补贴额度已用完")
+                : settlement.adjustSettlement(reservation.grantedMinor());
+        if (subsidy.success()) {
+            pendingTaxes.submit(tax);
             return;
         }
-        pendingTaxes.submit(tax);
+        plugin.runAsync(() -> finance.cancelQuickShopSubsidy(tax.businessKey(),
+                subsidy.message()));
+        plugin.getLogger().severe("QuickShop 税收服务器补贴入账失败，税款账本暂不写入: "
+                + subsidy.message());
     }
 
     void flushPendingTaxes() {
@@ -672,9 +1020,16 @@ final class TownRuntime {
     private void recordQuickShopTax(QuickShopTaxAdapter.SuccessfulTax tax) {
         finance.recordQuickShopTax(new EconomyRepository.QuickShopTax(
                 tax.townId(), tax.businessKey(), tax.shopId(), tax.shopType(),
-                tax.receiverId(), tax.interactingId(), tax.grossMinor(),
+                tax.receiverId(), tax.receiverName(), tax.interactingId(), tax.grossMinor(),
                 tax.basisPoints(), tax.taxMinor(), tax.worldName()));
         databaseAvailable.set(true);
+    }
+
+    EconomyRepository.SubsidyQuota quickShopSubsidyQuota(UUID townId) {
+        return finance.quickShopSubsidyQuota(townId,
+                economySettings.weeklySubsidyLimitMinor(settlement.scale()),
+                economySettings.twelveHourSubsidyLimitMinor(settlement.scale()),
+                Instant.now(), ZoneId.systemDefault());
     }
 
     private void handleQuickShopTaxFailure(QuickShopTaxAdapter.SuccessfulTax tax,
@@ -874,6 +1229,11 @@ final class TownRuntime {
         return territories.preview(playerId, gridX, gridZ);
     }
 
+    TerritoryService.ExpansionBatchPreview expansionBatchPreview(UUID playerId,
+                                                                  Set<TerritoryService.GridSelection> selections) {
+        return territories.batchPreview(playerId, selections);
+    }
+
     void loadTerritoryMap(Player player, Consumer<TerritoryService.TerritoryMap> success) {
         read(player, () -> territories.map(player.getUniqueId()),
                 map -> success.accept(territories.validate(map)));
@@ -896,6 +1256,66 @@ final class TownRuntime {
                       Consumer<RuntimeException> failure) {
         expandAction(mayor, () -> expansionPreview(mayor.getUniqueId(), gridX, gridZ),
                 success, failure);
+    }
+
+    void expandBatchAction(Player mayor, Set<TerritoryService.GridSelection> selections,
+                           Consumer<EconomyRepository.ExpansionBatchOperation> success,
+                           Consumer<RuntimeException> failure) {
+        expandBatchAction(mayor, selections, UUID.randomUUID().toString(), success, failure);
+    }
+
+    void expandBatchAction(Player mayor, Set<TerritoryService.GridSelection> selections,
+                           String requestId,
+                           Consumer<EconomyRepository.ExpansionBatchOperation> success,
+                           Consumer<RuntimeException> failure) {
+        if (!consumptionEnabled()) {
+            failure.accept(new IllegalStateException("公共资金新消费入口已由功能开关暂停"));
+            return;
+        }
+        readAction(mayor, () -> territories.batchPreview(mayor.getUniqueId(), selections),
+                preview -> {
+                    for (TerritoryService.ExpansionPreview candidate : preview.candidates()) {
+                        SitePolicy.Validation validation = territories.validate(candidate);
+                        if (!validation.valid()) {
+                            failure.accept(new IllegalArgumentException(
+                                    "扩张环境复核失败: " + validation.error()));
+                            return;
+                        }
+                    }
+                    if (requestId == null || requestId.isBlank()) {
+                        failure.accept(new IllegalArgumentException("批量扩张幂等键不能为空"));
+                        return;
+                    }
+                    String key = "expansion-batch:" + preview.account().townId() + ":"
+                            + requestId;
+                    List<EconomyRepository.ExpansionBatchItem> items = preview.candidates().stream()
+                            .map(candidate -> new EconomyRepository.ExpansionBatchItem(
+                                    candidate.candidate(), candidate.residenceName(),
+                                    candidate.areaName(), candidate.priceMinor()))
+                            .toList();
+                    plugin.runAsync(() -> {
+                        try {
+                            EconomyRepository.ExpansionBatchOperation batch =
+                                    finance.prepareExpansionBatch(
+                                            new EconomyRepository.ExpansionBatchRequest(
+                                                    preview.account().townId(), items,
+                                                    preview.totalPriceMinor(), mayor.getUniqueId(),
+                                                    mayor.getName(), key));
+                            if (batch.status().equals("COMPLETED")) {
+                                plugin.runMain(() -> success.accept(batch));
+                                return;
+                            }
+                            if (batch.status().equals("REFUNDED")) {
+                                throw new EconomyRepository.ConflictException(
+                                        "该批量扩张操作已经退款，请重新选择区域");
+                            }
+                            plugin.runMain(() -> projectExpansionBatch(mayor, batch, success,
+                                    failure));
+                        } catch (RuntimeException exception) {
+                            reportActionFailure(exception, failure);
+                        }
+                    });
+                }, failure);
     }
 
     private void expandAction(Player mayor,
@@ -999,6 +1419,109 @@ final class TownRuntime {
         });
     }
 
+    private void projectExpansionBatch(CommandSender mayor,
+                                       EconomyRepository.ExpansionBatchOperation batch,
+                                       Consumer<EconomyRepository.ExpansionBatchOperation> success,
+                                       Consumer<RuntimeException> failure) {
+        plugin.runAsync(() -> {
+            try {
+                List<UUID> members = repository.listLandAccessIds(batch.townId());
+                plugin.runMain(() -> addExpansionBatchAreas(mayor, batch, members, 0,
+                        new ArrayList<>(), success, failure));
+            } catch (RuntimeException exception) {
+                reportActionFailure(exception, failure);
+            }
+        });
+    }
+
+    private void addExpansionBatchAreas(CommandSender mayor,
+                                        EconomyRepository.ExpansionBatchOperation batch,
+                                        List<UUID> members, int index, List<String> addedAreas,
+                                        Consumer<EconomyRepository.ExpansionBatchOperation> success,
+                                        Consumer<RuntimeException> failure) {
+        if (index >= batch.expansions().size()) {
+            plugin.runAsync(() -> {
+                try {
+                    EconomyRepository.ExpansionBatchOperation completed =
+                            finance.completeExpansionBatch(batch.batchId());
+                    plugin.runMain(() -> success.accept(completed));
+                } catch (RuntimeException exception) {
+                    rollbackExpansionBatchAreas(mayor, batch, addedAreas, exception, failure);
+                }
+            });
+            return;
+        }
+        EconomyRepository.ExpansionOperation expansion = batch.expansions().get(index);
+        boolean alreadyPresent;
+        try {
+            alreadyPresent = landProtection.hasArea(expansion.residenceName(),
+                    expansion.residenceAreaName());
+        } catch (RuntimeException | LinkageError exception) {
+            rollbackExpansionBatchAreas(mayor, batch, addedAreas,
+                    new IllegalStateException("无法确认 Residence 原有区域: "
+                            + safeMessage(exception), exception), failure);
+            return;
+        }
+        LandProtectionService.Result result;
+        try {
+            result = landProtection.addArea(expansion.residenceName(),
+                    new LandProtectionService.Area(expansion.residenceAreaName(),
+                            expansion.unit().territory()), members);
+        } catch (RuntimeException | LinkageError exception) {
+            result = LandProtectionService.Result.failure(
+                    "Residence API 不可用: " + safeMessage(exception));
+        }
+        if (!result.success()) {
+            rollbackExpansionBatchAreas(mayor, batch, addedAreas,
+                    new IllegalStateException("Residence 批量扩张失败: " + result.message()), failure);
+            return;
+        }
+        if (!alreadyPresent) {
+            addedAreas.add(expansion.residenceAreaName());
+        }
+        addExpansionBatchAreas(mayor, batch, members, index + 1, addedAreas, success, failure);
+    }
+
+    private void rollbackExpansionBatchAreas(CommandSender mayor,
+                                              EconomyRepository.ExpansionBatchOperation batch,
+                                              List<String> addedAreas, RuntimeException cause,
+                                              Consumer<RuntimeException> failure) {
+        if (!plugin.getServer().isPrimaryThread()) {
+            plugin.runMain(() -> rollbackExpansionBatchAreas(mayor, batch, addedAreas, cause,
+                    failure));
+            return;
+        }
+        List<String> remaining = new ArrayList<>(addedAreas);
+        java.util.Collections.reverse(remaining);
+        List<String> cleanupErrors = new ArrayList<>();
+        for (String area : remaining) {
+            try {
+                LandProtectionService.Result cleanup = landProtection.removeArea(
+                        batch.expansions().getFirst().residenceName(), area);
+                if (!cleanup.success()) {
+                    cleanupErrors.add(area + ": " + cleanup.message());
+                }
+            } catch (RuntimeException | LinkageError exception) {
+                cleanupErrors.add(area + ": " + safeMessage(exception));
+            }
+        }
+        if (!cleanupErrors.isEmpty()) {
+            plugin.getLogger().severe("批量扩张外部区域回滚失败 batch=" + batch.batchId()
+                    + ": " + String.join("; ", cleanupErrors));
+            failure.accept(new IllegalStateException(cause.getMessage()
+                    + "；部分 Residence 区域未能回滚，批次保留待恢复", cause));
+            return;
+        }
+        plugin.runAsync(() -> {
+            try {
+                finance.refundExpansionBatch(batch.batchId(), cause.getMessage());
+                plugin.runMain(() -> failure.accept(cause));
+            } catch (RuntimeException exception) {
+                reportActionFailure(exception, failure);
+            }
+        });
+    }
+
     private void recoverExpansions(List<EconomyRepository.ExpansionOperation> expansions) {
         for (EconomyRepository.ExpansionOperation expansion : expansions) {
             plugin.runAsync(() -> {
@@ -1017,6 +1540,16 @@ final class TownRuntime {
                             + ": " + safeMessage(exception));
                 }
             });
+        }
+    }
+
+    private void recoverExpansionBatches(
+            List<EconomyRepository.ExpansionBatchOperation> batches) {
+        for (EconomyRepository.ExpansionBatchOperation batch : batches) {
+            projectExpansionBatch(org.bukkit.Bukkit.getConsoleSender(), batch,
+                    completed -> plugin.getLogger().info("已恢复批量领地扩张 " + batch.batchId()),
+                    exception -> plugin.getLogger().severe("恢复批量领地扩张失败 "
+                            + batch.batchId() + ": " + safeMessage(exception)));
         }
     }
 
@@ -1166,6 +1699,36 @@ final class TownRuntime {
         taxPolicies.putAll(loaded);
     }
 
+    void backfillKnownPlayerNames() {
+        plugin.runAsync(() -> {
+            try {
+                List<UUID> unresolved = finance.unresolvedLedgerActorIds();
+                plugin.runMain(() -> {
+                    Map<UUID, String> confirmed = new java.util.HashMap<>();
+                    for (UUID playerId : unresolved) {
+                        org.bukkit.OfflinePlayer player = plugin.getServer()
+                                .getOfflinePlayer(playerId);
+                        if ((player.hasPlayedBefore() || player.isOnline())
+                                && player.getName() != null && !player.getName().isBlank()) {
+                            confirmed.put(playerId, player.getName());
+                        }
+                    }
+                    plugin.runAsync(() -> confirmed.forEach((playerId, name) -> {
+                        try {
+                            finance.backfillLedgerActorName(playerId, name);
+                        } catch (RuntimeException exception) {
+                            plugin.getLogger().warning("回填账本玩家名失败 " + playerId + ": "
+                                    + safeMessage(exception));
+                        }
+                    }));
+                });
+            } catch (RuntimeException exception) {
+                plugin.getLogger().warning("扫描历史 UUID 操作人失败: "
+                        + safeMessage(exception));
+            }
+        });
+    }
+
     private static UUID actorId(CommandSender sender) {
         return sender instanceof Player player ? player.getUniqueId() : null;
     }
@@ -1210,8 +1773,10 @@ final class TownRuntime {
         });
     }
 
-    private void handleFailure(CommandSender sender, RuntimeException exception) {
-        markStorageFailure(exception);
+    private void handleFailure(CommandSender sender, Throwable exception) {
+        if (exception instanceof RuntimeException runtimeException) {
+            markStorageFailure(runtimeException);
+        }
         plugin.runMain(
                 () -> plugin.messages().send(sender, "chat.runtime.operation-failed",
                         Map.of("detail", safeMessage(exception))));
