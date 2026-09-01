@@ -7,7 +7,7 @@ system:
   menu-expired: '&c这个界面已经失效，请重新打开小镇服务。'
   invalid-menu-data: '&c界面数据已过期，请重新打开后再试。'
   # {detail} 为具体失败原因。
-  operation-failed: '&c没有完成这项操作：{detail}'
+  operation-failed: '&c这项操作错误：{detail}'
 
 handbook:
   # 通过小镇手册打开玩家入口后的领取结果。
@@ -89,7 +89,7 @@ chat:
   site:
     world-unloaded: '&c领地所在世界当前未加载。'
     teleport-failed: '&c无法传送到领地传送点。'
-    teleported: '&a已传送至领地中心传送点。'
+    teleported: '&a已传送至领地传送点。'
     wrong-world: '&c预览领地不在当前世界。'
     preview-started: '&e已显示 {scope} 的完整三维边界，粒子将持续约 {duration} 秒。'
 
@@ -168,12 +168,12 @@ chat:
     town-title: '&6{town} [代码 {code}]'
     town-status: '&7status={status} mayor={mayor} version={version}'
     town-territory: '&7领地={world} {x},{z} Residence={residence} projection={projection}'
-    town-deleted: '&a小镇“{town}”已删除，成员、名称和区块占位已释放；Residence: {detail}'
-    town-delete-residence-failed: '&c小镇已安全归档，但 Residence 移除失败：{detail}。名称、小镇代码和区块仍保持锁定；处理后可重复执行删除命令。'
+    town-deleted: '&a小镇“{town}”已删除。'
+    town-delete-residence-failed: '&c小镇已安全归档，但领地移除失败：{detail}。名称、小镇代码和区块仍保持锁定；处理后可重复执行删除命令。'
     role-invalid: '&c角色只支持 DEPUTY_MAYOR 或 MEMBER；MAYOR 请使用镇长转移流程。'
-    role-updated: '&a成员角色已调整为 {role}，正在复核 Residence 权限。'
-    member-added: '&a成员已添加，正在同步 Residence 权限。'
-    member-removed: '&a成员已移除，正在同步 Residence 权限。'
+    role-updated: '&a成员角色已调整为 {role}。'
+    member-added: '&a成员已添加。'
+    member-removed: '&a成员已移除。'
     vote-status: '&a投票状态: {status}，赞成/门槛: {yes}/{required}'
     vote-cancelled: '&a投票已取消: {id}'
     governance-invalid: '&c治理配置无效: {detail}'
@@ -308,7 +308,7 @@ chat:
   # Residence 外部命令和领地删除保护提示。
   residence:
     command-blocked: '&cTianjiTown 系统领地不能通过 Residence 命令管理。'
-    unavailable: '&cResidence 当前不可用，领地命令已安全拒绝。'
+    unavailable: '&cResidence 当前不可用，领地命令已拒绝。'
     deletion-blocked: '&cTianjiTown 小镇领地不能从外部删除，系统已自动恢复保护。'
 
   # 管理员命令参数解析错误；{action}/{placeholder}=用户输入的参数。
@@ -390,7 +390,7 @@ dialog:
     pending: '&b待投票'
     previous: '&e上一页'
     next: '&e下一页'
-    back-governance: '&7返回成员治理'
+    back-governance: '&7返回成员管理'
     back-list: '&7返回投票列表'
     detail-type: '&6{type}'
     entry:
@@ -405,6 +405,17 @@ dialog:
     empty-hint: '&7从成员列表选择目标后可发起治理投票'
     list-title: '&6小镇治理投票 · 第 {page} 页'
     detail-title: '&6治理投票详情'
+
+  town-members:
+    title: '小镇成员 · 第 {page} 页'
+    heading: '&6{town} 的成员 · 第 {page} 页'
+    item: '&f{index}. {name} &7· {role}'
+    empty: '&7暂无成员'
+    previous: '&e上一页'
+    next: '&e下一页'
+
+  town:
+    residence-name: '&7小镇领地名: {name}'
 
   # Dialog 操作按钮的悬浮提示。动态内容使用 {placeholder} 替换。
   tooltip:
@@ -470,13 +481,14 @@ dialog:
       cancel-submitted: '&7批准建镇前仍可撤回'
     town:
       rules: '&7完整查看当前规则'
-      members: '&7查看全部成员'
+      members: '&7查看全部成员；此页面仅供查看'
       edit: '&7在表单中编辑小镇资料'
       edit-description: '&7单独修改小镇简介'
       edit-rules: '&7预览、添加或删除小镇规则'
       territory: '&7包含初始领地与已扩张区域'
       territory-center: '&7初始中心: {x}, {z}'
       territory-preview: '&a点击传送并显示火焰边界'
+      set-teleport: '&7必须站在本镇领地内的安全位置'
     members:
       role: '&7身份: {role}'
       joined: '&7加入: {time}'
@@ -668,6 +680,8 @@ dialog:
     donation-success-message: "&f已向小镇捐款 {amount}\n当前公共余额: {balance}"
     draft-not-saved-title: '&6草稿未保存'
     draft-incomplete-title: '&6草稿尚未完成'
+    form-draft-saved-title: '&6草稿已保存'
+    form-draft-saved-message: '&f已保存小镇申请草稿'
     profile-saved-title: '&6小镇资料已保存'
     profile-saved-message: '&f新的简介和规则已经生效。'
     draft-saved-title: '&6草稿已保存'
@@ -738,9 +752,9 @@ dialog:
     intensity-hint: '&7强度使用罗马数字：I / II / III / IV / V'
     price-hint: '&7下一步会显示最终价格'
     duration-label: '&6持续时间（周）'
-    duration-format: '&f%s 周'
+    duration-format: '&f%s: %s 周'
     intensity-label: '&6强度 I–V'
-    intensity-format: '&f等级 %s'
+    intensity-format: '&f%s: 等级 %s'
     continue: '&a继续购买'
     select-title: '&6请选择购买参数'
     select-message: '&f请设置持续周数和 Buff 强度。'
@@ -768,11 +782,15 @@ dialog:
     current-heading: '&6{town} · 当前规则'
     edit-title: '&6编辑小镇规则'
     edit-heading: '&6{town} · 规则预览'
+    preview-tooltip: '&7只读预览'
     input-label: '&6新规则（可留空）'
     add: '&a添加规则'
     add-tooltip: '&7添加后立即重新编号并刷新预览'
     delete: '&c删除第 {index} 条'
     delete-tooltip: '&7删除后其余规则会自动重新编号'
+    limit-reached: '&f小镇规则最多 50 条。'
+    refresh-title: '&6规则已更新'
+    refresh-message: '&f规则已被其他操作修改，请刷新后再试。'
     invalid-title: '&6规则未修改'
     invalid-empty: '&f规则内容不能为空。'
     item: '&f{index}. {rule}'
@@ -814,6 +832,17 @@ dialog:
     save-hint: '&8保存后系统会邀请两名成员确认'
     save-draft: '&e保存草稿并退出'
     save-draft-tooltip: '&7保存当前步骤和已填写内容，稍后可继续'
+    status:
+      draft: '&f草稿'
+      site-selected: '&f已选址'
+      submitted: '&f已提交'
+      under-review: '&f审核中'
+      need-changes: '&e需要补充资料'
+      approved-provisioning: '&b正在创建小镇'
+      active: '&a已生效'
+      rejected: '&c已拒绝'
+      cancelled: '&7已撤回'
+      provision-failed: '&c创建失败'
     members-title: '&6第 3 / 3 步 · 选择初始成员'
     select-member-one-title: '&6选择小镇初始成员一'
     select-member-two-title: '&6选择小镇初始成员二'

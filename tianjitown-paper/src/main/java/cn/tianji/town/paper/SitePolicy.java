@@ -163,6 +163,10 @@ final class SitePolicy {
         preview(player, List.of(territory), false);
     }
 
+    void previewSilently(Player player, List<InitialTerritory> territories) {
+        preview(player, territories, false);
+    }
+
     void preview(Player player, List<InitialTerritory> territories) {
         preview(player, territories, true);
     }

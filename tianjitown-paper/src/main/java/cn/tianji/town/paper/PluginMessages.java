@@ -69,8 +69,12 @@ final class PluginMessages {
                 throw new IllegalStateException("缺少必需的投票消息配置: " + key);
             }
         }
-        validateRangeFormat("dialog.buff.duration-format");
-        validateRangeFormat("dialog.buff.intensity-format");
+        for (String key : java.util.List.of(
+                "dialog.tax.rate-format",
+                "dialog.buff.duration-format",
+                "dialog.buff.intensity-format")) {
+            validateRangeFormat(key);
+        }
     }
 
     private void validateRangeFormat(String key) {
@@ -78,7 +82,7 @@ final class PluginMessages {
         if (format == null || format.isBlank()) {
             throw new IllegalStateException("缺少范围输入格式配置: " + key);
         }
-        boolean placeholder = false;
+        int placeholders = 0;
         for (int index = 0; index < format.length(); index++) {
             if (format.charAt(index) != '%') {
                 continue;
@@ -90,11 +94,11 @@ final class PluginMessages {
             if (index + 1 >= format.length() || format.charAt(index + 1) != 's') {
                 throw new IllegalStateException(key + " 只支持 %s 占位符，不支持浮点格式");
             }
-            placeholder = true;
+            placeholders++;
             index++;
         }
-        if (!placeholder) {
-            throw new IllegalStateException(key + " 必须包含 %s 占位符");
+        if (placeholders != 2) {
+            throw new IllegalStateException(key + " 必须恰好包含两个未转义的 %s 占位符");
         }
     }
 

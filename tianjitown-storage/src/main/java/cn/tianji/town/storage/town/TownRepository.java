@@ -1510,7 +1510,7 @@ public final class TownRepository {
                 statement.setBytes(1, uuid(townId));
                 try (ResultSet result = statement.executeQuery()) {
                     if (!result.next() || result.getInt(1) != 1) {
-                        throw new ConflictException("仅剩镇长一名成员时才能解散，请先完成成员治理");
+                        throw new ConflictException("仅剩镇长一名成员时才能解散，请先完成成员管理");
                     }
                 }
             }

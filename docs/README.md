@@ -4,7 +4,7 @@
 
 - [`setup/PREFLIGHT.md`](setup/PREFLIGHT.md)：安装门禁与预发验证；
 - [`deployment/TOWN_LIFECYCLE.md`](deployment/TOWN_LIFECYCLE.md)：建镇、成员与 Residence 投影；
-- [`deployment/GOVERNANCE.md`](deployment/GOVERNANCE.md)：成员治理、镇长转让与投票；
+- [`deployment/GOVERNANCE.md`](deployment/GOVERNANCE.md)：成员管理、镇长转让与投票；
 - [`deployment/ECONOMY_AND_EXPANSION.md`](deployment/ECONOMY_AND_EXPANSION.md)：税收、公共资金与领地扩张；
 - [`deployment/BUFFS_AND_RESOURCES.md`](deployment/BUFFS_AND_RESOURCES.md)：公共 Buff 与历史资源订单；
 - [`deployment/TERRITORY_BONUSES.md`](deployment/TERRITORY_BONUSES.md)：建筑返还与信标增强；

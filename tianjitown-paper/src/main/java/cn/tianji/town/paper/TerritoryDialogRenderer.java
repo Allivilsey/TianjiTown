@@ -8,6 +8,7 @@ import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.object.ObjectContents;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -22,6 +23,8 @@ final class TerritoryDialogRenderer {
     private static final Key OWNED_SPRITE = Key.key("minecraft:block/green_stained_glass");
     private static final Key EXPANDABLE_SPRITE = Key.key("minecraft:block/light_gray_stained_glass");
     private static final Key BLOCKED_SPRITE = Key.key("minecraft:block/red_stained_glass");
+    private static final Key CONFIRM_SPRITE = Key.key("minecraft:block/lime_concrete");
+    private static final Key CLEAR_SPRITE = Key.key("minecraft:block/orange_concrete");
 
     private TerritoryDialogRenderer() {
     }
@@ -46,7 +49,7 @@ final class TerritoryDialogRenderer {
                              PluginMessages messages,
                              Set<TerritoryService.GridSelection> selected,
                              Function<TerritoryService.TerritoryCell, DialogAction> actionFactory,
-                             ActionButton exitAction, List<ActionButton> footerActions) {
+                             ActionButton exitAction, List<FooterAction> footerActions) {
         // 领地格子的状态名称、颜色、坐标和操作提示都从 messages.yml 读取，保持地图界面可配置。
         Objects.requireNonNull(map, "map");
         Objects.requireNonNull(formattedPrice, "formattedPrice");
@@ -54,10 +57,16 @@ final class TerritoryDialogRenderer {
         Objects.requireNonNull(selected, "selected");
         Objects.requireNonNull(actionFactory, "actionFactory");
         Objects.requireNonNull(footerActions, "footerActions");
-        List<ActionButton> buttons = new java.util.ArrayList<>(map.cells().stream()
-                .map(cell -> button(cell, formattedPrice, messages, selected, actionFactory))
+        Layout layout = layout(map, selected,
+                footerActions.stream().map(FooterAction::kind).toList());
+        List<ActionButton> buttons = new ArrayList<>(layout.mapButtons().stream()
+                .map(cell -> button(cell.cell(), formattedPrice, messages, cell.selected(),
+                        cell.width(), actionFactory))
                 .toList());
-        buttons.addAll(footerActions);
+        for (int index = 0; index < footerActions.size(); index++) {
+            buttons.add(footerButton(footerActions.get(index),
+                    layout.footerButtons().get(index).width()));
+        }
         return DialogType.multiAction(buttons)
                 .exitAction(exitAction)
                 .columns(COLUMNS)
@@ -66,16 +75,37 @@ final class TerritoryDialogRenderer {
 
     private static ActionButton button(
             TerritoryService.TerritoryCell cell, String formattedPrice,
-            PluginMessages messages, Set<TerritoryService.GridSelection> selected,
+            PluginMessages messages, boolean isSelected, int width,
             Function<TerritoryService.TerritoryCell, DialogAction> actionFactory) {
         TerritoryCellState state = cell.state();
-        boolean isSelected = state == TerritoryCellState.EXPANDABLE
-                && selected.contains(new TerritoryService.GridSelection(cell.gridX(), cell.gridZ()));
         DialogAction action = state == TerritoryCellState.EXPANDABLE
                 ? actionFactory.apply(cell) : null;
         return ActionButton.create(sprite(state, isSelected),
                 tooltip(cell, formattedPrice, messages, isSelected),
-                CELL_SIZE, action);
+                width, action);
+    }
+
+    private static ActionButton footerButton(FooterAction action, int width) {
+        return ActionButton.create(Component.object(ObjectContents.sprite(BLOCK_ATLAS,
+                action.kind() == FooterKind.CONFIRM ? CONFIRM_SPRITE : CLEAR_SPRITE)),
+                action.tooltip(), width, action.action());
+    }
+
+    static Layout layout(TerritoryService.TerritoryMap map,
+                         Set<TerritoryService.GridSelection> selected,
+                         List<FooterKind> footerKinds) {
+        Objects.requireNonNull(map, "map");
+        Objects.requireNonNull(selected, "selected");
+        Objects.requireNonNull(footerKinds, "footerKinds");
+        List<MapButton> mapButtons = map.cells().stream()
+                .map(cell -> new MapButton(cell,
+                        cell.state() == TerritoryCellState.EXPANDABLE && selected.contains(
+                                new TerritoryService.GridSelection(cell.gridX(), cell.gridZ())),
+                        CELL_SIZE))
+                .toList();
+        return new Layout(COLUMNS, CELL_SIZE, mapButtons, footerKinds.stream()
+                .map(kind -> new FooterButton(kind, CELL_SIZE))
+                .toList());
     }
 
     private static Component sprite(TerritoryCellState state, boolean selected) {
@@ -129,5 +159,42 @@ final class TerritoryDialogRenderer {
             case BLOCKED -> "dialog.territory.cell.blocked";
             case OTHER_TOWN -> "dialog.territory.cell.other-town";
         };
+    }
+
+    enum FooterKind {
+        CONFIRM,
+        CLEAR
+    }
+
+    record FooterAction(FooterKind kind, Component tooltip, DialogAction action) {
+        FooterAction {
+            Objects.requireNonNull(kind, "kind");
+            Objects.requireNonNull(tooltip, "tooltip");
+            Objects.requireNonNull(action, "action");
+        }
+    }
+
+    record MapButton(TerritoryService.TerritoryCell cell, boolean selected, int width) {
+        MapButton {
+            Objects.requireNonNull(cell, "cell");
+        }
+    }
+
+    record FooterButton(FooterKind kind, int width) {
+        FooterButton {
+            Objects.requireNonNull(kind, "kind");
+        }
+    }
+
+    record Layout(int columns, int cellSize, List<MapButton> mapButtons,
+                  List<FooterButton> footerButtons) {
+        Layout {
+            mapButtons = List.copyOf(mapButtons);
+            footerButtons = List.copyOf(footerButtons);
+            if (columns != COLUMNS || cellSize != CELL_SIZE
+                    || mapButtons.size() != COLUMNS * COLUMNS) {
+                throw new IllegalArgumentException("领地地图布局必须保持 5×5 的 20px 格子");
+            }
+        }
     }
 }
