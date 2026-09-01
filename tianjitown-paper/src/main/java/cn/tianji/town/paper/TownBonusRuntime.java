@@ -212,7 +212,7 @@ final class TownBonusRuntime implements Listener {
         }
     }
 
-    void diagnoseScheduled() {
+    void diagnoseAtStartup() {
         diagnose(plugin.getServer().getConsoleSender(), settings.operations().quickShopDiagnosticDays());
     }
 

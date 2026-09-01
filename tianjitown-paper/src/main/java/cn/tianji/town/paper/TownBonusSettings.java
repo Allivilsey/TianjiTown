@@ -85,7 +85,6 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
     private static Operations loadOperations(ConfigurationSection config) {
         String root = "operations";
         int diagnosticsDays = integer(config, root + ".quickshop-diagnostic-days", 7);
-        long diagnosticsMinutes = longInteger(config, root + ".diagnostics-interval-minutes", 60);
         long backupHours = longInteger(config, root + ".backup.interval-hours", 6);
         int retention = integer(config, root + ".backup.retention-count", 14);
         String directory = text(config, root + ".backup.directory", "backups");
@@ -93,18 +92,14 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
             throw new IllegalArgumentException(root
                     + ".quickshop-diagnostic-days 必须在 1~180 范围内");
         }
-        if (diagnosticsMinutes < 5 || diagnosticsMinutes > 24L * 60) {
-            throw new IllegalArgumentException(root
-                    + ".diagnostics-interval-minutes 必须在 5~1440 范围内");
-        }
         if (backupHours < 1 || backupHours > 24L * 30 || retention < 2 || retention > 1000) {
             throw new IllegalArgumentException("定时备份间隔或保留数量超出安全范围");
         }
         if (directory == null || directory.isBlank()) {
             throw new IllegalArgumentException(root + ".backup.directory 不能为空");
         }
-        return new Operations(diagnosticsDays, Duration.ofMinutes(diagnosticsMinutes),
-                new Backup(bool(config, root + ".backup.enabled", true),
+        return new Operations(diagnosticsDays, new Backup(
+                        bool(config, root + ".backup.enabled", true),
                         Duration.ofHours(backupHours), retention, Path.of(directory)));
     }
 
@@ -228,7 +223,7 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
         }
     }
 
-    record Operations(int quickShopDiagnosticDays, Duration diagnosticsInterval, Backup backup) {
+    record Operations(int quickShopDiagnosticDays, Backup backup) {
     }
 
     record Backup(boolean enabled, Duration interval, int retentionCount, Path directory) {

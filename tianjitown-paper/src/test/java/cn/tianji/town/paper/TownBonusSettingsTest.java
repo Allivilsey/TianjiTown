@@ -56,7 +56,6 @@ class TownBonusSettingsTest {
                     allowed-worlds: [world]
                   operations:
                     quickshop-diagnostic-days: 7
-                    diagnostics-interval-minutes: 60
                     backup:
                       enabled: true
                       interval-hours: 6

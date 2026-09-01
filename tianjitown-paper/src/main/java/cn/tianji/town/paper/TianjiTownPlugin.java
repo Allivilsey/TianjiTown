@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class TianjiTownPlugin extends JavaPlugin {
     private static final int CONFIG_SCHEMA = 10;
+    private static final long STARTUP_DIAGNOSTIC_DELAY_TICKS = 20L * 30;
     private final AtomicReference<GateStatus> gateStatus = new AtomicReference<>(
             new GateStatus(GateStatus.State.CHECKING, List.of("尚未开始")));
     private final AtomicLong lifecycleGeneration = new AtomicLong();
@@ -509,10 +510,11 @@ public final class TianjiTownPlugin extends JavaPlugin {
         getServer().getScheduler().runTaskTimer(this,
                 () -> runPeriodic("返还计数清理", runtime.bonuses()::cleanupCounters),
                 20L * 60, 20L * 60 * 60);
-        getServer().getScheduler().runTaskTimer(this,
-                () -> runPeriodic("定时诊断", runtime.bonuses()::diagnoseScheduled),
-                20L * 60 * 5, 20L * 60
-                        * runtime.bonuses().settings().operations().diagnosticsInterval().toMinutes());
+        // 启动恢复和首次缓存初始化使用异步任务；延迟一小段时间再执行一次诊断，
+        // 避免把启动中的中间状态报告成异常。运行期间通过管理员命令按需诊断。
+        getServer().getScheduler().runTaskLater(this,
+                () -> runPeriodic("启动诊断", runtime.bonuses()::diagnoseAtStartup),
+                STARTUP_DIAGNOSTIC_DELAY_TICKS);
         if (runtime.bonuses().settings().operations().backup().enabled()) {
             getServer().getScheduler().runTaskTimer(this,
                     () -> runPeriodic("定时备份", runtime.bonuses()::createScheduledBackup),
@@ -530,7 +532,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 + globalMarketCapability.detail());
         details.add("OK WorldBorder 边界 API 已接入");
         details.add("OK 玩家界面=DIALOG");
-        details.add("OK 建筑返还、信标增强、统一诊断与定时备份已启用");
+        details.add("OK 建筑返还、信标增强、启动诊断与定时备份已启用");
         gateStatus.set(new GateStatus(GateStatus.State.READY, details));
         getLogger().info("业务运行时启动完成；玩家入口仅限服务台和小镇手册。");
     }
