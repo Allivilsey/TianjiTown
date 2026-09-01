@@ -23,8 +23,7 @@ final class TerritoryDialogRenderer {
     private static final Key OWNED_SPRITE = Key.key("minecraft:block/green_stained_glass");
     private static final Key EXPANDABLE_SPRITE = Key.key("minecraft:block/light_gray_stained_glass");
     private static final Key BLOCKED_SPRITE = Key.key("minecraft:block/red_stained_glass");
-    private static final Key CONFIRM_SPRITE = Key.key("minecraft:block/lime_concrete");
-    private static final Key CLEAR_SPRITE = Key.key("minecraft:block/orange_concrete");
+    private static final int FOOTER_WIDTH = 170;
 
     private TerritoryDialogRenderer() {
     }
@@ -86,8 +85,7 @@ final class TerritoryDialogRenderer {
     }
 
     private static ActionButton footerButton(FooterAction action, int width) {
-        return ActionButton.create(Component.object(ObjectContents.sprite(BLOCK_ATLAS,
-                action.kind() == FooterKind.CONFIRM ? CONFIRM_SPRITE : CLEAR_SPRITE)),
+        return ActionButton.create(action.label(),
                 action.tooltip(), width, action.action());
     }
 
@@ -104,7 +102,7 @@ final class TerritoryDialogRenderer {
                         CELL_SIZE))
                 .toList();
         return new Layout(COLUMNS, CELL_SIZE, mapButtons, footerKinds.stream()
-                .map(kind -> new FooterButton(kind, CELL_SIZE))
+                .map(kind -> new FooterButton(kind, FOOTER_WIDTH))
                 .toList());
     }
 
@@ -166,9 +164,10 @@ final class TerritoryDialogRenderer {
         CLEAR
     }
 
-    record FooterAction(FooterKind kind, Component tooltip, DialogAction action) {
+    record FooterAction(FooterKind kind, Component label, Component tooltip, DialogAction action) {
         FooterAction {
             Objects.requireNonNull(kind, "kind");
+            Objects.requireNonNull(label, "label");
             Objects.requireNonNull(tooltip, "tooltip");
             Objects.requireNonNull(action, "action");
         }

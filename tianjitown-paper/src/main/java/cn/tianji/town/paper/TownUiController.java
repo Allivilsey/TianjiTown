@@ -756,7 +756,8 @@ final class TownUiController implements Listener {
             int pendingTransfer = governance != null && governance.pendingTransfer() != null ? 1 : 0;
             int pendingTotal = pendingVotes + pendingJoins + pendingTransfer;
             List<String> summary = new ArrayList<>();
-            summary.add("§7身份: §f" + (governance == null ? "成员" : governance.role()));
+            summary.add(dialogText("member-role.identity", Map.of("role", governance == null
+                    ? dialogText("member-role.member") : memberRoleText(governance.role()))));
             if (finance != null) {
                 summary.add("§7公共资金: §f" + runtime.money(finance.balanceMinor())
                         + " §8| §7税率: §f" + TownRuntime.percent(finance.taxRateBps()));
@@ -842,7 +843,8 @@ final class TownUiController implements Listener {
             List<MenuItem> items = new ArrayList<>();
             items.add(new MenuItem(0, button(Material.GOLDEN_HELMET, "§6成员管理",
                     List.of("§7小镇: §f" + town.profile().name(),
-                            "§7你的身份: §f" + governance.role(),
+                            dialogText("member-role.current-identity", Map.of("role",
+                                    memberRoleText(governance.role()))),
                             "§7待处理入镇申请: §f" + pendingJoins,
                             dialogText("votes.governance-pending-votes",
                                     Map.of("count", pendingVotes))), null, null)));
@@ -876,9 +878,8 @@ final class TownUiController implements Listener {
             }
             List<MenuItem> items = new ArrayList<>();
             items.add(new MenuItem(4, button(Material.NAME_TAG, "§6访客管理",
-                    List.of("§7当前访客: §f" + view.visitorCount(),
-                            "§7访客只获得本镇 Residence 领地权限",
-                            dialogText("votes.visitor-member-scope")), null, null)));
+                    List.of(dialogText("visitor.current-count", Map.of("count",
+                            view.visitorCount()))), null, null)));
             items.add(new MenuItem(11, button(Material.PLAYER_HEAD, "§e访客列表",
                     List.of(dialogText("tooltip.visitor.list")),
                     "VISITOR_LIST", townId + ":0")));
@@ -949,14 +950,13 @@ final class TownUiController implements Listener {
             for (Player candidate : visible) {
                 items.add(new MenuItem(slot++, button(Material.PLAYER_HEAD,
                         "§e" + candidate.getName(),
-                        List.of(dialogText("tooltip.visitor.invite-entry.click"),
-                                dialogText("tooltip.visitor.invite-entry.constraint")),
+                        List.of(dialogText("tooltip.visitor.invite-entry.click")),
                         "CONFIRM_ADD_VISITOR",
                         townId + ":" + candidate.getUniqueId() + ":" + page)));
             }
             if (visible.isEmpty()) {
                 items.add(new MenuItem(4, button(Material.PAPER, "§7没有可邀请的在线玩家",
-                        List.of("§7本镇成员和已有访客不会显示"), null, null)));
+                        List.of(), null, null)));
             }
             if (page > 0) {
                 items.add(new MenuItem(45, button(Material.ARROW, "§e上一页", List.of(),
@@ -1258,6 +1258,7 @@ final class TownUiController implements Listener {
                             Component confirmLabel = dialogComponent("territory.batch-confirm");
                             footer.add(new TerritoryDialogRenderer.FooterAction(
                                     TerritoryDialogRenderer.FooterKind.CONFIRM,
+                                    confirmLabel,
                                     confirmLabel.append(Component.newline()).append(
                                             dialogComponent("territory.batch-confirm-consequence", Map.of(
                                                     "price", runtime.money(total),
@@ -1265,6 +1266,7 @@ final class TownUiController implements Listener {
                                     dialogAction(player, session, "CONFIRM_EXPANSION_BATCH", null)));
                             footer.add(new TerritoryDialogRenderer.FooterAction(
                                     TerritoryDialogRenderer.FooterKind.CLEAR,
+                                    dialogComponent("territory.batch-clear"),
                                     dialogComponent("territory.batch-clear"),
                                     dialogAction(player, session,
                                             "CLEAR_EXPANSION_SELECTION", null)));
@@ -1729,23 +1731,24 @@ final class TownUiController implements Listener {
                 dialogComponent("rules.input-label"), false, "", 300, null);
         openDialogPage(player, title, List.of(DialogBody.plainMessage(
                         ruleEditorPreview(heading, layout), 420)), List.of(input),
-                DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session -> {
+                DialogBase.DialogAfterAction.NONE, session -> {
                     List<ActionButton> actions = new ArrayList<>();
+                    // Paper always renders body, inputs, then actions. Put add first in the
+                    // action section so the visible order is rules -> input -> add.
+                    actions.add(ActionButton.create(dialogComponent("rules.add"),
+                            dialogComponent("rules.add-tooltip"), RuleEditorDialogRenderer.ADD_WIDTH,
+                            dialogAction(player, session, addRule)));
                     for (RuleEditorDialogRenderer.Row row : layout.rows()) {
-                        actions.add(ActionButton.create(dialogComponent("rules.item", Map.of(
-                                        "index", row.displayIndex(), "rule", row.rule())),
-                                dialogComponent("rules.preview-tooltip"),
-                                RuleEditorDialogRenderer.PREVIEW_WIDTH, null));
-                        actions.add(ActionButton.create(dialogComponent("rules.delete", Map.of(
-                                        "index", row.displayIndex())),
-                                dialogComponent("rules.delete-tooltip"),
+                        actions.add(ActionButton.create(Component.object(
+                                        net.kyori.adventure.text.object.ObjectContents.sprite(
+                                                net.kyori.adventure.key.Key.key("minecraft:blocks"),
+                                                net.kyori.adventure.key.Key.key("minecraft:block/barrier"))),
+                                dialogComponent("rules.delete-tooltip", Map.of("index",
+                                        row.displayIndex())),
                                 RuleEditorDialogRenderer.DELETE_WIDTH,
                                 dialogAction(player, session,
                                         response -> deleteRule.accept(row.deleteTarget()))));
                     }
-                    actions.add(ActionButton.create(dialogComponent("rules.add"),
-                            dialogComponent("rules.add-tooltip"), RuleEditorDialogRenderer.ADD_WIDTH,
-                            dialogAction(player, session, addRule)));
                     actions.addAll(trailingActions.apply(session));
                     return DialogType.multiAction(actions)
                             .exitAction(returnButton(player, session, parent))
@@ -1846,20 +1849,21 @@ final class TownUiController implements Listener {
         runtime.read(player, () -> new TownMemberOverview(
                 runtime.repository().findTown(townId)
                         .orElseThrow(() -> new IllegalArgumentException("小镇不存在")),
-                runtime.repository().listMembers(townId, page, 8)), view -> {
+                runtime.repository().listAllMembers(townId)), view -> {
+            TownSnapshot.Page memberPage = memberPage(view.members(), page);
             Component content = dialogComponent("town-members.heading", Map.of(
                     "town", view.town().profile().name(), "page", page + 1));
-            if (view.page().members().isEmpty()) {
+            if (memberPage.members().isEmpty()) {
                 content = content.append(Component.newline()).append(Component.newline())
                         .append(dialogComponent("town-members.empty"));
             } else {
-                for (int index = 0; index < view.page().members().size(); index++) {
-                    TownSnapshot.Member member = view.page().members().get(index);
+                for (int index = 0; index < memberPage.members().size(); index++) {
+                    TownSnapshot.Member member = memberPage.members().get(index);
                     content = content.append(Component.newline()).append(Component.newline())
                             .append(dialogComponent("town-members.item", Map.of(
                                     "index", page * 8 + index + 1,
                                     "name", displayName(member.playerId()),
-                                    "role", member.role())));
+                                    "role", memberRoleText(member.role()))));
                 }
             }
             DialogRoute parent = new DialogRoute("TOWN", townId.toString());
@@ -1873,7 +1877,7 @@ final class TownUiController implements Listener {
                                             "TOWN_MEMBER_OVERVIEW",
                                             townId + ":" + (page - 1))));
                         }
-                        if (view.page().hasNext()) {
+                        if (memberPage.hasNext()) {
                             actions.add(ActionButton.create(dialogComponent("town-members.next"),
                                     null, 170, dialogAction(player, session,
                                             "TOWN_MEMBER_OVERVIEW",
@@ -1892,11 +1896,12 @@ final class TownUiController implements Listener {
     }
 
     private void openMembers(Player player, UUID townId, int page) {
-        runtime.read(player, () -> new MemberPage(runtime.repository().listMembers(townId, page, 8),
+        runtime.read(player, () -> new MemberPage(runtime.repository().listAllMembers(townId),
                 runtime.governance().dashboard(player.getUniqueId()).orElse(null)), view -> {
+            TownSnapshot.Page memberPage = memberPage(view.members(), page);
             List<MenuItem> items = new ArrayList<>();
             int slot = 0;
-            for (TownSnapshot.Member member : view.page().members()) {
+            for (TownSnapshot.Member member : memberPage.members()) {
                 String name = Objects.requireNonNullElse(Bukkit.getOfflinePlayer(member.playerId()).getName(),
                         member.playerId().toString());
                 String color = switch (member.role()) {
@@ -1909,7 +1914,7 @@ final class TownUiController implements Listener {
                 items.add(new MenuItem(slot++, button(Material.PLAYER_HEAD,
                         color + name,
                         List.of(dialogText("tooltip.members.role",
-                                        Map.of("role", member.role())),
+                                        Map.of("role", memberRoleText(member.role()))),
                                 dialogText("tooltip.members.joined",
                                         Map.of("time", member.joinedAt())),
                                 sameTown ? dialogText("tooltip.members.manage")
@@ -1921,7 +1926,7 @@ final class TownUiController implements Listener {
                 items.add(new MenuItem(45, button(Material.ARROW, "§e上一页", List.of(),
                         "MEMBERS", townId + ":" + (page - 1))));
             }
-            if (view.page().hasNext()) {
+            if (memberPage.hasNext()) {
                 items.add(new MenuItem(53, button(Material.ARROW, "§e下一页", List.of(),
                         "MEMBERS", townId + ":" + (page + 1))));
             }
@@ -1945,7 +1950,8 @@ final class TownUiController implements Listener {
                     targetId.toString());
             List<MenuItem> items = new ArrayList<>();
             items.add(new MenuItem(4, button(Material.PLAYER_HEAD, "§6" + name,
-                    List.of("§7身份: " + view.targetRole(), "§7UUID: " + targetId), null, null)));
+                    List.of(dialogText("member-role.identity", Map.of("role",
+                            memberRoleText(view.targetRole()))), "§7UUID: " + targetId), null, null)));
             boolean targetIsMayor = view.targetRole() == MemberRole.MAYOR;
             boolean viewerIsMayor = view.viewer().role() == MemberRole.MAYOR;
             if (viewerIsMayor && !targetIsMayor) {
@@ -2336,27 +2342,14 @@ final class TownUiController implements Listener {
         runtime.read(admin, () -> runtime.repository().findApplication(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("申请不存在")), application -> {
             List<String> summary = new ArrayList<>(List.of(
-                    "§7申请人: " + displayName(application.applicantId())
-                            + " §8(" + application.applicantId() + ")",
-                    "§7申请编号: " + application.id(),
+                    "§7申请人: " + displayName(application.applicantId()),
                     "§7申请状态: " + dialogText(ApplicationStatusText.messageKey(application.status())),
                     "§7提交时间: " + Objects.toString(application.submittedAt(), "尚未提交"),
                     "§7更新时间: " + application.updatedAt(),
                     "§7名称: " + application.text().name(),
-                    "§7小镇代码: " + application.text().residenceName(),
-                    "§7Residence 领地名: " + application.text().normalizedResidenceName(),
+                    "§7小镇领地名: " + application.text().normalizedResidenceName(),
                     "§7简介: " + application.text().description(),
-                    "§7规则: " + String.join(" | ", application.text().rules()),
-                    "§7申请费: 2000（批准后成为初始公共资金）"));
-            for (InitialMemberConfirmation member : application.initialMembers()) {
-                String confirmation = switch (member.status()) {
-                    case PENDING -> "待确认";
-                    case CONFIRMED -> "已确认";
-                    case REJECTED -> "已拒绝";
-                };
-                summary.add("§7初始成员: " + displayName(member.playerId())
-                        + " §8(" + confirmation + ")");
-            }
+                    "§7规则: " + String.join(" | ", application.text().rules())));
             if (application.territory() != null) {
                 summary.add("§7选址: " + application.territory().center().worldName() + " "
                         + application.territory().center().x() + ","
@@ -2543,7 +2536,8 @@ final class TownUiController implements Listener {
                     String[] parts = target.split(":");
                     openConfirmation(player, dialogText("confirmation.change-role-title"),
                             "SET_ROLE", target, dialogText(
-                                    "confirmation.change-role-consequence", Map.of("role", parts[2])),
+                                    "confirmation.change-role-consequence", Map.of("role",
+                                            memberRoleText(MemberRole.valueOf(parts[2])))),
                             "MEMBER_DETAIL",
                             parts[0] + ":" + parts[1] + ":" + parts[3]);
                 }
@@ -2680,7 +2674,8 @@ final class TownUiController implements Listener {
         actions.changeMemberRole(mayor, townId, playerId, role, outcome ->
                 handleOutcome(mayor, outcome, changed -> {
             openNotice(mayor, dialogText("notice.role-updated-title"),
-                    dialogText("notice.role-updated-message", Map.of("role", changed)),
+                    dialogText("notice.role-updated-message", Map.of("role",
+                            memberRoleText(changed))),
                     dialogText("common.back"),
                     "MEMBER_DETAIL", townId + ":" + playerId + ":" + page);
         }));
@@ -3180,11 +3175,11 @@ final class TownUiController implements Listener {
                             return;
                         }
                         String message = result.status() == ProvisionResult.Status.SUCCESS
-                                ? "小镇与 Residence 领地已经创建完成。"
+                                ? dialogText("notice.application-created-message")
                                 : result.detail() + "\n\n可执行操作：" + result.recoveryAction();
                         openNotice(admin,
                                 result.status() == ProvisionResult.Status.SUCCESS
-                                        ? "小镇创建成功" : "小镇创建未完成",
+                                        ? dialogText("notice.application-created-title") : "小镇创建未完成",
                                 message, "§7返回审核列表", "ADMIN_APPLICATIONS", null);
                     });
         });
@@ -4145,6 +4140,7 @@ final class TownUiController implements Listener {
 
     private void sendInitialMemberReminder(Player member, ApplicationSnapshot application) {
         Component message = dialogComponent("invitation.message", Map.of(
+                "player", displayName(application.applicantId()),
                 "town", application.text().name()));
         openDialogPage(member, dialogText("invitation.title"),
                 List.of(DialogBody.plainMessage(message, 400)), List.of(),
@@ -4221,6 +4217,16 @@ final class TownUiController implements Listener {
         int start = Math.min(values.size(), Math.max(0, page) * pageSize);
         int end = Math.min(values.size(), start + pageSize);
         return values.subList(start, end);
+    }
+
+    private TownSnapshot.Page memberPage(List<TownSnapshot.Member> members, int requestedPage) {
+        int page = Math.max(0, requestedPage);
+        List<TownSnapshot.Member> sorted = MemberDisplayOrder.sort(members, TownUiController::displayName);
+        return new TownSnapshot.Page(page(sorted, page, 8), hasNext(sorted, page, 8));
+    }
+
+    private String memberRoleText(MemberRole role) {
+        return dialogText(MemberRoleText.messageKey(role));
     }
 
     private static boolean hasNext(List<?> values, int page, int pageSize) {
@@ -4564,10 +4570,17 @@ final class TownUiController implements Listener {
         }
     }
 
-    private record TownMemberOverview(TownSnapshot town, TownSnapshot.Page page) {
+    private record TownMemberOverview(TownSnapshot town, List<TownSnapshot.Member> members) {
+        private TownMemberOverview {
+            members = List.copyOf(members);
+        }
     }
 
-    private record MemberPage(TownSnapshot.Page page, MemberGovernanceSnapshot governance) {
+    private record MemberPage(List<TownSnapshot.Member> members,
+                              MemberGovernanceSnapshot governance) {
+        private MemberPage {
+            members = List.copyOf(members);
+        }
     }
 
     private record MemberDetail(MemberGovernanceSnapshot viewer, MemberRole targetRole) {

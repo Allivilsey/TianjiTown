@@ -39,7 +39,7 @@ class TerritoryDialogRendererTest {
                 TerritoryDialogRenderer.MapButton::selected).count());
         assertEquals(2, oneSelection.footerButtons().size());
         assertTrue(oneSelection.footerButtons().stream().allMatch(button ->
-                button.width() == oneSelection.cellSize()));
+                button.width() > oneSelection.cellSize()));
     }
 
     private static void assertMapLayout(TerritoryDialogRenderer.Layout layout,

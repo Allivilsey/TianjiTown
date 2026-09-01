@@ -871,6 +871,31 @@ public final class TownRepository {
         });
     }
 
+    /**
+     * Returns the complete membership set for presentation-layer ordering.  Player names are not
+     * persisted, so the Paper layer applies its name-aware order before it paginates.
+     */
+    public List<TownSnapshot.Member> listAllMembers(UUID townId) {
+        requireWorkerThread();
+        return query(connection -> {
+            List<TownSnapshot.Member> members = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT player_uuid, role, joined_at FROM town_members
+                     WHERE town_id = ?
+                    """)) {
+                statement.setBytes(1, uuid(townId));
+                try (ResultSet result = statement.executeQuery()) {
+                    while (result.next()) {
+                        members.add(new TownSnapshot.Member(readUuid(result, "player_uuid"),
+                                MemberRole.valueOf(result.getString("role")),
+                                result.getTimestamp("joined_at").toInstant()));
+                    }
+                }
+            }
+            return List.copyOf(members);
+        });
+    }
+
     public List<UUID> listMemberIds(UUID townId) {
         requireWorkerThread();
         return query(connection -> {

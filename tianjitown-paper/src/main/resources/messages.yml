@@ -414,6 +414,16 @@ dialog:
     previous: '&e上一页'
     next: '&e下一页'
 
+  member-role:
+    mayor: '&6镇长'
+    deputy-mayor: '&a副镇长'
+    member: '&f成员'
+    identity: '&7身份: &f{role}'
+    current-identity: '&7你的身份: &f{role}'
+
+  visitor:
+    current-count: '&7当前访客: &f{count}'
+
   town:
     residence-name: '&7小镇领地名: {name}'
 
@@ -439,17 +449,15 @@ dialog:
       votes: '&7查看、参与或终止治理投票'
       applications: '&7审核玩家的入镇申请'
       visitors: '&7查看访客名单或邀请新访客'
-      visitor-permission: '&7访客拥有与普通成员相同的领地权限'
     visitor:
       list: '&7查看访客并将其移出名单'
-      invite: '&7从在线的非本镇成员中选择访客'
+      invite: '&7从在线玩家中选择访客'
       entry:
         inviter: '&7邀请人: {player}'
         added: '&7加入访客名单: {time}'
         remove: '&c点击移出访客名单'
       invite-entry:
         click: '&7点击后确认加入访客名单'
-        constraint: '&7可属于其他小镇，但不能是本镇成员'
     pending:
       applications: '&7查看并审批待处理申请'
       votes: '&7参与尚未投票的治理事项'
@@ -644,7 +652,9 @@ dialog:
     site-missing-title: '&6尚未选择领地'
     site-missing-message: '&f请先站在合适的位置，将脚下区域选为小镇领地中心。'
     application-submitted-title: '&6申请已提交'
-    application-submitted-message: '&f管理员审核期间仍可在批准前撤回申请。'
+    application-submitted-message: '&f少女审核中...'
+    application-created-title: '&6小镇创建成功'
+    application-created-message: '&f小镇创建成功。'
     application-cancelled-title: '&6申请已撤回'
     application-cancelled-message: '&f该选址已不再保留，你需要等待一段时间才能再次申请。'
     join-submitted-title: '&6入镇申请已提交'
@@ -712,7 +722,7 @@ dialog:
 
   # 5×5 领地地图和格子悬浮提示。
   territory:
-    title: '&65×5 领地扩张地图'
+    title: '&6小镇领地扩张'
     summary: '&7已拥有区域: {current}/{maximum}'
     legend: '&8黄色=中心 绿色=已扩张 浅灰色=可扩张 红色=不可扩张'
     limit-reached: '&c已达上限'
@@ -724,7 +734,6 @@ dialog:
     batch-clear: '&e清除已选区域'
     batch-select-hint: '&a点击可扩张格子选择/取消选择'
     batch-confirm-consequence: '&7将一次性扣除 {price}，并整体创建 {count} 个区域。'
-    selected: '&a已选中（再次点击取消）'
     cell:
       center: '&6小镇中心'
       owned: '&a已占领区域'
@@ -742,6 +751,7 @@ dialog:
       units-after-expansion: '&7扩张后拥有区域: {units}'
       expand-hint: '&a点击选择此区域'
       detail: '&7{detail}'
+      selected: '&a已选中（再次点击取消）'
 
   # 公共 Buff 购买流程。
   buff:
@@ -785,9 +795,9 @@ dialog:
     preview-tooltip: '&7只读预览'
     input-label: '&6新规则（可留空）'
     add: '&a添加规则'
-    add-tooltip: '&7添加后立即重新编号并刷新预览'
+    add-tooltip: '&7添加后会显示在规则列表中'
     delete: '&c删除第 {index} 条'
-    delete-tooltip: '&7删除后其余规则会自动重新编号'
+    delete-tooltip: '&c删除第 {index} 条规则；其余规则会自动重新编号'
     limit-reached: '&f小镇规则最多 50 条。'
     refresh-title: '&6规则已更新'
     refresh-message: '&f规则已被其他操作修改，请刷新后再试。'
@@ -820,11 +830,11 @@ dialog:
     name-label: '&6小镇名称'
     code-label: '&6小镇代码'
     basics-heading: '&6第 1 / 3 步 · 基础资料和简介'
-    basics-guidance: '&7先填写名称、代码和小镇简介；代码只能包含 1～12 个英文字母，并会直接作为小镇领地名。'
+    basics-guidance: '&7填写小镇名称、代码和简介；代码由 1～12 个英文字母组成，并作为小镇领地名。'
     description-label: '&6小镇简介'
-    rules-label: '&6小镇规则（每行一条）'
+    rules-label: '&6小镇规则'
     content-heading: '&6第 2 / 3 步 · 小镇规则'
-    content-guidance: '&7规则至少填写一条、最多 50 条；每行视为一条规则，提交前可返回修改简介。'
+    content-guidance: '&7请添加 1～50 条需要小镇成员遵守的规则。'
     member-one-placeholder: '&e<小镇初始成员一>'
     member-two-placeholder: '&e<小镇初始成员二>'
     member-select-hint: '&7点击后从在线玩家列表中选择'
@@ -868,6 +878,6 @@ dialog:
   # 初始成员邀请确认。
   invitation:
     title: '&6小镇初始成员邀请'
-    message: '&f“{town}”邀请你成为建镇初始成员。'
+    message: '&f{player}邀请你加入{town}'
     accept: '&a接受邀请'
     reject: '&c拒绝邀请'

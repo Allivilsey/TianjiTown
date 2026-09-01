@@ -18,9 +18,10 @@ class ApplicationStatusTextTest {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
 
         for (ApplicationStatus status : ApplicationStatus.values()) {
-            String label = messages.text(ApplicationStatusText.messageKey(status));
+            String label = messages.text("dialog." + ApplicationStatusText.messageKey(status));
 
             assertFalse(label.isBlank(), () -> "缺少状态文案: " + status);
+            assertFalse(label.contains("缺少消息配置"), () -> "状态文案键必须只添加一次 dialog. 前缀: " + status);
             assertFalse(label.contains(status.name()), () -> "状态文案泄露枚举名: " + status);
             assertTrue(label.chars().anyMatch(character -> character >= '\u4e00' && character <= '\u9fff'),
                     () -> "状态文案必须为中文: " + status);

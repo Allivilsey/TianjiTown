@@ -8,15 +8,14 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Stable layout model for a rule editor dialog.  The Paper dialog API lays out action buttons in
- * row-major order, so every rule deliberately contributes exactly two cells: its read-only
- * preview first and its matching delete action second.
+ * Stable layout model for a rule editor dialog. Rules are rendered in the dialog body, before
+ * the input section; only their compact delete controls live in the action section.
  */
 final class RuleEditorDialogRenderer {
     static final int COLUMNS = 2;
     static final int PREVIEW_WIDTH = 250;
-    static final int DELETE_WIDTH = 150;
-    static final int ADD_WIDTH = PREVIEW_WIDTH + DELETE_WIDTH;
+    static final int DELETE_WIDTH = 28;
+    static final int ADD_WIDTH = 130;
 
     private RuleEditorDialogRenderer() {
     }
@@ -41,6 +40,20 @@ final class RuleEditorDialogRenderer {
         int columns() {
             return COLUMNS;
         }
+
+        /** The fixed client order imposed by Paper's dialog model. */
+        List<Section> sections() {
+            return List.of(Section.HEADING_AND_RULES, Section.RULE_INPUT,
+                    Section.ADD_RULE, Section.DELETE_CONTROLS, Section.PAGE_ACTIONS);
+        }
+    }
+
+    enum Section {
+        HEADING_AND_RULES,
+        RULE_INPUT,
+        ADD_RULE,
+        DELETE_CONTROLS,
+        PAGE_ACTIONS
     }
 
     record Row(int displayIndex, String rule, DeleteTarget deleteTarget) {

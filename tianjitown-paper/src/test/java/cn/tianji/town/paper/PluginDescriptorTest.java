@@ -83,14 +83,14 @@ class PluginDescriptorTest {
             YamlConfiguration messages = YamlConfiguration.loadConfiguration(
                     new InputStreamReader(stream, StandardCharsets.UTF_8));
 
-            for (String section : List.of("common", "confirmation", "notice", "tax",
+            for (String section : List.of("common", "confirmation", "notice", "member-role", "tax",
                     "territory", "buff", "rules", "review", "application", "donation",
                     "invitation")) {
                 assertNotNull(messages.getConfigurationSection("dialog." + section),
                         "messages.yml 缺少 Dialog 文案分组: " + section);
             }
             for (String key : List.of("dialog.common.cancel", "dialog.tax.title",
-                    "dialog.territory.cell.expand-hint",
+                    "dialog.territory.cell.expand-hint", "dialog.territory.cell.selected",
                     "dialog.application.title",
                     "dialog.notice.operation-failed-title")) {
                 assertFalse(messages.getString(key, "").isBlank(),

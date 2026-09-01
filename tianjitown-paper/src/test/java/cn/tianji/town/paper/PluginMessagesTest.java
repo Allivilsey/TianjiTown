@@ -47,6 +47,21 @@ class PluginMessagesTest {
     }
 
     @Test
+    void keepsTheReviewedPlayerFacingCopyAndTerritorySelectionKey() {
+        PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
+
+        assertEquals("§f少女审核中...",
+                messages.text("dialog.notice.application-submitted-message"));
+        assertEquals("§f小镇创建成功。",
+                messages.text("dialog.notice.application-created-message"));
+        assertEquals("§6小镇领地扩张", messages.text("dialog.territory.title"));
+        assertEquals("§a已选中（再次点击取消）",
+                messages.text("dialog.territory.cell.selected"));
+        assertEquals("§f申请人邀请你加入青石镇", messages.text("dialog.invitation.message",
+                Map.of("player", "申请人", "town", "青石镇")));
+    }
+
+    @Test
     void rejectsInvalidRangePlaceholders() throws Exception {
         assertInvalidRangeFormat("dialog.tax.rate-format", "&f%s: %f%%");
         assertInvalidRangeFormat("dialog.buff.duration-format", "&f%s: %.0f 周");

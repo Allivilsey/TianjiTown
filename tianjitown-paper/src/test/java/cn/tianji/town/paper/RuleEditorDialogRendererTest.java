@@ -33,6 +33,25 @@ class RuleEditorDialogRendererTest {
     }
 
     @Test
+    void addAndDeleteControlsStayCompact() {
+        assertTrue(RuleEditorDialogRenderer.ADD_WIDTH < RuleEditorDialogRenderer.PREVIEW_WIDTH
+                + RuleEditorDialogRenderer.DELETE_WIDTH);
+        assertEquals(RuleEditorDialogRenderer.DELETE_WIDTH, 28);
+    }
+
+    @Test
+    void declaresTheRuleInputBeforeAddAndAnyPageActions() {
+        RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(TOWN_ID, 1,
+                List.of("规则一"));
+
+        assertEquals(List.of(RuleEditorDialogRenderer.Section.HEADING_AND_RULES,
+                RuleEditorDialogRenderer.Section.RULE_INPUT,
+                RuleEditorDialogRenderer.Section.ADD_RULE,
+                RuleEditorDialogRenderer.Section.DELETE_CONTROLS,
+                RuleEditorDialogRenderer.Section.PAGE_ACTIONS), layout.sections());
+    }
+
+    @Test
     void deleteTargetRoundTripsVersionIndexAndExpectedText() {
         RuleEditorDialogRenderer.DeleteTarget target = new RuleEditorDialogRenderer.DeleteTarget(
                 TOWN_ID, 9, 1, "规则: 包含冒号、换行\n和 Unicode");
