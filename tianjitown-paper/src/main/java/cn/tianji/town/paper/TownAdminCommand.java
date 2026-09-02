@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 final class TownAdminCommand implements CommandExecutor {
@@ -150,13 +151,21 @@ final class TownAdminCommand implements CommandExecutor {
             send(sender, "chat.admin.status-beacon", Map.of("state",
                     runtime.bonuses().beaconEnabled() ? "ENABLED" : "PAUSED"));
             TownBonusRuntime.DiagnosticResult diagnostic = runtime.bonuses().lastDiagnostic();
-            send(sender, "chat.admin.status-diagnostic", Map.of(
-                    "detail", diagnostic.detail(), "report", diagnostic.report() == null
-                            ? "" : "，报告=" + diagnostic.report()));
+            if (diagnostic.report() == null) {
+                send(sender, "chat.admin.status-diagnostic-no-report", Map.of(
+                        "detail", diagnostic.detail()));
+            } else {
+                send(sender, "chat.admin.status-diagnostic", Map.of(
+                        "detail", diagnostic.detail(), "report", safeText(diagnostic.report())));
+            }
             OnlineBackupService.Result backup = runtime.bonuses().lastBackup();
-            send(sender, "chat.admin.status-backup", Map.of(
-                    "detail", backup.detail(), "file", backup.databaseFile() == null
-                            ? "" : "，文件=" + backup.databaseFile()));
+            if (backup.databaseFile() == null) {
+                send(sender, "chat.admin.status-backup-no-file", Map.of(
+                        "detail", backup.detail()));
+            } else {
+                send(sender, "chat.admin.status-backup", Map.of(
+                        "detail", backup.detail(), "file", safeText(backup.databaseFile())));
+            }
         }
         send(sender, "chat.admin.status-player-entry", Map.of("state",
                 maintenanceMode() ? "MAINTENANCE" : "OPEN"));
@@ -164,7 +173,7 @@ final class TownAdminCommand implements CommandExecutor {
 
     private boolean diagnose(CommandSender sender, TownRuntime runtime, String[] args) {
         if (args.length > 2) {
-            throw new IllegalArgumentException("用法: /townadmin diagnose [1~180天]");
+            throw messageArgument("chat.admin.usage-diagnose");
         }
         int days = args.length == 2 ? Integer.parseInt(args[1])
                 : runtime.bonuses().settings().operations().quickShopDiagnosticDays();
@@ -174,7 +183,7 @@ final class TownAdminCommand implements CommandExecutor {
 
     private boolean backup(CommandSender sender, TownRuntime runtime, String[] args) {
         if (args.length != 1) {
-            throw new IllegalArgumentException("用法: /townadmin backup");
+            throw messageArgument("chat.admin.usage-backup");
         }
         runtime.bonuses().createBackup(sender);
         return true;
@@ -182,16 +191,14 @@ final class TownAdminCommand implements CommandExecutor {
 
     private boolean maintenance(CommandSender sender, String[] args) {
         if (args.length == 1) {
-            send(sender, "chat.admin.maintenance-status", Map.of("state",
-                    maintenanceMode() ? "已开启" : "已关闭"));
+            sendMaintenanceStatus(sender);
             return true;
         }
         if (args.length != 2) {
-            throw new IllegalArgumentException("用法: /townadmin maintenance <on|off|status>");
+            throw messageArgument("chat.admin.usage-maintenance");
         }
         if (args[1].equalsIgnoreCase("status")) {
-            send(sender, "chat.admin.maintenance-status", Map.of("state",
-                    maintenanceMode() ? "已开启" : "已关闭"));
+            sendMaintenanceStatus(sender);
             return true;
         }
         boolean enabled;
@@ -200,13 +207,39 @@ final class TownAdminCommand implements CommandExecutor {
         } else if (args[1].equalsIgnoreCase("off") || args[1].equalsIgnoreCase("disable")) {
             enabled = false;
         } else {
-            throw new IllegalArgumentException("用法: /townadmin maintenance <on|off|status>");
+            throw messageArgument("chat.admin.usage-maintenance");
         }
         plugin.getConfig().set("town.maintenance-mode", enabled);
         plugin.saveConfig();
         send(sender, enabled ? "chat.admin.maintenance-enabled"
                 : "chat.admin.maintenance-disabled");
         return true;
+    }
+
+    private void sendMaintenanceStatus(CommandSender sender) {
+        send(sender, maintenanceMode() ? "chat.admin.maintenance-status-enabled"
+                : "chat.admin.maintenance-status-disabled");
+    }
+
+    private IllegalArgumentException messageArgument(String key) {
+        return new IllegalArgumentException(plugin.messages().text(key));
+    }
+
+    private IllegalArgumentException messageArgument(String key, Map<String, ?> placeholders) {
+        return new IllegalArgumentException(plugin.messages().text(key, placeholders));
+    }
+
+    private void requireMessageLength(String[] args, int minimum, String key) {
+        if (args.length < minimum) {
+            throw messageArgument(key);
+        }
+    }
+
+    private void requireMessageLength(String[] args, int minimum, String key,
+                                      Map<String, ?> placeholders) {
+        if (args.length < minimum) {
+            throw messageArgument(key, placeholders);
+        }
     }
 
     private boolean confirm(CommandSender sender, String[] args) {
@@ -224,7 +257,9 @@ final class TownAdminCommand implements CommandExecutor {
                 } catch (RuntimeException exception) {
                     send(sender, "chat.admin.confirm-start-failed", Map.of(
                             "detail", safeMessage(exception)));
-                    plugin.getLogger().warning("危险操作启动失败: " + safeMessage(exception));
+                    plugin.getLogger().warning(plugin.messages().plainText(
+                            "log.admin.confirmation-start-failure",
+                            Map.of("detail", safeText(safeMessage(exception)))));
                 }
             }
             case EXPIRED -> send(sender, "chat.admin.confirm-expired");
@@ -272,16 +307,16 @@ final class TownAdminCommand implements CommandExecutor {
 
     private boolean audit(CommandSender sender, TownRuntime runtime, String[] args) {
         if (args.length > 2) {
-            throw new IllegalArgumentException("用法: /townadmin audit [1~200]");
+            throw messageArgument("chat.admin.usage-audit");
         }
         int limit;
         try {
             limit = args.length == 2 ? Integer.parseInt(args[1]) : 20;
         } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException("audit 数量必须是 1~200 的整数");
+            throw messageArgument("chat.admin.audit-limit-integer");
         }
         if (limit < 1 || limit > 200) {
-            throw new IllegalArgumentException("audit 数量必须在 1~200");
+            throw messageArgument("chat.admin.audit-limit-range");
         }
         runtime.read(sender, () -> runtime.repository().auditLog(limit), records -> {
             send(sender, "chat.admin.audit-title");
@@ -358,16 +393,19 @@ final class TownAdminCommand implements CommandExecutor {
             applicationHelp(sender);
             return true;
         }
-        requireLength(args, 4, "application " + action + " <小镇全名> <原因>");
+        requireMessageLength(args, 4, "chat.admin.usage-application-review",
+                Map.of("action", action));
         runtime.read(sender, () -> {
             List<ApplicationSnapshot> candidates = runtime.repository()
                     .listApplicationsForCompletion(500);
             TownCommandParser.NamedReason parsed = TownCommandParser.namedReason(args, 2,
-                    candidates.stream().map(candidate -> candidate.text().name()).toList());
+                    candidates.stream().map(candidate -> candidate.text().name()).toList(),
+                    plugin.messages()::plainText);
             ApplicationSnapshot application = candidates.stream()
                     .filter(candidate -> sameName(candidate.text().name(), parsed.townName()))
-                    .findFirst().orElseThrow(() -> new IllegalArgumentException(
-                            "找不到待处理申请 “" + parsed.townName() + "”"));
+                    .findFirst().orElseThrow(() -> messageArgument(
+                            "chat.admin.application-not-found",
+                            Map.of("town", safeText(parsed.townName()))));
             return new ApplicationRequest(application, parsed.reason());
         }, request -> {
             ApplicationSnapshot application = request.application();
@@ -399,7 +437,7 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private boolean town(CommandSender sender, TownRuntime runtime, String[] args) {
-        requireLength(args, 3, "town <view|delete> <小镇全名>");
+        requireMessageLength(args, 3, "chat.admin.usage-town");
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("view")) {
             String townName = TownCommandParser.townName(args, 2);
@@ -420,23 +458,25 @@ final class TownAdminCommand implements CommandExecutor {
             return true;
         }
         if (action.equals("delete")) {
-            requireLength(args, 4, "town delete <小镇全名> <原因>");
+            requireMessageLength(args, 4, "chat.admin.usage-town-delete");
             runtime.read(sender, () -> {
                 List<TownSnapshot> candidates = runtime.repository().listTowns(true);
                 TownCommandParser.NamedReason parsed = TownCommandParser.namedReason(args, 2,
-                        townNames(candidates));
+                        townNames(candidates), plugin.messages()::plainText);
                 TownSnapshot target = candidates.stream()
                         .filter(candidate -> sameName(candidate.profile().name(), parsed.townName()))
-                        .findFirst().orElseThrow(() -> new IllegalArgumentException(
-                                "找不到小镇 “" + parsed.townName() + "”"));
+                        .findFirst().orElseThrow(() -> messageArgument(
+                                "chat.admin.town-not-found",
+                                Map.of("town", safeText(parsed.townName()))));
                 return new TownDeleteRequest(target.id(), target.profile().name(), target.version(),
                         parsed.reason());
             }, request -> requestConfirmation(sender,
-                    "删除小镇“" + request.townName() + "”（审计记录会保留）",
+                    plugin.messages().text("chat.admin.town-delete-confirmation",
+                            Map.of("town", safeText(request.townName()))),
                     () -> deleteTown(sender, runtime, request)));
             return true;
         }
-        throw new IllegalArgumentException("town 只支持 view 或 delete");
+        throw messageArgument("chat.admin.town-action-unsupported");
     }
 
     private void deleteTown(CommandSender sender, TownRuntime runtime,
@@ -456,23 +496,26 @@ final class TownAdminCommand implements CommandExecutor {
                             sender.getName(), request.reason());
                     return deleted;
                 }, completed -> send(sender, "chat.admin.town-deleted", Map.of(
-                        "town", completed.profile().name(), "detail", result.message())));
+                        "town", completed.profile().name(), "detail",
+                        LandProtectionMessages.detail(plugin.messages(), result))));
             } else {
                 send(sender, "chat.admin.town-delete-residence-failed", Map.of(
-                        "detail", result.message()));
-                plugin.getLogger().warning("删除小镇后 Residence 移除失败 "
-                        + deleted.profile().name() + "/" + deleted.residenceName()
-                        + ": " + result.message());
+                        "detail", LandProtectionMessages.detail(plugin.messages(), result)));
+                plugin.getLogger().warning(plugin.messages().plainText(
+                        "log.admin.town-delete-residence-failure", Map.of(
+                                "town", safeText(deleted.profile().name()),
+                                "residence", safeText(deleted.residenceName()),
+                                "detail", safeText(LandProtectionMessages.detail(
+                                        plugin.messages(), result)))));
             }
         });
     }
 
     private boolean member(CommandSender sender, TownRuntime runtime, String[] args) {
-        requireLength(args, 5,
-                "member <add|remove|role> <小镇全名> <玩家> <原因|角色>");
+        requireMessageLength(args, 5, "chat.admin.usage-member");
         String action = args[1].toLowerCase(Locale.ROOT);
         if (!action.equals("add") && !action.equals("remove") && !action.equals("role")) {
-            throw new IllegalArgumentException("member 只支持 add、remove 或 role");
+            throw messageArgument("chat.admin.member-action-unsupported");
         }
         runtime.read(sender, () -> memberRequest(runtime, args), request -> {
             UUID playerId = playerId(request.player());
@@ -487,7 +530,8 @@ final class TownAdminCommand implements CommandExecutor {
                 runtime.write(sender, () -> {
                     TownSnapshot town = requireTown(runtime, request.townId());
                     runtime.governance().changeRoleByAdmin(town.id(), playerId, role,
-                            actorId(sender), sender.getName(), "管理员调整成员角色");
+                            actorId(sender), sender.getName(),
+                            plugin.messages().plainText("log.admin.member-role-change-reason"));
                     return town;
                 }, town -> {
                     send(sender, "chat.admin.role-updated", Map.of("role", role));
@@ -527,8 +571,7 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private boolean vote(CommandSender sender, TownRuntime runtime, String[] args) {
-        requireLength(args, 3,
-                "vote <create-kick|create-mayor|settle|cancel> <小镇全名|voteId> ...");
+        requireMessageLength(args, 3, "chat.admin.usage-vote");
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("settle")) {
             UUID voteId = UUID.fromString(args[2]);
@@ -543,36 +586,40 @@ final class TownAdminCommand implements CommandExecutor {
             return true;
         }
         if (action.equals("cancel")) {
-            requireLength(args, 4, "vote cancel <voteId> <原因>");
+            requireMessageLength(args, 4, "chat.admin.usage-vote-cancel");
             UUID voteId = UUID.fromString(args[2]);
-            String reason = String.join(" ", java.util.Arrays.copyOfRange(args, 3, args.length));
+            String reason = TownCommandParser.reason(args, 3, plugin.messages()::plainText);
             runtime.write(sender, () -> runtime.governance().cancelVote(voteId,
                     actorId(sender), sender.getName(), reason), vote ->
                     send(sender, "chat.admin.vote-cancelled", Map.of("id", vote.id())));
             return true;
         }
         if (!action.equals("create-kick") && !action.equals("create-mayor")) {
-            throw new IllegalArgumentException(
-                    "vote 只支持 create-kick、create-mayor、settle 或 cancel");
+            throw messageArgument("chat.admin.vote-action-unsupported");
         }
-        requireLength(args, 4, "vote " + action + " <小镇全名> <玩家>");
+        requireMessageLength(args, 4, "chat.admin.usage-vote-create",
+                Map.of("action", action));
         GovernanceSettings settings;
         try {
-            settings = GovernanceSettings.load(plugin.getConfig());
+            settings = GovernanceSettings.load(plugin.getConfig(),
+                    plugin.messages()::plainText);
         } catch (IllegalArgumentException exception) {
             send(sender, "chat.admin.governance-invalid", Map.of(
                     "detail", exception.getMessage()));
-            plugin.getLogger().warning("拒绝创建治理投票: " + exception.getMessage());
+            plugin.getLogger().warning(plugin.messages().plainText(
+                    "log.admin.governance-vote-creation-rejected",
+                    Map.of("detail", safeText(safeMessage(exception)))));
             return true;
         }
         runtime.read(sender, () -> {
             List<TownSnapshot> towns = runtime.repository().listTowns(false).stream()
                     .filter(town -> town.status() == TownStatus.ACTIVE).toList();
             TownCommandParser.NamedPlayer parsed = TownCommandParser.namedPlayer(args, 2,
-                    townNames(towns));
+                    townNames(towns), plugin.messages()::plainText);
             TownSnapshot town = towns.stream()
                     .filter(candidate -> sameName(candidate.profile().name(), parsed.townName()))
-                    .findFirst().orElseThrow(() -> new IllegalArgumentException("找不到可操作的小镇"));
+                    .findFirst().orElseThrow(() -> messageArgument(
+                            "chat.admin.vote-town-not-found"));
             return new VoteCreateRequest(town.id(), playerId(parsed.player()),
                     action.equals("create-kick") ? VoteType.KICK_MEMBER : VoteType.REPLACE_MAYOR);
         }, request -> {
@@ -590,20 +637,19 @@ final class TownAdminCommand implements CommandExecutor {
         List<TownSnapshot> candidates = runtime.repository().listTowns(false).stream()
                 .filter(town -> town.status() == TownStatus.ACTIVE).toList();
         TownCommandParser.NamedPlayerReason parsed = TownCommandParser.namedPlayerReason(args, 2,
-                townNames(candidates));
+                townNames(candidates), plugin.messages()::plainText);
         TownSnapshot town = candidates.stream()
                 .filter(candidate -> sameName(candidate.profile().name(), parsed.townName()))
-                .findFirst().orElseThrow(() -> new IllegalArgumentException(
-                        "找不到可操作的小镇 “" + parsed.townName() + "”"));
+                .findFirst().orElseThrow(() -> messageArgument(
+                        "chat.admin.member-town-not-found",
+                        Map.of("town", safeText(parsed.townName()))));
         return new MemberRequest(town.id(), parsed.player(), parsed.reason());
     }
 
     private boolean mayor(CommandSender sender, TownRuntime runtime, String[] args) {
-        requireLength(args, 5,
-                "mayor transfer <小镇全名> <玩家> <原因>");
+        requireMessageLength(args, 5, "chat.admin.usage-mayor");
         if (!args[1].equalsIgnoreCase("transfer")) {
-            throw new IllegalArgumentException(
-                    "用法: /townadmin mayor transfer <小镇全名> <玩家> <原因>");
+            throw messageArgument("chat.admin.usage-mayor");
         }
         runtime.read(sender, () -> memberRequest(runtime, args), request -> {
             UUID newMayor = playerId(request.player());
@@ -621,7 +667,7 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private boolean land(CommandSender sender, TownRuntime runtime, String[] args) {
-        requireLength(args, 3, "land <preview|reconcile|rebuild> <小镇全名|all>");
+        requireMessageLength(args, 3, "chat.admin.usage-land");
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("preview")) {
             if (!(sender instanceof Player player)) {
@@ -634,7 +680,7 @@ final class TownAdminCommand implements CommandExecutor {
             return true;
         }
         if (!action.equals("reconcile") && !action.equals("rebuild")) {
-            throw new IllegalArgumentException("land 只支持 preview/reconcile/rebuild");
+            throw messageArgument("chat.admin.land-action-unsupported");
         }
         if (action.equals("reconcile")) {
             runtime.read(sender, () -> {
@@ -659,9 +705,12 @@ final class TownAdminCommand implements CommandExecutor {
                         targets.stream().map(town -> new TownReference(town.id(),
                                 town.profile().name(), town.version())).toList());
             }, request -> {
-                String target = request.all() ? "全部 " + request.towns().size() + " 个小镇"
-                        : "小镇“" + request.towns().getFirst().townName() + "”";
-                requestConfirmation(sender, "移除并重建" + target + "的 Residence 投影",
+                String description = request.all()
+                        ? plugin.messages().text("chat.admin.land-rebuild-confirmation-all",
+                                Map.of("count", request.towns().size()))
+                        : plugin.messages().text("chat.admin.land-rebuild-confirmation-town",
+                                Map.of("town", safeText(request.towns().getFirst().townName())));
+                requestConfirmation(sender, description,
                         () -> rebuildLand(sender, runtime, request));
             });
         }
@@ -670,14 +719,14 @@ final class TownAdminCommand implements CommandExecutor {
 
     private boolean money(CommandSender sender, TownRuntime runtime, String[] args) {
         requirePermission(sender, TownAdminPermissions.MONEY);
-        requireLength(args, 2, "money <view|adjust|reconcile> ...");
+        requireMessageLength(args, 2, "chat.admin.usage-money-root");
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("reconcile")) {
             runtime.reconcileSettlement();
             send(sender, "chat.admin.settlement-reconcile-submitted");
             return true;
         }
-        requireLength(args, 3, "money <view|adjust> <小镇全名> [金额 原因]");
+        requireMessageLength(args, 3, "chat.admin.usage-money");
         if (action.equals("view")) {
             String townName = TownCommandParser.townName(args, 2);
             runtime.read(sender, () -> {
@@ -690,40 +739,40 @@ final class TownAdminCommand implements CommandExecutor {
             return true;
         }
         if (action.equals("adjust")) {
-            requireLength(args, 5, "money adjust <小镇全名> <带符号金额> <原因>");
+            requireMessageLength(args, 5, "chat.admin.usage-money-adjust");
             runtime.read(sender, () -> {
                 List<TownSnapshot> towns = runtime.repository().listTowns(true);
                 TownCommandParser.NamedAmountReason parsed = TownCommandParser.namedAmountReason(
-                        args, 2, townNames(towns));
+                        args, 2, townNames(towns), plugin.messages()::plainText);
                 TownSnapshot town = towns.stream().filter(candidate -> sameName(
                                 candidate.profile().name(), parsed.townName())).findFirst()
-                        .orElseThrow(() -> new IllegalArgumentException("小镇不存在"));
+                        .orElseThrow(() -> messageArgument("chat.admin.town-not-found-generic"));
                 long amount = MoneyAmount.from(new BigDecimal(parsed.amount()),
                         runtime.settlement().scale()).minorUnits();
                 if (amount == 0) {
-                    throw new IllegalArgumentException("调整金额不能为 0");
+                    throw messageArgument("chat.admin.money-adjust-zero");
                 }
                 return new MoneyAdjustment(town.id(), amount, parsed.reason());
             }, request -> runtime.adjustFunds(sender, request.townId(), request.amountMinor(),
                     request.reason()));
             return true;
         }
-        throw new IllegalArgumentException("money 只支持 view、adjust 或 reconcile");
+        throw messageArgument("chat.admin.money-action-unsupported");
     }
 
     private boolean tax(CommandSender sender, TownRuntime runtime, String[] args) {
         requirePermission(sender, TownAdminPermissions.TAX);
-        requireLength(args, 5, "tax set <小镇全名> <百分比> <原因>");
+        requireMessageLength(args, 5, "chat.admin.usage-tax");
         if (!args[1].equalsIgnoreCase("set")) {
-            throw new IllegalArgumentException("tax 只支持 set");
+            throw messageArgument("chat.admin.tax-action-unsupported");
         }
         runtime.read(sender, () -> {
             List<TownSnapshot> towns = runtime.repository().listTowns(true);
             TownCommandParser.NamedAmountReason parsed = TownCommandParser.namedAmountReason(
-                    args, 2, townNames(towns));
+                    args, 2, townNames(towns), plugin.messages()::plainText);
             TownSnapshot town = towns.stream().filter(candidate -> sameName(
                             candidate.profile().name(), parsed.townName())).findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("小镇不存在"));
+                    .orElseThrow(() -> messageArgument("chat.admin.town-not-found-generic"));
             BigDecimal percent = new BigDecimal(parsed.amount().replace("%", ""));
             int bps = percent.movePointRight(2).intValueExact();
             return new TaxAdjustment(town.id(), bps, parsed.reason());
@@ -734,9 +783,9 @@ final class TownAdminCommand implements CommandExecutor {
 
     private boolean ledger(CommandSender sender, TownRuntime runtime, String[] args) {
         requirePermission(sender, TownAdminPermissions.LEDGER);
-        requireLength(args, 3, "ledger view <小镇全名>");
+        requireMessageLength(args, 3, "chat.admin.usage-ledger");
         if (!args[1].equalsIgnoreCase("view")) {
-            throw new IllegalArgumentException("ledger 只支持 view");
+            throw messageArgument("chat.admin.ledger-action-unsupported");
         }
         String townName = TownCommandParser.townName(args, 2);
         runtime.read(sender, () -> {
@@ -756,7 +805,7 @@ final class TownAdminCommand implements CommandExecutor {
 
     private boolean expand(CommandSender sender, TownRuntime runtime, String[] args) {
         requirePermission(sender, TownAdminPermissions.EXPAND);
-        requireLength(args, 3, "expand <view|preview> <小镇全名> [方向]");
+        requireMessageLength(args, 3, "chat.admin.usage-expand");
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("preview") && !(sender instanceof Player)) {
             send(sender, "chat.admin.expand-player-only");
@@ -774,7 +823,7 @@ final class TownAdminCommand implements CommandExecutor {
                 TownCommandParser.NamedAction parsed = TownCommandParser.namedAction(args, 2,
                         townNames(towns), List.of("north", "east", "south", "west"));
                 if (parsed.action() == null) {
-                    throw new IllegalArgumentException("必须指定 north/east/south/west");
+                    throw messageArgument("chat.admin.expand-direction-required");
                 }
                 TownSnapshot town = towns.stream().filter(candidate -> sameName(
                                 candidate.profile().name(), parsed.townName())).findFirst().orElseThrow();
@@ -785,7 +834,7 @@ final class TownAdminCommand implements CommandExecutor {
                         ExpansionDirection.parse(parsed.action()));
                 return new AdminExpansion(town, units, candidate);
             }
-            throw new IllegalArgumentException("expand 只支持 view 或 preview");
+            throw messageArgument("chat.admin.expand-action-unsupported");
         }, view -> {
             send(sender, "chat.admin.expand-title", Map.of("town", view.town().profile().name(),
                     "current", view.units().size(),
@@ -806,10 +855,10 @@ final class TownAdminCommand implements CommandExecutor {
 
     private boolean buff(CommandSender sender, TownRuntime runtime, String[] args) {
         requirePermission(sender, TownAdminPermissions.BUFF);
-        requireLength(args, 2, "buff <list|grant> ...");
+        requireMessageLength(args, 2, "chat.admin.usage-buff-root");
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("list")) {
-            requireLength(args, 3, "buff list <小镇全名>");
+            requireMessageLength(args, 3, "chat.admin.usage-buff-list");
             String townName = TownCommandParser.townName(args, 2);
             runtime.read(sender, () -> {
                 TownSnapshot town = requireTown(runtime, townName);
@@ -825,23 +874,26 @@ final class TownAdminCommand implements CommandExecutor {
         }
         if (action.equals("grant")) {
             if (!runtime.buffs().buffShopEnabled() || !runtime.consumptionEnabled()) {
-                throw new IllegalArgumentException("公共 Buff 新购买已由功能开关暂停");
+                throw messageArgument("chat.admin.buff-purchase-paused");
             }
-            requireLength(args, 5, "buff grant <小镇全名> <buffKey> <原因>");
+            requireMessageLength(args, 5, "chat.admin.usage-buff-grant");
             runtime.read(sender, () -> {
                 List<TownSnapshot> towns = runtime.repository().listTowns(true);
                 TownCommandParser.NamedActionReason parsed = TownCommandParser.namedActionReason(
                         args, 2, townNames(towns),
-                        runtime.buffs().settings().buffs().keySet());
+                        runtime.buffs().settings().buffs().keySet(),
+                        plugin.messages()::plainText);
                 TownSnapshot town = towns.stream().filter(candidate -> sameName(
                                 candidate.profile().name(), parsed.townName())).findFirst()
-                        .orElseThrow(() -> new IllegalArgumentException("小镇不存在"));
+                        .orElseThrow(() -> messageArgument("chat.admin.town-not-found-generic"));
                 BuffDefinition definition = runtime.buffs().settings().requireBuff(
                         parsed.action().toLowerCase(Locale.ROOT));
                 return new BuffGrantRequest(town.id(), town.profile().name(), definition,
                         parsed.reason());
-            }, request -> requestConfirmation(sender, "为小镇“" + request.townName()
-                    + "”代购 Buff “" + request.definition().displayName() + "”并扣除公共资金",
+            }, request -> requestConfirmation(sender,
+                    plugin.messages().text("chat.admin.buff-purchase-confirmation", Map.of(
+                            "town", safeText(request.townName()),
+                            "buff", safeText(request.definition().displayName()))),
                     () -> runtime.write(sender, () -> runtime.buffs().repository()
                                     .purchaseBuffForTown(request.townId(), actorId(sender),
                                             sender.getName(), request.definition(),
@@ -856,7 +908,7 @@ final class TownAdminCommand implements CommandExecutor {
                             })));
             return true;
         }
-        throw new IllegalArgumentException("buff 只支持 list 或 grant；公共 Buff 不接受退款");
+        throw messageArgument("chat.admin.buff-action-unsupported");
     }
 
     private void rebuildLand(CommandSender sender, TownRuntime runtime,
@@ -866,8 +918,8 @@ final class TownAdminCommand implements CommandExecutor {
                 TownSnapshot current = requireTown(runtime, reference.townId());
                 requireVersion(current, reference.version());
                 if (current.status() == TownStatus.ARCHIVED) {
-                    throw new IllegalArgumentException("小镇“" + current.profile().name()
-                            + "”已归档，请重新发起操作");
+                    throw messageArgument("chat.admin.town-archived", Map.of(
+                            "town", safeText(current.profile().name())));
                 }
                 return current;
             }).toList();
@@ -877,21 +929,22 @@ final class TownAdminCommand implements CommandExecutor {
                     .remove(state.town().residenceName(), state.town().territory());
             send(sender, removal.success() ? "chat.admin.land-rebuild-success"
                     : "chat.admin.land-rebuild-failure", Map.of(
-                    "town", state.town().profile().name(), "detail", removal.message()));
+                    "town", state.town().profile().name(), "detail",
+                    LandProtectionMessages.detail(plugin.messages(), removal)));
             if (removal.success()) {
                 runtime.reconcile(sender, state.town(), state.members(), true);
             }
         }));
     }
 
-    private static List<TownSnapshot> selectLandTargets(List<TownSnapshot> candidates,
-                                                         String targetName) {
+    private List<TownSnapshot> selectLandTargets(List<TownSnapshot> candidates,
+                                                  String targetName) {
         List<TownSnapshot> targets = targetName.equalsIgnoreCase("all")
                 ? candidates
                 : candidates.stream().filter(town -> sameName(town.profile().name(), targetName))
                 .toList();
         if (targets.isEmpty()) {
-            throw new IllegalArgumentException("没有可操作的小镇");
+            throw messageArgument("chat.admin.no-operable-town");
         }
         return targets;
     }
@@ -909,14 +962,15 @@ final class TownAdminCommand implements CommandExecutor {
                 state -> runtime.reconcile(sender, state.town(), state.members(), repair));
     }
 
-    private static TownSnapshot requireTown(TownRuntime runtime, String townName) {
+    private TownSnapshot requireTown(TownRuntime runtime, String townName) {
         return runtime.repository().findTownByName(townName)
-                .orElseThrow(() -> new IllegalArgumentException("找不到小镇 “" + townName + "”"));
+                .orElseThrow(() -> messageArgument("chat.admin.town-not-found",
+                        Map.of("town", safeText(townName))));
     }
 
-    private static TownSnapshot requireTown(TownRuntime runtime, UUID townId) {
+    private TownSnapshot requireTown(TownRuntime runtime, UUID townId) {
         return runtime.repository().findTown(townId)
-                .orElseThrow(() -> new IllegalArgumentException("找不到小镇记录"));
+                .orElseThrow(() -> messageArgument("chat.admin.town-record-not-found"));
     }
 
     private TownRuntime requireRuntime(CommandSender sender) {
@@ -946,27 +1000,10 @@ final class TownAdminCommand implements CommandExecutor {
         }
     }
 
-    private static void requireLength(String[] args, int minimum, String usage) {
-        if (args.length < minimum) {
-            throw new IllegalArgumentException("用法: /townadmin " + usage);
-        }
-    }
-
-    private static String reasonTail(String[] args, int start) {
-        if (start >= args.length) {
-            throw new IllegalArgumentException("必须填写原因");
-        }
-        String reason = String.join(" ", java.util.Arrays.copyOfRange(args, start, args.length))
-                .strip();
-        if (reason.isBlank() || reason.equalsIgnoreCase("<原因>")) {
-            throw new IllegalArgumentException("必须填写实际原因");
-        }
-        return reason;
-    }
-
-    private static void requirePermission(CommandSender sender, String permission) {
+    private void requirePermission(CommandSender sender, String permission) {
         if (!TownAdminPermissions.has(sender::hasPermission, permission)) {
-            throw new IllegalArgumentException("缺少权限 " + permission);
+            throw messageArgument("chat.admin.permission-missing", Map.of(
+                    "permission", safeText(permission)));
         }
     }
 
@@ -979,10 +1016,10 @@ final class TownAdminCommand implements CommandExecutor {
         return towns.stream().map(town -> town.profile().name()).toList();
     }
 
-    private static void requireVersion(TownSnapshot town, long expectedVersion) {
+    private void requireVersion(TownSnapshot town, long expectedVersion) {
         if (town.version() != expectedVersion) {
-            throw new IllegalArgumentException("小镇“" + town.profile().name()
-                    + "”在确认期间发生变化，请重新发起操作");
+            throw messageArgument("chat.admin.confirmation-stale", Map.of(
+                    "town", safeText(town.profile().name())));
         }
     }
 
@@ -990,6 +1027,10 @@ final class TownAdminCommand implements CommandExecutor {
         String message = throwable.getMessage();
         return message == null || message.isBlank()
                 ? throwable.getClass().getSimpleName() : message;
+    }
+
+    private static String safeText(Object value) {
+        return String.valueOf(value).replace('&', '＆').replace('§', '�');
     }
 
     private boolean maintenanceMode() {
@@ -1032,63 +1073,37 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private List<String> configuredRootHelpEntries(Predicate<String> hasPermission) {
-        List<String> entries = new ArrayList<>();
-        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.OPERATIONS)) {
-            entries.add(plugin.messages().text("chat.admin.help-entry-system"));
-        }
-        if (hasPermission.test(TownAdminPermissions.ROOT)) {
-            entries.add(plugin.messages().text("chat.admin.help-entry-station"));
-            entries.add(plugin.messages().text("chat.admin.help-entry-application"));
-            entries.add(plugin.messages().text("chat.admin.help-entry-town"));
-            entries.add(plugin.messages().text("chat.admin.help-entry-member"));
-            entries.add(plugin.messages().text("chat.admin.help-entry-vote"));
-            entries.add(plugin.messages().text("chat.admin.help-entry-land"));
-        }
-        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.MONEY)) {
-            entries.add(plugin.messages().text("chat.admin.help-entry-money"));
-        }
-        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.TAX)) {
-            entries.add(plugin.messages().text("chat.admin.help-entry-tax"));
-        }
-        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.LEDGER)) {
-            entries.add(plugin.messages().text("chat.admin.help-entry-ledger"));
-        }
-        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.EXPAND)) {
-            entries.add(plugin.messages().text("chat.admin.help-entry-expand"));
-        }
-        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.BUFF)) {
-            entries.add(plugin.messages().text("chat.admin.help-entry-buff"));
-        }
-        return List.copyOf(entries);
+        return rootHelpEntries(hasPermission, plugin.messages()::text);
     }
 
-    static List<String> rootHelpEntries(Predicate<String> hasPermission) {
+    static List<String> rootHelpEntries(Predicate<String> hasPermission,
+                                        Function<String, String> messageResolver) {
         List<String> entries = new ArrayList<>();
         if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.OPERATIONS)) {
-            entries.add("§esystem §7状态、重载、维护、审计、统一诊断与在线备份");
+            entries.add(messageResolver.apply("chat.admin.help-entry-system"));
         }
         if (hasPermission.test(TownAdminPermissions.ROOT)) {
-            entries.add("§estation §7服务台与小镇手册");
-            entries.add("§eapplication §7申请审批");
-            entries.add("§etown §7小镇查看与删除");
-            entries.add("§emember §7成员与镇长管理");
-            entries.add("§evote §7治理投票代办与结算");
-            entries.add("§eland §7领地预览与对账");
+            entries.add(messageResolver.apply("chat.admin.help-entry-station"));
+            entries.add(messageResolver.apply("chat.admin.help-entry-application"));
+            entries.add(messageResolver.apply("chat.admin.help-entry-town"));
+            entries.add(messageResolver.apply("chat.admin.help-entry-member"));
+            entries.add(messageResolver.apply("chat.admin.help-entry-vote"));
+            entries.add(messageResolver.apply("chat.admin.help-entry-land"));
         }
         if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.MONEY)) {
-            entries.add("§emoney §7公共资金查询、调整与对账");
+            entries.add(messageResolver.apply("chat.admin.help-entry-money"));
         }
         if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.TAX)) {
-            entries.add("§etax §7QuickShop 税率调整");
+            entries.add(messageResolver.apply("chat.admin.help-entry-tax"));
         }
         if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.LEDGER)) {
-            entries.add("§eledger §7公共资金账本查询");
+            entries.add(messageResolver.apply("chat.admin.help-entry-ledger"));
         }
         if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.EXPAND)) {
-            entries.add("§eexpand §7领地扩张查询与预览");
+            entries.add(messageResolver.apply("chat.admin.help-entry-expand"));
         }
         if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.BUFF)) {
-            entries.add("§ebuff §7公共 Buff 查询与代购");
+            entries.add(messageResolver.apply("chat.admin.help-entry-buff"));
         }
         return List.copyOf(entries);
     }
@@ -1114,7 +1129,7 @@ final class TownAdminCommand implements CommandExecutor {
             case "tax" -> send(sender, "chat.admin.help-economy-tax");
             case "ledger" -> send(sender, "chat.admin.help-economy-ledger");
             case "expand" -> send(sender, "chat.admin.help-economy-expand");
-            default -> throw new IllegalArgumentException("未知经济帮助分类");
+            default -> throw messageArgument("chat.admin.help-unknown", Map.of("topic", topic));
         }
     }
 

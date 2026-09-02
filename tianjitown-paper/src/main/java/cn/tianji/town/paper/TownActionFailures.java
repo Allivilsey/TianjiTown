@@ -1,5 +1,6 @@
 package cn.tianji.town.paper;
 
+import cn.tianji.town.core.application.ApplicationText;
 import cn.tianji.town.storage.town.TownRepository;
 import cn.tianji.town.storage.governance.GovernanceRepository;
 import cn.tianji.town.storage.economy.EconomyRepository;
@@ -26,6 +27,15 @@ final class TownActionFailures {
         }
         return TownActionResult.failure(action, reason(exception, detail),
                 Map.of("detail", detail));
+    }
+
+    static TownActionResult from(String action, RuntimeException exception,
+                                 PluginMessages messages) {
+        if (exception instanceof ApplicationText.ValidationException validation) {
+            return TownActionResult.failure(action, "VALIDATION_FAILED", Map.of(
+                    "detail", ApplicationTextMessages.join(messages, validation.issues())));
+        }
+        return from(action, exception);
     }
 
     static String safeMessage(Throwable throwable) {

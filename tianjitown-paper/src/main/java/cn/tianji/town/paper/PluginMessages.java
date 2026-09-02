@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
@@ -15,6 +16,12 @@ import java.util.Map;
 import java.util.Objects;
 
 final class PluginMessages {
+    private static final String BOOTSTRAP_RESOURCE_MISSING =
+            "TT-MESSAGES-BOOTSTRAP-RESOURCE-MISSING";
+    private static final String BOOTSTRAP_RESOURCE_READ_FAILURE =
+            "TT-MESSAGES-BOOTSTRAP-RESOURCE-READ-FAILED";
+    private static final String BOOTSTRAP_MISSING_MESSAGE =
+            "TT-MESSAGES-MISSING-KEY: {key}";
     private final File file;
     private volatile YamlConfiguration configuration;
 
@@ -27,19 +34,76 @@ final class PluginMessages {
         // 先读取玩家配置，再挂载 JAR 内默认值；这样升级时无需覆盖玩家已有的自定义文案。
         YamlConfiguration loaded = YamlConfiguration.loadConfiguration(file);
         InputStream resource = PluginMessages.class.getResourceAsStream("/messages.yml");
-        if (resource != null) {
-            try (InputStream input = resource;
-                 InputStreamReader reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
-                loaded.setDefaults(YamlConfiguration.loadConfiguration(reader));
-            } catch (IOException exception) {
-                throw new IllegalStateException("读取内置 messages.yml 失败", exception);
-            }
+        if (resource == null) {
+            throw new IllegalStateException(BOOTSTRAP_RESOURCE_MISSING);
+        }
+        try (InputStream input = resource;
+             InputStreamReader reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
+            YamlConfiguration defaults = new YamlConfiguration();
+            defaults.load(reader);
+            loaded.setDefaults(defaults);
+        } catch (IOException | InvalidConfigurationException exception) {
+            throw new IllegalStateException(BOOTSTRAP_RESOURCE_READ_FAILURE, exception);
         }
         configuration = loaded;
         validateRequiredMessages();
     }
 
     private void validateRequiredMessages() {
+        for (String key : java.util.List.of(
+                "diagnostic.lifecycle.startup-checking",
+                "diagnostic.lifecycle.admin-command-missing",
+                "diagnostic.lifecycle.config-schema-gate-failed",
+                "diagnostic.lifecycle.configuration-validation-passed",
+                "diagnostic.lifecycle.configuration-validation-failed",
+                "diagnostic.lifecycle.business-config-gate-failed",
+                "diagnostic.lifecycle.synchronous-gate-failed",
+                "diagnostic.lifecycle.dependency-missing",
+                "diagnostic.lifecycle.dependency-disabled",
+                "diagnostic.lifecycle.dependency-probe-failure",
+                "diagnostic.lifecycle.vault-economy-unavailable",
+                "diagnostic.lifecycle.database-gate-failed",
+                "diagnostic.lifecycle.database-gate-locked",
+                "diagnostic.lifecycle.database-config-invalid",
+                "diagnostic.lifecycle.database-config-gate-failed",
+                "diagnostic.lifecycle.config-schema-too-new",
+                "diagnostic.lifecycle.config-schema-upgrade-required",
+                "diagnostic.lifecycle.runtime-activation-failure",
+                "diagnostic.lifecycle.runtime-gate-failed",
+                "diagnostic.lifecycle.runtime-initialization-failure",
+                "diagnostic.lifecycle.world-border-ready",
+                "diagnostic.lifecycle.dialog-ui-ready",
+                "diagnostic.lifecycle.runtime-features-ready",
+                "diagnostic.world-border.api-load-failure",
+                "log.scheduler.lifecycle-stopped",
+                "log.scheduler.quick-shop-tax-refresh-failure",
+                "log.lifecycle.sqlite-recovered",
+                "log.lifecycle.sqlite-interrupted",
+                "log.lifecycle.interrupted-provision-reason",
+                "log.lifecycle.interrupted-provisions-recovered",
+                "log.lifecycle.interrupted-provision-recovery-failure",
+                "log.donation.compensation-retry-failed",
+                "log.donation.compensation-finalization-failed",
+                "log.donation.compensation-recovered",
+                "log.donation.compensation-exhausted",
+                "log.donation.settlement-balance-read-failure",
+                "log.donation.settlement-shortfall",
+                "log.donation.settlement-reconciliation-failure",
+                "log.residence.reconciliation-failure",
+                "log.residence.reconciliation-difference",
+                "log.residence.reconciliation-sqlite-read-failure",
+                "log.residence.automatic-repair-cancelled",
+                "log.residence.automatic-repair-delayed",
+                "log.residence.automatic-repair-sqlite-read-failure",
+                "log.residence.automatic-repair-api-failure",
+                "log.residence.automatic-repair-consistent",
+                "log.residence.automatic-repair-completed",
+                "log.residence.automatic-repair-failed",
+                "validation.runtime-configuration.database-file-required",
+                "validation.runtime-configuration.database-file-path-invalid",
+                "validation.runtime-configuration.database-directory-create-failure")) {
+            requireMessage(key);
+        }
         for (String key : java.util.List.of(
                 "chat.notification.vote-created", "chat.buttons.view-votes",
                 "dialog.votes.type-kick", "dialog.votes.type-replace-mayor",
@@ -66,7 +130,8 @@ final class PluginMessages {
                 "dialog.tooltip.votes.entry.deadline")) {
             String value = configuration.getString(key);
             if (value == null || value.isBlank()) {
-                throw new IllegalStateException("缺少必需的投票消息配置: " + key);
+                throw configurationFailure("diagnostic.messages.required-vote-missing",
+                        Map.of("key", key));
             }
         }
         for (String key : java.util.List.of(
@@ -77,10 +142,19 @@ final class PluginMessages {
         }
     }
 
+    private void requireMessage(String key) {
+        String value = configuration.getString(key);
+        if (value == null || value.isBlank()) {
+            throw configurationFailure("diagnostic.messages.required-message-missing",
+                    Map.of("key", key));
+        }
+    }
+
     private void validateRangeFormat(String key) {
         String format = configuration.getString(key);
         if (format == null || format.isBlank()) {
-            throw new IllegalStateException("缺少范围输入格式配置: " + key);
+            throw configurationFailure("diagnostic.messages.range-format-missing",
+                    Map.of("key", key));
         }
         int placeholders = 0;
         for (int index = 0; index < format.length(); index++) {
@@ -92,13 +166,15 @@ final class PluginMessages {
                 continue;
             }
             if (index + 1 >= format.length() || format.charAt(index + 1) != 's') {
-                throw new IllegalStateException(key + " 只支持 %s 占位符，不支持浮点格式");
+                throw configurationFailure("diagnostic.messages.range-format-unsupported",
+                        Map.of("key", key));
             }
             placeholders++;
             index++;
         }
         if (placeholders != 2) {
-            throw new IllegalStateException(key + " 必须恰好包含两个未转义的 %s 占位符");
+            throw configurationFailure("diagnostic.messages.range-format-placeholder-count",
+                    Map.of("key", key));
         }
     }
 
@@ -118,7 +194,9 @@ final class PluginMessages {
 
     String rawText(String key, Map<String, ?> placeholders) {
         // Dialog 菜单需要在应用颜色表前保留配置中的 & 代码，因此提供未转换的读取入口。
-        return resolve(key, placeholders, "&c缺少消息配置: " + key);
+        String missingMessage = resolve("system.missing-message", Map.of("key", key),
+                BOOTSTRAP_MISSING_MESSAGE);
+        return resolve(key, placeholders, missingMessage);
     }
 
     Component component(String key) {
@@ -139,9 +217,16 @@ final class PluginMessages {
         return PlainTextComponentSerializer.plainText().serialize(component(key, placeholders));
     }
 
+    private IllegalStateException configurationFailure(String key, Map<String, ?> placeholders) {
+        return new IllegalStateException(plainText(key, placeholders));
+    }
+
     private String resolve(String key, Map<String, ?> placeholders, String fallback) {
         // 聊天消息和 Dialog 共用占位符替换逻辑，保证重载后的文本行为一致。
-        String message = Objects.requireNonNullElse(configuration.getString(key), fallback);
+        String message = configuration.getString(key);
+        if (message == null || message.isBlank()) {
+            message = fallback;
+        }
         for (Map.Entry<String, ?> entry : placeholders.entrySet()) {
             message = message.replace("{" + entry.getKey() + "}",
                     String.valueOf(entry.getValue()));

@@ -11,19 +11,28 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BiFunction;
 
 public final class QuickShopHistoryProbe {
     private final Plugin quickShop;
     private final UUID settlementAccountId;
     private final int moneyScale;
+    private final BiFunction<String, Map<String, ?>, String> messageResolver;
 
     public QuickShopHistoryProbe(Plugin quickShop, UUID settlementAccountId, int moneyScale) {
+        this(quickShop, settlementAccountId, moneyScale, (key, placeholders) -> key);
+    }
+
+    public QuickShopHistoryProbe(Plugin quickShop, UUID settlementAccountId, int moneyScale,
+                                 BiFunction<String, Map<String, ?>, String> messageResolver) {
         this.quickShop = Objects.requireNonNull(quickShop, "quickShop");
         this.settlementAccountId = Objects.requireNonNull(settlementAccountId,
                 "settlementAccountId");
         this.moneyScale = moneyScale;
+        this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
     }
 
     public Result inspect(Instant since) {
@@ -31,7 +40,8 @@ public final class QuickShopHistoryProbe {
         try {
             if (!QuickShopTaxAdapter.isAtLeastMinimum(
                     quickShop.getPluginMeta().getVersion())) {
-                return Result.unavailable("QuickShop 版本未通过交易历史适配器验证");
+                return Result.unavailable(resolveMessage(
+                        "diagnostic.quick-shop.history-version-unsupported", Map.of()));
             }
             ClassLoader loader = quickShop.getClass().getClassLoader();
             Class<?> entryPointType = Class.forName(
@@ -47,19 +57,29 @@ public final class QuickShopHistoryProbe {
                     .filter(value -> value.getParameterTypes()[0].isInstance(quickShopCore))
                     .filter(value -> value.getParameterTypes()[1].isInstance(database))
                     .findFirst()
-                    .orElseThrow(() -> new NoSuchMethodException("MetricQuery 构造器不存在"));
+                    .orElseThrow(MetricQueryConstructorMissingException::new);
             Object query = constructor.newInstance(quickShopCore, database);
             Method queryTransactions = queryType.getMethod("queryTransactions", Date.class,
                     long.class, boolean.class);
             Object raw = queryTransactions.invoke(query, Date.from(since), 0L, true);
             if (!(raw instanceof List<?> records)) {
-                return Result.unavailable("QuickShop 交易历史返回类型异常");
+                return Result.unavailable(resolveMessage(
+                        "diagnostic.quick-shop.history-result-type-invalid", Map.of()));
             }
-            return summarize(records, settlementAccountId, moneyScale);
+            return summarize(records, settlementAccountId, moneyScale, messageResolver);
         } catch (ReflectiveOperationException | LinkageError | RuntimeException exception) {
             Throwable cause = exception instanceof InvocationTargetException invocation
                     && invocation.getCause() != null ? invocation.getCause() : exception;
-            return Result.unavailable("QuickShop 交易历史读取失败: " + message(cause));
+            String detail = switch (cause) {
+                case MetricQueryConstructorMissingException ignored -> resolveMessage(
+                        "diagnostic.quick-shop.history-query-constructor-missing", Map.of());
+                case ApiTargetTypeMismatchException mismatch -> resolveMessage(
+                        "diagnostic.quick-shop.api-target-type-mismatch",
+                        Map.of("type", mismatch.apiTypeName()));
+                default -> message(cause);
+            };
+            return Result.unavailable(resolveMessage(
+                    "diagnostic.quick-shop.history-read-failure", Map.of("detail", detail)));
         }
     }
 
@@ -69,16 +89,22 @@ public final class QuickShopHistoryProbe {
         Objects.requireNonNull(apiType, "apiType");
         Objects.requireNonNull(name, "name");
         if (!apiType.isInstance(target)) {
-            throw new IllegalArgumentException("目标对象未实现 QuickShop API: "
-                    + apiType.getName());
+            throw new ApiTargetTypeMismatchException(apiType.getName());
         }
         return apiType.getMethod(name).invoke(target);
     }
 
     static Result summarize(List<?> records, UUID settlementAccountId, int moneyScale)
             throws ReflectiveOperationException {
+        return summarize(records, settlementAccountId, moneyScale, (key, placeholders) -> key);
+    }
+
+    static Result summarize(List<?> records, UUID settlementAccountId, int moneyScale,
+                            BiFunction<String, Map<String, ?>, String> messageResolver)
+            throws ReflectiveOperationException {
         Objects.requireNonNull(records, "records");
         Objects.requireNonNull(settlementAccountId, "settlementAccountId");
+        Objects.requireNonNull(messageResolver, "messageResolver");
         long successfulTaxRecords = 0;
         long taxMinor = 0;
         for (Object record : records) {
@@ -97,7 +123,7 @@ public final class QuickShopHistoryProbe {
                     moneyScale, RoundingMode.HALF_UP).minorUnits());
         }
         return Result.available(successfulTaxRecords, taxMinor, records.size() >= 1_000,
-                "已读取 QuickShop transaction metric 历史");
+                resolveMessage(messageResolver, "diagnostic.quick-shop.history-success", Map.of()));
     }
 
     private static Object call(Object target, String name) throws ReflectiveOperationException {
@@ -106,7 +132,39 @@ public final class QuickShopHistoryProbe {
 
     private static String message(Throwable throwable) {
         String value = throwable.getMessage();
-        return value == null || value.isBlank() ? throwable.getClass().getSimpleName() : value;
+        String detail = value == null || value.isBlank()
+                ? throwable.getClass().getSimpleName() : value;
+        return detail.replace('&', '＆').replace('§', '�');
+    }
+
+    private String resolveMessage(String key, Map<String, ?> placeholders) {
+        return resolveMessage(messageResolver, key, placeholders);
+    }
+
+    private static String resolveMessage(BiFunction<String, Map<String, ?>, String> resolver,
+                                         String key, Map<String, ?> placeholders) {
+        try {
+            String resolved = resolver.apply(key, placeholders);
+            return resolved == null || resolved.isBlank() ? key : resolved;
+        } catch (RuntimeException | LinkageError exception) {
+            return key + " " + placeholders;
+        }
+    }
+
+    private static final class MetricQueryConstructorMissingException
+            extends ReflectiveOperationException {
+    }
+
+    private static final class ApiTargetTypeMismatchException extends IllegalArgumentException {
+        private final String apiTypeName;
+
+        private ApiTargetTypeMismatchException(String apiTypeName) {
+            this.apiTypeName = apiTypeName;
+        }
+
+        private String apiTypeName() {
+            return apiTypeName;
+        }
     }
 
     public record Result(boolean available, long successfulTaxRecords, long taxMinor,

@@ -13,96 +13,144 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
-record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs) {
+record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs,
+                    BiFunction<String, Map<String, ?>, String> messageResolver) {
+    private static final int MAXIMUM_BUFF_COUNT = 36;
+    private static final String UNKNOWN_BUFF = "validation.buff.unknown";
+    private static final String CATALOG_REQUIRED = "validation.buff.catalog-required";
+    private static final String CATALOG_LIMIT = "validation.buff.catalog-limit";
+    private static final String DUPLICATE_KEY = "validation.buff.duplicate-key";
+    private static final String PURCHASING_ROLES_REQUIRED =
+            "validation.buff.purchasing-roles-required";
+    private static final String SECTION_REQUIRED = "validation.buff.section-required";
+    private static final String VALUE_REQUIRED = "validation.buff.value-required";
+    private static final String PRICE_OVERFLOW = "validation.buff.price-overflow";
+    private static final String PRICE_RANGE = "validation.buff.price-range";
+    private static final String ENUM_UNSUPPORTED = "validation.buff.enum-unsupported";
+
     BuffSettings {
         buffs = Map.copyOf(buffs);
+        messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
+    }
+
+    BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs) {
+        this(buffShopEnabled, buffs, BuffSettings::fallbackMessage);
     }
 
     BuffDefinition requireBuff(String key) {
         BuffDefinition definition = buffs.get(key);
         if (definition == null) {
-            throw new IllegalArgumentException("未知 Buff: " + key);
+            throw new IllegalArgumentException(resolveMessage(UNKNOWN_BUFF,
+                    Map.of("key", safeText(key))));
         }
         return definition;
     }
 
     static BuffSettings load(ConfigurationSection config) {
-        return load(config, 2);
+        return load(config, 2, BuffSettings::fallbackMessage);
     }
 
     static BuffSettings load(ConfigurationSection config, int moneyScale) {
+        return load(config, moneyScale, BuffSettings::fallbackMessage);
+    }
+
+    static BuffSettings load(ConfigurationSection config,
+                             BiFunction<String, Map<String, ?>, String> messageResolver) {
+        return load(config, 2, messageResolver);
+    }
+
+    static BuffSettings load(ConfigurationSection config, int moneyScale,
+                             BiFunction<String, Map<String, ?>, String> messageResolver) {
         Objects.requireNonNull(config, "config");
+        Objects.requireNonNull(messageResolver, "messageResolver");
         Map<String, BuffDefinition> buffs = loadBuffs(
-                config.getConfigurationSection("buffs.catalog"), moneyScale);
+                config.getConfigurationSection("buffs.catalog"), moneyScale, messageResolver);
         if (buffs.isEmpty()) {
-            throw new IllegalArgumentException("buffs.catalog 至少需要一个 Buff");
+            throw new IllegalArgumentException(resolveMessage(messageResolver, CATALOG_REQUIRED,
+                    Map.of()));
         }
-        if (buffs.size() > 36) {
-            throw new IllegalArgumentException("buffs.catalog 最多支持 36 个 Buff");
+        if (buffs.size() > MAXIMUM_BUFF_COUNT) {
+            throw new IllegalArgumentException(resolveMessage(messageResolver, CATALOG_LIMIT,
+                    Map.of("maximum", MAXIMUM_BUFF_COUNT)));
         }
         return new BuffSettings(ConfigurationValues.bool(config,
-                "buffs.shop-enabled", true), buffs);
+                "buffs.shop-enabled", true, messageResolver), buffs, messageResolver);
     }
 
     private static Map<String, BuffDefinition> loadBuffs(ConfigurationSection catalog,
-                                                         int moneyScale) {
+                                                         int moneyScale,
+                                                         BiFunction<String, Map<String, ?>, String>
+                                                                 messageResolver) {
         if (catalog == null) {
             return Map.of();
         }
         Map<String, BuffDefinition> result = new LinkedHashMap<>();
         for (String key : catalog.getKeys(false)) {
-            ConfigurationSection section = requireSection(catalog, key);
+            ConfigurationSection section = requireSection(catalog, key, messageResolver);
             BuffDefinition definition = new BuffDefinition(key,
-                    text(section, "display-name"),
+                    text(section, "display-name", messageResolver),
                     enumValue(BuffDefinition.EffectKind.class,
-                            text(section, "effect-kind"), key + ".effect-kind"),
-                    text(section, "effect-key"),
-                    ConfigurationValues.text(section, "operation", "AMPLIFIER"),
-                    ConfigurationValues.decimalText(section, "base-price"),
-                    ConfigurationValues.integer(section, "maximum-level"),
-                    enumValue(BuffStackingRule.class, text(section, "stacking"),
-                    key + ".stacking"),
-                    ConfigurationValues.decimalNumber(section, "amount-per-level"),
-                    roles(section, "purchasing-roles"));
-            validatePriceRange(section, definition, moneyScale);
+                            text(section, "effect-kind", messageResolver),
+                            section.getCurrentPath() + ".effect-kind", messageResolver),
+                    text(section, "effect-key", messageResolver),
+                    ConfigurationValues.text(section, "operation", "AMPLIFIER", messageResolver),
+                    ConfigurationValues.decimalText(section, "base-price", messageResolver),
+                    ConfigurationValues.integer(section, "maximum-level", messageResolver),
+                    enumValue(BuffStackingRule.class, text(section, "stacking", messageResolver),
+                    section.getCurrentPath() + ".stacking", messageResolver),
+                    ConfigurationValues.decimalNumber(section, "amount-per-level", messageResolver),
+                    roles(section, "purchasing-roles", messageResolver));
+            validatePriceRange(section, definition, moneyScale, messageResolver);
             if (result.putIfAbsent(key, definition) != null) {
-                throw new IllegalArgumentException("重复 Buff key: " + key);
+                throw new IllegalArgumentException(resolveMessage(messageResolver, DUPLICATE_KEY,
+                        Map.of("key", safeText(key))));
             }
         }
         return result;
     }
 
-    private static Set<MemberRole> roles(ConfigurationSection section, String path) {
-        List<String> values = ConfigurationValues.stringList(section, path);
+    private static Set<MemberRole> roles(ConfigurationSection section, String path,
+                                        BiFunction<String, Map<String, ?>, String>
+                                                messageResolver) {
+        List<String> values = ConfigurationValues.stringList(section, path, messageResolver);
         if (values.isEmpty()) {
-            throw new IllegalArgumentException(section.getCurrentPath() + "." + path
-                    + " 至少需要一个角色");
+            throw new IllegalArgumentException(resolveMessage(messageResolver,
+                    PURCHASING_ROLES_REQUIRED, Map.of("path",
+                            safeText(section.getCurrentPath() + "." + path))));
         }
-        return values.stream().map(value -> enumValue(MemberRole.class, value, path))
+        return values.stream().map(value -> enumValue(MemberRole.class, value,
+                        section.getCurrentPath() + "." + path, messageResolver))
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    private static ConfigurationSection requireSection(ConfigurationSection parent, String key) {
+    private static ConfigurationSection requireSection(ConfigurationSection parent, String key,
+                                                       BiFunction<String, Map<String, ?>, String>
+                                                               messageResolver) {
         ConfigurationSection section = parent.getConfigurationSection(key);
         if (section == null) {
-            throw new IllegalArgumentException(parent.getCurrentPath() + "." + key
-                    + " 必须为配置节");
+            throw new IllegalArgumentException(resolveMessage(messageResolver, SECTION_REQUIRED,
+                    Map.of("path", safeText(parent.getCurrentPath() + "." + key))));
         }
         return section;
     }
 
-    private static String text(ConfigurationSection section, String path) {
-        String value = ConfigurationValues.text(section, path);
+    private static String text(ConfigurationSection section, String path,
+                               BiFunction<String, Map<String, ?>, String> messageResolver) {
+        String value = ConfigurationValues.text(section, path, messageResolver);
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(section.getCurrentPath() + "." + path + " 不能为空");
+            throw new IllegalArgumentException(resolveMessage(messageResolver, VALUE_REQUIRED,
+                    Map.of("path", safeText(section.getCurrentPath() + "." + path))));
         }
         return value.strip();
     }
 
     private static void validatePriceRange(ConfigurationSection section,
-                                           BuffDefinition definition, int moneyScale) {
+                                           BuffDefinition definition, int moneyScale,
+                                           BiFunction<String, Map<String, ?>, String>
+                                                   messageResolver) {
         int maximumPricedLevel = definition.stackingRule() == BuffStackingRule.LEVEL_UP
                 ? definition.maximumLevel() : 1;
         try {
@@ -112,23 +160,50 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs) 
                         .multiply(BigDecimal.valueOf(duration.discountBasisPoints(), 4))
                         .multiply(BigDecimal.valueOf(maximumPricedLevel));
                 if (price.compareTo(BigDecimal.valueOf(Long.MAX_VALUE, moneyScale)) > 0) {
-                    throw new ArithmeticException("金额超过 long 次级单位上限");
+                    throw new ArithmeticException(resolveMessage(messageResolver, PRICE_OVERFLOW,
+                            Map.of()));
                 }
                 BuffPricing.price(definition, duration, maximumPricedLevel, moneyScale);
             }
             BuffPricing.weeklyPrice(definition, 4,
                     Math.min(5, definition.maximumLevel()), moneyScale);
         } catch (ArithmeticException exception) {
-            throw new IllegalArgumentException(section.getCurrentPath()
-                    + ".base-price 产生的价格超出次级货币单位范围", exception);
+            throw new IllegalArgumentException(resolveMessage(messageResolver, PRICE_RANGE,
+                    Map.of("path", safeText(section.getCurrentPath() + ".base-price"))),
+                    exception);
         }
     }
 
-    private static <E extends Enum<E>> E enumValue(Class<E> type, String value, String path) {
+    private static <E extends Enum<E>> E enumValue(Class<E> type, String value, String path,
+                                                   BiFunction<String, Map<String, ?>, String>
+                                                           messageResolver) {
         try {
             return Enum.valueOf(type, value.toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException(path + " 的值不受支持: " + value, exception);
+            throw new IllegalArgumentException(resolveMessage(messageResolver, ENUM_UNSUPPORTED,
+                    Map.of("path", safeText(path), "value", safeText(value))), exception);
         }
+    }
+
+    private String resolveMessage(String key, Map<String, ?> placeholders) {
+        return resolveMessage(messageResolver, key, placeholders);
+    }
+
+    private static String resolveMessage(BiFunction<String, Map<String, ?>, String> resolver,
+                                         String key, Map<String, ?> placeholders) {
+        try {
+            String resolved = resolver.apply(key, placeholders);
+            return resolved == null || resolved.isBlank() ? key : resolved;
+        } catch (RuntimeException | LinkageError exception) {
+            return key;
+        }
+    }
+
+    static String fallbackMessage(String key, Map<String, ?> placeholders) {
+        return key;
+    }
+
+    private static String safeText(Object value) {
+        return String.valueOf(value).replace('&', '＆').replace('§', '�');
     }
 }

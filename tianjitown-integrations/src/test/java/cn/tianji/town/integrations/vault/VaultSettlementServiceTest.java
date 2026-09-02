@@ -11,9 +11,11 @@ import org.bukkit.plugin.ServicesManager;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 
 import static net.milkbowl.vault.economy.EconomyResponse.ResponseType.FAILURE;
 import static net.milkbowl.vault.economy.EconomyResponse.ResponseType.SUCCESS;
@@ -171,7 +173,7 @@ class VaultSettlementServiceTest {
         VaultSettlementService.Result adjustment = settlement.adjustSettlement(100);
         assertFalse(availability.success());
         assertFalse(adjustment.success());
-        assertTrue(adjustment.message().contains("provider 不可用"));
+        assertTrue(adjustment.message().contains("provider-unavailable"));
         assertFalse(depositCalled.get());
     }
 
@@ -195,7 +197,7 @@ class VaultSettlementServiceTest {
         VaultSettlementService.Result availability = settlement.checkAvailability();
 
         assertFalse(availability.success());
-        assertTrue(availability.message().contains("hasAccount"));
+        assertTrue(availability.message().contains("account-unavailable"));
 
         failingMethod.set("withdrawPlayer");
         VaultSettlementService.Result mutation = settlement.transferFromPlayer(player, 100);
@@ -203,11 +205,59 @@ class VaultSettlementServiceTest {
         assertFalse(mutation.success());
         assertTrue(mutation.compensationRequired());
         assertFalse(mutation.playerRefundRequired());
-        assertTrue(mutation.message().contains("人工复核"));
+        assertTrue(mutation.message().contains("player-debit-ambiguous"));
+    }
+
+    @Test
+    void resolvesSettlementMessagesAndSanitizesProviderDetails() {
+        OfflinePlayer settlementAccount = offlinePlayer(UUID.randomUUID(), "Tax");
+        OfflinePlayer player = offlinePlayer(UUID.randomUUID(), "Player");
+        Economy economy = proxy(Economy.class, (ignored, method, arguments) -> switch (
+                method.getName()) {
+            case "isEnabled", "hasAccount" -> true;
+            case "fractionalDigits" -> 2;
+            case "withdrawPlayer" -> response(1.0D, FAILURE, "provider&§detail");
+            default -> defaultValue(method.getReturnType());
+        });
+        BiFunction<String, Map<String, ?>, String> resolver = (key, placeholders) ->
+                "resolved:" + key + ":"
+                        + (placeholders.get("detail") == null
+                        ? "none" : placeholders.get("detail"));
+
+        VaultSettlementService settlement = settlement(economy, settlementAccount, resolver);
+
+        VaultSettlementService.Result result = settlement.transferFromPlayer(player, 100);
+
+        assertFalse(result.success());
+        assertEquals("resolved:diagnostic.vault.settlement.player-debit-failure:provider＆�detail",
+                result.message());
+    }
+
+    @Test
+    void fallsBackToStableMessageKeysWhenNoResolverIsProvided() {
+        VaultSettlementService.Result result = settlement(
+                proxy(Economy.class, (ignored, method, arguments) -> switch (method.getName()) {
+                    case "isEnabled", "hasAccount" -> true;
+                    case "fractionalDigits" -> 2;
+                    default -> defaultValue(method.getReturnType());
+                }), offlinePlayer(UUID.randomUUID(), "Tax")).checkAvailability();
+
+        assertTrue(result.message().contains("account-available"));
     }
 
     private static VaultSettlementService settlement(Economy economy,
                                                        OfflinePlayer settlementAccount) {
+        return new VaultSettlementService(server(economy, settlementAccount), "tax", 2);
+    }
+
+    private static VaultSettlementService settlement(
+            Economy economy, OfflinePlayer settlementAccount,
+            BiFunction<String, Map<String, ?>, String> messageResolver) {
+        return new VaultSettlementService(server(economy, settlementAccount), "tax", 2,
+                messageResolver);
+    }
+
+    private static Server server(Economy economy, OfflinePlayer settlementAccount) {
         Plugin provider = proxy(Plugin.class,
                 (ignored, method, arguments) -> defaultValue(method.getReturnType()));
         RegisteredServiceProvider<Economy> registration = new RegisteredServiceProvider<>(
@@ -222,7 +272,7 @@ class VaultSettlementServiceTest {
             case "isPrimaryThread" -> true;
             default -> defaultValue(method.getReturnType());
         });
-        return new VaultSettlementService(server, "tax", 2);
+        return server;
     }
 
     private static OfflinePlayer offlinePlayer(UUID playerId, String playerName) {

@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -32,8 +33,96 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class TianjiTownPlugin extends JavaPlugin {
     private static final int CONFIG_SCHEMA = 10;
     private static final long STARTUP_DIAGNOSTIC_DELAY_TICKS = 20L * 30;
+    private static final String BOOTSTRAP_GATE_DETAIL = "TT-PLUGIN-NOT-STARTED";
+    private static final String BOOTSTRAP_MESSAGES_NOT_LOADED = "TT-MESSAGES-NOT-LOADED";
+    private static final String STARTUP_CHECKING = "diagnostic.lifecycle.startup-checking";
+    private static final String ADMIN_COMMAND_MISSING =
+            "diagnostic.lifecycle.admin-command-missing";
+    private static final String CONFIG_SCHEMA_GATE_FAILED =
+            "diagnostic.lifecycle.config-schema-gate-failed";
+    private static final String CONFIGURATION_VALIDATION_PASSED =
+            "diagnostic.lifecycle.configuration-validation-passed";
+    private static final String CONFIGURATION_VALIDATION_FAILED =
+            "diagnostic.lifecycle.configuration-validation-failed";
+    private static final String BUSINESS_CONFIG_GATE_FAILED =
+            "diagnostic.lifecycle.business-config-gate-failed";
+    private static final String SYNCHRONOUS_GATE_FAILED =
+            "diagnostic.lifecycle.synchronous-gate-failed";
+    private static final String DEPENDENCY_MISSING =
+            "diagnostic.lifecycle.dependency-missing";
+    private static final String DEPENDENCY_DISABLED =
+            "diagnostic.lifecycle.dependency-disabled";
+    private static final String DEPENDENCY_PROBE_FAILURE =
+            "diagnostic.lifecycle.dependency-probe-failure";
+    private static final String VAULT_ECONOMY_UNAVAILABLE =
+            "diagnostic.lifecycle.vault-economy-unavailable";
+    private static final String DATABASE_GATE_FAILED =
+            "diagnostic.lifecycle.database-gate-failed";
+    private static final String DATABASE_GATE_LOCKED =
+            "diagnostic.lifecycle.database-gate-locked";
+    private static final String DATABASE_CONFIG_INVALID =
+            "diagnostic.lifecycle.database-config-invalid";
+    private static final String DATABASE_CONFIG_GATE_FAILED =
+            "diagnostic.lifecycle.database-config-gate-failed";
+    private static final String CONFIG_SCHEMA_TOO_NEW =
+            "diagnostic.lifecycle.config-schema-too-new";
+    private static final String CONFIG_SCHEMA_UPGRADE_REQUIRED =
+            "diagnostic.lifecycle.config-schema-upgrade-required";
+    private static final String RUNTIME_ACTIVATION_FAILURE =
+            "diagnostic.lifecycle.runtime-activation-failure";
+    private static final String RUNTIME_GATE_FAILED =
+            "diagnostic.lifecycle.runtime-gate-failed";
+    private static final String RUNTIME_INITIALIZATION_FAILURE =
+            "diagnostic.lifecycle.runtime-initialization-failure";
+    private static final String WORLD_BORDER_READY =
+            "diagnostic.lifecycle.world-border-ready";
+    private static final String DIALOG_UI_READY =
+            "diagnostic.lifecycle.dialog-ui-ready";
+    private static final String RUNTIME_FEATURES_READY =
+            "diagnostic.lifecycle.runtime-features-ready";
+    private static final String WORLD_BORDER_API_LOAD_FAILURE =
+            "diagnostic.world-border.api-load-failure";
+    private static final String DATABASE_FILE_REQUIRED =
+            "validation.runtime-configuration.database-file-required";
+    private static final String DATABASE_FILE_PATH_INVALID =
+            "validation.runtime-configuration.database-file-path-invalid";
+    private static final String DATABASE_DIRECTORY_CREATE_FAILURE =
+            "validation.runtime-configuration.database-directory-create-failure";
+    private static final String NEGATIVE_DELAY = "diagnostic.scheduler.negative-delay";
+    private static final String UI_CLOSE_FAILURE = "log.lifecycle.ui-close-failure";
+    private static final String ASYNC_SHUTDOWN_TIMEOUT = "log.lifecycle.async-shutdown-timeout";
+    private static final String BEACON_CLEANUP_FAILURE = "log.lifecycle.beacon-cleanup-failure";
+    private static final String BUFF_CLEANUP_FAILURE = "log.lifecycle.buff-cleanup-failure";
+    private static final String DATABASE_CLOSE_FAILURE = "log.lifecycle.database-close-failure";
+    private static final String RESIDENCE_NAMES_LOAD_FAILURE =
+            "log.lifecycle.residence-names-load-failure";
+    private static final String RUNTIME_STARTED = "log.lifecycle.runtime-started";
+    private static final String RUNTIME_LOCKED = "log.lifecycle.runtime-locked";
+    private static final String ASYNC_TASK_FAILURE = "log.scheduler.async-task-failure";
+    private static final String MAIN_THREAD_CALLBACK_FAILURE =
+            "log.scheduler.main-thread-callback-failure";
+    private static final String MAIN_THREAD_CALLBACK_SUBMIT_FAILURE =
+            "log.scheduler.main-thread-callback-submit-failure";
+    private static final String PERIODIC_SQLITE_RECOVERY_FAILURE =
+            "log.scheduler.periodic.sqlite-recovery-failure";
+    private static final String PERIODIC_RESIDENCE_RECONCILIATION_FAILURE =
+            "log.scheduler.periodic.residence-reconciliation-failure";
+    private static final String PERIODIC_VOTE_SETTLEMENT_FAILURE =
+            "log.scheduler.periodic.vote-settlement-failure";
+    private static final String PERIODIC_SETTLEMENT_RECONCILIATION_FAILURE =
+            "log.scheduler.periodic.settlement-reconciliation-failure";
+    private static final String PERIODIC_TERRITORY_BONUS_INDEX_FAILURE =
+            "log.scheduler.periodic.territory-bonus-index-refresh-failure";
+    private static final String PERIODIC_BEACON_EFFECT_FAILURE =
+            "log.scheduler.periodic.beacon-effect-refresh-failure";
+    private static final String PERIODIC_REFUND_COUNTER_FAILURE =
+            "log.scheduler.periodic.refund-counter-cleanup-failure";
+    private static final String PERIODIC_STARTUP_DIAGNOSTIC_FAILURE =
+            "log.scheduler.periodic.startup-diagnostic-failure";
+    private static final String PERIODIC_SCHEDULED_BACKUP_FAILURE =
+            "log.scheduler.periodic.scheduled-backup-failure";
     private final AtomicReference<GateStatus> gateStatus = new AtomicReference<>(
-            new GateStatus(GateStatus.State.CHECKING, List.of("尚未开始")));
+            new GateStatus(GateStatus.State.CHECKING, List.of(BOOTSTRAP_GATE_DETAIL)));
     private final AtomicLong lifecycleGeneration = new AtomicLong();
     private final AsyncTaskTracker asyncTasks = new AsyncTaskTracker();
     private final ThreadLocal<Long> asyncGeneration = new ThreadLocal<>();
@@ -50,15 +139,16 @@ public final class TianjiTownPlugin extends JavaPlugin {
     public void onEnable() {
         long generation = lifecycleGeneration.incrementAndGet();
         periodicFailures.clear();
-        gateStatus.set(new GateStatus(GateStatus.State.CHECKING, List.of("正在执行启动门禁")));
-        asyncTasks.startAccepting();
-        asyncExecutor = Executors.newFixedThreadPool(4,
-                Thread.ofPlatform().daemon(true).name("TianjiTown-Async-", 0).factory());
         saveDefaultConfig();
         saveResource("messages.yml", false);
         messages = new PluginMessages(getDataFolder());
+        gateStatus.set(new GateStatus(GateStatus.State.CHECKING,
+                List.of(messages().plainText(STARTUP_CHECKING))));
+        asyncTasks.startAccepting();
+        asyncExecutor = Executors.newFixedThreadPool(4,
+                Thread.ofPlatform().daemon(true).name("TianjiTown-Async-", 0).factory());
         org.bukkit.command.PluginCommand adminCommand = java.util.Objects.requireNonNull(
-                getCommand("townadmin"), "plugin.yml 缺少 townadmin");
+                getCommand("townadmin"), messages().plainText(ADMIN_COMMAND_MISSING));
         TownAdminTabCompleter completer = new TownAdminTabCompleter(this);
         townAdminTabCompleter = completer;
         adminCommand.setExecutor(new TownAdminCommand(this));
@@ -66,24 +156,25 @@ public final class TianjiTownPlugin extends JavaPlugin {
 
         List<String> synchronousChecks = new ArrayList<>();
         if (!prepareConfigSchema(synchronousChecks)) {
-            lock("配置 schema 门禁未通过", synchronousChecks);
+            lock(messages().plainText(CONFIG_SCHEMA_GATE_FAILED), synchronousChecks);
             return;
         }
         RuntimeConfigurationValidator.DatabaseSettings databaseSettings;
         try {
             databaseSettings = RuntimeConfigurationValidator.validate(getConfig(),
-                    world -> getServer().getWorld(world) != null);
-            synchronousChecks.add("OK 配置类型、范围与世界引用校验通过");
+                    world -> getServer().getWorld(world) != null, messages()::plainText);
+            synchronousChecks.add(messages().plainText(CONFIGURATION_VALIDATION_PASSED));
         } catch (RuntimeException exception) {
-            synchronousChecks.add("FAIL 配置校验: " + exception.getMessage());
-            lock("业务配置门禁未通过", synchronousChecks);
+            synchronousChecks.add(messages().plainText(CONFIGURATION_VALIDATION_FAILED,
+                    Map.of("detail", safeMessage(exception))));
+            lock(messages().plainText(BUSINESS_CONFIG_GATE_FAILED), synchronousChecks);
             return;
         }
         boolean dependenciesHealthy = checkDependencies(synchronousChecks);
         gateStatus.set(new GateStatus(GateStatus.State.CHECKING, synchronousChecks));
 
         if (!dependenciesHealthy) {
-            lock("同步门禁未通过", synchronousChecks);
+            lock(messages().plainText(SYNCHRONOUS_GATE_FAILED), synchronousChecks);
             return;
         }
         runAsync(() -> checkDatabase(synchronousChecks, databaseSettings, generation));
@@ -98,7 +189,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
             try {
                 ui.close();
             } catch (RuntimeException | LinkageError exception) {
-                getLogger().warning("停服关闭玩家界面失败: " + safeMessage(exception));
+                getLogger().warning(plainText(UI_CLOSE_FAILURE,
+                        Map.of("detail", safeMessage(exception))));
             }
         }
         TownAdminTabCompleter completer = townAdminTabCompleter;
@@ -110,8 +202,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
             executor.shutdown();
         }
         if (!asyncTasks.awaitQuiescence(Duration.ofSeconds(30))) {
-            getLogger().severe("等待异步任务结束超时，仍有 " + asyncTasks.active()
-                    + " 个任务；将继续关闭数据源。请检查阻塞的第三方 API。");
+            getLogger().severe(plainText(ASYNC_SHUTDOWN_TIMEOUT,
+                    Map.of("active", asyncTasks.active())));
         }
         if (executor != null) {
             executor.shutdownNow();
@@ -124,12 +216,14 @@ public final class TianjiTownPlugin extends JavaPlugin {
             try {
                 runtime.bonuses().clearAll();
             } catch (RuntimeException | LinkageError exception) {
-                getLogger().warning("停服清理信标效果失败: " + safeMessage(exception));
+                getLogger().warning(plainText(BEACON_CLEANUP_FAILURE,
+                        Map.of("detail", safeMessage(exception))));
             }
             try {
                 runtime.buffs().clearAll();
             } catch (RuntimeException | LinkageError exception) {
-                getLogger().warning("停服清理公共 Buff 失败: " + safeMessage(exception));
+                getLogger().warning(plainText(BUFF_CLEANUP_FAILURE,
+                        Map.of("detail", safeMessage(exception))));
             }
         }
         DatabaseGate gate = databaseGate;
@@ -137,7 +231,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
             try {
                 gate.close();
             } catch (RuntimeException exception) {
-                getLogger().warning("关闭 SQLite 数据源失败: " + safeMessage(exception));
+                getLogger().warning(plainText(DATABASE_CLOSE_FAILURE,
+                        Map.of("detail", safeMessage(exception))));
             } finally {
                 databaseGate = null;
             }
@@ -168,13 +263,25 @@ public final class TianjiTownPlugin extends JavaPlugin {
     PluginMessages messages() {
         PluginMessages current = messages;
         if (current == null) {
-            throw new IllegalStateException("messages.yml 尚未加载");
+            throw new IllegalStateException(BOOTSTRAP_MESSAGES_NOT_LOADED);
         }
         return current;
     }
 
     void reloadMessages() {
         messages().reload();
+    }
+
+    private String plainText(String key) {
+        return plainText(key, Map.of());
+    }
+
+    private String plainText(String key, Map<String, ?> placeholders) {
+        PluginMessages current = messages;
+        if (current == null) {
+            return "TT-MESSAGES-UNAVAILABLE: " + key;
+        }
+        return current.plainText(key, placeholders);
     }
 
     boolean runAsync(Runnable task) {
@@ -196,8 +303,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
                     }
                 } catch (RuntimeException | LinkageError exception) {
                     if (isCurrentLifecycle(generation)) {
-                        getLogger().severe("异步任务异常，已在插件边界隔离: "
-                                + safeMessage(exception));
+                        getLogger().severe(plainText(ASYNC_TASK_FAILURE,
+                                Map.of("detail", safeMessage(exception))));
                     }
                 } finally {
                     asyncGeneration.remove();
@@ -219,7 +326,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
 
     boolean runMainLater(Runnable task, long delayTicks) {
         if (delayTicks < 0) {
-            throw new IllegalArgumentException("delayTicks 不能为负数");
+            throw new IllegalArgumentException(plainText(NEGATIVE_DELAY));
         }
         return scheduleMain(task, delayTicks);
     }
@@ -239,8 +346,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
             try {
                 task.run();
             } catch (RuntimeException | LinkageError exception) {
-                getLogger().severe("主线程回调异常，已在插件边界隔离: "
-                        + safeMessage(exception));
+                getLogger().severe(plainText(MAIN_THREAD_CALLBACK_FAILURE,
+                        Map.of("detail", safeMessage(exception))));
             }
         };
         try {
@@ -252,7 +359,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
             return true;
         } catch (RuntimeException exception) {
             if (isCurrentLifecycle(generation)) {
-                getLogger().warning("主线程回调提交失败: " + safeMessage(exception));
+                getLogger().warning(plainText(MAIN_THREAD_CALLBACK_SUBMIT_FAILURE,
+                        Map.of("detail", safeMessage(exception))));
             }
             return false;
         }
@@ -267,28 +375,33 @@ public final class TianjiTownPlugin extends JavaPlugin {
             try {
                 Plugin dependency = getServer().getPluginManager().getPlugin(name);
                 if (dependency == null) {
-                    details.add("FAIL " + name + " 未安装");
+                    details.add(messages().plainText(DEPENDENCY_MISSING,
+                            Map.of("dependency", safeText(name))));
                     healthy = false;
                 } else if (!dependency.isEnabled()) {
-                    details.add("FAIL " + name + " " + dependency.getPluginMeta().getVersion()
-                            + "（未启用）");
+                    details.add(messages().plainText(DEPENDENCY_DISABLED,
+                            Map.of("dependency", safeText(name),
+                                    "version", safeText(dependency.getPluginMeta().getVersion()))));
                     healthy = false;
                 } else {
                     details.add("OK " + name + " " + dependency.getPluginMeta().getVersion());
                 }
             } catch (RuntimeException | LinkageError exception) {
-                details.add("FAIL " + name + " 依赖探测异常: " + safeMessage(exception));
+                details.add(messages().plainText(DEPENDENCY_PROBE_FAILURE,
+                        Map.of("dependency", safeText(name),
+                                "detail", safeText(safeMessage(exception)))));
                 healthy = false;
             }
         }
         boolean economyHealthy = false;
         if (getServer().getPluginManager().isPluginEnabled("Vault")) {
-            VaultEconomyProbe.Result economy = new VaultEconomyProbe(getServer()).verify();
+            VaultEconomyProbe.Result economy = new VaultEconomyProbe(getServer(),
+                    messages()::plainText).verify();
             details.add((economy.healthy() ? "OK " : "FAIL ") + "Vault Economy provider="
                     + economy.provider() + " (" + economy.message() + ")");
             economyHealthy = economy.healthy();
         } else {
-            details.add("FAIL Vault Economy provider=不可用 (Vault 未启用，已跳过服务探测)");
+            details.add(messages().plainText(VAULT_ECONOMY_UNAVAILABLE));
         }
         return healthy && economyHealthy;
     }
@@ -309,8 +422,9 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 if (!isCurrentLifecycle(generation)) {
                     return;
                 }
-                details.add("FAIL SQLite/Flyway: " + result.detail());
-                lock("数据库门禁未通过", details);
+                details.add(messages().plainText(DATABASE_GATE_FAILED,
+                        Map.of("detail", safeText(result.detail()))));
+                lock(messages().plainText(DATABASE_GATE_LOCKED), details);
                 return;
             }
             if (!isCurrentLifecycle(generation)) {
@@ -324,8 +438,9 @@ public final class TianjiTownPlugin extends JavaPlugin {
             if (!isCurrentLifecycle(generation)) {
                 return;
             }
-            details.add("FAIL SQLite config: " + exception.getMessage());
-            lock("数据库配置无效", details);
+            details.add(messages().plainText(DATABASE_CONFIG_INVALID,
+                    Map.of("detail", safeText(safeMessage(exception)))));
+            lock(messages().plainText(DATABASE_CONFIG_GATE_FAILED), details);
         }
     }
 
@@ -336,20 +451,20 @@ public final class TianjiTownPlugin extends JavaPlugin {
             return true;
         }
         if (configured > CONFIG_SCHEMA) {
-            details.add("FAIL config schema=" + configured + " 高于本插件支持的 "
-                    + CONFIG_SCHEMA + "，拒绝降级读取");
+            details.add(messages().plainText(CONFIG_SCHEMA_TOO_NEW,
+                    Map.of("schema", configured, "supported", CONFIG_SCHEMA)));
         } else {
-            details.add("FAIL config schema=" + configured + " 不能直接安全升级到 "
-                    + CONFIG_SCHEMA + "；请先按对应版本升级手册处理");
+            details.add(messages().plainText(CONFIG_SCHEMA_UPGRADE_REQUIRED,
+                    Map.of("schema", configured, "supported", CONFIG_SCHEMA)));
         }
         return false;
     }
 
     private String resolveDatabaseUrl() {
         String configured = ConfigurationValues.text(getConfig(), "database.file",
-                "tianjitown.db");
+                "tianjitown.db", messages()::plainText);
         if (configured.isBlank()) {
-            throw new IllegalArgumentException("database.file 不能为空");
+            throw new IllegalArgumentException(messages().plainText(DATABASE_FILE_REQUIRED));
         }
         Path databaseFile = Path.of(configured);
         if (!databaseFile.isAbsolute()) {
@@ -358,12 +473,14 @@ public final class TianjiTownPlugin extends JavaPlugin {
         databaseFile = databaseFile.toAbsolutePath().normalize();
         Path databaseDirectory = databaseFile.getParent();
         if (databaseDirectory == null) {
-            throw new IllegalArgumentException("database.file 必须指向数据库文件");
+            throw new IllegalArgumentException(messages().plainText(DATABASE_FILE_PATH_INVALID));
         }
         try {
             Files.createDirectories(databaseDirectory);
         } catch (IOException exception) {
-            throw new IllegalArgumentException("无法创建 SQLite 目录: " + databaseDirectory, exception);
+            throw new IllegalArgumentException(messages().plainText(
+                    DATABASE_DIRECTORY_CREATE_FAILURE,
+                    Map.of("path", safeText(databaseDirectory))), exception);
         }
         return "jdbc:sqlite:" + databaseFile;
     }
@@ -398,8 +515,9 @@ public final class TianjiTownPlugin extends JavaPlugin {
             }
             candidate.close();
             List<String> details = new ArrayList<>(previousDetails);
-            details.add("FAIL 业务运行时激活异常: " + safeMessage(exception));
-            lock("业务运行时门禁未通过", details);
+            details.add(messages().plainText(RUNTIME_ACTIVATION_FAILURE,
+                    Map.of("detail", safeText(safeMessage(exception)))));
+            lock(messages().plainText(RUNTIME_GATE_FAILED), details);
         }
     }
 
@@ -430,9 +548,9 @@ public final class TianjiTownPlugin extends JavaPlugin {
         } catch (RuntimeException | LinkageError exception) {
             candidate.close();
             List<String> details = new ArrayList<>(previousDetails);
-            details.add("FAIL 业务配置、WorldBorder、玩家界面或清算账户: "
-                    + exception.getMessage());
-            lock("业务运行时门禁未通过", details);
+            details.add(messages().plainText(RUNTIME_INITIALIZATION_FAILURE,
+                    Map.of("detail", safeText(safeMessage(exception)))));
+            lock(messages().plainText(RUNTIME_GATE_FAILED), details);
             return;
         }
         databaseGate = candidate;
@@ -441,19 +559,21 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 java.util.Objects.requireNonNull(quickShop, "QuickShop-Hikari"),
                 runtime::quickShopTaxEnabled, runtime::taxPolicy, runtime::acceptQuickShopTax,
                 runtime.settlement().accountName(), runtime.settlement().accountId(),
-                runtime.settlement().scale()).register();
+                runtime.settlement().scale(), messages()::plainText).register();
         runtime.setQuickShopTaxAvailable(quickShopCapability.available());
         Plugin jobs = java.util.Objects.requireNonNull(
                 getServer().getPluginManager().getPlugin("Jobs"), "Jobs");
         JobsIncomeTaxAdapter.Capability jobsCapability = new JobsIncomeTaxAdapter(this, jobs,
-                runtime::taxEnabled, runtime::acceptJobsIncomeTax).register();
+                runtime::taxEnabled, runtime::acceptJobsIncomeTax,
+                messages()::plainText).register();
         Plugin globalMarketPlus = java.util.Objects.requireNonNull(
                 getServer().getPluginManager().getPlugin("GlobalMarketPlus"),
                 "GlobalMarketPlus");
         GlobalMarketPlusIncomeTaxAdapter.Capability globalMarketCapability =
                 new GlobalMarketPlusIncomeTaxAdapter(this, globalMarketPlus,
                         runtime::taxEnabled,
-                        runtime::acceptGlobalMarketPlusIncomeTax).register();
+                        runtime::acceptGlobalMarketPlusIncomeTax,
+                        messages()::plainText).register();
         townRuntime = runtime;
         townActions = actions;
         townUi = ui;
@@ -467,10 +587,10 @@ public final class TianjiTownPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new ResidenceCommandGuard(this, managedResidenceNames::contains,
                         activeResidenceNames::contains,
-                        messages()::text), this);
+                        messages()::text, messages()::plainText), this);
         getServer().getPluginManager().registerEvents(new ResidenceDeletionGuard(this,
                 managedResidenceNames::contains, residenceProtection::internalMutation,
-                runtime::reconcileAll, messages()::text), this);
+                runtime::reconcileAll, messages()::text, messages()::plainText), this);
         runAsync(() -> {
             try {
                 runtime.repository().listTowns(true).forEach(town -> {
@@ -480,7 +600,8 @@ public final class TianjiTownPlugin extends JavaPlugin {
                     }
                 });
             } catch (RuntimeException exception) {
-                getLogger().severe("读取系统 Residence 名称清单失败: " + exception.getMessage());
+                getLogger().severe(plainText(RESIDENCE_NAMES_LOAD_FAILURE,
+                        Map.of("detail", safeText(safeMessage(exception)))));
             }
         });
         runtime.recoverStartupState();
@@ -489,35 +610,43 @@ public final class TianjiTownPlugin extends JavaPlugin {
         runtime.bonuses().recoverTaggedBeacons();
         runtime.bonuses().refreshIndex();
         getServer().getScheduler().runTaskTimer(this,
-                () -> runPeriodic("SQLite 恢复检查", runtime::checkRecovery),
+                () -> runPeriodic(PERIODIC_SQLITE_RECOVERY_FAILURE, runtime::checkRecovery),
                 20L * 30, 20L * 30);
         getServer().getScheduler().runTaskTimer(this,
-                () -> runPeriodic("Residence 对账", runtime::reconcileAll), 20L * 10,
+                () -> runPeriodic(PERIODIC_RESIDENCE_RECONCILIATION_FAILURE,
+                        runtime::reconcileAll), 20L * 10,
                 20L * 60 * 60);
         getServer().getScheduler().runTaskTimer(this,
-                () -> runPeriodic("投票结算", runtime::settleDueVotes), 20L * 30,
+                () -> runPeriodic(PERIODIC_VOTE_SETTLEMENT_FAILURE,
+                        runtime::settleDueVotes), 20L * 30,
                 20L * 60);
         getServer().getScheduler().runTaskTimer(this,
-                () -> runPeriodic("清算对账", runtime::reconcileSettlement), 20L * 20,
+                () -> runPeriodic(PERIODIC_SETTLEMENT_RECONCILIATION_FAILURE,
+                        runtime::reconcileSettlement), 20L * 20,
                 20L * 60 * Math.max(1,
                         getConfig().getLong("economy.reconciliation-interval-minutes", 5)));
         getServer().getScheduler().runTaskTimer(this,
-                () -> runPeriodic("领地加成索引刷新", runtime.bonuses()::refreshIndex),
+                () -> runPeriodic(PERIODIC_TERRITORY_BONUS_INDEX_FAILURE,
+                        runtime.bonuses()::refreshIndex),
                 20L * 15, 20L * 30);
         getServer().getScheduler().runTaskTimer(this,
-                () -> runPeriodic("信标效果刷新", runtime.bonuses()::refreshBeaconEffects),
+                () -> runPeriodic(PERIODIC_BEACON_EFFECT_FAILURE,
+                        runtime.bonuses()::refreshBeaconEffects),
                 20L * 10, runtime.bonuses().settings().beacon().refreshIntervalTicks());
         getServer().getScheduler().runTaskTimer(this,
-                () -> runPeriodic("返还计数清理", runtime.bonuses()::cleanupCounters),
+                () -> runPeriodic(PERIODIC_REFUND_COUNTER_FAILURE,
+                        runtime.bonuses()::cleanupCounters),
                 20L * 60, 20L * 60 * 60);
         // 启动恢复和首次缓存初始化使用异步任务；延迟一小段时间再执行一次诊断，
         // 避免把启动中的中间状态报告成异常。运行期间通过管理员命令按需诊断。
         getServer().getScheduler().runTaskLater(this,
-                () -> runPeriodic("启动诊断", runtime.bonuses()::diagnoseAtStartup),
+                () -> runPeriodic(PERIODIC_STARTUP_DIAGNOSTIC_FAILURE,
+                        runtime.bonuses()::diagnoseAtStartup),
                 STARTUP_DIAGNOSTIC_DELAY_TICKS);
         if (runtime.bonuses().settings().operations().backup().enabled()) {
             getServer().getScheduler().runTaskTimer(this,
-                    () -> runPeriodic("定时备份", runtime.bonuses()::createScheduledBackup),
+                    () -> runPeriodic(PERIODIC_SCHEDULED_BACKUP_FAILURE,
+                            runtime.bonuses()::createScheduledBackup),
                     20L * 60,
                     20L * 60 * 60 * runtime.bonuses().settings().operations()
                             .backup().interval().toHours());
@@ -530,26 +659,26 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 + jobsCapability.detail());
         details.add((globalMarketCapability.available() ? "OK " : "WARN ")
                 + globalMarketCapability.detail());
-        details.add("OK WorldBorder 边界 API 已接入");
-        details.add("OK 玩家界面=DIALOG");
-        details.add("OK 建筑返还、信标增强、启动诊断与定时备份已启用");
+        details.add(messages().plainText(WORLD_BORDER_READY));
+        details.add(messages().plainText(DIALOG_UI_READY));
+        details.add(messages().plainText(RUNTIME_FEATURES_READY));
         gateStatus.set(new GateStatus(GateStatus.State.READY, details));
-        getLogger().info("业务运行时启动完成；玩家入口仅限服务台和小镇手册。");
+        getLogger().info(plainText(RUNTIME_STARTED));
     }
 
     private boolean isCurrentLifecycle(long generation) {
         return isEnabled() && lifecycleGeneration.get() == generation;
     }
 
-    private void runPeriodic(String name, Runnable task) {
+    private void runPeriodic(String messageKey, Runnable task) {
         try {
             task.run();
-            periodicFailures.remove(name);
+            periodicFailures.remove(messageKey);
         } catch (RuntimeException | LinkageError exception) {
             // 同一周期任务持续失败时只记录首次，避免依赖故障造成日志洪泛。
-            if (periodicFailures.add(name)) {
-                getLogger().severe(name + "失败，后续周期仍会继续尝试: "
-                        + safeMessage(exception));
+            if (periodicFailures.add(messageKey)) {
+                getLogger().severe(plainText(messageKey,
+                        Map.of("detail", safeText(safeMessage(exception)))));
             }
         }
     }
@@ -558,9 +687,11 @@ public final class TianjiTownPlugin extends JavaPlugin {
         try {
             Plugin worldBorder = java.util.Objects.requireNonNull(
                     getServer().getPluginManager().getPlugin("WorldBorder"), "WorldBorder");
-            return new WorldBorderBoundaryService(getServer(), worldBorder);
+            return new WorldBorderBoundaryService(getServer(), worldBorder,
+                    messages()::plainText);
         } catch (LinkageError error) {
-            throw new IllegalStateException("WorldBorder API 无法加载", error);
+            throw new IllegalStateException(messages().plainText(WORLD_BORDER_API_LOAD_FAILURE),
+                    error);
         }
     }
 
@@ -568,12 +699,16 @@ public final class TianjiTownPlugin extends JavaPlugin {
         List<String> copy = new ArrayList<>(details);
         copy.add("LOCKED " + reason);
         gateStatus.set(new GateStatus(GateStatus.State.LOCKED, copy));
-        getLogger().severe(reason + "；TianjiTown 所有写功能保持锁定。使用 /townadmin status 查看详情。");
+        getLogger().severe(plainText(RUNTIME_LOCKED, Map.of("reason", safeText(reason))));
     }
 
     private static String safeMessage(Throwable throwable) {
         String message = throwable.getMessage();
         return message == null || message.isBlank()
                 ? throwable.getClass().getSimpleName() : message;
+    }
+
+    private static String safeText(Object value) {
+        return String.valueOf(value).replace('&', '＆').replace('§', '�');
     }
 }

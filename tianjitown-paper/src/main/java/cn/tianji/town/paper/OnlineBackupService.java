@@ -19,9 +19,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 
 final class OnlineBackupService {
     private static final String PREFIX = "tianjitown-";
+    private static final String MAIN_THREAD_REQUIRED =
+            "diagnostic.backup.main-thread-required";
+    private static final String ABSOLUTE_PATH = "validation.backup.absolute-path";
+    private static final String RELATIVE_PATH_ESCAPE =
+            "validation.backup.relative-path-escape";
+    private static final String SYMLINK_ESCAPE = "validation.backup.symlink-escape";
+    private static final String NOT_DIRECTORY = "validation.backup.not-directory";
+    private static final String REAL_PATH_VERIFICATION_FAILURE =
+            "validation.backup.real-path-verification-failure";
+    private static final String FILENAME_EXHAUSTED = "diagnostic.backup.filename-exhausted";
+    private static final String SHA256_UNAVAILABLE = "diagnostic.backup.sha256-unavailable";
     private static final DateTimeFormatter STAMP = DateTimeFormatter
             .ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
     private final TianjiTownPlugin plugin;
@@ -40,7 +52,8 @@ final class OnlineBackupService {
 
     Result create() {
         if (plugin.getServer().isPrimaryThread()) {
-            throw new IllegalStateException("SQLite 备份不能在 Paper 主线程执行");
+            throw new IllegalStateException(resolveMessage(plugin.messages()::plainText,
+                    MAIN_THREAD_REQUIRED, Map.of()));
         }
         Instant startedAt = Instant.now();
         Path databaseFile = null;
@@ -51,7 +64,8 @@ final class OnlineBackupService {
             Path directory = resolveDirectory();
             Files.createDirectories(directory);
             directory = resolveDirectory();
-            BackupPaths paths = reserveBackupPaths(directory, startedAt);
+            BackupPaths paths = reserveBackupPaths(directory, startedAt,
+                    plugin.messages()::plainText);
             databaseFile = paths.databaseFile();
             configFile = paths.configFile();
             checksumFile = paths.checksumFile();
@@ -84,24 +98,36 @@ final class OnlineBackupService {
     }
 
     Path resolveDirectory() {
-        return resolveDirectory(plugin.getDataFolder().toPath(), settings.directory());
+        return resolveDirectory(plugin.getDataFolder().toPath(), settings.directory(),
+                plugin.messages()::plainText);
     }
 
     static Path resolveDirectory(Path dataDirectory, Path configured) {
+        return resolveDirectory(dataDirectory, configured, OnlineBackupService::fallbackMessage);
+    }
+
+    static Path resolveDirectory(Path dataDirectory, Path configured,
+                                 BiFunction<String, Map<String, ?>, String> messageResolver) {
+        Objects.requireNonNull(dataDirectory, "dataDirectory");
+        Objects.requireNonNull(configured, "configured");
+        Objects.requireNonNull(messageResolver, "messageResolver");
         Path normalizedDataDirectory = dataDirectory.toAbsolutePath().normalize();
         if (configured.isAbsolute()) {
-            throw new IllegalArgumentException("备份目录必须位于插件数据目录内，不能使用绝对路径: "
-                    + configured);
+            throw new IllegalArgumentException(resolveMessage(messageResolver, ABSOLUTE_PATH,
+                    Map.of("path", safeText(configured))));
         }
         Path directory = normalizedDataDirectory.resolve(configured).normalize();
         if (!directory.startsWith(normalizedDataDirectory)) {
-            throw new IllegalArgumentException("相对备份目录不能超出插件数据目录: " + configured);
+            throw new IllegalArgumentException(resolveMessage(messageResolver,
+                    RELATIVE_PATH_ESCAPE, Map.of("path", safeText(configured))));
         }
-        verifyRealPathContained(normalizedDataDirectory, directory);
+        verifyRealPathContained(normalizedDataDirectory, directory, messageResolver);
         return directory;
     }
 
-    private static void verifyRealPathContained(Path dataDirectory, Path directory) {
+    private static void verifyRealPathContained(Path dataDirectory, Path directory,
+                                                BiFunction<String, Map<String, ?>, String>
+                                                        messageResolver) {
         if (!Files.exists(dataDirectory)) {
             return;
         }
@@ -112,19 +138,30 @@ final class OnlineBackupService {
                 existing = existing.getParent();
             }
             if (existing == null || !existing.toRealPath().startsWith(realDataDirectory)) {
-                throw new IllegalArgumentException("备份目录通过符号链接或联接超出插件数据目录: "
-                        + directory);
+                throw new IllegalArgumentException(resolveMessage(messageResolver, SYMLINK_ESCAPE,
+                        Map.of("path", safeText(directory))));
             }
             if (Files.exists(directory) && !Files.isDirectory(directory)) {
-                throw new IllegalArgumentException("备份目录指向文件: " + directory);
+                throw new IllegalArgumentException(resolveMessage(messageResolver, NOT_DIRECTORY,
+                        Map.of("path", safeText(directory))));
             }
         } catch (IOException exception) {
-            throw new IllegalArgumentException("无法验证备份目录真实路径: " + directory,
+            throw new IllegalArgumentException(resolveMessage(messageResolver,
+                    REAL_PATH_VERIFICATION_FAILURE, Map.of("path", safeText(directory))),
                     exception);
         }
     }
 
     static BackupPaths reserveBackupPaths(Path directory, Instant startedAt) throws IOException {
+        return reserveBackupPaths(directory, startedAt, OnlineBackupService::fallbackMessage);
+    }
+
+    static BackupPaths reserveBackupPaths(Path directory, Instant startedAt,
+                                          BiFunction<String, Map<String, ?>, String>
+                                                  messageResolver) throws IOException {
+        Objects.requireNonNull(directory, "directory");
+        Objects.requireNonNull(startedAt, "startedAt");
+        Objects.requireNonNull(messageResolver, "messageResolver");
         String baseStem = PREFIX + STAMP.format(startedAt);
         for (int sequence = 0; sequence < 10_000; sequence++) {
             String stem = sequence == 0 ? baseStem : baseStem + "-" + sequence;
@@ -143,7 +180,7 @@ final class OnlineBackupService {
             }
             Files.deleteIfExists(paths.reservationFile());
         }
-        throw new IOException("同一秒内备份任务过多，无法分配唯一文件名");
+        throw new IOException(resolveMessage(messageResolver, FILENAME_EXHAUSTED, Map.of()));
     }
 
     private void prune(Path directory) throws IOException {
@@ -172,12 +209,20 @@ final class OnlineBackupService {
         }
     }
 
-    private static String sha256(Path path) throws IOException {
+    private String sha256(Path path) throws IOException {
+        return sha256(path, plugin.messages()::plainText);
+    }
+
+    static String sha256(Path path, BiFunction<String, Map<String, ?>, String> messageResolver)
+            throws IOException {
+        Objects.requireNonNull(path, "path");
+        Objects.requireNonNull(messageResolver, "messageResolver");
         MessageDigest digest;
         try {
             digest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("运行环境缺少 SHA-256", exception);
+            throw new IllegalStateException(resolveMessage(messageResolver, SHA256_UNAVAILABLE,
+                    Map.of()), exception);
         }
         try (InputStream stream = Files.newInputStream(path)) {
             byte[] buffer = new byte[64 * 1024];
@@ -205,6 +250,28 @@ final class OnlineBackupService {
     private static String safeMessage(Throwable throwable) {
         String value = throwable.getMessage();
         return value == null || value.isBlank() ? throwable.getClass().getSimpleName() : value;
+    }
+
+    private static String resolveMessage(
+            BiFunction<String, Map<String, ?>, String> messageResolver,
+            String key, Map<String, ?> placeholders) {
+        try {
+            String message = messageResolver.apply(key, placeholders);
+            if (message != null && !message.isBlank()) {
+                return message;
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // 备份路径校验和技术诊断仍需在消息配置异常时返回稳定键名。
+        }
+        return fallbackMessage(key, placeholders);
+    }
+
+    private static String fallbackMessage(String key, Map<String, ?> placeholders) {
+        return ConfigurationValues.fallbackMessage(key, placeholders);
+    }
+
+    private static String safeText(Object value) {
+        return String.valueOf(value).replace('&', '＆').replace('§', '�');
     }
 
     record Result(boolean success, Instant completedAt, String detail, Path databaseFile) {

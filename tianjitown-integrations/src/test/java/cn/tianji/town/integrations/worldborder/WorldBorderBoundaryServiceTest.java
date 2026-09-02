@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.BiFunction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -107,6 +109,51 @@ class WorldBorderBoundaryServiceTest {
 
         assertThrows(IllegalStateException.class, () -> new WorldBorderBoundaryService(
                 server(false), access).check(territory(), 0));
+    }
+
+    @Test
+    void resolvesOffThreadFailureThroughInjectedMessageResolver() {
+        WorldBorderBoundaryService.BorderAccess access = new WorldBorderBoundaryService.BorderAccess() {
+            @Override
+            public Object border(String worldName) {
+                return new Object();
+            }
+
+            @Override
+            public boolean inside(Object border, double x, double z) {
+                return true;
+            }
+        };
+        BiFunction<String, Map<String, ?>, String> resolver = (key, placeholders) -> {
+            assertEquals("diagnostic.world-border.main-thread-required", key);
+            assertTrue(placeholders.isEmpty());
+            return "custom world border thread diagnostic";
+        };
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new WorldBorderBoundaryService(server(false), access, resolver)
+                        .check(territory(), 0));
+
+        assertEquals("custom world border thread diagnostic", exception.getMessage());
+    }
+
+    @Test
+    void resolvesDisabledPluginFailureThroughInjectedMessageResolver() {
+        BiFunction<String, Map<String, ?>, String> resolver = (key, placeholders) -> {
+            assertEquals("diagnostic.world-border.plugin-disabled", key);
+            assertTrue(placeholders.isEmpty());
+            return "custom world border disabled diagnostic";
+        };
+        Plugin plugin = (Plugin) Proxy.newProxyInstance(
+                WorldBorderBoundaryServiceTest.class.getClassLoader(),
+                new Class<?>[]{Plugin.class},
+                (ignored, method, arguments) -> method.getName().equals("isEnabled")
+                        ? false : defaultValue(method.getReturnType()));
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> new WorldBorderBoundaryService(server(true), plugin, resolver));
+
+        assertEquals("custom world border disabled diagnostic", exception.getMessage());
     }
 
     private static InitialTerritory territory() {

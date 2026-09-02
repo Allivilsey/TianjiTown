@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ResidenceLandProtectionServiceTest {
@@ -37,7 +38,29 @@ class ResidenceLandProtectionServiceTest {
         LandProtectionService.Result result = service.remove("SKY", territory);
 
         assertFalse(result.success());
-        assertTrue(result.message().contains("完整重启服务端"));
+        assertEquals(LandProtectionService.ResultCode.RESIDENCE_API_UNAVAILABLE, result.code());
+        assertEquals("RESIDENCE_PLUGIN_UNAVAILABLE", result.parameters().get("detail"));
+    }
+
+    @Test
+    void reportsWorldUnavailableAsStructuredCollisionFailure() {
+        Server server = proxy(Server.class, (ignored, method, arguments) -> switch (
+                method.getName()) {
+            case "getWorld", "isPrimaryThread" -> method.getName().equals("isPrimaryThread")
+                    ? true : null;
+            default -> defaultValue(method.getReturnType());
+        });
+        ResidenceLandProtectionService service = new ResidenceLandProtectionService(server,
+                new HashSet<>());
+        InitialTerritory territory = new InitialTerritory(
+                new ChunkPosition(UUID.randomUUID(), "unloaded-world", 10, 20));
+
+        LandProtectionService.Collision collision = service.findCollision(territory);
+
+        assertTrue(collision.occupied());
+        assertEquals(LandProtectionService.ResultCode.WORLD_UNLOADED, collision.code());
+        assertEquals("unloaded-world", collision.parameters().get("world"));
+        assertTrue(collision.residenceName() == null);
     }
 
     @SuppressWarnings("unchecked")

@@ -47,9 +47,10 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         try {
             ClaimedResidence existing = manager().getByName(name);
             return existing == null ? Collision.none()
-                    : new Collision(true, existing.getName());
+                    : new Collision(true, safeText(existing.getName()));
         } catch (RuntimeException | LinkageError exception) {
-            return new Collision(true, dependencyError(exception));
+            return Collision.failureCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", dependencyDetail(exception)));
         }
     }
 
@@ -59,12 +60,15 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         try {
             Bounds bounds = bounds(territory);
             if (bounds == null) {
-                return new Collision(true, "世界未加载");
+                return Collision.failureCode(ResultCode.WORLD_UNLOADED,
+                        Map.of("world", safeText(territory.center().worldName())));
             }
             ClaimedResidence collision = manager().collidesWithResidence(bounds.area());
-            return collision == null ? Collision.none() : new Collision(true, collision.getName());
+            return collision == null ? Collision.none()
+                    : new Collision(true, safeText(collision.getName()));
         } catch (RuntimeException | LinkageError exception) {
-            return new Collision(true, dependencyError(exception));
+            return Collision.failureCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", dependencyDetail(exception)));
         }
     }
 
@@ -75,16 +79,23 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         String name = registerManagedName(residenceName);
         Bounds bounds = bounds(territory);
         if (bounds == null) {
-            return Inspection.invalid("目标世界未加载: " + territory.center().worldName());
+            return Inspection.invalidCode(ResultCode.WORLD_UNLOADED,
+                    Map.of("world", safeText(territory.center().worldName())));
         }
-        ClaimedResidence residence = manager().getByName(name);
-        if (residence == null) {
-            return Inspection.missing("缺少 Residence 投影 " + name);
+        try {
+            ClaimedResidence residence = manager().getByName(name);
+            if (residence == null) {
+                return Inspection.missingCode(ResultCode.PROJECTION_MISSING,
+                        Map.of("residence", safeText(name)));
+            }
+            Result verification = verifyAndApply(name, residence, bounds, members, false);
+            return new Inspection(verification.success() ? ProjectionState.HEALTHY
+                    : ProjectionState.INVALID, verification.code(), verification.parameters(),
+                    verification.legacyMessage());
+        } catch (RuntimeException | LinkageError exception) {
+            return Inspection.invalidCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", dependencyDetail(exception)));
         }
-        Result verification = verifyAndApply(name, residence, bounds, members, false);
-        return verification.success()
-                ? Inspection.healthy(verification.message())
-                : Inspection.invalid(verification.message());
     }
 
     @Override
@@ -95,7 +106,8 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             ResidenceManager manager = manager();
             Bounds bounds = bounds(territory);
             if (bounds == null) {
-                return Result.failure("目标世界未加载: " + territory.center().worldName());
+                return Result.failureCode(ResultCode.WORLD_UNLOADED,
+                        Map.of("world", safeText(territory.center().worldName())));
             }
             ClaimedResidence existing = manager.getByName(name);
             if (existing != null) {
@@ -103,18 +115,22 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             }
             ClaimedResidence collision = manager.collidesWithResidence(bounds.area());
             if (collision != null) {
-                return Result.failure("目标 5×5 区块与 Residence 冲突: " + collision.getName());
+                return Result.failureCode(ResultCode.INITIAL_PROJECTION_COLLISION,
+                        Map.of("residence", safeText(collision.getName())));
             }
             if (!manager.addResidence(name, SYSTEM_OWNER_HINT, bounds.low(), bounds.high())) {
-                return Result.failure("Residence API 拒绝创建系统领地 " + name);
+                return Result.failureCode(ResultCode.PROJECTION_CREATE_REJECTED,
+                        Map.of("residence", safeText(name)));
             }
             ClaimedResidence created = manager.getByName(name);
             if (created == null) {
-                return Result.failure("Residence 创建后无法按名称读取: " + name);
+                return Result.failureCode(ResultCode.PROJECTION_CREATE_READBACK_FAILED,
+                        Map.of("residence", safeText(name)));
             }
             return verifyAndApply(name, created, bounds, members, true);
         } catch (RuntimeException | LinkageError exception) {
-            return Result.failure(dependencyError(exception));
+            return Result.failureCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", dependencyDetail(exception)));
         }
     }
 
@@ -126,21 +142,25 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             ResidenceManager manager = manager();
             ClaimedResidence existing = manager.getByName(name);
             if (existing == null) {
-                return Result.ok("Residence 已不存在");
+                return Result.successCode(ResultCode.PROJECTION_ALREADY_ABSENT);
             }
             Bounds bounds = bounds(territory);
             if (bounds == null) {
-                return Result.failure("目标世界未加载: " + territory.center().worldName());
+                return Result.failureCode(ResultCode.WORLD_UNLOADED,
+                        Map.of("world", safeText(territory.center().worldName())));
             }
             if (!existing.isServerLand() || !matchesMainBounds(existing, bounds)) {
-                return Result.failure("拒绝移除同名但并非当前小镇投影的 Residence: " + name);
+                return Result.failureCode(ResultCode.PROJECTION_REMOVE_REJECTED,
+                        Map.of("residence", safeText(name)));
             }
             removeResidence(manager, name);
             return manager.getByName(name) == null
-                    ? Result.ok("Residence 已移除")
-                    : Result.failure("Residence 移除后仍可读取");
+                    ? Result.successCode(ResultCode.PROJECTION_REMOVED)
+                    : Result.failureCode(ResultCode.PROJECTION_STILL_PRESENT,
+                    Map.of("residence", safeText(name)));
         } catch (RuntimeException | LinkageError exception) {
-            return Result.failure(dependencyError(exception));
+            return Result.failureCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", dependencyDetail(exception)));
         }
     }
 
@@ -151,24 +171,32 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         String name = registerManagedName(residenceName);
         Bounds bounds = bounds(territory);
         if (bounds == null) {
-            return Result.failure("目标世界未加载: " + territory.center().worldName());
+            return Result.failureCode(ResultCode.WORLD_UNLOADED,
+                    Map.of("world", safeText(territory.center().worldName())));
         }
-        ResidenceManager manager = manager();
-        ClaimedResidence residence = manager.getByName(name);
-        if (residence == null) {
-            return repair ? create(name, territory, members)
-                    : Result.failure("缺少 Residence 投影 " + name);
+        try {
+            ResidenceManager manager = manager();
+            ClaimedResidence residence = manager.getByName(name);
+            if (residence == null) {
+                return repair ? create(name, territory, members)
+                        : Result.failureCode(ResultCode.PROJECTION_MISSING,
+                        Map.of("residence", safeText(name)));
+            }
+            Result verification = verifyAndApply(name, residence, bounds, members, repair);
+            if (verification.success() || !repair) {
+                return verification;
+            }
+            if (!residence.isServerLand()) {
+                return Result.failureCode(ResultCode.REBUILD_OWNER_MISMATCH,
+                        Map.of("residence", safeText(name)));
+            }
+            // 名称来自数据库登记清单；重建前仍要求现有投影属于受控服务端账户。
+            removeResidence(manager, name);
+            return create(name, territory, members);
+        } catch (RuntimeException | LinkageError exception) {
+            return Result.failureCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", dependencyDetail(exception)));
         }
-        Result verification = verifyAndApply(name, residence, bounds, members, repair);
-        if (verification.success() || !repair) {
-            return verification;
-        }
-        if (!residence.isServerLand()) {
-            return Result.failure("同名 Residence 不属于受控服务端账户，拒绝重建: " + name);
-        }
-        // 名称来自数据库登记清单；重建前仍要求现有投影属于受控服务端账户。
-        removeResidence(manager, name);
-        return create(name, territory, members);
     }
 
     @Override
@@ -210,16 +238,18 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                 world = server.getWorld(worldName);
             }
             if (world == null) {
-                return Result.failure("目标世界未加载: " + worldName);
+                return Result.failureCode(ResultCode.WORLD_UNLOADED,
+                        Map.of("world", safeText(worldName)));
             }
             ResidenceManager manager = manager();
             ClaimedResidence residence = manager.getByName(name);
             if (residence == null || !residence.isServerLand()) {
-                return Result.failure("缺少受控 Residence 投影 " + name);
+                return Result.failureCode(ResultCode.CONTROLLED_PROJECTION_MISSING,
+                        Map.of("residence", safeText(name)));
             }
             Location location = new Location(world, x, y, z, yaw, pitch);
             if (!residence.containsLoc(location)) {
-                return Result.failure("传送点不在本镇 Residence 内");
+                return Result.failureCode(ResultCode.TELEPORT_POINT_OUTSIDE_PROJECTION);
             }
             // Residence 6 的公开 API 只提供基于 Player 当前位置的 setTpLoc；公开的
             // tpLoc 数据字段是同一 API 对非玩家调用方提供的坐标入口。
@@ -227,9 +257,11 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             residence.PitchYaw = new Vector(location.getPitch(), location.getYaw(), 0.0D);
             // 立即持久化，避免仅修改内存对象在 Residence 重载或崩溃后丢失传送点。
             manager.save();
-            return Result.ok("Residence 传送点已更新: " + name);
+            return Result.successCode(ResultCode.TELEPORT_POINT_UPDATED,
+                    Map.of("residence", safeText(name)));
         } catch (RuntimeException | LinkageError exception) {
-            return Result.failure(dependencyError(exception));
+            return Result.failureCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", dependencyDetail(exception)));
         }
     }
 
@@ -237,13 +269,20 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     public Inspection inspect(String residenceName, List<Area> areas, Collection<UUID> members) {
         requireMainThread();
         String name = registerManagedName(residenceName);
-        ClaimedResidence residence = manager().getByName(name);
-        if (residence == null) {
-            return Inspection.missing("缺少 Residence 投影 " + name);
+        try {
+            ClaimedResidence residence = manager().getByName(name);
+            if (residence == null) {
+                return Inspection.missingCode(ResultCode.PROJECTION_MISSING,
+                        Map.of("residence", safeText(name)));
+            }
+            Result result = verifyAndApply(name, residence, areas, members, false);
+            return new Inspection(result.success() ? ProjectionState.HEALTHY
+                    : ProjectionState.INVALID, result.code(), result.parameters(),
+                    result.legacyMessage());
+        } catch (RuntimeException | LinkageError exception) {
+            return Inspection.invalidCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", dependencyDetail(exception)));
         }
-        Result result = verifyAndApply(name, residence, areas, members, false);
-        return result.success() ? Inspection.healthy(result.message())
-                : Inspection.invalid(result.message());
     }
 
     @Override
@@ -257,27 +296,33 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             manager = manager();
             residence = manager.getByName(name);
             if (residence == null) {
-                return Result.failure("缺少待扩张的 Residence 投影 " + name);
+                return Result.failureCode(ResultCode.EXPANSION_PROJECTION_MISSING,
+                        Map.of("residence", safeText(name)));
             }
             if (!residence.isServerLand()) {
-                return Result.failure("Residence 所有者不是受控服务端账户");
+                return Result.failureCode(ResultCode.PROJECTION_OWNER_NOT_CONTROLLED,
+                        Map.of("owner", safeText(residence.getOwner())));
             }
             Bounds bounds = bounds(area.territory());
             if (bounds == null) {
-                return Result.failure("目标世界未加载: " + area.territory().center().worldName());
+                return Result.failureCode(ResultCode.WORLD_UNLOADED,
+                        Map.of("world", safeText(area.territory().center().worldName())));
             }
             CuboidArea existing = residence.getArea(area.name());
             if (existing != null) {
                 return matchesBounds(existing, bounds)
                         ? verifyPermissions(name, residence, members, true)
-                        : Result.failure("同名 Residence 区域边界不一致: " + area.name());
+                        : Result.failureCode(ResultCode.AREA_BOUNDS_MISMATCH,
+                        Map.of("area", safeText(area.name())));
             }
             String collision = manager.checkAreaCollision(bounds.area(), residence);
             if (collision != null) {
-                return Result.failure("目标 5×5 区块与 Residence 冲突: " + collision);
+                return Result.failureCode(ResultCode.EXPANSION_COLLISION,
+                        Map.of("residence", safeText(collision)));
             }
             if (!residence.addArea(bounds.area(), area.name())) {
-                return Result.failure("Residence API 拒绝添加区域 " + area.name());
+                return Result.failureCode(ResultCode.AREA_ADD_REJECTED,
+                        Map.of("area", safeText(area.name())));
             }
             areaAdded = true;
             manager.calculateChunks(residence);
@@ -288,7 +333,6 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             }
             return permissions;
         } catch (RuntimeException | LinkageError exception) {
-            String cleanup = "";
             if (areaAdded && residence != null) {
                 try {
                     removeArea(residence, area.name());
@@ -296,10 +340,13 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                         manager.calculateChunks(residence);
                     }
                 } catch (RuntimeException | LinkageError cleanupFailure) {
-                    cleanup = "；新增区域回滚失败: " + dependencyError(cleanupFailure);
+                    return Result.failureCode(ResultCode.AREA_ADD_ROLLBACK_FAILED,
+                            Map.of("detail", dependencyDetail(exception),
+                                    "cleanup", dependencyDetail(cleanupFailure)));
                 }
             }
-            return Result.failure(dependencyError(exception) + cleanup);
+            return Result.failureCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", dependencyDetail(exception)));
         }
     }
 
@@ -311,21 +358,24 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             ResidenceManager manager = manager();
             ClaimedResidence residence = manager.getByName(name);
             if (residence == null || residence.getArea(areaName) == null) {
-                return Result.ok("Residence 扩张区域已不存在");
+                return Result.successCode(ResultCode.EXPANSION_AREA_ALREADY_ABSENT);
             }
             if (!residence.isServerLand()) {
-                return Result.failure("同名 Residence 不属于受控服务端账户，拒绝移除区域");
+                return Result.failureCode(ResultCode.AREA_OWNER_NOT_CONTROLLED);
             }
             if (residence.getArea(areaName) == residence.getMainArea()) {
-                return Result.failure("拒绝移除 Residence 主区域");
+                return Result.failureCode(ResultCode.MAIN_AREA_REMOVAL_REJECTED);
             }
             removeArea(residence, areaName);
             manager.calculateChunks(residence);
             return residence.getArea(areaName) != null
-                    ? Result.failure("Residence 区域移除后仍可读取")
-                    : Result.ok("Residence 扩张区域已移除");
+                    ? Result.failureCode(ResultCode.AREA_STILL_PRESENT,
+                    Map.of("area", safeText(areaName)))
+                    : Result.successCode(ResultCode.EXPANSION_AREA_REMOVED,
+                    Map.of("area", safeText(areaName)));
         } catch (RuntimeException | LinkageError exception) {
-            return Result.failure(dependencyError(exception));
+            return Result.failureCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", dependencyDetail(exception)));
         }
     }
 
@@ -342,45 +392,52 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                             boolean repair) {
         requireMainThread();
         String name = registerManagedName(residenceName);
-        ResidenceManager manager = manager();
-        ClaimedResidence residence = manager.getByName(name);
-        if (residence == null) {
-            if (!repair) {
-                return Result.failure("缺少 Residence 投影 " + name);
-            }
-            return createFromDatabase(name, areas, members);
-        }
-        Result current = verifyAndApply(name, residence, areas, members, repair);
-        if (current.success() || !repair) {
-            return current;
-        }
-        for (Area area : areas) {
-            Bounds bounds = bounds(area.territory());
-            if (bounds == null) {
-                return Result.failure("目标世界未加载: " + area.territory().center().worldName());
-            }
-            CuboidArea actual = residence.getArea(area.name());
-            if (actual == null) {
-                Result added = addArea(name, area, members);
-                if (!added.success()) {
-                    return added;
+        try {
+            ResidenceManager manager = manager();
+            ClaimedResidence residence = manager.getByName(name);
+            if (residence == null) {
+                if (!repair) {
+                    return Result.failureCode(ResultCode.PROJECTION_MISSING,
+                            Map.of("residence", safeText(name)));
                 }
-            } else if (!matchesBounds(actual, bounds)) {
-                return rebuildFromDatabase(manager, name, residence, areas, members,
-                        "区域边界不一致: " + area.name());
+                return createFromDatabase(name, areas, members);
             }
+            Result current = verifyAndApply(name, residence, areas, members, repair);
+            if (current.success() || !repair) {
+                return current;
+            }
+            for (Area area : areas) {
+                Bounds bounds = bounds(area.territory());
+                if (bounds == null) {
+                    return Result.failureCode(ResultCode.WORLD_UNLOADED,
+                            Map.of("world", safeText(area.territory().center().worldName())));
+                }
+                CuboidArea actual = residence.getArea(area.name());
+                if (actual == null) {
+                    Result added = addArea(name, area, members);
+                    if (!added.success()) {
+                        return added;
+                    }
+                } else if (!matchesBounds(actual, bounds)) {
+                    return rebuildFromDatabase(manager, name, residence, areas, members);
+                }
+            }
+            Result repaired = verifyAndApply(name, residence, areas, members, true);
+            return repaired.success() ? repaired
+                    : rebuildFromDatabase(manager, name, residence, areas, members);
+        } catch (RuntimeException | LinkageError exception) {
+            return Result.failureCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", dependencyDetail(exception)));
         }
-        Result repaired = verifyAndApply(name, residence, areas, members, true);
-        return repaired.success() ? repaired
-                : rebuildFromDatabase(manager, name, residence, areas, members,
-                repaired.message());
     }
 
     private Result createFromDatabase(String name, List<Area> areas,
                                       Collection<UUID> members) {
         Area main = areas.stream().filter(area -> area.name().equalsIgnoreCase("main"))
-                .findFirst().orElseThrow(() -> new IllegalArgumentException(
-                        "多区域 Residence 缺少 main 区域"));
+                .findFirst().orElse(null);
+        if (main == null) {
+            return Result.failureCode(ResultCode.MAIN_AREA_MISSING);
+        }
         Result created = create(name, main.territory(), members);
         if (!created.success()) {
             return created;
@@ -392,39 +449,43 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             Result added = addArea(name, area, members);
             if (!added.success()) {
                 cleanupIncompleteProjection(name);
-                return Result.failure("依照数据库创建区域失败: " + added.message()
-                        + "；不完整投影已清理，后续对账将重试");
+                return Result.failureCode(ResultCode.DATABASE_AREA_CREATE_FAILED,
+                        Map.of("area", safeText(area.name())));
             }
         }
-        return Result.ok("Residence 投影已依照数据库重建: " + name);
+        return Result.successCode(ResultCode.PROJECTION_REBUILT_FROM_DATABASE,
+                Map.of("residence", safeText(name)));
     }
 
     private Result rebuildFromDatabase(ResidenceManager manager, String name,
                                        ClaimedResidence residence, List<Area> areas,
-                                       Collection<UUID> members, String difference) {
+                                       Collection<UUID> members) {
         if (!residence.isServerLand()) {
-            return Result.failure("同名 Residence 不属于受控服务端账户，拒绝按数据库重建: "
-                    + name);
+            return Result.failureCode(ResultCode.REBUILD_OWNER_MISMATCH,
+                    Map.of("residence", safeText(name)));
         }
         for (Area area : areas) {
             Bounds bounds = bounds(area.territory());
             if (bounds == null) {
-                return Result.failure("目标世界未加载: " + area.territory().center().worldName());
+                return Result.failureCode(ResultCode.WORLD_UNLOADED,
+                        Map.of("world", safeText(area.territory().center().worldName())));
             }
             String collision = manager.checkAreaCollision(bounds.area(), residence);
             if (collision != null) {
-                return Result.failure("数据库领地与外部 Residence 冲突，拒绝重建: " + collision);
+                return Result.failureCode(ResultCode.DATABASE_REBUILD_COLLISION,
+                        Map.of("residence", safeText(collision)));
             }
         }
         // 只有受控投影且数据库目标区域无外部冲突时，才允许以数据库版本整体替换。
         removeResidence(manager, name);
         if (manager.getByName(name) != null) {
-            return Result.failure("Residence 旧投影移除后仍可读取，无法按数据库重建: " + name);
+            return Result.failureCode(ResultCode.DATABASE_REBUILD_REMOVE_FAILED,
+                    Map.of("residence", safeText(name)));
         }
         Result rebuilt = createFromDatabase(name, areas, members);
         return rebuilt.success()
-                ? Result.ok("Residence 投影已依照数据库自动修复: " + name
-                + "（" + difference + "）")
+                ? Result.successCode(ResultCode.PROJECTION_AUTO_REPAIRED,
+                Map.of("residence", safeText(name)))
                 : rebuilt;
     }
 
@@ -439,23 +500,26 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     private Result verifyAndApply(String name, ClaimedResidence residence, List<Area> areas,
                                   Collection<UUID> members, boolean applyPermissions) {
         if (!residence.isServerLand()) {
-            return Result.failure("Residence 所有者不是受控服务端账户: " + residence.getOwner());
+            return Result.failureCode(ResultCode.PROJECTION_OWNER_NOT_CONTROLLED,
+                    Map.of("owner", safeText(residence.getOwner())));
         }
         if (residence.getAreaCount() != areas.size()) {
-            return Result.failure("Residence 区域数量与数据库不一致");
+            return Result.failureCode(ResultCode.AREA_COUNT_MISMATCH);
         }
         Map<String, CuboidArea> actual = residence.getAreaMap();
         for (Area area : areas) {
             Bounds bounds = bounds(area.territory());
             if (bounds == null) {
-                return Result.failure("目标世界未加载: " + area.territory().center().worldName());
+                return Result.failureCode(ResultCode.WORLD_UNLOADED,
+                        Map.of("world", safeText(area.territory().center().worldName())));
             }
             CuboidArea cuboid = actual.get(area.name().toLowerCase(java.util.Locale.ROOT));
             if (cuboid == null) {
                 cuboid = residence.getArea(area.name());
             }
             if (cuboid == null || !matchesBounds(cuboid, bounds)) {
-                return Result.failure("Residence 区域缺失或边界不一致: " + area.name());
+                return Result.failureCode(ResultCode.AREA_MISSING_OR_BOUNDS_MISMATCH,
+                        Map.of("area", safeText(area.name())));
             }
         }
         return verifyPermissions(name, residence, members, applyPermissions);
@@ -465,11 +529,12 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                                   Collection<UUID> members, boolean applyPermissions) {
         ResidenceManager manager = manager();
         if (!matchesBounds(residence, bounds)) {
-            return Result.failure("Residence 边界或区域数量不一致");
+            return Result.failureCode(ResultCode.PROJECTION_BOUNDS_OR_AREA_COUNT_MISMATCH);
         }
         // Residence 会按服务端 UUID 动态返回 Server_Land 等展示名，不能依赖展示名判断所有权。
         if (!residence.isServerLand()) {
-            return Result.failure("Residence 所有者不是受控服务端账户: " + residence.getOwner());
+            return Result.failureCode(ResultCode.PROJECTION_OWNER_NOT_CONTROLLED,
+                    Map.of("owner", safeText(residence.getOwner())));
         }
         Location[] checks = {bounds.low(), bounds.high(),
                 new Location(bounds.low().getWorld(), bounds.low().getX(), bounds.low().getY(),
@@ -479,7 +544,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         for (Location check : checks) {
             ClaimedResidence found = manager.getByLoc(check);
             if (found == null || !name.equalsIgnoreCase(found.getName())) {
-                return Result.failure("Residence 边界不覆盖预期的 5×5 区块");
+                return Result.failureCode(ResultCode.PROJECTION_BOUNDARY_MISMATCH);
             }
         }
         return verifyPermissions(name, residence, members, applyPermissions);
@@ -489,18 +554,20 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                                      Collection<UUID> members, boolean applyPermissions) {
         for (String flag : PROTECTED_EXPLOSION_FLAGS) {
             if (!applyPermissions && residence.getPermissions().has(flag, true)) {
-                return Result.failure("Residence 爆炸保护标记不一致: " + flag);
+                return Result.failureCode(ResultCode.EXPLOSION_FLAG_MISMATCH,
+                        Map.of("flag", safeText(flag)));
             }
             if (applyPermissions && !residence.getPermissions().setFlag(
                     server.getConsoleSender(), flag, FlagPermissions.FlagState.FALSE, true,
-                    false)) {
-                return Result.failure("无法写入 Residence 爆炸保护标记: " + flag);
+                     false)) {
+                return Result.failureCode(ResultCode.EXPLOSION_FLAG_WRITE_FAILED,
+                        Map.of("flag", safeText(flag)));
             }
         }
         java.util.Set<UUID> existingPlayers = java.util.Set.copyOf(
                 residence.getPermissions().getPlayerFlags().keySet());
         if (!applyPermissions && !existingPlayers.equals(java.util.Set.copyOf(members))) {
-            return Result.failure("Residence 成员权限列表与数据库不一致");
+            return Result.failureCode(ResultCode.MEMBERSHIP_MISMATCH);
         }
         // 清理已离镇玩家的权限，Residence 权限完全由数据库成员关系投影。
         if (applyPermissions) {
@@ -513,21 +580,26 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
         for (UUID member : members) {
             Map<String, Boolean> playerFlags = residence.getPermissions().getPlayerFlags(member);
             if (!applyPermissions && !residence.isTrusted(member)) {
-                return Result.failure("成员 " + member + " 的 padd 权限组不一致");
+                return Result.failureCode(ResultCode.MEMBER_PADD_PERMISSION_MISMATCH,
+                        Map.of("member", safeText(member)));
             }
             if (!applyPermissions && !Boolean.TRUE.equals(playerFlags.get(IGNITE_FLAG))) {
-                return Result.failure("成员 " + member + " 的点火权限不一致");
+                return Result.failureCode(ResultCode.MEMBER_IGNITE_PERMISSION_MISMATCH,
+                        Map.of("member", safeText(member)));
             }
             if (applyPermissions && !residence.getPermissions().setFlagGroupOnPlayer(
-                    server.getConsoleSender(), member, padd.groupedFlag, "true", true)) {
-                return Result.failure("无法写入成员 " + member + " 的 padd 权限组");
+                     server.getConsoleSender(), member, padd.groupedFlag, "true", true)) {
+                return Result.failureCode(ResultCode.MEMBER_PADD_PERMISSION_WRITE_FAILED,
+                        Map.of("member", safeText(member)));
             }
             if (applyPermissions && !residence.getPermissions().setPlayerFlag(member, IGNITE_FLAG,
                     FlagPermissions.FlagState.TRUE)) {
-                return Result.failure("无法写入成员 " + member + " 的点火权限");
+                return Result.failureCode(ResultCode.MEMBER_IGNITE_PERMISSION_WRITE_FAILED,
+                        Map.of("member", safeText(member)));
             }
         }
-        return Result.ok("Residence 投影正常: " + name);
+        return Result.successCode(ResultCode.PROJECTION_HEALTHY,
+                Map.of("residence", safeText(name)));
     }
 
     private Bounds bounds(InitialTerritory territory) {
@@ -550,24 +622,29 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     private ResidenceManager manager() {
         Plugin residence = server.getPluginManager().getPlugin("Residence");
         if (residence == null || !residence.isEnabled()) {
-            throw new IllegalStateException("Residence 插件当前不可用；恢复后必须完整重启服务端");
+            throw new IllegalStateException("RESIDENCE_PLUGIN_UNAVAILABLE");
         }
+        ResidenceManager manager;
         try {
-            ResidenceManager manager = (ResidenceManager) ResidenceApi.getResidenceManager();
-            if (manager == null) {
-                throw new IllegalStateException("ResidenceManager 当前不可用");
-            }
-            return manager;
+            manager = (ResidenceManager) ResidenceApi.getResidenceManager();
         } catch (RuntimeException | LinkageError exception) {
-            throw new IllegalStateException("Residence API 类加载器不可用；必须完整重启服务端",
-                    exception);
+            throw new IllegalStateException("RESIDENCE_API_CLASSLOADER_UNAVAILABLE", exception);
         }
+        if (manager == null) {
+            throw new IllegalStateException("RESIDENCE_MANAGER_UNAVAILABLE");
+        }
+        return manager;
     }
 
-    private static String dependencyError(Throwable throwable) {
+    private static String dependencyDetail(Throwable throwable) {
         String message = throwable.getMessage();
-        return "Residence API 不可用: " + (message == null || message.isBlank()
-                ? throwable.getClass().getSimpleName() : message);
+        String detail = message == null || message.isBlank()
+                ? throwable.getClass().getSimpleName() : message;
+        return safeText(detail);
+    }
+
+    private static String safeText(Object value) {
+        return String.valueOf(value).replace('&', '＆').replace('§', '�');
     }
 
     private static boolean matchesBounds(ClaimedResidence residence, Bounds bounds) {
@@ -586,7 +663,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
 
     private void requireMainThread() {
         if (!server.isPrimaryThread()) {
-            throw new IllegalStateException("Residence API 必须在 Paper 主线程调用");
+            throw new IllegalStateException("RESIDENCE_MAIN_THREAD_REQUIRED");
         }
     }
 

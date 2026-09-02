@@ -14,6 +14,23 @@ class ExpansionRulesTest {
     private static final UUID WORLD = UUID.randomUUID();
 
     @Test
+    void keepsDirectionValuesAsStableBusinessValuesWithoutPresentationText() {
+        assertEquals(0, ExpansionDirection.NORTH.gridX());
+        assertEquals(-1, ExpansionDirection.NORTH.gridZ());
+        assertEquals(1, ExpansionDirection.EAST.gridX());
+        assertEquals(0, ExpansionDirection.EAST.gridZ());
+        assertEquals(0, ExpansionDirection.SOUTH.gridX());
+        assertEquals(1, ExpansionDirection.SOUTH.gridZ());
+        assertEquals(-1, ExpansionDirection.WEST.gridX());
+        assertEquals(0, ExpansionDirection.WEST.gridZ());
+
+        assertEquals(ExpansionDirection.NORTH, ExpansionDirection.parse("north"));
+        assertEquals(ExpansionDirection.EAST, ExpansionDirection.parse("东"));
+        assertEquals(ExpansionDirection.SOUTH, ExpansionDirection.parse("S"));
+        assertEquals(ExpansionDirection.WEST, ExpansionDirection.parse("west"));
+    }
+
+    @Test
     void expandsInFixedFiveByFiveGridAndStaysConnected() {
         TerritoryUnit origin = unit(0, 0, 10, 20);
         TerritoryUnit east = TerritoryRules.next(List.of(origin), ExpansionDirection.EAST);

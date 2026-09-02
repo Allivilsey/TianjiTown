@@ -4,6 +4,7 @@ import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -26,20 +27,23 @@ public record ApplicationText(String name, String shortName, String residenceNam
                 .toList();
     }
 
-    public List<String> validate() {
-        List<String> errors = new ArrayList<>();
-        validateName(name, "名称", 2, 24, errors);
+    public List<ValidationIssue> validate() {
+        List<ValidationIssue> errors = new ArrayList<>();
+        validateName(name, 2, 24, errors);
         if (residenceName.isEmpty() || residenceName.length() > 12) {
-            errors.add("小镇代码长度必须为 1~12");
+            errors.add(issue(ValidationIssue.Code.RESIDENCE_NAME_LENGTH,
+                    bounds(1, 12)));
         } else if (!RESIDENCE_NAME.matcher(residenceName).matches()) {
-            errors.add("小镇代码只能包含英文字母，不允许空格、数字或特殊符号");
+            errors.add(issue(ValidationIssue.Code.RESIDENCE_NAME_CHARACTERS));
         }
-        validateSafeText(description, "简介", 500, errors);
+        validateSafeText(description, 500, ValidationIssue.Code.DESCRIPTION_LENGTH,
+                ValidationIssue.Code.DESCRIPTION_FORMAT, errors);
         if (rules.isEmpty() || rules.size() > 50) {
-            errors.add("规则数量必须为 1~50");
+            errors.add(issue(ValidationIssue.Code.RULE_COUNT, bounds(1, 50)));
         }
         for (int index = 0; index < rules.size(); index++) {
-            validateSafeText(rules.get(index), "规则 " + (index + 1), 300, errors);
+            validateSafeText(rules.get(index), 300, ValidationIssue.Code.RULE_LENGTH,
+                    ValidationIssue.Code.RULE_FORMAT, errors, index + 1);
         }
         return List.copyOf(errors);
     }
@@ -61,35 +65,71 @@ public record ApplicationText(String name, String shortName, String residenceNam
     }
 
     public void requireValid() {
-        List<String> errors = validate();
+        List<ValidationIssue> errors = validate();
         if (!errors.isEmpty()) {
-            throw new IllegalArgumentException(String.join("；", errors));
+            throw new ValidationException(errors);
         }
     }
 
-    private static void validateName(String value, String label, int minimum, int maximum,
-                                     List<String> errors) {
+    private static void validateName(String value, int minimum, int maximum,
+                                     List<ValidationIssue> errors) {
         if (value.length() < minimum || value.length() > maximum) {
-            errors.add(label + "长度必须为 " + minimum + "~" + maximum);
+            errors.add(issue(ValidationIssue.Code.NAME_LENGTH, bounds(minimum, maximum)));
         } else if (!SAFE_NAME.matcher(value).matches()) {
-            errors.add(label + "只能包含文字、数字、空格、下划线、连字符和间隔点");
+            errors.add(issue(ValidationIssue.Code.NAME_CHARACTERS));
         }
-        validateFormatting(value, label, errors);
+        validateFormatting(value, ValidationIssue.Code.NAME_FORMAT, errors);
     }
 
-    private static void validateSafeText(String value, String label, int maximum,
-                                         List<String> errors) {
+    private static void validateSafeText(String value, int maximum,
+                                         ValidationIssue.Code lengthCode,
+                                         ValidationIssue.Code formatCode,
+                                         List<ValidationIssue> errors) {
         if (value.length() > maximum) {
-            errors.add(label + "不能超过 " + maximum + " 字符");
+            errors.add(issue(lengthCode, Map.of("maximum", Integer.toString(maximum))));
         }
-        validateFormatting(value, label, errors);
+        validateFormatting(value, formatCode, errors);
     }
 
-    private static void validateFormatting(String value, String label, List<String> errors) {
+    private static void validateSafeText(String value, int maximum,
+                                         ValidationIssue.Code lengthCode,
+                                         ValidationIssue.Code formatCode,
+                                         List<ValidationIssue> errors, int ruleIndex) {
+        if (value.length() > maximum) {
+            errors.add(issue(lengthCode, Map.of("index", Integer.toString(ruleIndex),
+                    "maximum", Integer.toString(maximum))));
+        }
+        validateFormatting(value, formatCode, errors, ruleIndex);
+    }
+
+    private static void validateFormatting(String value, ValidationIssue.Code code,
+                                           List<ValidationIssue> errors) {
         if (FORMAT_CODE.matcher(value).find() || MINI_MESSAGE.matcher(value).find()
                 || CONTROL.matcher(value).find()) {
-            errors.add(label + "含有不允许的格式或控制字符");
+            errors.add(issue(code));
         }
+    }
+
+    private static void validateFormatting(String value, ValidationIssue.Code code,
+                                           List<ValidationIssue> errors, int ruleIndex) {
+        if (FORMAT_CODE.matcher(value).find() || MINI_MESSAGE.matcher(value).find()
+                || CONTROL.matcher(value).find()) {
+            errors.add(issue(code, Map.of("index", Integer.toString(ruleIndex))));
+        }
+    }
+
+    private static ValidationIssue issue(ValidationIssue.Code code) {
+        return issue(code, Map.of());
+    }
+
+    private static ValidationIssue issue(ValidationIssue.Code code,
+                                         Map<String, String> parameters) {
+        return new ValidationIssue(code, parameters);
+    }
+
+    private static Map<String, String> bounds(int minimum, int maximum) {
+        return Map.of("minimum", Integer.toString(minimum),
+                "maximum", Integer.toString(maximum));
     }
 
     private static String normalize(String value) {
@@ -103,5 +143,62 @@ public record ApplicationText(String name, String shortName, String residenceNam
 
     private static String normalizeKey(String value) {
         return normalize(value).toLowerCase(Locale.ROOT).replace(" ", "");
+    }
+
+    public record ValidationIssue(Code code, Map<String, String> parameters) {
+        public ValidationIssue {
+            code = Objects.requireNonNull(code, "code");
+            parameters = Map.copyOf(Objects.requireNonNull(parameters, "parameters"));
+        }
+
+        public Field field() {
+            return code.field();
+        }
+
+        public enum Code {
+            NAME_LENGTH(Field.NAME),
+            NAME_CHARACTERS(Field.NAME),
+            NAME_FORMAT(Field.NAME),
+            RESIDENCE_NAME_LENGTH(Field.RESIDENCE_NAME),
+            RESIDENCE_NAME_CHARACTERS(Field.RESIDENCE_NAME),
+            DESCRIPTION_LENGTH(Field.DESCRIPTION),
+            DESCRIPTION_FORMAT(Field.DESCRIPTION),
+            RULE_COUNT(Field.RULES),
+            RULE_LENGTH(Field.RULES),
+            RULE_FORMAT(Field.RULES);
+
+            private final Field field;
+
+            Code(Field field) {
+                this.field = field;
+            }
+
+            public Field field() {
+                return field;
+            }
+        }
+
+        public enum Field {
+            NAME,
+            RESIDENCE_NAME,
+            DESCRIPTION,
+            RULES
+        }
+    }
+
+    public static final class ValidationException extends IllegalArgumentException {
+        private final List<ValidationIssue> issues;
+
+        public ValidationException(List<ValidationIssue> issues) {
+            super("APPLICATION_TEXT_VALIDATION_FAILED");
+            if (issues == null || issues.isEmpty()) {
+                throw new IllegalArgumentException("issues");
+            }
+            this.issues = List.copyOf(issues);
+        }
+
+        public List<ValidationIssue> issues() {
+            return issues;
+        }
     }
 }

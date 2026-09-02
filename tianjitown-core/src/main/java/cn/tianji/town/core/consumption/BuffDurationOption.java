@@ -4,23 +4,17 @@ import java.time.Duration;
 import java.util.Locale;
 
 public enum BuffDurationOption {
-    ONE_HOUR("一小时", 1, 10_000),
-    ONE_DAY("一天", 24, 9_000),
-    ONE_WEEK("一周", 24 * 7, 8_000),
-    ONE_MONTH("一月", 24 * 30, 7_000);
+    ONE_HOUR(1, 10_000),
+    ONE_DAY(24, 9_000),
+    ONE_WEEK(24 * 7, 8_000),
+    ONE_MONTH(24 * 30, 7_000);
 
-    private final String displayName;
     private final int hours;
     private final int discountBasisPoints;
 
-    BuffDurationOption(String displayName, int hours, int discountBasisPoints) {
-        this.displayName = displayName;
+    BuffDurationOption(int hours, int discountBasisPoints) {
         this.hours = hours;
         this.discountBasisPoints = discountBasisPoints;
-    }
-
-    public String displayName() {
-        return displayName;
     }
 
     public int hours() {

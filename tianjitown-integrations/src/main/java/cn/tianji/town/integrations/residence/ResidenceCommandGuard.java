@@ -13,52 +13,68 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Predicate;
-import java.util.function.BiFunction;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiFunction;
+import java.util.function.Predicate;
 
 public final class ResidenceCommandGuard implements Listener {
+    private static final String COMMAND_GUARD_FAILURE_MESSAGE =
+            "log.residence.command-guard-failure";
     private final Predicate<String> managedName;
     private final Predicate<String> activeName;
     private final java.util.function.Consumer<String> failureLogger;
     private final BiFunction<String, Map<String, ?>, String> messageResolver;
+    private final BiFunction<String, Map<String, ?>, String> logMessageResolver;
     private final AtomicBoolean failureLogged = new AtomicBoolean();
 
     public ResidenceCommandGuard(Predicate<String> managedName) {
-        this(managedName, managedName, ignored -> { }, ResidenceCommandGuard::fallbackMessage);
+        this(managedName, managedName, ignored -> { }, ResidenceCommandGuard::fallbackMessage,
+                ResidenceCommandGuard::fallbackMessage);
     }
 
     public ResidenceCommandGuard(Plugin owner, Predicate<String> managedName) {
         this(managedName, managedName, message -> owner.getLogger().severe(message),
-                ResidenceCommandGuard::fallbackMessage);
+                ResidenceCommandGuard::fallbackMessage, ResidenceCommandGuard::fallbackMessage);
     }
 
     public ResidenceCommandGuard(Plugin owner, Predicate<String> managedName,
                                  BiFunction<String, Map<String, ?>, String> messageResolver) {
-        this(managedName, managedName, message -> owner.getLogger().severe(message), messageResolver);
+        this(managedName, managedName, message -> owner.getLogger().severe(message),
+                messageResolver, messageResolver);
     }
 
     public ResidenceCommandGuard(Plugin owner, Predicate<String> managedName,
                                  Predicate<String> activeName,
                                  BiFunction<String, Map<String, ?>, String> messageResolver) {
         this(managedName, activeName, message -> owner.getLogger().severe(message),
-                messageResolver);
+                messageResolver, messageResolver);
+    }
+
+    public ResidenceCommandGuard(Plugin owner, Predicate<String> managedName,
+                                 Predicate<String> activeName,
+                                 BiFunction<String, Map<String, ?>, String> messageResolver,
+                                 BiFunction<String, Map<String, ?>, String> logMessageResolver) {
+        this(managedName, activeName, message -> owner.getLogger().severe(message),
+                messageResolver, logMessageResolver);
     }
 
     ResidenceCommandGuard(Predicate<String> managedName,
-                          java.util.function.Consumer<String> failureLogger) {
-        this(managedName, managedName, failureLogger, ResidenceCommandGuard::fallbackMessage);
+                           java.util.function.Consumer<String> failureLogger) {
+        this(managedName, managedName, failureLogger, ResidenceCommandGuard::fallbackMessage,
+                ResidenceCommandGuard::fallbackMessage);
     }
 
     private ResidenceCommandGuard(Predicate<String> managedName,
                                   Predicate<String> activeName,
                                   java.util.function.Consumer<String> failureLogger,
-                                  BiFunction<String, Map<String, ?>, String> messageResolver) {
+                                  BiFunction<String, Map<String, ?>, String> messageResolver,
+                                  BiFunction<String, Map<String, ?>, String> logMessageResolver) {
         this.managedName = Objects.requireNonNull(managedName, "managedName");
         this.activeName = Objects.requireNonNull(activeName, "activeName");
         this.failureLogger = Objects.requireNonNull(failureLogger, "failureLogger");
         this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
+        this.logMessageResolver = Objects.requireNonNull(logMessageResolver, "logMessageResolver");
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -109,8 +125,7 @@ public final class ResidenceCommandGuard implements Listener {
             }
             if (failureLogged.compareAndSet(false, true)) {
                 try {
-                    failureLogger.accept("Residence 命令保护异常，已按失败关闭策略拒绝命令: "
-                            + safeMessage(exception) + "；同类后续错误将被抑制");
+                    failureLogger.accept(resolveFailureMessage(logMessageResolver, exception));
                 } catch (RuntimeException | LinkageError ignored) {
                     // 故障记录器失效时仍不能污染 Paper 事件循环。
                 }
@@ -120,8 +135,25 @@ public final class ResidenceCommandGuard implements Listener {
 
     private static String safeMessage(Throwable throwable) {
         String message = throwable.getMessage();
-        return message == null || message.isBlank()
+        String detail = message == null || message.isBlank()
                 ? throwable.getClass().getSimpleName() : message;
+        return detail.replace('&', '＆').replace('§', '�');
+    }
+
+    static String resolveFailureMessage(BiFunction<String, Map<String, ?>, String> resolver,
+                                        Throwable exception) {
+        return resolveMessage(resolver, COMMAND_GUARD_FAILURE_MESSAGE,
+                Map.of("detail", safeMessage(exception)));
+    }
+
+    private static String resolveMessage(BiFunction<String, Map<String, ?>, String> resolver,
+                                         String key, Map<String, ?> placeholders) {
+        try {
+            String resolved = resolver.apply(key, placeholders);
+            return resolved == null || resolved.isBlank() ? key : resolved;
+        } catch (RuntimeException | LinkageError ignored) {
+            return key + " " + placeholders;
+        }
     }
 
     private static String fallbackMessage(String key, Map<String, ?> placeholders) {

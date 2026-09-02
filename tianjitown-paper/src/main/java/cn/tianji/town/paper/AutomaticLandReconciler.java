@@ -19,7 +19,7 @@ final class AutomaticLandReconciler {
                 residenceName, areas, members);
         if (inspection.state() == LandProtectionService.ProjectionState.HEALTHY) {
             return new Outcome(inspection, false,
-                    LandProtectionService.Result.ok(inspection.message()));
+                    LandProtectionService.Result.fromHealthyInspection(inspection));
         }
         return new Outcome(inspection, true,
                 protection.reconcile(residenceName, areas, members, true));

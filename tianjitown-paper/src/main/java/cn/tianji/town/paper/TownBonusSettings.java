@@ -3,7 +3,6 @@ package cn.tianji.town.paper;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 
-import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.DateTimeException;
@@ -12,41 +11,82 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon,
                          Operations operations) {
+    private static final String REFUND_CHANCE_RANGE =
+            "validation.bonus.building-refund-chance-range";
+    private static final String INTEGER_RANGE = "validation.bonus.integer-range";
+    private static final String REFUND_WEEKLY_LIMIT_RANGE =
+            "validation.bonus.building-refund-weekly-limit-range";
+    private static final String REFUND_RETENTION_RANGE =
+            "validation.bonus.building-refund-retention-range";
+    private static final String RESET_ZONE_INVALID =
+            "validation.bonus.building-refund-reset-zone-invalid";
+    private static final String BLACKLIST_REQUIRED =
+            "validation.bonus.building-refund-blacklist-required";
+    private static final String BLACKLIST_MATERIAL_INVALID =
+            "validation.bonus.building-refund-blacklist-material-invalid";
+    private static final String BEACON_REFRESH_INTERVAL_RANGE =
+            "validation.bonus.beacon-refresh-interval-range";
+    private static final String BEACON_WORLDS_REQUIRED =
+            "validation.bonus.beacon-worlds-required";
+    private static final String DIAGNOSTIC_DAYS_RANGE =
+            "validation.bonus.diagnostic-days-range";
+    private static final String BACKUP_RANGE = "validation.bonus.backup-range";
+    private static final String BACKUP_DIRECTORY_REQUIRED =
+            "validation.bonus.backup-directory-required";
+
     static TownBonusSettings load(ConfigurationSection config) {
-        Objects.requireNonNull(config, "config");
-        return new TownBonusSettings(loadBuildingRefund(config), loadBeacon(config),
-                loadOperations(config));
+        return load(config, ConfigurationValues::fallbackMessage);
     }
 
-    private static BuildingRefund loadBuildingRefund(ConfigurationSection config) {
+    static TownBonusSettings load(ConfigurationSection config,
+                                  BiFunction<String, Map<String, ?>, String> messageResolver) {
+        Objects.requireNonNull(config, "config");
+        Objects.requireNonNull(messageResolver, "messageResolver");
+        return new TownBonusSettings(loadBuildingRefund(config, messageResolver),
+                loadBeacon(config, messageResolver), loadOperations(config, messageResolver));
+    }
+
+    private static BuildingRefund loadBuildingRefund(
+            ConfigurationSection config,
+            BiFunction<String, Map<String, ?>, String> messageResolver) {
         String root = "territory.building-refund";
-        double chance = decimal(config, root + ".chance", 0.1D);
-        int weeklyLimit = integer(config, root + ".weekly-limit", 3_000);
-        int retentionWeeks = integer(config, root + ".counter-retention-weeks", 12);
+        double chance = decimal(config, root + ".chance", 0.1D, messageResolver);
+        int weeklyLimit = integer(config, root + ".weekly-limit", 3_000, messageResolver);
+        int retentionWeeks = integer(config, root + ".counter-retention-weeks", 12,
+                messageResolver);
         if (!Double.isFinite(chance) || chance <= 0 || chance > 1) {
-            throw new IllegalArgumentException(root + ".chance 必须在 (0, 1] 范围内");
+            throw invalid(messageResolver, REFUND_CHANCE_RANGE,
+                    Map.of("path", root + ".chance"));
         }
         if (weeklyLimit < 1 || weeklyLimit > 100_000) {
-            throw new IllegalArgumentException(root + ".weekly-limit 必须在 1~100000 范围内");
+            throw invalid(messageResolver, REFUND_WEEKLY_LIMIT_RANGE,
+                    Map.of("path", root + ".weekly-limit", "minimum", 1, "maximum", 100_000));
         }
         if (retentionWeeks < 2 || retentionWeeks > 260) {
-            throw new IllegalArgumentException(root
-                    + ".counter-retention-weeks 必须在 2~260 范围内");
+            throw invalid(messageResolver, REFUND_RETENTION_RANGE,
+                    Map.of("path", root + ".counter-retention-weeks", "minimum", 2,
+                            "maximum", 260));
         }
         ZoneId resetZone;
         try {
-            resetZone = ZoneId.of(text(config, root + ".reset-zone", "Asia/Shanghai"));
+            resetZone = ZoneId.of(ConfigurationValues.text(config, root + ".reset-zone",
+                    "Asia/Shanghai", messageResolver));
         } catch (DateTimeException exception) {
-            throw new IllegalArgumentException(root + ".reset-zone 不是有效时区", exception);
+            throw invalid(messageResolver, RESET_ZONE_INVALID,
+                    Map.of("path", root + ".reset-zone"), exception);
         }
-        List<String> configured = stringList(config, root + ".blacklist");
+        List<String> configured = ConfigurationValues.stringList(config, root + ".blacklist",
+                messageResolver);
         if (configured.isEmpty()) {
-            throw new IllegalArgumentException(root + ".blacklist 至少需要一个方块或分组");
+            throw invalid(messageResolver, BLACKLIST_REQUIRED,
+                    Map.of("path", root + ".blacklist"));
         }
         Set<Material> blacklist = new LinkedHashSet<>();
         for (String value : configured) {
@@ -57,64 +97,70 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
             }
             Material material = Material.matchMaterial(value);
             if (material == null) {
-                throw new IllegalArgumentException("建筑返还黑名单材料无效: " + value);
+                throw invalid(messageResolver, BLACKLIST_MATERIAL_INVALID,
+                        Map.of("value", safeText(value)));
             }
             blacklist.add(material);
         }
-        return new BuildingRefund(bool(config, root + ".enabled", true), chance,
+        return new BuildingRefund(ConfigurationValues.bool(config, root + ".enabled", true,
+                messageResolver), chance,
                 weeklyLimit, retentionWeeks, resetZone, blacklist);
     }
 
-    private static BeaconEnhancement loadBeacon(ConfigurationSection config) {
+    private static BeaconEnhancement loadBeacon(
+            ConfigurationSection config,
+            BiFunction<String, Map<String, ?>, String> messageResolver) {
         String root = "territory.beacon";
-        long refreshTicks = longInteger(config, root + ".refresh-interval-ticks", 100L);
+        long refreshTicks = ConfigurationValues.longInteger(config,
+                root + ".refresh-interval-ticks", 100L, messageResolver);
         if (refreshTicks < 20 || refreshTicks > 20L * 60) {
-            throw new IllegalArgumentException(root
-                    + ".refresh-interval-ticks 必须在 20~1200 范围内");
+            throw invalid(messageResolver, BEACON_REFRESH_INTERVAL_RANGE,
+                    Map.of("path", root + ".refresh-interval-ticks", "minimum", 20,
+                            "maximum", 1_200));
         }
-        Set<String> worlds = stringList(config, root + ".allowed-worlds").stream()
+        Set<String> worlds = ConfigurationValues.stringList(config, root + ".allowed-worlds",
+                messageResolver).stream()
                 .map(value -> value.toLowerCase(Locale.ROOT)).collect(
                         java.util.stream.Collectors.toUnmodifiableSet());
         if (worlds.isEmpty()) {
-            throw new IllegalArgumentException(root + ".allowed-worlds 至少需要一个世界");
+            throw invalid(messageResolver, BEACON_WORLDS_REQUIRED,
+                    Map.of("path", root + ".allowed-worlds"));
         }
-        return new BeaconEnhancement(bool(config, root + ".enabled", true), refreshTicks,
-                worlds);
+        return new BeaconEnhancement(ConfigurationValues.bool(config, root + ".enabled", true,
+                messageResolver), refreshTicks, worlds);
     }
 
-    private static Operations loadOperations(ConfigurationSection config) {
+    private static Operations loadOperations(
+            ConfigurationSection config,
+            BiFunction<String, Map<String, ?>, String> messageResolver) {
         String root = "operations";
-        int diagnosticsDays = integer(config, root + ".quickshop-diagnostic-days", 7);
-        long backupHours = longInteger(config, root + ".backup.interval-hours", 6);
-        int retention = integer(config, root + ".backup.retention-count", 14);
-        String directory = text(config, root + ".backup.directory", "backups");
+        int diagnosticsDays = integer(config, root + ".quickshop-diagnostic-days", 7,
+                messageResolver);
+        long backupHours = ConfigurationValues.longInteger(config, root + ".backup.interval-hours", 6,
+                messageResolver);
+        int retention = integer(config, root + ".backup.retention-count", 14, messageResolver);
+        String directory = ConfigurationValues.text(config, root + ".backup.directory", "backups",
+                messageResolver);
         if (diagnosticsDays < 1 || diagnosticsDays > 180) {
-            throw new IllegalArgumentException(root
-                    + ".quickshop-diagnostic-days 必须在 1~180 范围内");
+            throw invalid(messageResolver, DIAGNOSTIC_DAYS_RANGE,
+                    Map.of("path", root + ".quickshop-diagnostic-days", "minimum", 1,
+                            "maximum", 180));
         }
         if (backupHours < 1 || backupHours > 24L * 30 || retention < 2 || retention > 1000) {
-            throw new IllegalArgumentException("定时备份间隔或保留数量超出安全范围");
+            throw invalid(messageResolver, BACKUP_RANGE, Map.of());
         }
         if (directory == null || directory.isBlank()) {
-            throw new IllegalArgumentException(root + ".backup.directory 不能为空");
+            throw invalid(messageResolver, BACKUP_DIRECTORY_REQUIRED,
+                    Map.of("path", root + ".backup.directory"));
         }
         return new Operations(diagnosticsDays, new Backup(
-                        bool(config, root + ".backup.enabled", true),
+                        ConfigurationValues.bool(config, root + ".backup.enabled", true,
+                                messageResolver),
                         Duration.ofHours(backupHours), retention, Path.of(directory)));
     }
 
-    private static boolean bool(ConfigurationSection config, String path, boolean defaultValue) {
-        Object value = config.get(path);
-        if (value == null) {
-            return defaultValue;
-        }
-        if (value instanceof Boolean bool) {
-            return bool;
-        }
-        throw invalidType(path, "布尔值");
-    }
-
-    private static double decimal(ConfigurationSection config, String path, double defaultValue) {
+    private static double decimal(ConfigurationSection config, String path, double defaultValue,
+                                  BiFunction<String, Map<String, ?>, String> messageResolver) {
         Object value = config.get(path);
         if (value == null) {
             return defaultValue;
@@ -122,54 +168,49 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
         if (value instanceof Number number) {
             return number.doubleValue();
         }
-        throw invalidType(path, "数字");
+        throw invalid(messageResolver, "validation.configuration.number-type",
+                Map.of("path", safeText(path)));
     }
 
-    private static int integer(ConfigurationSection config, String path, int defaultValue) {
-        long value = longInteger(config, path, defaultValue);
+    private static int integer(ConfigurationSection config, String path, int defaultValue,
+                               BiFunction<String, Map<String, ?>, String> messageResolver) {
+        long value = ConfigurationValues.longInteger(config, path, defaultValue, messageResolver);
         if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException(path + " 超出整数范围");
+            throw invalid(messageResolver, INTEGER_RANGE,
+                    Map.of("path", safeText(path)));
         }
         return (int) value;
     }
 
-    private static long longInteger(ConfigurationSection config, String path, long defaultValue) {
-        Object value = config.get(path);
-        if (value == null) {
-            return defaultValue;
-        }
-        if (!(value instanceof Number number)) {
-            throw invalidType(path, "整数");
-        }
+    private static IllegalArgumentException invalid(
+            BiFunction<String, Map<String, ?>, String> messageResolver,
+            String key, Map<String, ?> placeholders) {
+        return new IllegalArgumentException(resolveMessage(messageResolver, key, placeholders));
+    }
+
+    private static IllegalArgumentException invalid(
+            BiFunction<String, Map<String, ?>, String> messageResolver,
+            String key, Map<String, ?> placeholders, RuntimeException cause) {
+        return new IllegalArgumentException(resolveMessage(messageResolver, key, placeholders),
+                cause);
+    }
+
+    private static String resolveMessage(
+            BiFunction<String, Map<String, ?>, String> messageResolver,
+            String key, Map<String, ?> placeholders) {
         try {
-            return new BigDecimal(number.toString()).longValueExact();
-        } catch (ArithmeticException | NumberFormatException exception) {
-            throw new IllegalArgumentException(path + " 必须为 long 范围内的整数", exception);
+            String message = messageResolver.apply(key, placeholders);
+            if (message != null && !message.isBlank()) {
+                return message;
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // 配置解析必须在消息加载失败时仍能暴露稳定诊断标识。
         }
+        return ConfigurationValues.fallbackMessage(key, placeholders);
     }
 
-    private static String text(ConfigurationSection config, String path, String defaultValue) {
-        Object value = config.get(path);
-        if (value == null) {
-            return defaultValue;
-        }
-        if (value instanceof String text) {
-            return text;
-        }
-        throw invalidType(path, "文本");
-    }
-
-    private static List<String> stringList(ConfigurationSection config, String path) {
-        Object value = config.get(path);
-        if (!(value instanceof List<?> values)
-                || values.stream().anyMatch(item -> !(item instanceof String))) {
-            throw invalidType(path, "文本列表");
-        }
-        return values.stream().map(String.class::cast).toList();
-    }
-
-    private static IllegalArgumentException invalidType(String path, String expected) {
-        return new IllegalArgumentException(path + " 必须为" + expected);
+    private static String safeText(Object value) {
+        return String.valueOf(value).replace('&', '＆').replace('§', '�');
     }
 
     static boolean isSafeSingleBlock(Material material) {

@@ -9,38 +9,120 @@ import org.bukkit.plugin.RegisteredServiceProvider;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BiFunction;
 
 public final class VaultSettlementService {
+    private static final String ACCOUNT_NAME_REQUIRED =
+            "validation.vault.account-name-required";
+    private static final String ACCOUNT_RESOLVE_FAILURE =
+            "diagnostic.vault.settlement.account-resolve-failure";
+    private static final String SCALE_READ_FAILURE =
+            "diagnostic.vault.settlement.scale-read-failure";
+    private static final String SCALE_RANGE = "validation.vault.scale-range";
+    private static final String ACCOUNT_READY = "diagnostic.vault.settlement.account-ready";
+    private static final String ACCOUNT_CREATE_FAILURE =
+            "diagnostic.vault.settlement.account-create-failure";
+    private static final String ACCOUNT_INITIALIZATION_FAILURE =
+            "diagnostic.vault.settlement.account-initialization-failure";
+    private static final String BALANCE_READ_FAILURE =
+            "diagnostic.vault.settlement.balance-read-failure";
+    private static final String ACCOUNT_AVAILABLE =
+            "diagnostic.vault.settlement.account-available";
+    private static final String ACCOUNT_UNAVAILABLE =
+            "diagnostic.vault.settlement.account-unavailable";
+    private static final String DONATION_AMOUNT_POSITIVE =
+            "validation.vault.donation-amount-positive";
+    private static final String PLAYER_DEBIT_AMBIGUOUS =
+            "log.vault.settlement.player-debit-ambiguous";
+    private static final String PLAYER_DEBIT_FAILURE =
+            "diagnostic.vault.settlement.player-debit-failure";
+    private static final String SETTLEMENT_CREDIT_AMBIGUOUS =
+            "log.vault.settlement.settlement-credit-ambiguous";
+    private static final String SETTLEMENT_CREDIT_FAILURE =
+            "diagnostic.vault.settlement.settlement-credit-failure";
+    private static final String FUNDS_TRANSFERRED =
+            "diagnostic.vault.settlement.funds-transferred";
+    private static final String PLAYER_COMPENSATION_AMBIGUOUS =
+            "log.vault.settlement.player-compensation-ambiguous";
+    private static final String REFUND_AMOUNT_POSITIVE =
+            "validation.vault.refund-amount-positive";
+    private static final String PLAYER_REFUND_AMBIGUOUS =
+            "log.vault.settlement.player-refund-ambiguous";
+    private static final String PLAYER_DEBIT_COMPENSATED =
+            "diagnostic.vault.settlement.player-debit-compensated";
+    private static final String PLAYER_COMPENSATION_FAILURE =
+            "diagnostic.vault.settlement.player-compensation-failure";
+    private static final String RETURN_AMOUNT_POSITIVE =
+            "validation.vault.return-amount-positive";
+    private static final String SETTLEMENT_DEBIT_AMBIGUOUS =
+            "log.vault.settlement.settlement-debit-ambiguous";
+    private static final String SETTLEMENT_DEBIT_FAILURE =
+            "diagnostic.vault.settlement.settlement-debit-failure";
+    private static final String PLAYER_CREDIT_AMBIGUOUS =
+            "log.vault.settlement.player-credit-ambiguous";
+    private static final String FUNDS_RETURNED =
+            "diagnostic.vault.settlement.funds-returned";
+    private static final String SETTLEMENT_COMPENSATION_AMBIGUOUS =
+            "log.vault.settlement.settlement-compensation-ambiguous";
+    private static final String PLAYER_CREDIT_FAILURE =
+            "diagnostic.vault.settlement.player-credit-failure";
+    private static final String ADJUSTMENT_NON_ZERO =
+            "validation.vault.adjustment-non-zero";
+    private static final String ACCOUNT_ADJUSTMENT_AMBIGUOUS =
+            "log.vault.settlement.account-adjustment-ambiguous";
+    private static final String ACCOUNT_ADJUSTED =
+            "diagnostic.vault.settlement.account-adjusted";
+    private static final String ACCOUNT_ADJUSTMENT_FAILURE =
+            "diagnostic.vault.settlement.account-adjustment-failure";
+    private static final String PROVIDER_UNAVAILABLE =
+            "diagnostic.vault.provider-unavailable";
+    private static final String PROVIDER_PROBE_FAILURE =
+            "diagnostic.vault.provider-probe-failure";
+    private static final String INVALID_AMOUNT = "diagnostic.vault.invalid-amount";
+    private static final String ACCOUNT_NOT_AVAILABLE =
+            "diagnostic.vault.settlement.account-not-available";
+    private static final String ACCOUNT_CHECK_FAILURE =
+            "diagnostic.vault.settlement.account-check-failure";
+    private static final String MAIN_THREAD_REQUIRED = "diagnostic.vault.main-thread-required";
+    private static final String EMPTY_RESPONSE = "log.vault.settlement.empty-response";
     private final Server server;
     private final String accountName;
     private final UUID accountId;
     private final OfflinePlayer account;
     private final int scale;
+    private final BiFunction<String, Map<String, ?>, String> messageResolver;
 
     public VaultSettlementService(Server server, String accountName, int configuredScale) {
+        this(server, accountName, configuredScale, VaultSettlementService::fallbackMessage);
+    }
+
+    public VaultSettlementService(Server server, String accountName, int configuredScale,
+                                  BiFunction<String, Map<String, ?>, String> messageResolver) {
         this.server = Objects.requireNonNull(server, "server");
+        this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
         if (accountName == null || accountName.isBlank()) {
-            throw new IllegalArgumentException("清算账户名不能为空");
+            throw new IllegalArgumentException(resolveMessage(ACCOUNT_NAME_REQUIRED, Map.of()));
         }
         try {
             this.account = server.getOfflinePlayer(accountName);
             this.accountId = account.getUniqueId();
             this.accountName = account.getName() == null ? accountName : account.getName();
         } catch (RuntimeException | LinkageError exception) {
-            throw unavailable("无法解析 Vault 离线清算账户", exception);
+            throw unavailable(ACCOUNT_RESOLVE_FAILURE, exception);
         }
         Economy economy = economy();
         int providerScale;
         try {
             providerScale = economy.fractionalDigits();
         } catch (RuntimeException | LinkageError exception) {
-            throw unavailable("无法读取 Vault 金额精度", exception);
+            throw unavailable(SCALE_READ_FAILURE, exception);
         }
         this.scale = providerScale >= 0 ? Math.min(providerScale, 8) : configuredScale;
         if (scale < 0 || scale > 8) {
-            throw new IllegalArgumentException("Vault 金额精度必须在 0~8 之间");
+            throw new IllegalArgumentException(resolveMessage(SCALE_RANGE, Map.of()));
         }
     }
 
@@ -49,18 +131,18 @@ public final class VaultSettlementService {
         try {
             Economy economy = economy();
             if (economy.hasAccount(account)) {
-                return Result.success("清算账户已就绪");
+                return Result.success(resolveMessage(ACCOUNT_READY, Map.of()));
             }
             if (economy.createPlayerAccount(account) && economy.hasAccount(account)) {
-                return Result.success("清算账户已就绪");
+                return Result.success(resolveMessage(ACCOUNT_READY, Map.of()));
             }
-            return Result.failure("Vault provider 无法创建或重新读取离线清算账户 "
-                    + accountName, false, false);
+            return Result.failure(resolveMessage(ACCOUNT_CREATE_FAILURE,
+                    Map.of("account", safeText(accountName))), false, false);
         } catch (AvailabilityException exception) {
             return Result.failure(exception.getMessage(), false, false);
         } catch (RuntimeException | LinkageError exception) {
-            return Result.failure("Vault 清算账户初始化异常: " + safeMessage(exception),
-                    false, false);
+            return Result.failure(resolveMessage(ACCOUNT_INITIALIZATION_FAILURE,
+                    Map.of("detail", safeMessage(exception))), false, false);
         }
     }
 
@@ -71,7 +153,7 @@ public final class VaultSettlementService {
             double balance = economy.getBalance(account);
             return amount(balance).minorUnits();
         } catch (RuntimeException | LinkageError exception) {
-            throw unavailable("Vault 清算余额读取异常", exception);
+            throw unavailable(BALANCE_READ_FAILURE, exception);
         }
     }
 
@@ -79,17 +161,17 @@ public final class VaultSettlementService {
         requireMainThread();
         try {
             readyEconomy();
-            return Result.success("Vault 清算账户可用");
+            return Result.success(resolveMessage(ACCOUNT_AVAILABLE, Map.of()));
         } catch (RuntimeException | LinkageError exception) {
-            return Result.failure("Vault 清算账户不可用: " + safeMessage(exception),
-                    false, false);
+            return Result.failure(resolveMessage(ACCOUNT_UNAVAILABLE,
+                    Map.of("detail", safeMessage(exception))), false, false);
         }
     }
 
     public Result transferFromPlayer(OfflinePlayer player, long amountMinor) {
         requireMainThread();
         if (amountMinor <= 0) {
-            throw new IllegalArgumentException("捐款金额必须大于 0");
+            throw new IllegalArgumentException(resolveMessage(DONATION_AMOUNT_POSITIVE, Map.of()));
         }
         Economy economy;
         try {
@@ -102,46 +184,48 @@ public final class VaultSettlementService {
         try {
             withdrawn = economy.withdrawPlayer(player, amount);
         } catch (RuntimeException | LinkageError exception) {
-            return ambiguousFailure("玩家扣款", exception);
+            return ambiguousFailure(PLAYER_DEBIT_AMBIGUOUS, exception);
         }
         if (withdrawn == null) {
-            return ambiguousFailure("玩家扣款", new IllegalStateException("返回结果为空"));
+            return ambiguousFailure(EMPTY_RESPONSE);
         }
         if (!withdrawn.transactionSuccess()) {
-            return Result.failure("玩家扣款失败: " + withdrawn.errorMessage, false, false);
+            return Result.failure(resolveMessage(PLAYER_DEBIT_FAILURE,
+                    Map.of("detail", safeResponseDetail(withdrawn))), false, false);
         }
         EconomyResponse deposited;
         try {
             deposited = economy.depositPlayer(account, amount);
         } catch (RuntimeException | LinkageError exception) {
-            return ambiguousFailure("清算账户入账", exception);
+            return ambiguousFailure(SETTLEMENT_CREDIT_AMBIGUOUS, exception);
         }
         if (deposited == null) {
-            return ambiguousFailure("清算账户入账", new IllegalStateException("返回结果为空"));
+            return ambiguousFailure(EMPTY_RESPONSE);
         }
         if (deposited.transactionSuccess()) {
-            return Result.success("资金已转入清算账户");
+            return Result.success(resolveMessage(FUNDS_TRANSFERRED, Map.of()));
         }
         EconomyResponse compensation;
         try {
             compensation = economy.depositPlayer(player, amount);
         } catch (RuntimeException | LinkageError exception) {
-            return ambiguousFailure("玩家自动补偿", exception);
+            return ambiguousFailure(PLAYER_COMPENSATION_AMBIGUOUS, exception);
         }
         if (compensation == null) {
-            return ambiguousFailure("玩家自动补偿", new IllegalStateException("返回结果为空"));
+            return ambiguousFailure(EMPTY_RESPONSE);
         }
         boolean compensated = compensation.transactionSuccess();
         return compensated
-                ? Result.failure("清算账户入账失败: " + deposited.errorMessage, true, false)
-                : Result.playerRefundRequired("清算账户入账失败: "
-                + deposited.errorMessage);
+                ? Result.failure(resolveMessage(SETTLEMENT_CREDIT_FAILURE,
+                Map.of("detail", safeResponseDetail(deposited))), true, false)
+                : Result.playerRefundRequired(resolveMessage(SETTLEMENT_CREDIT_FAILURE,
+                Map.of("detail", safeResponseDetail(deposited))));
     }
 
     public Result refundDebitedPlayer(OfflinePlayer player, long amountMinor) {
         requireMainThread();
         if (amountMinor <= 0) {
-            throw new IllegalArgumentException("补偿金额必须大于 0");
+            throw new IllegalArgumentException(resolveMessage(REFUND_AMOUNT_POSITIVE, Map.of()));
         }
         Economy economy;
         try {
@@ -153,21 +237,21 @@ public final class VaultSettlementService {
         try {
             refunded = economy.depositPlayer(player, decimal(amountMinor));
         } catch (RuntimeException | LinkageError exception) {
-            return ambiguousFailure("玩家退款", exception);
+            return ambiguousFailure(PLAYER_REFUND_AMBIGUOUS, exception);
         }
         if (refunded == null) {
-            return ambiguousFailure("玩家退款", new IllegalStateException("返回结果为空"));
+            return ambiguousFailure(EMPTY_RESPONSE);
         }
         return refunded.transactionSuccess()
-                ? Result.success("玩家扣款已自动补偿")
-                : Result.failure("玩家自动补偿失败: " + refunded.errorMessage,
-                false, false);
+                ? Result.success(resolveMessage(PLAYER_DEBIT_COMPENSATED, Map.of()))
+                : Result.failure(resolveMessage(PLAYER_COMPENSATION_FAILURE,
+                Map.of("detail", safeResponseDetail(refunded))), false, false);
     }
 
     public Result transferToPlayer(OfflinePlayer player, long amountMinor) {
         requireMainThread();
         if (amountMinor <= 0) {
-            throw new IllegalArgumentException("返还金额必须大于 0");
+            throw new IllegalArgumentException(resolveMessage(RETURN_AMOUNT_POSITIVE, Map.of()));
         }
         Economy economy;
         try {
@@ -180,44 +264,45 @@ public final class VaultSettlementService {
         try {
             withdrawn = economy.withdrawPlayer(account, amount);
         } catch (RuntimeException | LinkageError exception) {
-            return ambiguousFailure("清算账户扣款", exception);
+            return ambiguousFailure(SETTLEMENT_DEBIT_AMBIGUOUS, exception);
         }
         if (withdrawn == null) {
-            return ambiguousFailure("清算账户扣款", new IllegalStateException("返回结果为空"));
+            return ambiguousFailure(EMPTY_RESPONSE);
         }
         if (!withdrawn.transactionSuccess()) {
-            return Result.failure("清算账户扣款失败: " + withdrawn.errorMessage, false, false);
+            return Result.failure(resolveMessage(SETTLEMENT_DEBIT_FAILURE,
+                    Map.of("detail", safeResponseDetail(withdrawn))), false, false);
         }
         EconomyResponse deposited;
         try {
             deposited = economy.depositPlayer(player, amount);
         } catch (RuntimeException | LinkageError exception) {
-            return ambiguousFailure("玩家返还入账", exception);
+            return ambiguousFailure(PLAYER_CREDIT_AMBIGUOUS, exception);
         }
         if (deposited == null) {
-            return ambiguousFailure("玩家返还入账", new IllegalStateException("返回结果为空"));
+            return ambiguousFailure(EMPTY_RESPONSE);
         }
         if (deposited.transactionSuccess()) {
-            return Result.success("资金已返还玩家");
+            return Result.success(resolveMessage(FUNDS_RETURNED, Map.of()));
         }
         EconomyResponse compensation;
         try {
             compensation = economy.depositPlayer(account, amount);
         } catch (RuntimeException | LinkageError exception) {
-            return ambiguousFailure("清算账户自动补偿", exception);
+            return ambiguousFailure(SETTLEMENT_COMPENSATION_AMBIGUOUS, exception);
         }
         if (compensation == null) {
-            return ambiguousFailure("清算账户自动补偿", new IllegalStateException("返回结果为空"));
+            return ambiguousFailure(EMPTY_RESPONSE);
         }
         boolean compensated = compensation.transactionSuccess();
-        return Result.failure("玩家返还入账失败: " + deposited.errorMessage,
-                compensated, !compensated);
+        return Result.failure(resolveMessage(PLAYER_CREDIT_FAILURE,
+                Map.of("detail", safeResponseDetail(deposited))), compensated, !compensated);
     }
 
     public Result adjustSettlement(long amountMinor) {
         requireMainThread();
         if (amountMinor == 0) {
-            throw new IllegalArgumentException("调整金额不能为 0");
+            throw new IllegalArgumentException(resolveMessage(ADJUSTMENT_NON_ZERO, Map.of()));
         }
         Economy economy;
         try {
@@ -232,13 +317,15 @@ public final class VaultSettlementService {
                     ? economy.depositPlayer(account, amount)
                     : economy.withdrawPlayer(account, amount);
         } catch (RuntimeException | LinkageError exception) {
-            return ambiguousFailure("清算账户调整", exception);
+            return ambiguousFailure(ACCOUNT_ADJUSTMENT_AMBIGUOUS, exception);
         }
         if (response == null) {
-            return ambiguousFailure("清算账户调整", new IllegalStateException("返回结果为空"));
+            return ambiguousFailure(EMPTY_RESPONSE);
         }
-        return response.transactionSuccess() ? Result.success("清算账户调整完成")
-                : Result.failure("清算账户调整失败: " + response.errorMessage, false, false);
+        return response.transactionSuccess()
+                ? Result.success(resolveMessage(ACCOUNT_ADJUSTED, Map.of()))
+                : Result.failure(resolveMessage(ACCOUNT_ADJUSTMENT_FAILURE,
+                Map.of("detail", safeResponseDetail(response))), false, false);
     }
 
     public Result compensateSettlement(long appliedAmountMinor) {
@@ -264,13 +351,13 @@ public final class VaultSettlementService {
                     server.getServicesManager().getRegistration(Economy.class);
             if (registration == null || registration.getProvider() == null
                     || !registration.getProvider().isEnabled()) {
-                throw new AvailabilityException("Vault Economy provider 不可用");
+                throw unavailable(PROVIDER_UNAVAILABLE, Map.of());
             }
             return registration.getProvider();
         } catch (AvailabilityException exception) {
             throw exception;
         } catch (RuntimeException | LinkageError exception) {
-            throw unavailable("Vault Economy provider 探测异常", exception);
+            throw unavailable(PROVIDER_PROBE_FAILURE, exception);
         }
     }
 
@@ -282,7 +369,7 @@ public final class VaultSettlementService {
 
     private MoneyAmount amount(double value) {
         if (!Double.isFinite(value)) {
-            throw new IllegalArgumentException("Vault 返回了无效金额");
+            throw new IllegalArgumentException(resolveMessage(INVALID_AMOUNT, Map.of()));
         }
         return MoneyAmount.rounded(BigDecimal.valueOf(value), scale, RoundingMode.HALF_UP);
     }
@@ -290,12 +377,13 @@ public final class VaultSettlementService {
     private void requireAccount(Economy economy) {
         try {
             if (!economy.hasAccount(account)) {
-                throw new AvailabilityException("Vault 离线清算账户不可用: " + accountName);
+                throw unavailable(ACCOUNT_NOT_AVAILABLE,
+                        Map.of("account", safeText(accountName)));
             }
         } catch (AvailabilityException exception) {
             throw exception;
         } catch (RuntimeException | LinkageError exception) {
-            throw unavailable("Vault 离线清算账户检查异常", exception);
+            throw unavailable(ACCOUNT_CHECK_FAILURE, exception);
         }
     }
 
@@ -305,23 +393,57 @@ public final class VaultSettlementService {
 
     private void requireMainThread() {
         if (!server.isPrimaryThread()) {
-            throw new IllegalStateException("Vault Economy API 必须在 Paper 主线程调用");
+            throw new IllegalStateException(resolveMessage(MAIN_THREAD_REQUIRED, Map.of()));
         }
     }
 
-    private static Result ambiguousFailure(String operation, Throwable throwable) {
-        return Result.failure("Vault " + operation + "调用异常，资金结果需要人工复核: "
-                + safeMessage(throwable), false, true);
+    private Result ambiguousFailure(String messageKey, Throwable throwable) {
+        return Result.failure(resolveMessage(messageKey,
+                Map.of("detail", safeMessage(throwable))), false, true);
     }
 
-    private static AvailabilityException unavailable(String operation, Throwable throwable) {
-        return new AvailabilityException(operation + ": " + safeMessage(throwable), throwable);
+    private Result ambiguousFailure(String messageKey) {
+        return Result.failure(resolveMessage(messageKey, Map.of()), false, true);
+    }
+
+    private AvailabilityException unavailable(String messageKey, Throwable throwable) {
+        return new AvailabilityException(resolveMessage(messageKey,
+                Map.of("detail", safeMessage(throwable))), throwable);
+    }
+
+    private AvailabilityException unavailable(String messageKey,
+                                              Map<String, ?> placeholders) {
+        return new AvailabilityException(resolveMessage(messageKey, placeholders));
     }
 
     private static String safeMessage(Throwable throwable) {
         String message = throwable.getMessage();
-        return message == null || message.isBlank()
+        String detail = message == null || message.isBlank()
                 ? throwable.getClass().getSimpleName() : message;
+        return safeText(detail);
+    }
+
+    private static String safeResponseDetail(EconomyResponse response) {
+        String detail = response.errorMessage;
+        return safeText(detail == null || detail.isBlank()
+                ? "unknown-provider-error" : detail);
+    }
+
+    private static String safeText(String text) {
+        return text == null ? "" : text.replace('&', '＆').replace('§', '�');
+    }
+
+    private String resolveMessage(String key, Map<String, ?> placeholders) {
+        try {
+            String resolved = messageResolver.apply(key, placeholders);
+            return resolved == null || resolved.isBlank() ? key : resolved;
+        } catch (RuntimeException | LinkageError exception) {
+            return key + " " + placeholders;
+        }
+    }
+
+    private static String fallbackMessage(String key, Map<String, ?> placeholders) {
+        return key;
     }
 
     public record Result(boolean success, String message, boolean compensated,

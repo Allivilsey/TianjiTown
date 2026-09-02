@@ -17,10 +17,23 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiFunction;
 
 final class SitePolicy {
+    private static final String PREVIEW_INVALIDATED = "log.site.preview-invalidated";
+    private static final String PREVIEW_CANCEL_FAILED = "log.site.preview-cancel-failed";
+    private static final String BLACKLIST_INVALID_AREA = "log.site.blacklist-invalid-area";
+    private static final String PREVIEW_AREAS_REQUIRED = "validation.site.areas-required";
+    private static final String PREVIEW_WORLD_MISMATCH = "validation.site.world-mismatch";
+    private static final String PREVIEW_FOCUS_MISSING = "validation.site.focus-missing";
+    private static final String BLACKLIST_BOUNDS = "validation.site.blacklist-bounds-invalid";
+    private static final String BLACKLIST_INTEGER_TYPE =
+            "validation.site.blacklist-integer-required";
+    private static final String PREVIEW_SCOPE_SINGLE = "chat.site.preview-scope-single";
+    private static final String PREVIEW_SCOPE_MULTIPLE = "chat.site.preview-scope-multiple";
     private final TianjiTownPlugin plugin;
     private final LandProtectionService landProtection;
     private final WorldBoundaryService worldBoundaries;
@@ -53,6 +66,9 @@ final class SitePolicy {
                     "chat.site-validation.residence-unavailable",
                     Map.of("detail", safeMessage(exception))));
         }
+        if (collision.code() != null) {
+            return Validation.failure(LandProtectionMessages.detail(plugin.messages(), collision));
+        }
         if (collision.occupied()) {
             return Validation.failure(plugin.messages().plainText(
                     "chat.site-validation.residence-collision",
@@ -73,6 +89,9 @@ final class SitePolicy {
             return Validation.failure(plugin.messages().plainText(
                     "chat.site-validation.residence-unavailable",
                     Map.of("detail", safeMessage(exception))));
+        }
+        if (collision.code() != null) {
+            return Validation.failure(LandProtectionMessages.detail(plugin.messages(), collision));
         }
         if (collision.occupied() && (collision.residenceName() == null
                 || !collision.residenceName().equalsIgnoreCase(residenceName))) {
@@ -131,7 +150,8 @@ final class SitePolicy {
     private void teleportAndPreview(Player player, InitialTerritory focus,
                                     List<InitialTerritory> territories,
                                     boolean announcePreview) {
-        List<InitialTerritory> areas = previewAreas(focus, territories);
+        List<InitialTerritory> areas = previewAreas(focus, territories,
+                plugin.messages()::plainText);
         World world = plugin.getServer().getWorld(focus.center().worldId());
         if (world == null) {
             world = plugin.getServer().getWorld(focus.center().worldName());
@@ -173,7 +193,8 @@ final class SitePolicy {
 
     private void preview(Player player, List<InitialTerritory> territories,
                          boolean announce) {
-        List<InitialTerritory> areas = previewAreas(null, territories);
+        List<InitialTerritory> areas = previewAreas(null, territories,
+                plugin.messages()::plainText);
         UUID worldId = areas.getFirst().center().worldId();
         if (!player.getWorld().getUID().equals(worldId)) {
             plugin.messages().send(player, "chat.site.wrong-world");
@@ -209,8 +230,9 @@ final class SitePolicy {
                     }
                     try {
                         if (plugin.isEnabled()) {
-                            plugin.getLogger().warning("领地预览对象已失效，任务已结束: "
-                                    + safeMessage(exception));
+                            plugin.getLogger().warning(plugin.messages().plainText(
+                                    PREVIEW_INVALIDATED,
+                                    Map.of("detail", safeMessage(exception))));
                         }
                     } catch (RuntimeException | LinkageError ignored) {
                         // 插件关闭阶段记录器失效时不再向事件循环抛出异常。
@@ -221,7 +243,7 @@ final class SitePolicy {
         BukkitTask task = runnable.runTaskTimer(plugin, 0L, intervalTicks);
         previews.put(playerId, task);
         if (announce) {
-            String scope = areas.size() == 1 ? "5×5 区块" : areas.size() + " 个领地单元";
+            String scope = previewScope(areas.size(), plugin.messages()::plainText);
             plugin.messages().send(player, "chat.site.preview-started", Map.of(
                     "scope", scope, "duration", durationSeconds));
         }
@@ -241,8 +263,9 @@ final class SitePolicy {
             } catch (RuntimeException | LinkageError exception) {
                 try {
                     if (plugin.isEnabled()) {
-                        plugin.getLogger().warning("取消领地预览任务失败: "
-                                + safeMessage(exception));
+                        plugin.getLogger().warning(plugin.messages().plainText(
+                                PREVIEW_CANCEL_FAILED,
+                                Map.of("detail", safeMessage(exception))));
                     }
                 } catch (RuntimeException | LinkageError ignored) {
                     // 插件关闭阶段记录器失效时继续清理预览索引。
@@ -305,19 +328,33 @@ final class SitePolicy {
         }
     }
 
-    private static List<InitialTerritory> previewAreas(
-            InitialTerritory required, List<InitialTerritory> territories) {
+    static String previewScope(int areaCount,
+                               BiFunction<String, Map<String, ?>, String> messageResolver) {
+        Objects.requireNonNull(messageResolver, "messageResolver");
+        String key = areaCount == 1 ? PREVIEW_SCOPE_SINGLE : PREVIEW_SCOPE_MULTIPLE;
+        Map<String, ?> placeholders = areaCount == 1
+                ? Map.of() : Map.of("count", areaCount);
+        return resolveMessage(messageResolver, key, placeholders);
+    }
+
+    static List<InitialTerritory> previewAreas(
+            InitialTerritory required, List<InitialTerritory> territories,
+            BiFunction<String, Map<String, ?>, String> messageResolver) {
+        Objects.requireNonNull(messageResolver, "messageResolver");
         if (territories == null || territories.isEmpty()) {
-            throw new IllegalArgumentException("领地预览至少需要一个区域");
+            throw new IllegalArgumentException(resolveMessage(messageResolver,
+                    PREVIEW_AREAS_REQUIRED, Map.of()));
         }
         List<InitialTerritory> areas = List.copyOf(territories);
         UUID worldId = areas.getFirst().center().worldId();
         if (areas.stream().anyMatch(area -> !area.center().worldId().equals(worldId))) {
-            throw new IllegalArgumentException("领地预览区域必须位于同一世界");
+            throw new IllegalArgumentException(resolveMessage(messageResolver,
+                    PREVIEW_WORLD_MISMATCH, Map.of()));
         }
         if (required != null && (!required.center().worldId().equals(worldId)
                 || !areas.contains(required))) {
-            throw new IllegalArgumentException("领地中心不在预览区域中");
+            throw new IllegalArgumentException(resolveMessage(messageResolver,
+                    PREVIEW_FOCUS_MISSING, Map.of()));
         }
         return areas;
     }
@@ -334,26 +371,65 @@ final class SitePolicy {
                 continue;
             }
             try {
-                result.add(new Rectangle(number(raw, "min-chunk-x"), number(raw, "max-chunk-x"),
-                        number(raw, "min-chunk-z"), number(raw, "max-chunk-z")));
+                BiFunction<String, Map<String, ?>, String> messageResolver =
+                        plugin.messages()::plainText;
+                int minimumX = number(raw, "min-chunk-x", messageResolver);
+                int maximumX = number(raw, "max-chunk-x", messageResolver);
+                int minimumZ = number(raw, "min-chunk-z", messageResolver);
+                int maximumZ = number(raw, "max-chunk-z", messageResolver);
+                result.add(rectangle(minimumX, maximumX, minimumZ, maximumZ,
+                        messageResolver));
             } catch (IllegalArgumentException exception) {
-                plugin.getLogger().warning(path + " 存在无效区域: " + exception.getMessage());
+                plugin.getLogger().warning(plugin.messages().plainText(BLACKLIST_INVALID_AREA,
+                        Map.of("path", safeText(path), "detail", safeMessage(exception))));
             }
         }
         return List.copyOf(result);
     }
 
-    private static int number(java.util.Map<?, ?> map, String key) {
+    private static int number(java.util.Map<?, ?> map, String key,
+                              BiFunction<String, Map<String, ?>, String> messageResolver) {
         Object value = map.get(key);
         if (!(value instanceof Number number)) {
-            throw new IllegalArgumentException("缺少整数 " + key);
+            throw new IllegalArgumentException(resolveMessage(messageResolver,
+                    BLACKLIST_INTEGER_TYPE, Map.of("key", safeText(key))));
         }
         return number.intValue();
     }
 
+    private static Rectangle rectangle(int minimumX, int maximumX, int minimumZ, int maximumZ,
+                                       BiFunction<String, Map<String, ?>, String>
+                                               messageResolver) {
+        if (minimumX > maximumX || minimumZ > maximumZ) {
+            throw new IllegalArgumentException(resolveMessage(messageResolver,
+                    BLACKLIST_BOUNDS, Map.of()));
+        }
+        return new Rectangle(minimumX, maximumX, minimumZ, maximumZ);
+    }
+
     private static String safeMessage(Throwable throwable) {
         String message = throwable.getMessage();
-        return message == null || message.isBlank() ? throwable.getClass().getSimpleName() : message;
+        return safeText(message == null || message.isBlank()
+                ? throwable.getClass().getSimpleName() : message);
+    }
+
+    private static String resolveMessage(
+            BiFunction<String, Map<String, ?>, String> messageResolver,
+            String key, Map<String, ?> placeholders) {
+        Objects.requireNonNull(messageResolver, "messageResolver");
+        try {
+            String message = messageResolver.apply(key, placeholders);
+            if (message != null && !message.isBlank()) {
+                return message;
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // 运行时文案解析失败时保留稳定键，避免预览流程重新抛出本地化异常。
+        }
+        return key;
+    }
+
+    private static String safeText(Object value) {
+        return String.valueOf(value).replace('&', '＆').replace('§', '�');
     }
 
     record Validation(boolean valid, String error, InitialTerritory territory) {
@@ -367,12 +443,6 @@ final class SitePolicy {
     }
 
     private record Rectangle(int minimumX, int maximumX, int minimumZ, int maximumZ) {
-        Rectangle {
-            if (minimumX > maximumX || minimumZ > maximumZ) {
-                throw new IllegalArgumentException("区域最小值不能大于最大值");
-            }
-        }
-
         boolean contains(InitialTerritory territory) {
             return minimumX <= territory.minimumChunkX() && maximumX >= territory.maximumChunkX()
                     && minimumZ <= territory.minimumChunkZ() && maximumZ >= territory.maximumChunkZ();

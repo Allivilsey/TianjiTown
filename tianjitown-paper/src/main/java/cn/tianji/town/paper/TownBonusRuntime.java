@@ -52,6 +52,30 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 final class TownBonusRuntime implements Listener {
+    private static final String INDEX_REFRESH_FAILURE =
+            "log.bonus.index-refresh-failure";
+    private static final String REFUND_COUNTER_CLEANUP_FAILURE =
+            "log.bonus.refund-counter-cleanup-failure";
+    private static final String BACKUP_RESULT_SUCCESS =
+            "chat.bonus.backup-result-success";
+    private static final String BACKUP_RESULT_SUCCESS_NO_FILE =
+            "chat.bonus.backup-result-success-no-file";
+    private static final String BACKUP_RESULT_FAILURE =
+            "chat.bonus.backup-result-failure";
+    private static final String SCHEDULED_BACKUP_SUCCESS =
+            "log.bonus.scheduled-backup-success";
+    private static final String BEACON_REFRESH_OBJECT_FAILURE =
+            "log.bonus.beacon-refresh-object-failure";
+    private static final String BEACON_RECORD_OBJECT_FAILURE =
+            "log.bonus.beacon-record-object-failure";
+    private static final String BEACON_CLEANUP_OBJECT_FAILURE =
+            "log.bonus.beacon-cleanup-object-failure";
+    private static final String SETTLEMENT_ACCOUNT_UNAVAILABLE =
+            "diagnostic.bonus.settlement-account-unavailable";
+    private static final String QUICKSHOP_HISTORY_INCOMPLETE =
+            "diagnostic.bonus.quick-shop-reconciliation-incomplete";
+    private static final String DIAGNOSTIC_REPORT_WRITE_FAILURE =
+            "log.bonus.diagnostic-report-write-failure";
     private static final DateTimeFormatter REPORT_STAMP = DateTimeFormatter
             .ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
     private final TianjiTownPlugin plugin;
@@ -77,7 +101,8 @@ final class TownBonusRuntime implements Listener {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.quickShopHistory = new QuickShopHistoryProbe(quickShop,
-                host.settlement().accountId(), host.settlement().scale());
+                host.settlement().accountId(), host.settlement().scale(),
+                plugin.messages()::plainText);
         this.backups = new OnlineBackupService(plugin, host.database(),
                 settings.operations().backup());
         this.lastDiagnostic = new AtomicReference<>(new DiagnosticResult(false, null,
@@ -113,8 +138,8 @@ final class TownBonusRuntime implements Listener {
             try {
                 index.set(repository.loadBonusIndex());
             } catch (RuntimeException exception) {
-                plugin.getLogger().warning("刷新领地加成缓存失败，将继续使用旧快照: "
-                        + safeMessage(exception));
+                plugin.getLogger().warning(plugin.messages().plainText(INDEX_REFRESH_FAILURE,
+                        Map.of("detail", safeText(safeMessage(exception)))));
             } finally {
                 indexRefreshRunning.set(false);
             }
@@ -131,7 +156,9 @@ final class TownBonusRuntime implements Listener {
                         .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
                         .minusWeeks(settings.buildingRefund().retentionWeeks()));
             } catch (RuntimeException exception) {
-                plugin.getLogger().warning("清理建筑返还周计数失败: " + safeMessage(exception));
+                plugin.getLogger().warning(plugin.messages().plainText(
+                        REFUND_COUNTER_CLEANUP_FAILURE,
+                        Map.of("detail", safeText(safeMessage(exception)))));
             }
         });
     }
@@ -144,13 +171,21 @@ final class TownBonusRuntime implements Listener {
         plugin.messages().send(sender, "chat.bonus.backup-started");
         plugin.runAsync(() -> {
             OnlineBackupService.Result result = backups.create();
-            plugin.runMain(() -> plugin.messages().send(sender, result.success()
-                            ? "chat.bonus.backup-result-success"
-                            : "chat.bonus.backup-result-failure",
-                    result.success() ? Map.of("detail", result.detail(), "file",
-                                    result.databaseFile() == null ? ""
-                                            : "；文件=" + result.databaseFile())
-                            : Map.of("detail", result.detail())));
+            plugin.runMain(() -> {
+                if (!result.success()) {
+                    plugin.messages().send(sender, BACKUP_RESULT_FAILURE,
+                            Map.of("detail", safeText(result.detail())));
+                    return;
+                }
+                if (result.databaseFile() == null) {
+                    plugin.messages().send(sender, BACKUP_RESULT_SUCCESS_NO_FILE,
+                            Map.of("detail", safeText(result.detail())));
+                    return;
+                }
+                plugin.messages().send(sender, BACKUP_RESULT_SUCCESS,
+                        Map.of("detail", safeText(result.detail()),
+                                "file", safeText(result.databaseFile())));
+            });
         });
     }
 
@@ -161,7 +196,9 @@ final class TownBonusRuntime implements Listener {
         plugin.runAsync(() -> {
             OnlineBackupService.Result result = backups.create();
             if (result.success()) {
-                plugin.getLogger().info(result.detail() + "；文件=" + result.databaseFile());
+                plugin.getLogger().info(plugin.messages().plainText(SCHEDULED_BACKUP_SUCCESS,
+                        Map.of("detail", safeText(result.detail()),
+                                "file", safeText(result.databaseFile()))));
             } else {
                 plugin.getLogger().severe(result.detail());
             }
@@ -234,8 +271,9 @@ final class TownBonusRuntime implements Listener {
             } catch (RuntimeException | LinkageError exception) {
                 playerFailure = true;
                 if (beaconPlayerFailureLogged.compareAndSet(false, true)) {
-                    plugin.getLogger().warning("信标刷新遇到已失效的玩家、世界或依赖对象，"
-                            + "已跳过该对象: " + safeMessage(exception));
+                    plugin.getLogger().warning(plugin.messages().plainText(
+                            BEACON_REFRESH_OBJECT_FAILURE,
+                            Map.of("detail", safeText(safeMessage(exception)))));
                 }
             }
         }
@@ -373,8 +411,9 @@ final class TownBonusRuntime implements Listener {
         try {
             recordBeaconEffectsChecked(beacon);
         } catch (RuntimeException | LinkageError exception) {
-            plugin.getLogger().warning("信标对象在延迟回调前已失效，已跳过记录: "
-                    + safeMessage(exception));
+            plugin.getLogger().warning(plugin.messages().plainText(
+                    BEACON_RECORD_OBJECT_FAILURE,
+                    Map.of("detail", safeText(safeMessage(exception)))));
         }
     }
 
@@ -433,8 +472,9 @@ final class TownBonusRuntime implements Listener {
                 removeManagedEffect(entry.getKey(), entry.getValue());
             } catch (RuntimeException | LinkageError exception) {
                 if (!failed && beaconCleanupFailureLogged.compareAndSet(false, true)) {
-                    plugin.getLogger().warning("清理托管信标效果时对象已失效: "
-                            + safeMessage(exception));
+                    plugin.getLogger().warning(plugin.messages().plainText(
+                            BEACON_CLEANUP_OBJECT_FAILURE,
+                            Map.of("detail", safeText(safeMessage(exception)))));
                 }
                 failed = true;
             }
@@ -486,7 +526,7 @@ final class TownBonusRuntime implements Listener {
                 healthyResidence++;
             } else {
                 residenceErrors.add(state.townName() + "=" + inspection.state() + ":"
-                        + inspection.message());
+                        + LandProtectionMessages.detail(plugin.messages(), inspection));
             }
         }
         healthy &= residenceErrors.isEmpty();
@@ -494,7 +534,7 @@ final class TownBonusRuntime implements Listener {
         residenceErrors.forEach(error -> lines.add("Residence ERROR " + error));
         if (settlement == null) {
             healthy = false;
-            lines.add("Vault ERROR 清算账户不可读取");
+            lines.add(plugin.messages().plainText(SETTLEMENT_ACCOUNT_UNAVAILABLE));
         } else {
             healthy &= settlement.healthy();
             lines.add("Vault settlement external=" + settlement.externalBalanceMinor()
@@ -518,7 +558,7 @@ final class TownBonusRuntime implements Listener {
             lines.add("QuickShop reconciliation=" + (historyMatches ? "MATCH" : "DIFFERENCE"));
         } else {
             healthy = false;
-            lines.add("QuickShop reconciliation=INCOMPLETE（历史不可用或超过 1000 条上限）");
+            lines.add(plugin.messages().plainText(QUICKSHOP_HISTORY_INCOMPLETE));
         }
         String summaryKey = healthy ? "chat.bonus.diagnostic-summary-success"
                 : "chat.bonus.diagnostic-summary-failure";
@@ -545,7 +585,9 @@ final class TownBonusRuntime implements Listener {
                         base.detail(), report));
                 pruneReports(directory);
             } catch (IOException exception) {
-                plugin.getLogger().warning("写入一键诊断报告失败: " + safeMessage(exception));
+                plugin.getLogger().warning(plugin.messages().plainText(
+                        DIAGNOSTIC_REPORT_WRITE_FAILURE,
+                        Map.of("detail", safeText(safeMessage(exception)))));
             }
         });
     }
@@ -563,6 +605,10 @@ final class TownBonusRuntime implements Listener {
         for (Path report : reports.stream().skip(30).toList()) {
             Files.deleteIfExists(report);
         }
+    }
+
+    private static String safeText(Object value) {
+        return String.valueOf(value).replace('&', '＆').replace('§', '�');
     }
 
     private static String safeMessage(Throwable throwable) {

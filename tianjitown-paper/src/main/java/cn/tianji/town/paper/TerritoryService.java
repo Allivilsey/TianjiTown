@@ -19,6 +19,28 @@ import java.util.UUID;
 import java.util.Set;
 
 final class TerritoryService {
+    private static final String BATCH_SELECTION_REQUIRED =
+            "validation.territory.batch-selection-required";
+    private static final String BATCH_CAPACITY_EXCEEDED =
+            "validation.territory.batch-capacity-exceeded";
+    private static final String BATCH_GRID_OUT_OF_BOUNDS =
+            "validation.territory.batch-grid-out-of-bounds";
+    private static final String BATCH_DUPLICATE_SELECTION =
+            "validation.territory.batch-duplicate-selection";
+    private static final String BATCH_OCCUPIED_SELECTION =
+            "validation.territory.batch-occupied-selection";
+    private static final String BATCH_NOT_CONNECTED =
+            "validation.territory.batch-not-connected";
+    private static final String TOWN_REQUIRED = "validation.territory.town-required";
+    private static final String MAYOR_REQUIRED = "validation.territory.mayor-required";
+    private static final String ORIGIN_MISSING = "validation.territory.origin-missing";
+    private static final String CAPACITY_REACHED = "validation.territory.capacity-reached";
+    private static final String CELL_NOT_ADJACENT =
+            "dialog.territory.cell.not-adjacent-detail";
+    private static final String CELL_UNAVAILABLE =
+            "dialog.territory.cell.unavailable-detail";
+    private static final String MAP_SIZE_INVALID = "territory.map-size-invalid";
+
     private final EconomyRepository finance;
     private final SitePolicy sitePolicy;
     private final PluginMessages messages;
@@ -51,26 +73,28 @@ final class TerritoryService {
     ExpansionBatchPreview batchPreview(UUID playerId, Set<GridSelection> selections) {
         Context context = context(playerId);
         if (selections == null || selections.isEmpty()) {
-            throw new IllegalArgumentException("请至少选择一个领地单元");
+            throw new IllegalArgumentException(messages.plainText(BATCH_SELECTION_REQUIRED));
         }
         if (context.units().size() + selections.size() > settings.maximumUnits()
                 || context.units().size() + selections.size() > TerritoryRules.MAXIMUM_UNITS) {
-            throw new IllegalArgumentException("批量扩张后超过领地单元上限");
+            throw new IllegalArgumentException(messages.plainText(BATCH_CAPACITY_EXCEEDED));
         }
         Set<Grid> requested = new HashSet<>();
         for (GridSelection selection : selections) {
             if (selection == null || Math.abs((long) selection.gridX()) > TerritoryRules.GRID_RADIUS
                     || Math.abs((long) selection.gridZ()) > TerritoryRules.GRID_RADIUS) {
-                throw new IllegalArgumentException("选中的领地单元超出 5×5 扩张网格");
+                throw new IllegalArgumentException(messages.plainText(
+                        BATCH_GRID_OUT_OF_BOUNDS));
             }
             if (!requested.add(new Grid(selection.gridX(), selection.gridZ()))) {
-                throw new IllegalArgumentException("批量扩张包含重复领地单元");
+                throw new IllegalArgumentException(messages.plainText(
+                        BATCH_DUPLICATE_SELECTION));
             }
         }
         Set<Grid> occupied = new HashSet<>();
         context.units().forEach(unit -> occupied.add(new Grid(unit.gridX(), unit.gridZ())));
         if (requested.stream().anyMatch(occupied::contains)) {
-            throw new IllegalArgumentException("选中的领地单元已经被占领");
+            throw new IllegalArgumentException(messages.plainText(BATCH_OCCUPIED_SELECTION));
         }
         List<GridSelection> remaining = new ArrayList<>(selections);
         List<TerritoryUnit> working = new ArrayList<>(context.units());
@@ -94,7 +118,7 @@ final class TerritoryService {
                 }
             }
             if (!progressed) {
-                throw new IllegalArgumentException("批量选区必须与现有领地四方向连通");
+                throw new IllegalArgumentException(messages.plainText(BATCH_NOT_CONNECTED));
             }
         }
         long totalPrice = Math.multiplyExact(price(), candidates.size());
@@ -159,9 +183,9 @@ final class TerritoryService {
                     cells.add(new TerritoryCell(gridX, gridZ,
                             TerritoryCellState.EXPANDABLE, territory, preview,
                             messages.plainText("dialog.territory.cell.expandable-detail")));
-                } catch (IllegalArgumentException exception) {
+                } catch (IllegalArgumentException ignored) {
                     cells.add(new TerritoryCell(gridX, gridZ, TerritoryCellState.BLOCKED,
-                            territory, null, cellDetail(exception)));
+                            territory, null, cellDetail(context.units(), gridX, gridZ)));
                 }
             }
         }
@@ -191,9 +215,9 @@ final class TerritoryService {
 
     private Context context(UUID playerId) {
         EconomyRepository.TownFinance account = finance.findFinanceByPlayer(playerId)
-                .orElseThrow(() -> new IllegalArgumentException("你不属于任何小镇"));
+                .orElseThrow(() -> new IllegalArgumentException(messages.plainText(TOWN_REQUIRED)));
         if (!account.role().equals("MAYOR")) {
-            throw new IllegalArgumentException("只有镇长可以使用公共资金扩张");
+            throw new IllegalArgumentException(messages.plainText(MAYOR_REQUIRED));
         }
         List<EconomyRepository.TerritoryUnitSnapshot> snapshots =
                 finance.territoryUnits(account.townId()).stream()
@@ -201,7 +225,8 @@ final class TerritoryService {
                         .toList();
         EconomyRepository.TerritoryUnitSnapshot origin = snapshots.stream()
                 .filter(unit -> unit.unit().gridX() == 0 && unit.unit().gridZ() == 0)
-                .findFirst().orElseThrow(() -> new IllegalArgumentException("初始领地单元缺失"));
+                .findFirst().orElseThrow(() -> new IllegalArgumentException(
+                        messages.plainText(ORIGIN_MISSING)));
         List<TerritoryUnit> units = snapshots.stream()
                 .map(EconomyRepository.TerritoryUnitSnapshot::unit).toList();
         return new Context(account, units, origin);
@@ -223,16 +248,19 @@ final class TerritoryService {
         return ExpansionPricing.price(settings.expansionCost(), moneyScale).minorUnits();
     }
 
-    private String cellDetail(IllegalArgumentException exception) {
-        if ("目标必须与已有领地四方向相邻".equals(exception.getMessage())) {
-            return messages.plainText("dialog.territory.cell.not-adjacent-detail");
+    private String cellDetail(List<TerritoryUnit> units, int gridX, int gridZ) {
+        for (ExpansionDirection direction : ExpansionDirection.values()) {
+            if (units.stream().anyMatch(unit -> unit.gridX() + direction.gridX() == gridX
+                    && unit.gridZ() + direction.gridZ() == gridZ)) {
+                return messages.plainText(CELL_UNAVAILABLE);
+            }
         }
-        return exception.getMessage();
+        return messages.plainText(CELL_NOT_ADJACENT);
     }
 
     private void requireCapacity(Context context) {
         if (context.units().size() >= settings.maximumUnits()) {
-            throw new IllegalArgumentException("领地单元已达到配置上限");
+            throw new IllegalArgumentException(messages.plainText(CAPACITY_REACHED));
         }
     }
 
@@ -286,7 +314,7 @@ final class TerritoryService {
         TerritoryMap {
             cells = List.copyOf(cells);
             if (cells.size() != TerritoryRules.MAXIMUM_UNITS) {
-                throw new IllegalArgumentException("领地地图必须包含 25 个格子");
+                throw new IllegalArgumentException(MAP_SIZE_INVALID);
             }
         }
     }

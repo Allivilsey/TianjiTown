@@ -10,11 +10,13 @@ import org.bukkit.plugin.Plugin;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
@@ -24,14 +26,17 @@ public final class JobsIncomeTaxAdapter {
     private final Plugin jobs;
     private final BooleanSupplier taxEnabled;
     private final Function<Earning, TaxResult> processor;
+    private final BiFunction<String, Map<String, ?>, String> messageResolver;
     private final AtomicBoolean eventFailureLogged = new AtomicBoolean();
 
     public JobsIncomeTaxAdapter(Plugin owner, Plugin jobs, BooleanSupplier taxEnabled,
-                                Function<Earning, TaxResult> processor) {
+                                Function<Earning, TaxResult> processor,
+                                BiFunction<String, Map<String, ?>, String> messageResolver) {
         this.owner = Objects.requireNonNull(owner, "owner");
         this.jobs = Objects.requireNonNull(jobs, "jobs");
         this.taxEnabled = Objects.requireNonNull(taxEnabled, "taxEnabled");
         this.processor = Objects.requireNonNull(processor, "processor");
+        this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
     }
 
     public Capability register() {
@@ -46,10 +51,13 @@ public final class JobsIncomeTaxAdapter {
             owner.getServer().getPluginManager().registerEvent(eventType, listener,
                     EventPriority.HIGHEST, safeExecutor(eventType, this::onPayment), owner,
                     true);
-            return Capability.success("Jobs " + jobs.getPluginMeta().getVersion()
-                    + " 收入事件、异步转主线程结算与可变付款金额已通过能力检查");
+            return Capability.success(resolveMessage(
+                    "diagnostic.jobs.capability-success",
+                    Map.of("version", String.valueOf(jobs.getPluginMeta().getVersion()))));
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
-            return Capability.failure("Jobs 收入税 API 能力检查失败: " + message(exception));
+            return Capability.failure(resolveMessage(
+                    "diagnostic.jobs.capability-failure",
+                    Map.of("detail", message(exception))));
         }
     }
 
@@ -68,7 +76,7 @@ public final class JobsIncomeTaxAdapter {
                 call(event, "setAmount", double.class, result.netAmount());
             }
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
-            logEventFailure("收入税处理失败，已保留玩家原始收入", exception);
+            logEventFailure("log.jobs.payment-failure", exception);
         }
     }
 
@@ -82,9 +90,11 @@ public final class JobsIncomeTaxAdapter {
                     () -> processor.apply(earning)).get(10, TimeUnit.SECONDS);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("等待 Jobs 主线程税务结算时被中断", exception);
+            throw new IllegalStateException(resolveMessage("log.jobs.await-interrupted", Map.of()),
+                    exception);
         } catch (TimeoutException exception) {
-            throw new IllegalStateException("等待 Jobs 主线程税务结算超时", exception);
+            throw new IllegalStateException(resolveMessage("log.jobs.await-timeout", Map.of()),
+                    exception);
         } catch (ExecutionException exception) {
             Throwable cause = exception.getCause();
             if (cause instanceof RuntimeException runtime) {
@@ -93,20 +103,30 @@ public final class JobsIncomeTaxAdapter {
             if (cause instanceof LinkageError linkage) {
                 throw linkage;
             }
-            throw new IllegalStateException("Jobs 主线程税务结算失败", cause);
+            throw new IllegalStateException(
+                    resolveMessage("log.jobs.main-thread-failure", Map.of()), cause);
         }
     }
 
     private EventExecutor safeExecutor(Class<? extends Event> expectedType,
                                        java.util.function.Consumer<Event> consumer) {
         return ThirdPartyEventExecutor.filtered(expectedType, consumer,
-                exception -> logEventFailure("事件边界捕获异常", exception));
+                exception -> logEventFailure("log.jobs.boundary-failure", exception));
     }
 
-    private void logEventFailure(String context, Throwable throwable) {
+    private void logEventFailure(String messageKey, Throwable throwable) {
         if (eventFailureLogged.compareAndSet(false, true)) {
-            owner.getLogger().severe("Jobs " + context + ": " + message(throwable)
-                    + "；同类后续错误将被抑制");
+            owner.getLogger().severe(resolveMessage(messageKey,
+                    Map.of("detail", message(throwable))));
+        }
+    }
+
+    private String resolveMessage(String key, Map<String, ?> placeholders) {
+        try {
+            String resolved = messageResolver.apply(key, placeholders);
+            return resolved == null || resolved.isBlank() ? key : resolved;
+        } catch (RuntimeException | LinkageError exception) {
+            return key + " " + placeholders;
         }
     }
 
@@ -139,8 +159,9 @@ public final class JobsIncomeTaxAdapter {
     }
 
     private static String message(Throwable throwable) {
-        return throwable.getMessage() == null ? throwable.getClass().getSimpleName()
+        String detail = throwable.getMessage() == null ? throwable.getClass().getSimpleName()
                 : throwable.getMessage();
+        return detail.replace('&', '＆').replace('§', '�');
     }
 
     public record Earning(OfflinePlayer player, double grossAmount) {

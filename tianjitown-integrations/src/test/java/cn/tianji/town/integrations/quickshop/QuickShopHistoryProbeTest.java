@@ -94,6 +94,20 @@ public class QuickShopHistoryProbeTest {
         assertEquals(101, result.taxMinor());
     }
 
+    @Test
+    void resolvesSuccessfulHistoryDetailThroughInjectedMessageResolver() throws Exception {
+        UUID settlement = UUID.randomUUID();
+
+        QuickShopHistoryProbe.Result result = QuickShopHistoryProbe.summarize(
+                records(1, settlement), settlement, 2, (key, placeholders) -> {
+                    assertEquals("diagnostic.quick-shop.history-success", key);
+                    assertTrue(placeholders.isEmpty());
+                    return "custom history detail";
+                });
+
+        assertEquals("custom history detail", result.detail());
+    }
+
     private static List<Object> records(int count, UUID settlement) {
         List<Object> records = new ArrayList<>(count);
         for (int index = 0; index < count; index++) {

@@ -3,20 +3,28 @@ package cn.tianji.town.paper;
 import cn.tianji.town.integrations.vault.VaultSettlementService;
 import cn.tianji.town.storage.economy.EconomyRepository;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.BiFunction;
 
 final class DonationCompensationCoordinator {
     private static final int DEFAULT_MAXIMUM_ATTEMPTS = 8;
     private static final long DEFAULT_INITIAL_DELAY_TICKS = 20L;
     private static final long DEFAULT_MAXIMUM_DELAY_TICKS = 20L * 30;
+    private static final String INVALID_OPERATION =
+            "validation.donation.compensation-operation";
+    private static final String REFUND_CALL_FAILURE =
+            "diagnostic.donation.compensation-call-failure";
+    private static final String REFUND_RESOLVED = "log.donation.compensation-resolved";
 
     private final Scheduler scheduler;
     private final PlayerRefund playerRefund;
     private final CompensationStore store;
     private final Listener listener;
+    private final BiFunction<String, Map<String, ?>, String> messageResolver;
     private final int maximumAttempts;
     private final long initialDelayTicks;
     private final long maximumDelayTicks;
@@ -25,17 +33,35 @@ final class DonationCompensationCoordinator {
     DonationCompensationCoordinator(Scheduler scheduler, PlayerRefund playerRefund,
                                     CompensationStore store, Listener listener) {
         this(scheduler, playerRefund, store, listener, DEFAULT_MAXIMUM_ATTEMPTS,
-                DEFAULT_INITIAL_DELAY_TICKS, DEFAULT_MAXIMUM_DELAY_TICKS);
+                DEFAULT_INITIAL_DELAY_TICKS, DEFAULT_MAXIMUM_DELAY_TICKS,
+                DonationCompensationCoordinator::fallbackMessage);
+    }
+
+    DonationCompensationCoordinator(Scheduler scheduler, PlayerRefund playerRefund,
+                                    CompensationStore store, Listener listener,
+                                    BiFunction<String, Map<String, ?>, String> messageResolver) {
+        this(scheduler, playerRefund, store, listener, DEFAULT_MAXIMUM_ATTEMPTS,
+                DEFAULT_INITIAL_DELAY_TICKS, DEFAULT_MAXIMUM_DELAY_TICKS, messageResolver);
     }
 
     DonationCompensationCoordinator(Scheduler scheduler, PlayerRefund playerRefund,
                                     CompensationStore store, Listener listener,
                                     int maximumAttempts, long initialDelayTicks,
                                     long maximumDelayTicks) {
+        this(scheduler, playerRefund, store, listener, maximumAttempts, initialDelayTicks,
+                maximumDelayTicks, DonationCompensationCoordinator::fallbackMessage);
+    }
+
+    DonationCompensationCoordinator(Scheduler scheduler, PlayerRefund playerRefund,
+                                    CompensationStore store, Listener listener,
+                                    int maximumAttempts, long initialDelayTicks,
+                                    long maximumDelayTicks,
+                                    BiFunction<String, Map<String, ?>, String> messageResolver) {
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.playerRefund = Objects.requireNonNull(playerRefund, "playerRefund");
         this.store = Objects.requireNonNull(store, "store");
         this.listener = Objects.requireNonNull(listener, "listener");
+        this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
         if (maximumAttempts <= 0) {
             throw new IllegalArgumentException("maximumAttempts 必须大于 0");
         }
@@ -50,7 +76,7 @@ final class DonationCompensationCoordinator {
     void submit(EconomyRepository.EconomyOperation operation) {
         Objects.requireNonNull(operation, "operation");
         if (!operation.operationType().equals("DONATION") || operation.actorId() == null) {
-            throw new IllegalArgumentException("只有带玩家身份的捐款操作可以自动补偿");
+            throw new IllegalArgumentException(resolveMessage(INVALID_OPERATION, Map.of()));
         }
         Recovery recovery = new Recovery(operation);
         if (pending.putIfAbsent(operation.operationId(), recovery) == null) {
@@ -78,7 +104,8 @@ final class DonationCompensationCoordinator {
                     recovery.operation.amountMinor());
         } catch (RuntimeException | LinkageError exception) {
             result = VaultSettlementService.Result.failure(
-                    "Vault 自动补偿调用异常: " + TownActionFailures.safeMessage(exception),
+                    resolveMessage(REFUND_CALL_FAILURE, Map.of("detail",
+                            safeText(TownActionFailures.safeMessage(exception)))),
                     false, false);
         }
         if (result.success()) {
@@ -103,7 +130,7 @@ final class DonationCompensationCoordinator {
         recovery.storageAttempts++;
         try {
             store.resolve(recovery.operation.operationId(),
-                    "玩家扣款已由自动补偿恢复");
+                    resolveMessage(REFUND_RESOLVED, Map.of()));
             pending.remove(recovery.operation.operationId(), recovery);
             listener.recovered(recovery.operation, recovery.externalAttempts);
         } catch (RuntimeException exception) {
@@ -128,6 +155,23 @@ final class DonationCompensationCoordinator {
             delay *= 2;
         }
         return Math.min(delay, maximumDelayTicks);
+    }
+
+    private String resolveMessage(String key, Map<String, ?> placeholders) {
+        try {
+            String resolved = messageResolver.apply(key, placeholders);
+            return resolved == null || resolved.isBlank() ? key : resolved;
+        } catch (RuntimeException | LinkageError exception) {
+            return key;
+        }
+    }
+
+    private static String fallbackMessage(String key, Map<String, ?> placeholders) {
+        return key;
+    }
+
+    private static String safeText(String text) {
+        return text == null ? "" : text.replace('&', '＆').replace('§', '�');
     }
 
     interface Scheduler {

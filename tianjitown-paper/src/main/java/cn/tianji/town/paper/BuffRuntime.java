@@ -36,6 +36,26 @@ import java.util.function.Consumer;
 
 final class BuffRuntime implements Listener {
     private static final long REFRESH_RETRY_DELAY_TICKS = 20L * 5;
+    private static final String BUFF_SHOP_PAUSED = "chat.buff.shop-paused";
+    private static final String REFRESH_FAILURE = "log.buff.refresh-failure";
+    private static final String REFRESH_CHECK_FAILURE = "log.buff.refresh-check-failure";
+    private static final String REFUND_REASON = "log.buff.refund-reason";
+    private static final String APPLICATION_FAILURE_REFUNDED =
+            "chat.buff.application-failure-refunded";
+    private static final String EXPIRATION_SCHEDULE_FAILURE =
+            "log.buff.expiration-schedule-failure";
+    private static final String EXPIRATION_CLEANUP_FAILURE =
+            "log.buff.expiration-cleanup-failure";
+    private static final String EXPIRATION_CANCEL_FAILURE =
+            "log.buff.expiration-cancel-failure";
+    private static final String MISSING_ATTRIBUTE = "diagnostic.buff.missing-attribute";
+    private static final String ATTRIBUTE_REPAIR_MISSING =
+            "log.buff.attribute-repair-missing";
+    private static final String ATTRIBUTE_REPAIR_MISMATCH =
+            "log.buff.attribute-repair-mismatch";
+    private static final String MAX_HEALTH_MISSING = "diagnostic.buff.max-health-missing";
+    private static final String MAX_HEALTH_INVALID = "diagnostic.buff.max-health-invalid";
+    private static final String CLEANUP_INVALID_OBJECT = "log.buff.cleanup-invalid-object";
 
     private final TianjiTownPlugin plugin;
     private final TownRuntime host;
@@ -75,7 +95,7 @@ final class BuffRuntime implements Listener {
                        Consumer<CommerceRepository.BuffPurchase> success,
                        Consumer<RuntimeException> failure) {
         if (!buffShopEnabled() || !host.consumptionEnabled()) {
-            failure.accept(new IllegalStateException("公共 Buff 商店当前暂停新购买"));
+            failure.accept(new IllegalStateException(plugin.messages().plainText(BUFF_SHOP_PAUSED)));
             return;
         }
         try {
@@ -94,7 +114,7 @@ final class BuffRuntime implements Listener {
                        Consumer<CommerceRepository.BuffPurchase> success,
                        Consumer<RuntimeException> failure) {
         if (!buffShopEnabled() || !host.consumptionEnabled()) {
-            failure.accept(new IllegalStateException("公共 Buff 商店当前暂停新购买"));
+            failure.accept(new IllegalStateException(plugin.messages().plainText(BUFF_SHOP_PAUSED)));
             return;
         }
         try {
@@ -131,8 +151,9 @@ final class BuffRuntime implements Listener {
                     applyBuffs(player, buffs, normalizeRespawnHealth);
                     scheduleExpiration(playerId, buffs, refreshGeneration);
                 } catch (RuntimeException | LinkageError exception) {
-                    plugin.getLogger().severe("刷新玩家公共 Buff 失败 " + player.getUniqueId()
-                            + ": " + safeMessage(exception));
+                    plugin.getLogger().severe(plugin.messages().plainText(REFRESH_FAILURE,
+                            Map.of("player", player.getUniqueId(),
+                                    "detail", safeText(safeMessage(exception)))));
                     retryRefresh(player, playerId, refreshGeneration, expireRecords, exception);
                 }
             }
@@ -157,8 +178,8 @@ final class BuffRuntime implements Listener {
         if (!isCurrentRefresh(playerId, refreshGeneration)) {
             return;
         }
-        plugin.getLogger().warning("检查玩家公共 Buff 失败 " + playerId
-                + "，将在稍后重试: " + safeMessage(exception));
+        plugin.getLogger().warning(plugin.messages().plainText(REFRESH_CHECK_FAILURE,
+                Map.of("player", playerId, "detail", safeText(safeMessage(exception)))));
         if (!plugin.runMainLater(() -> {
             if (!isCurrentRefresh(playerId, refreshGeneration)) {
                 return;
@@ -233,12 +254,13 @@ final class BuffRuntime implements Listener {
             } catch (RuntimeException | LinkageError exception) {
                 host.writeAction(player,
                         () -> repository.refundActiveBuff(purchase.buff().buffId(), null,
-                                "SYSTEM", "Buff 应用失败自动补偿: " + safeMessage(exception)),
+                                "SYSTEM", plugin.messages().plainText(REFUND_REASON,
+                                        Map.of("detail", safeText(safeMessage(exception))))),
                         refunded -> {
                     refreshAllPlayers();
                     failure.accept(new IllegalStateException(
-                            "Buff 应用失败，已自动取消并退回公共资金: "
-                                    + safeMessage(exception), exception));
+                            plugin.messages().plainText(APPLICATION_FAILURE_REFUNDED,
+                                    Map.of("detail", safeText(safeMessage(exception)))), exception));
                         }, refundFailure -> {
                             retryRefresh(player, playerId, refreshGeneration, false, refundFailure);
                             failure.accept(refundFailure);
@@ -324,8 +346,8 @@ final class BuffRuntime implements Listener {
             expirationDeadlines.put(playerId, deadline);
             return true;
         } catch (RuntimeException | LinkageError exception) {
-            plugin.getLogger().warning("安排公共 Buff 到期检查失败 " + playerId + ": "
-                    + safeMessage(exception));
+            plugin.getLogger().warning(plugin.messages().plainText(EXPIRATION_SCHEDULE_FAILURE,
+                    Map.of("player", playerId, "detail", safeText(safeMessage(exception)))));
             return false;
         }
     }
@@ -355,8 +377,8 @@ final class BuffRuntime implements Listener {
         if (!isCurrentRefresh(playerId, refreshGeneration)) {
             return;
         }
-        plugin.getLogger().warning("公共 Buff 到期清理失败 " + playerId
-                + "，将在稍后重试: " + safeMessage(exception));
+        plugin.getLogger().warning(plugin.messages().plainText(EXPIRATION_CLEANUP_FAILURE,
+                Map.of("player", playerId, "detail", safeText(safeMessage(exception)))));
         Instant retryAt = Instant.now().plusSeconds(1);
         if (!scheduleExpirationTask(playerId, refreshGeneration, retryAt)) {
             expirationDeadlines.put(playerId, retryAt);
@@ -369,8 +391,9 @@ final class BuffRuntime implements Listener {
             try {
                 task.cancel();
             } catch (RuntimeException | LinkageError exception) {
-                plugin.getLogger().warning("取消公共 Buff 到期检查失败 " + playerId + ": "
-                        + safeMessage(exception));
+                plugin.getLogger().warning(plugin.messages().plainText(EXPIRATION_CANCEL_FAILURE,
+                        Map.of("player", playerId,
+                                "detail", safeText(safeMessage(exception)))));
             }
         }
     }
@@ -546,8 +569,9 @@ final class BuffRuntime implements Listener {
         for (AttributeExpectation expectation : desired.values()) {
             AttributeInstance instance = player.getAttribute(expectation.key().attribute());
             if (instance == null) {
-                throw new IllegalStateException("玩家缺少 Attribute: "
-                        + expectation.key().attribute().getKey());
+                throw new IllegalStateException(plugin.messages().plainText(MISSING_ATTRIBUTE,
+                        Map.of("attribute", safeText(String.valueOf(
+                                expectation.key().attribute().getKey())))));
             }
             AttributeModifier current = instance.getModifier(expectation.key().modifierKey());
             boolean wasPreviouslyManaged = previous != null
@@ -570,12 +594,19 @@ final class BuffRuntime implements Listener {
 
     private void logAttributeRepair(Player player, AttributeExpectation expectation,
                                     AttributeModifier current) {
-        String actual = current == null ? "缺失" : "amount=" + current.getAmount()
-                + ", operation=" + current.getOperation();
-        plugin.getLogger().warning("检测到玩家 " + player.getUniqueId() + " 的 Buff Attribute 异常（"
-                + expectation.key().attribute().getKey() + "，实际 " + actual
-                + "，期望 amount=" + expectation.amount() + ", operation="
-                + expectation.operation() + "），已自动修复");
+        String key = current == null ? ATTRIBUTE_REPAIR_MISSING : ATTRIBUTE_REPAIR_MISMATCH;
+        Map<String, ?> placeholders = current == null
+                ? Map.of("player", player.getUniqueId(),
+                        "attribute", safeText(String.valueOf(
+                                expectation.key().attribute().getKey())),
+                        "amount", expectation.amount(), "operation", expectation.operation())
+                : Map.of("player", player.getUniqueId(),
+                        "attribute", safeText(String.valueOf(
+                                expectation.key().attribute().getKey())),
+                        "actual", safeText("amount=" + current.getAmount()
+                                + ", operation=" + current.getOperation()),
+                        "amount", expectation.amount(), "operation", expectation.operation());
+        plugin.getLogger().warning(plugin.messages().plainText(key, placeholders));
     }
 
     private void reconcilePotions(Player player, Map<PotionEffectType, PotionEffect> desired) {
@@ -618,10 +649,12 @@ final class BuffRuntime implements Listener {
     private void normalizeHealth(Player player, double previousHealth,
                                  boolean normalizeRespawnHealth) {
         AttributeInstance instance = Objects.requireNonNull(
-                player.getAttribute(Attribute.MAX_HEALTH), "玩家缺少 MAX_HEALTH Attribute");
+                player.getAttribute(Attribute.MAX_HEALTH),
+                plugin.messages().plainText(MAX_HEALTH_MISSING));
         double maximumHealth = instance.getValue();
         if (!Double.isFinite(maximumHealth) || maximumHealth <= 0) {
-            throw new IllegalStateException("玩家 MAX_HEALTH Attribute 数值无效: " + maximumHealth);
+            throw new IllegalStateException(plugin.messages().plainText(MAX_HEALTH_INVALID,
+                    Map.of("amount", maximumHealth)));
         }
         double targetHealth = normalizeRespawnHealth || !Double.isFinite(previousHealth)
                 ? maximumHealth : Math.max(0, Math.min(previousHealth, maximumHealth));
@@ -675,8 +708,8 @@ final class BuffRuntime implements Listener {
         } catch (RuntimeException | LinkageError exception) {
             if (cleanupFailureLogged.compareAndSet(false, true)) {
                 try {
-                    plugin.getLogger().warning("清理玩家公共 Buff 时对象已失效: "
-                            + safeMessage(exception) + "；同类后续错误将被抑制");
+                    plugin.getLogger().warning(plugin.messages().plainText(CLEANUP_INVALID_OBJECT,
+                            Map.of("detail", safeText(safeMessage(exception)))));
                 } catch (RuntimeException | LinkageError ignored) {
                     // 停服期间记录器失效时继续完成其余清理。
                 }
@@ -751,6 +784,10 @@ final class BuffRuntime implements Listener {
         String message = throwable.getMessage();
         return message == null || message.isBlank()
                 ? throwable.getClass().getSimpleName() : message;
+    }
+
+    private static String safeText(String text) {
+        return text == null ? "" : text.replace('&', '＆').replace('§', '�');
     }
 
     private record AttributeKey(Attribute attribute, NamespacedKey modifierKey) {

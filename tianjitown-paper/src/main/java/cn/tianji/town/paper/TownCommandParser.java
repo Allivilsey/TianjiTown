@@ -6,20 +6,34 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.BiFunction;
 
 final class TownCommandParser {
     private TownCommandParser() {
     }
 
     static NamedReason namedReason(String[] args, int nameStart, Collection<String> townNames) {
+        return namedReason(args, nameStart, townNames, null);
+    }
+
+    static NamedReason namedReason(String[] args, int nameStart, Collection<String> townNames,
+                                   BiFunction<String, Map<String, ?>, String> messageResolver) {
         NameMatch match = requireNameMatch(args, nameStart, townNames);
         String reason = join(args, match.end(), args.length, "chat.parser.missing-reason");
-        rejectPlaceholder(reason, "<原因>");
+        rejectPlaceholder(reason, TownAdminCompletionHints.REASON_MACHINE_VALUE,
+                configuredHint(messageResolver, TownAdminCompletionHints.REASON_KEY));
         return new NamedReason(match.name(), reason);
     }
 
     static NamedPlayerReason namedPlayerReason(String[] args, int nameStart,
                                                 Collection<String> townNames) {
+        return namedPlayerReason(args, nameStart, townNames, null);
+    }
+
+    static NamedPlayerReason namedPlayerReason(String[] args, int nameStart,
+                                                Collection<String> townNames,
+                                                BiFunction<String, Map<String, ?>, String>
+                                                        messageResolver) {
         NameMatch match = requireNameMatch(args, nameStart, townNames);
         if (match.end() >= args.length) {
             throw error("chat.parser.missing-player");
@@ -28,19 +42,27 @@ final class TownCommandParser {
         if (player.isBlank()) {
             throw error("chat.parser.missing-player");
         }
-        rejectPlaceholder(player, "<玩家>");
+        rejectPlaceholder(player, TownAdminCompletionHints.PLAYER_MACHINE_VALUE,
+                configuredHint(messageResolver, TownAdminCompletionHints.PLAYER_KEY));
         String reason = join(args, match.end() + 1, args.length, "chat.parser.missing-reason");
-        rejectPlaceholder(reason, "<原因>");
+        rejectPlaceholder(reason, TownAdminCompletionHints.REASON_MACHINE_VALUE,
+                configuredHint(messageResolver, TownAdminCompletionHints.REASON_KEY));
         return new NamedPlayerReason(match.name(), player, reason);
     }
 
     static NamedPlayer namedPlayer(String[] args, int nameStart, Collection<String> townNames) {
+        return namedPlayer(args, nameStart, townNames, null);
+    }
+
+    static NamedPlayer namedPlayer(String[] args, int nameStart, Collection<String> townNames,
+                                   BiFunction<String, Map<String, ?>, String> messageResolver) {
         NameMatch match = requireNameMatch(args, nameStart, townNames);
         if (match.end() + 1 != args.length) {
             throw error("chat.parser.exactly-one-player");
         }
         String player = args[match.end()].strip();
-        rejectPlaceholder(player, "<玩家>");
+        rejectPlaceholder(player, TownAdminCompletionHints.PLAYER_MACHINE_VALUE,
+                configuredHint(messageResolver, TownAdminCompletionHints.PLAYER_KEY));
         return new NamedPlayer(match.name(), player);
     }
 
@@ -63,19 +85,37 @@ final class TownCommandParser {
 
     static NamedAmountReason namedAmountReason(String[] args, int nameStart,
                                                Collection<String> townNames) {
+        return namedAmountReason(args, nameStart, townNames, null);
+    }
+
+    static NamedAmountReason namedAmountReason(String[] args, int nameStart,
+                                               Collection<String> townNames,
+                                               BiFunction<String, Map<String, ?>, String>
+                                                       messageResolver) {
         NameMatch match = requireNameMatch(args, nameStart, townNames);
         if (match.end() >= args.length) {
             throw error("chat.parser.missing-amount");
         }
         String amount = args[match.end()].strip();
+        rejectPlaceholder(amount, TownAdminCompletionHints.AMOUNT_MACHINE_VALUE,
+                configuredHint(messageResolver, TownAdminCompletionHints.AMOUNT_KEY));
         String reason = join(args, match.end() + 1, args.length, "chat.parser.missing-reason");
-        rejectPlaceholder(reason, "<原因>");
+        rejectPlaceholder(reason, TownAdminCompletionHints.REASON_MACHINE_VALUE,
+                configuredHint(messageResolver, TownAdminCompletionHints.REASON_KEY));
         return new NamedAmountReason(match.name(), amount, reason);
     }
 
     static NamedActionReason namedActionReason(String[] args, int nameStart,
                                                Collection<String> townNames,
                                                Collection<String> actions) {
+        return namedActionReason(args, nameStart, townNames, actions, null);
+    }
+
+    static NamedActionReason namedActionReason(String[] args, int nameStart,
+                                               Collection<String> townNames,
+                                               Collection<String> actions,
+                                               BiFunction<String, Map<String, ?>, String>
+                                                       messageResolver) {
         NameMatch match = requireNameMatch(args, nameStart, townNames);
         if (match.end() >= args.length) {
             throw error("chat.parser.missing-target");
@@ -85,13 +125,21 @@ final class TownCommandParser {
             throw error("chat.parser.unsupported-action", Map.of("action", action));
         }
         String reason = join(args, match.end() + 1, args.length, "chat.parser.missing-reason");
-        rejectPlaceholder(reason, "<原因>");
+        rejectPlaceholder(reason, TownAdminCompletionHints.REASON_MACHINE_VALUE,
+                configuredHint(messageResolver, TownAdminCompletionHints.REASON_KEY));
         return new NamedActionReason(match.name(), action, reason);
     }
 
     static NamedPlayerActionQuantityReason namedPlayerActionQuantityReason(
             String[] args, int nameStart, Collection<String> townNames,
             Collection<String> actions) {
+        return namedPlayerActionQuantityReason(args, nameStart, townNames, actions, null);
+    }
+
+    static NamedPlayerActionQuantityReason namedPlayerActionQuantityReason(
+            String[] args, int nameStart, Collection<String> townNames,
+            Collection<String> actions,
+            BiFunction<String, Map<String, ?>, String> messageResolver) {
         NameMatch match = requireNameMatch(args, nameStart, townNames);
         if (match.end() + 3 > args.length) {
             throw error("chat.parser.missing-player-product-quantity");
@@ -108,7 +156,8 @@ final class TownCommandParser {
             throw new ParseException("chat.parser.quantity-integer", Map.of(), exception);
         }
         String reason = join(args, match.end() + 3, args.length, "chat.parser.missing-reason");
-        rejectPlaceholder(reason, "<原因>");
+        rejectPlaceholder(reason, TownAdminCompletionHints.REASON_MACHINE_VALUE,
+                configuredHint(messageResolver, TownAdminCompletionHints.REASON_KEY));
         return new NamedPlayerActionQuantityReason(match.name(), player, action, quantity, reason);
     }
 
@@ -122,6 +171,14 @@ final class TownCommandParser {
 
     static String townName(String[] args, int nameStart) {
         return join(args, nameStart, args.length, "chat.parser.town-full-name");
+    }
+
+    static String reason(String[] args, int start,
+                         BiFunction<String, Map<String, ?>, String> messageResolver) {
+        String reason = join(args, start, args.length, "chat.parser.missing-reason");
+        rejectPlaceholder(reason, TownAdminCompletionHints.REASON_MACHINE_VALUE,
+                configuredHint(messageResolver, TownAdminCompletionHints.REASON_KEY));
+        return reason;
     }
 
     private static NameMatch requireNameMatch(String[] args, int nameStart,
@@ -143,10 +200,17 @@ final class TownCommandParser {
         return best;
     }
 
-    private static void rejectPlaceholder(String value, String placeholder) {
-        if (value.equalsIgnoreCase(placeholder)) {
-            throw error("chat.parser.placeholder", Map.of("placeholder", placeholder));
+    private static void rejectPlaceholder(String value, String... placeholders) {
+        for (String placeholder : placeholders) {
+            if (value.equalsIgnoreCase(placeholder)) {
+                throw error("chat.parser.placeholder", Map.of("placeholder", placeholder));
+            }
         }
+    }
+
+    private static String configuredHint(
+            BiFunction<String, Map<String, ?>, String> messageResolver, String key) {
+        return messageResolver == null ? null : TownAdminCompletionHints.resolve(messageResolver, key);
     }
 
     private static String join(String[] args, int start, int end, String missingKey) {
@@ -173,38 +237,15 @@ final class TownCommandParser {
         private final Map<String, ?> placeholders;
 
         private ParseException(String messageKey, Map<String, ?> placeholders) {
-            super(legacyMessage(messageKey, placeholders));
+            super(messageKey);
             this.messageKey = messageKey;
             this.placeholders = Map.copyOf(placeholders);
         }
 
         private ParseException(String messageKey, Map<String, ?> placeholders, Throwable cause) {
-            super(legacyMessage(messageKey, placeholders), cause);
+            super(messageKey, cause);
             this.messageKey = messageKey;
             this.placeholders = Map.copyOf(placeholders);
-        }
-
-        private static String legacyMessage(String messageKey, Map<String, ?> placeholders) {
-            return switch (messageKey) {
-                case "chat.parser.missing-reason" -> "必须填写原因";
-                case "chat.parser.missing-player" -> "必须指定目标玩家";
-                case "chat.parser.exactly-one-player" -> "小镇名称后必须且只能指定一个目标玩家";
-                case "chat.parser.one-action" -> "目标后只允许一个操作参数";
-                case "chat.parser.unsupported-action" -> "不支持的操作参数: "
-                        + placeholders.get("action");
-                case "chat.parser.missing-amount" -> "必须填写金额或税率";
-                case "chat.parser.missing-target" -> "必须指定操作目标";
-                case "chat.parser.unsupported-product" -> "不支持的商品: "
-                        + placeholders.get("action");
-                case "chat.parser.missing-player-product-quantity" -> "必须依次指定玩家、商品和数量";
-                case "chat.parser.quantity-integer" -> "数量必须为整数";
-                case "chat.parser.extra-town-argument" -> "小镇名称后存在多余参数";
-                case "chat.parser.town-full-name" -> "必须填写小镇全名";
-                case "chat.parser.town-not-found" -> "找不到匹配的小镇全名";
-                case "chat.parser.placeholder" -> "请将 " + placeholders.get("placeholder")
-                        + " 替换为实际内容";
-                default -> messageKey;
-            };
         }
 
         String messageKey() {

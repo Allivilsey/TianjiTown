@@ -14,12 +14,14 @@ import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -38,6 +40,7 @@ public final class QuickShopTaxAdapter {
     private final BooleanSupplier taxEnabled;
     private final Function<UUID, TaxPolicy> policyLookup;
     private final Consumer<SuccessfulTax> successConsumer;
+    private final BiFunction<String, Map<String, ?>, String> messageResolver;
     private final String settlementAccount;
     private final UUID settlementAccountId;
     private final int moneyScale;
@@ -55,12 +58,14 @@ public final class QuickShopTaxAdapter {
                                Function<UUID, TaxPolicy> policyLookup,
                                Consumer<SuccessfulTax> successConsumer,
                                String settlementAccount, UUID settlementAccountId,
-                               int moneyScale) {
+                               int moneyScale,
+                               BiFunction<String, Map<String, ?>, String> messageResolver) {
         this.owner = Objects.requireNonNull(owner, "owner");
         this.quickShop = Objects.requireNonNull(quickShop, "quickShop");
         this.taxEnabled = Objects.requireNonNull(taxEnabled, "taxEnabled");
         this.policyLookup = Objects.requireNonNull(policyLookup, "policyLookup");
         this.successConsumer = Objects.requireNonNull(successConsumer, "successConsumer");
+        this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
         this.settlementAccount = Objects.requireNonNull(settlementAccount, "settlementAccount");
         this.settlementAccountId = Objects.requireNonNull(settlementAccountId,
                 "settlementAccountId");
@@ -71,9 +76,10 @@ public final class QuickShopTaxAdapter {
         try {
             String version = quickShop.getPluginMeta().getVersion();
             if (!isAtLeastMinimum(version)) {
-                return Capability.failure("QuickShop-Hikari 版本至少为 "
-                        + MINIMUM_SUPPORTED_VERSION + "，当前为 " + version
-                        + "；动态税已保持关闭");
+                return Capability.failure(resolveMessage(
+                        "diagnostic.quick-shop.tax-version-unsupported",
+                        Map.of("minimum", MINIMUM_SUPPORTED_VERSION,
+                                "version", safeText(String.valueOf(version)))));
             }
             ClassLoader loader = quickShop.getClass().getClassLoader();
             Class<? extends Event> taxEvent = eventClass(loader, TAX_EVENT);
@@ -94,11 +100,13 @@ public final class QuickShopTaxAdapter {
             owner.getServer().getPluginManager().registerEvent(successEvent, listener,
                     EventPriority.MONITOR, safeExecutor(successEvent, this::onSuccess), owner,
                     true);
-            return Capability.success("QuickShop " + version
-                    + " 税率、交易账户、精确事件分流和成功事件签名已通过能力检查");
+            return Capability.success(resolveMessage(
+                    "diagnostic.quick-shop.tax-capability-success",
+                    Map.of("version", safeText(String.valueOf(version)))));
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
-            return Capability.failure("QuickShop 税务 API 能力检查失败: "
-                    + exception.getClass().getSimpleName() + ": " + exception.getMessage());
+            return Capability.failure(resolveMessage(
+                    "diagnostic.quick-shop.tax-capability-failure",
+                    Map.of("detail", message(exception))));
         }
     }
 
@@ -130,7 +138,7 @@ public final class QuickShopTaxAdapter {
                     selling ? "SELLING" : "BUYING", basisPoints));
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             pending.remove();
-            logEventFailure("税率事件处理失败", exception);
+            logEventFailure("log.quick-shop.tax-event-failure", exception);
         }
     }
 
@@ -153,7 +161,7 @@ public final class QuickShopTaxAdapter {
             call(transaction, "taxer", qUserType, settlementUser);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             pending.remove();
-            logEventFailure("税款账户切换失败", exception);
+            logEventFailure("log.quick-shop.transaction-account-failure", exception);
         }
     }
 
@@ -192,13 +200,14 @@ public final class QuickShopTaxAdapter {
                     gross.minorUnits(),
                     tax.basisPoints(), taxAmount.minorUnits(), location.getWorld().getName()));
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
-            logEventFailure("成功交易入账事件处理失败", exception);
+            logEventFailure("log.quick-shop.success-settlement-failure", exception);
         }
     }
 
     private MoneyAmount money(double amount) {
         if (!Double.isFinite(amount)) {
-            throw new IllegalArgumentException("QuickShop 返回了无效金额");
+            throw new IllegalArgumentException(resolveMessage(
+                    "diagnostic.quick-shop.invalid-amount", Map.of()));
         }
         return MoneyAmount.rounded(BigDecimal.valueOf(amount), moneyScale, RoundingMode.HALF_UP);
     }
@@ -206,13 +215,22 @@ public final class QuickShopTaxAdapter {
     private EventExecutor safeExecutor(Class<? extends Event> expectedType,
                                        Consumer<Event> consumer) {
         return ThirdPartyEventExecutor.filtered(expectedType, consumer,
-                exception -> logEventFailure("事件边界捕获异常", exception));
+                exception -> logEventFailure("log.quick-shop.boundary-failure", exception));
     }
 
-    private void logEventFailure(String context, Throwable throwable) {
+    private void logEventFailure(String messageKey, Throwable throwable) {
         if (eventFailureLogged.compareAndSet(false, true)) {
-            owner.getLogger().severe("QuickShop " + context + ": " + message(throwable)
-                    + "；同类后续错误将被抑制");
+            owner.getLogger().severe(resolveMessage(messageKey,
+                    Map.of("detail", message(throwable))));
+        }
+    }
+
+    private String resolveMessage(String key, Map<String, ?> placeholders) {
+        try {
+            String resolved = messageResolver.apply(key, placeholders);
+            return resolved == null || resolved.isBlank() ? key : resolved;
+        } catch (RuntimeException | LinkageError exception) {
+            return key + " " + placeholders;
         }
     }
 
@@ -307,8 +325,13 @@ public final class QuickShopTaxAdapter {
     }
 
     private static String message(Throwable throwable) {
-        return throwable.getMessage() == null ? throwable.getClass().getSimpleName()
+        String detail = throwable.getMessage() == null ? throwable.getClass().getSimpleName()
                 : throwable.getMessage();
+        return safeText(detail);
+    }
+
+    private static String safeText(String value) {
+        return value.replace('&', '＆').replace('§', '�');
     }
 
     private record PendingTax(UUID townId, UUID receiverId, String receiverName,

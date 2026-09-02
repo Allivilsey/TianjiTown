@@ -31,6 +31,16 @@ import java.util.function.Supplier;
  * 玩家界面的共享业务入口。此类不负责页面跳转或玩家可见文案。
  */
 final class TownActions {
+    private static final String APPLICATION_NOT_FOUND = "chat.application.not-found";
+    private static final String RESIDENCE_NAME_CONFLICT =
+            "chat.site-validation.residence-name-conflict";
+    private static final String REVIEW_REASON_EMPTY = "dialog.review.empty-error";
+    private static final String REVIEW_REASON_TOO_LONG = "dialog.review.too-long-error";
+    private static final String DONATION_AMOUNT_POSITIVE =
+            "validation.vault.donation-amount-positive";
+    private static final String RESIDENCE_MEMBER_SYNC_FAILURE =
+            "log.residence.member-sync-failure";
+
     private final TianjiTownPlugin plugin;
     private final TownRuntime runtime;
 
@@ -41,7 +51,7 @@ final class TownActions {
 
     void createApplication(Player actor, ApplicationText text, List<UUID> initialMemberIds,
                            Consumer<TownActionOutcome<ApplicationSnapshot>> completion) {
-        if (!validateText("APPLICATION_CREATE", text, completion)) {
+        if (!validateApplicationText("APPLICATION_CREATE", text, completion)) {
             return;
         }
         Duration cooldown = Duration.ofHours(plugin.getConfig()
@@ -56,7 +66,7 @@ final class TownActions {
     void updateApplication(Player actor, UUID applicationId, ApplicationText text,
                            List<UUID> initialMemberIds, long expectedVersion,
                            Consumer<TownActionOutcome<ApplicationSnapshot>> completion) {
-        if (!validateText("APPLICATION_UPDATE", text, completion)) {
+        if (!validateApplicationText("APPLICATION_UPDATE", text, completion)) {
             return;
         }
         write("APPLICATION_UPDATE", actor,
@@ -91,14 +101,21 @@ final class TownActions {
         long minutes = plugin.getConfig().getLong("town.application.reservation-minutes", 60);
         int buffer = plugin.getConfig().getInt("town.site.minimum-buffer-chunks", 1);
         runtime.readAction(actor, () -> runtime.repository().findApplication(applicationId)
-                        .orElseThrow(() -> new IllegalArgumentException("申请不存在")),
+                        .orElseThrow(ApplicationNotFoundException::new),
                 application -> {
                     LandProtectionService.Collision nameCollision = runtime.landProtection()
                             .findNameCollision(application.text().normalizedResidenceName());
+                    if (nameCollision.code() != null) {
+                        completion.accept(TownActionOutcome.failure(TownActionResult.failure(
+                                action, "RESIDENCE_UNAVAILABLE", Map.of("detail",
+                                        LandProtectionMessages.detail(plugin.messages(),
+                                                nameCollision)))));
+                        return;
+                    }
                     if (nameCollision.occupied()) {
                         completion.accept(TownActionOutcome.failure(TownActionResult.failure(
                                 action, "RESIDENCE_NAME_CONFLICT", Map.of("detail",
-                                        "领地名与已存在的领地重复。"))));
+                                        plugin.messages().plainText(RESIDENCE_NAME_CONFLICT)))));
                         return;
                     }
                     writeUnchecked(action, actor,
@@ -109,7 +126,7 @@ final class TownActions {
                                     "status", selected.status(), "expires_at",
                                     selected.reservationExpiresAt()), completion);
                 }, exception -> completion.accept(TownActionOutcome.failure(
-                        TownActionFailures.from(action, exception))));
+                        actionFailure(action, exception))));
     }
 
     void submitApplication(Player actor, UUID applicationId,
@@ -140,8 +157,11 @@ final class TownActions {
             return;
         }
         if (reason == null || reason.isBlank() || reason.length() > 500) {
+            String reasonMessage = reason == null || reason.isBlank()
+                    ? plugin.messages().plainText(REVIEW_REASON_EMPTY)
+                    : plugin.messages().plainText(REVIEW_REASON_TOO_LONG);
             completion.accept(TownActionOutcome.failure(TownActionResult.failure(action,
-                    "VALIDATION_FAILED", Map.of("detail", "审核原因必须为 1-500 个字符"))));
+                    "VALIDATION_FAILED", Map.of("detail", reasonMessage))));
             return;
         }
         write(action, actor, () -> requestChanges
@@ -156,7 +176,7 @@ final class TownActions {
     void updateTownProfile(Player actor, UUID townId, ApplicationText profile,
                            long expectedVersion,
                            Consumer<TownActionOutcome<TownSnapshot>> completion) {
-        if (!validateText("TOWN_PROFILE_UPDATE", profile, completion)) {
+        if (!validateApplicationText("TOWN_PROFILE_UPDATE", profile, completion)) {
             return;
         }
         write("TOWN_PROFILE_UPDATE", actor,
@@ -253,7 +273,8 @@ final class TownActions {
                               Consumer<TownActionOutcome<TransferSnapshot>> completion) {
         GovernanceSettings settings;
         try {
-            settings = GovernanceSettings.load(plugin.getConfig());
+            settings = GovernanceSettings.load(plugin.getConfig(),
+                    plugin.messages()::plainText);
         } catch (IllegalArgumentException exception) {
             failNow("MAYOR_TRANSFER_REQUEST", exception, completion);
             return;
@@ -288,7 +309,8 @@ final class TownActions {
                     Consumer<TownActionOutcome<VoteSnapshot>> completion) {
         GovernanceSettings settings;
         try {
-            settings = GovernanceSettings.load(plugin.getConfig());
+            settings = GovernanceSettings.load(plugin.getConfig(),
+                    plugin.messages()::plainText);
         } catch (IllegalArgumentException exception) {
             failNow("VOTE_CREATE", exception, completion);
             return;
@@ -359,7 +381,8 @@ final class TownActions {
                     if (!removed.success()) {
                         completion.accept(TownActionOutcome.failure(TownActionResult.failure(
                                 action, "LAND_PROTECTION_FAILED", Map.of("town_id", town.id(),
-                                        "archived", true, "detail", removed.message()))));
+                                        "archived", true, "detail",
+                                        LandProtectionMessages.detail(plugin.messages(), removed)))));
                         return;
                     }
                     writeUnchecked(action, actor, () -> {
@@ -415,7 +438,8 @@ final class TownActions {
         }
         if (amountMinor <= 0) {
             completion.accept(TownActionOutcome.failure(TownActionResult.failure(action,
-                    "VALIDATION_FAILED", Map.of("detail", "捐款金额必须大于 0"))));
+                    "VALIDATION_FAILED", Map.of("detail",
+                            plugin.messages().plainText(DONATION_AMOUNT_POSITIVE)))));
             return;
         }
         if (!runtime.consumptionEnabled()) {
@@ -552,15 +576,15 @@ final class TownActions {
                         runtime.reconcileAction(actor, state.town(), state.members(), true,
                                 result -> {
                                     if (!result.success()) {
-                                        plugin.getLogger().warning(
-                                                "同步 Residence 成员失败 town=" + townId
-                                                        + ": " + result.message());
+                                        plugin.getLogger().warning(residenceSyncFailure(townId,
+                                                LandProtectionMessages.detail(
+                                                        plugin.messages(), result)));
                                     }
                                 }, exception -> plugin.getLogger().warning(
-                                        "同步 Residence 成员失败 town=" + townId + ": "
-                                                + TownActionFailures.safeMessage(exception))),
-                exception -> plugin.getLogger().warning("同步 Residence 成员失败 town=" + townId
-                        + ": " + TownActionFailures.safeMessage(exception)));
+                                        residenceSyncFailure(townId,
+                                                TownActionFailures.safeMessage(exception)))),
+                exception -> plugin.getLogger().warning(residenceSyncFailure(townId,
+                        TownActionFailures.safeMessage(exception))));
     }
 
     private <T> void write(String action, Player actor, Supplier<T> operation,
@@ -579,7 +603,7 @@ final class TownActions {
                         TownActionOutcome.success(TownActionResult.success(action,
                                 resultData.apply(value)), value)),
                 exception -> completion.accept(TownActionOutcome.failure(
-                        TownActionFailures.from(action, exception))));
+                        TownActionFailures.from(action, exception, plugin.messages()))));
     }
 
     private <T> boolean rejectBeforeWrite(String action,
@@ -602,15 +626,44 @@ final class TownActions {
         completion.accept(TownActionOutcome.failure(TownActionFailures.from(action, exception)));
     }
 
+    private TownActionResult actionFailure(String action, RuntimeException exception) {
+        if (exception instanceof ApplicationNotFoundException) {
+            return TownActionResult.failure(action, "NOT_FOUND",
+                    Map.of("detail", plugin.messages().plainText(APPLICATION_NOT_FOUND)));
+        }
+        return TownActionFailures.from(action, exception, plugin.messages());
+    }
+
+    private String residenceSyncFailure(UUID townId, String detail) {
+        return plugin.messages().plainText(RESIDENCE_MEMBER_SYNC_FAILURE,
+                Map.of("town", townId, "detail", safeText(detail)));
+    }
+
+    private static String safeText(String value) {
+        return value == null ? "" : value.replace('&', '＆').replace('§', '�');
+    }
+
+    private <T> boolean validateApplicationText(String action, ApplicationText text,
+                                                Consumer<TownActionOutcome<T>> completion) {
+        List<ApplicationText.ValidationIssue> issues = text.validate();
+        if (issues.isEmpty()) {
+            return true;
+        }
+        completion.accept(TownActionOutcome.failure(TownActionResult.failure(action,
+                "VALIDATION_FAILED", Map.of("detail",
+                        ApplicationTextMessages.join(plugin.messages(), issues)))));
+        return false;
+    }
+
     static <T> boolean validateText(String action, ApplicationText text,
                                     Consumer<TownActionOutcome<T>> completion) {
         try {
             text.requireValid();
             return true;
-        } catch (IllegalArgumentException exception) {
+        } catch (ApplicationText.ValidationException exception) {
             completion.accept(TownActionOutcome.failure(TownActionResult.failure(action,
                     "VALIDATION_FAILED", Map.of("detail",
-                            TownActionFailures.safeMessage(exception)))));
+                            exception.getMessage()))));
             return false;
         }
     }
@@ -629,6 +682,9 @@ final class TownActions {
         return Map.of("vote_id", vote.id(), "town_id", vote.townId(), "status", vote.status(),
                 "yes_votes", vote.yesVotes(), "no_votes", vote.noVotes(),
                 "required_yes", vote.requiredYes());
+    }
+
+    private static final class ApplicationNotFoundException extends RuntimeException {
     }
 
     @FunctionalInterface

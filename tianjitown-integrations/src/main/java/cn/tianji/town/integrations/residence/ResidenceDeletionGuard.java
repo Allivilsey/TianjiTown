@@ -19,27 +19,43 @@ import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
 public final class ResidenceDeletionGuard implements Listener {
+    private static final String NON_PLAYER_DELETION_MESSAGE =
+            "log.residence.non-player-deletion-cancelled";
+    private static final String RECOVERY_FAILURE_MESSAGE =
+            "log.residence.deletion-recovery-failure";
+    private static final String PROTECTION_FAILURE_MESSAGE =
+            "log.residence.deletion-guard-failure";
     private final Plugin owner;
     private final Predicate<String> managedName;
     private final BooleanSupplier internalMutation;
     private final Runnable recovery;
     private final BiFunction<String, Map<String, ?>, String> messageResolver;
+    private final BiFunction<String, Map<String, ?>, String> logMessageResolver;
     private final AtomicBoolean failureLogged = new AtomicBoolean();
 
     public ResidenceDeletionGuard(Plugin owner, Predicate<String> managedName,
                                   BooleanSupplier internalMutation, Runnable recovery) {
         this(owner, managedName, internalMutation, recovery,
+                ResidenceDeletionGuard::fallbackMessage,
                 ResidenceDeletionGuard::fallbackMessage);
     }
 
     public ResidenceDeletionGuard(Plugin owner, Predicate<String> managedName,
                                   BooleanSupplier internalMutation, Runnable recovery,
                                   BiFunction<String, Map<String, ?>, String> messageResolver) {
+        this(owner, managedName, internalMutation, recovery, messageResolver, messageResolver);
+    }
+
+    public ResidenceDeletionGuard(Plugin owner, Predicate<String> managedName,
+                                  BooleanSupplier internalMutation, Runnable recovery,
+                                  BiFunction<String, Map<String, ?>, String> messageResolver,
+                                  BiFunction<String, Map<String, ?>, String> logMessageResolver) {
         this.owner = Objects.requireNonNull(owner, "owner");
         this.managedName = Objects.requireNonNull(managedName, "managedName");
         this.internalMutation = Objects.requireNonNull(internalMutation, "internalMutation");
         this.recovery = Objects.requireNonNull(recovery, "recovery");
         this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
+        this.logMessageResolver = Objects.requireNonNull(logMessageResolver, "logMessageResolver");
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
@@ -70,8 +86,8 @@ public final class ResidenceDeletionGuard implements Listener {
         if (source != null) {
             source.sendMessage(messageResolver.apply("chat.residence.deletion-blocked", Map.of()));
         } else {
-            owner.getLogger().warning("系统领地删除保护事件已取消；来源=非玩家，领地="
-                    + residence.getName());
+            owner.getLogger().warning(resolveNonPlayerDeletionMessage(logMessageResolver,
+                    residence.getName()));
         }
         Server server = owner.getServer();
         if (owner.isEnabled()) {
@@ -82,7 +98,7 @@ public final class ResidenceDeletionGuard implements Listener {
                 try {
                     recovery.run();
                 } catch (RuntimeException | LinkageError exception) {
-                    logFailure("Residence 删除后的对账恢复失败", exception);
+                    logFailure(RECOVERY_FAILURE_MESSAGE, exception);
                 }
             });
         }
@@ -95,24 +111,51 @@ public final class ResidenceDeletionGuard implements Listener {
         } catch (RuntimeException | LinkageError cancellationFailure) {
             throwable.addSuppressed(cancellationFailure);
         }
-        logFailure("Residence 删除保护异常，已按失败关闭策略取消删除", throwable);
+        logFailure(PROTECTION_FAILURE_MESSAGE, throwable);
     }
 
-    private void logFailure(String context, Throwable throwable) {
+    private void logFailure(String messageKey, Throwable throwable) {
         if (failureLogged.compareAndSet(false, true)) {
             try {
-                owner.getLogger().severe(context + ": " + safeMessage(throwable)
-                        + "；同类后续错误将被抑制");
+                owner.getLogger().severe(resolveFailureMessage(logMessageResolver, messageKey,
+                        throwable));
             } catch (RuntimeException | LinkageError ignored) {
                 // 故障记录器失效时仍不能污染 Paper 事件循环。
             }
         }
     }
 
+    static String resolveNonPlayerDeletionMessage(
+            BiFunction<String, Map<String, ?>, String> resolver, String residenceName) {
+        return resolveMessage(resolver, NON_PLAYER_DELETION_MESSAGE,
+                Map.of("residence", safeText(residenceName)));
+    }
+
+    static String resolveFailureMessage(BiFunction<String, Map<String, ?>, String> resolver,
+                                        String messageKey, Throwable throwable) {
+        return resolveMessage(resolver, messageKey,
+                Map.of("detail", safeMessage(throwable)));
+    }
+
+    private static String resolveMessage(BiFunction<String, Map<String, ?>, String> resolver,
+                                         String key, Map<String, ?> placeholders) {
+        try {
+            String resolved = resolver.apply(key, placeholders);
+            return resolved == null || resolved.isBlank() ? key : resolved;
+        } catch (RuntimeException | LinkageError ignored) {
+            return key + " " + placeholders;
+        }
+    }
+
     private static String safeMessage(Throwable throwable) {
         String message = throwable.getMessage();
-        return message == null || message.isBlank()
+        String detail = message == null || message.isBlank()
                 ? throwable.getClass().getSimpleName() : message;
+        return safeText(detail);
+    }
+
+    private static String safeText(String text) {
+        return text == null ? "" : text.replace('&', '＆').replace('§', '�');
     }
 
     private static String fallbackMessage(String key, Map<String, ?> placeholders) {

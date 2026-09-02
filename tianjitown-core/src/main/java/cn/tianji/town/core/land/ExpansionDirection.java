@@ -3,19 +3,17 @@ package cn.tianji.town.core.land;
 import java.util.Locale;
 
 public enum ExpansionDirection {
-    NORTH(0, -1, "北"),
-    EAST(1, 0, "东"),
-    SOUTH(0, 1, "南"),
-    WEST(-1, 0, "西");
+    NORTH(0, -1),
+    EAST(1, 0),
+    SOUTH(0, 1),
+    WEST(-1, 0);
 
     private final int gridX;
     private final int gridZ;
-    private final String displayName;
 
-    ExpansionDirection(int gridX, int gridZ, String displayName) {
+    ExpansionDirection(int gridX, int gridZ) {
         this.gridX = gridX;
         this.gridZ = gridZ;
-        this.displayName = displayName;
     }
 
     public int gridX() {
@@ -24,10 +22,6 @@ public enum ExpansionDirection {
 
     public int gridZ() {
         return gridZ;
-    }
-
-    public String displayName() {
-        return displayName;
     }
 
     public static ExpansionDirection parse(String value) {

@@ -11,6 +11,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ConsumptionRulesTest {
     @Test
+    void keepsDurationOptionsAsStableBusinessValuesWithoutPresentationText() {
+        assertEquals(1, BuffDurationOption.ONE_HOUR.hours());
+        assertEquals(24, BuffDurationOption.ONE_DAY.hours());
+        assertEquals(24 * 7, BuffDurationOption.ONE_WEEK.hours());
+        assertEquals(24 * 30, BuffDurationOption.ONE_MONTH.hours());
+        assertEquals(10_000, BuffDurationOption.ONE_HOUR.discountBasisPoints());
+        assertEquals(9_000, BuffDurationOption.ONE_DAY.discountBasisPoints());
+        assertEquals(8_000, BuffDurationOption.ONE_WEEK.discountBasisPoints());
+        assertEquals(7_000, BuffDurationOption.ONE_MONTH.discountBasisPoints());
+    }
+
+    @Test
     void calculatesLinearDurationPricesWithDiscountsAndLevelCap() {
         BuffDefinition definition = new BuffDefinition("speed", "公共速度",
                 BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",

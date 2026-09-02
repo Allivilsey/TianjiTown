@@ -23,8 +23,12 @@ import java.util.concurrent.atomic.AtomicReference;
 final class TownAdminTabCompleter implements TabCompleter {
     private static final long REFRESH_INTERVAL_TICKS = 20L * 15;
     private static final long STALE_NANOS = Duration.ofSeconds(20).toNanos();
+    private static final String COMPLETION_CACHE_RESTORED =
+            "log.admin.completion-cache-restored";
+    private static final String COMPLETION_CACHE_REFRESH_FAILED =
+            "log.admin.completion-cache-refresh-failed";
     private final TianjiTownPlugin plugin;
-    private final TownAdminCompletionEngine engine = new TownAdminCompletionEngine();
+    private final TownAdminCompletionEngine engine;
     private final AtomicReference<TownAdminCompletionEngine.Snapshot> snapshot =
             new AtomicReference<>(TownAdminCompletionEngine.Snapshot.empty());
     private final AtomicBoolean refreshing = new AtomicBoolean();
@@ -35,6 +39,7 @@ final class TownAdminTabCompleter implements TabCompleter {
 
     TownAdminTabCompleter(TianjiTownPlugin plugin) {
         this.plugin = plugin;
+        this.engine = new TownAdminCompletionEngine(plugin.messages()::plainText);
     }
 
     void start(TownRuntime runtime) {
@@ -108,12 +113,13 @@ final class TownAdminTabCompleter implements TabCompleter {
                             town.id(), town.profile().name(), town.status())).toList(), members));
             refreshedAt.set(System.nanoTime());
             if (refreshFailureLogged.compareAndSet(true, false)) {
-                plugin.getLogger().info("管理员命令补全缓存已恢复。");
+                plugin.getLogger().info(plugin.messages().plainText(COMPLETION_CACHE_RESTORED));
             }
         } catch (RuntimeException exception) {
             if (refreshFailureLogged.compareAndSet(false, true)) {
-                plugin.getLogger().warning("刷新管理员命令补全缓存失败，将继续使用旧缓存: "
-                        + safeMessage(exception));
+                plugin.getLogger().warning(plugin.messages().plainText(
+                        COMPLETION_CACHE_REFRESH_FAILED,
+                        Map.of("detail", safeText(safeMessage(exception)))));
             }
         } finally {
             refreshing.set(false);
@@ -143,5 +149,9 @@ final class TownAdminTabCompleter implements TabCompleter {
     private static String safeMessage(Throwable throwable) {
         String message = throwable.getMessage();
         return message == null || message.isBlank() ? throwable.getClass().getSimpleName() : message;
+    }
+
+    private static String safeText(Object value) {
+        return String.valueOf(value).replace('&', '＆').replace('§', '�');
     }
 }

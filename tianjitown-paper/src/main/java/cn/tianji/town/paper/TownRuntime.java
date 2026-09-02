@@ -37,6 +37,234 @@ import java.util.function.Supplier;
 
 final class TownRuntime {
     private static final BigDecimal APPLICATION_FEE = new BigDecimal("2000.00");
+    private static final String SCHEDULER_LIFECYCLE_STOPPED =
+            "log.scheduler.lifecycle-stopped";
+    private static final String QUICK_SHOP_TAX_REFRESH_FAILURE =
+            "log.scheduler.quick-shop-tax-refresh-failure";
+    private static final String QUICK_SHOP_TAX_SUBSIDY_QUOTA_EXHAUSTED =
+            "log.quick-shop.subsidy-quota-exhausted";
+    private static final String QUICK_SHOP_TAX_SUBSIDY_SETTLEMENT_FAILURE =
+            "log.quick-shop.subsidy-settlement-failure";
+    private static final String QUICK_SHOP_TAX_LEDGER_WRITE_FAILURE =
+            "log.quick-shop.tax-ledger-write-failure";
+    private static final String GLOBAL_MARKET_PLUS_INCOME_TAX_DEBIT_FAILURE =
+            "log.global-market-plus.income-tax-debit-failure";
+    private static final String GLOBAL_MARKET_PLUS_SUBSIDY_SETTLEMENT_REFUNDED =
+            "log.global-market-plus.subsidy-settlement-failure-refunded";
+    private static final String GLOBAL_MARKET_PLUS_SUBSIDY_SETTLEMENT_REFUND_FAILED =
+            "log.global-market-plus.subsidy-settlement-failure-refund-failed";
+    private static final String JOBS_INCOME_TAX_SETTLEMENT_FAILURE =
+            "log.jobs.income-tax-settlement-failure";
+    private static final String EXTERNAL_INCOME_TAX_LEDGER_WRITE_FAILURE =
+            "log.external-income-tax.ledger-write-failure";
+    private static final String SETTLEMENT_BALANCE_READ_FAILURE =
+            "log.settlement.balance-read-failure";
+    private static final String SETTLEMENT_SHORTFALL = "log.settlement.shortfall";
+    private static final String SETTLEMENT_RECONCILIATION_FAILURE =
+            "log.settlement.reconciliation-failure";
+    private static final String CONSUMPTION_PAUSED = "chat.runtime.consumption-paused";
+    private static final String EXPANSION_VALIDATION_FAILED =
+            "chat.lifecycle.expansion-validation-failed";
+    private static final String EXPANSION_BATCH_REQUEST_ID_REQUIRED =
+            "validation.territory.batch-request-id-required";
+    private static final String EXPANSION_BATCH_ALREADY_REFUNDED =
+            "validation.territory.batch-already-refunded";
+    private static final String EXPANSION_FAILED_REFUNDED =
+            "chat.lifecycle.expansion-failed-refunded";
+    private static final String EXPANSION_AREA_PRESENCE_CHECK_FAILED =
+            "chat.lifecycle.expansion-area-presence-check-failed";
+    private static final String EXPANSION_BATCH_FAILED =
+            "chat.lifecycle.expansion-batch-failed";
+    private static final String EXPANSION_BATCH_ROLLBACK_FAILED =
+            "log.expansion.batch-rollback-failed";
+    private static final String EXPANSION_BATCH_ROLLBACK_PARTIAL =
+            "chat.lifecycle.expansion-batch-rollback-partial";
+    private static final String EXPANSION_RECOVERED = "log.expansion.recovered";
+    private static final String EXPANSION_RECOVERY_FAILED = "log.expansion.recovery-failed";
+    private static final String EXPANSION_BATCH_RECOVERED = "log.expansion.batch-recovered";
+    private static final String EXPANSION_BATCH_RECOVERY_FAILED =
+            "log.expansion.batch-recovery-failed";
+    private static final String STORAGE_UNAVAILABLE = "chat.lifecycle.storage-unavailable";
+    private static final String STORAGE_WRITE_LOCKED = "chat.lifecycle.storage-write-locked";
+    private static final String EXTERNAL_PREFLIGHT_FAILED =
+            "chat.lifecycle.external-preflight-failed";
+    private static final String EXTERNAL_OPERATION_FAILED = "chat.lifecycle.external-failed";
+    private static final String COMPENSATION_AUTO = "chat.lifecycle.compensation-auto";
+    private static final String COMPENSATION_MANUAL = "chat.lifecycle.compensation-manual";
+    private static final String EXTERNAL_OPERATION_COMPENSATION_AUTO =
+            "log.external-operation.compensation-auto";
+    private static final String EXTERNAL_OPERATION_COMPENSATION_MANUAL =
+            "log.external-operation.compensation-manual";
+    private static final String LEDGER_ACTOR_NAME_BACKFILL_FAILURE =
+            "log.lifecycle.ledger-actor-name-backfill-failure";
+    private static final String LEDGER_ACTOR_SCAN_FAILURE =
+            "log.lifecycle.ledger-actor-scan-failure";
+    private static final String TOWN_REQUIRED = "validation.territory.town-required";
+    private static final String DONATION_OPERATION_REASON = "log.donation.operation-reason";
+    private static final String TAX_RATE_CHANGE_REASON = "log.tax.rate-change-reason";
+    private static final String SQLITE_RECOVERED = "log.lifecycle.sqlite-recovered";
+    private static final String SQLITE_INTERRUPTED = "log.lifecycle.sqlite-interrupted";
+    private static final String INTERRUPTED_PROVISION_REASON =
+            "log.lifecycle.interrupted-provision-reason";
+    private static final String INTERRUPTED_PROVISIONS_RECOVERED =
+            "log.lifecycle.interrupted-provisions-recovered";
+    private static final String INTERRUPTED_PROVISION_RECOVERY_FAILURE =
+            "log.lifecycle.interrupted-provision-recovery-failure";
+    private static final String DONATION_COMPENSATION_RETRY_FAILED =
+            "log.donation.compensation-retry-failed";
+    private static final String DONATION_COMPENSATION_FINALIZATION_FAILED =
+            "log.donation.compensation-finalization-failed";
+    private static final String DONATION_COMPENSATION_RECOVERED =
+            "log.donation.compensation-recovered";
+    private static final String DONATION_COMPENSATION_EXHAUSTED =
+            "log.donation.compensation-exhausted";
+    private static final String DONATION_SETTLEMENT_BALANCE_READ_FAILURE =
+            "log.donation.settlement-balance-read-failure";
+    private static final String DONATION_SETTLEMENT_SHORTFALL =
+            "log.donation.settlement-shortfall";
+    private static final String DONATION_SETTLEMENT_RECONCILIATION_FAILURE =
+            "log.donation.settlement-reconciliation-failure";
+    private static final String RESIDENCE_RECONCILIATION_FAILURE =
+            "log.residence.reconciliation-failure";
+    private static final String RESIDENCE_RECONCILIATION_DIFFERENCE =
+            "log.residence.reconciliation-difference";
+    private static final String RESIDENCE_RECONCILIATION_SQLITE_FAILURE =
+            "log.residence.reconciliation-sqlite-read-failure";
+    private static final String RESIDENCE_AUTOMATIC_REPAIR_CANCELLED =
+            "log.residence.automatic-repair-cancelled";
+    private static final String RESIDENCE_AUTOMATIC_REPAIR_DELAYED =
+            "log.residence.automatic-repair-delayed";
+    private static final String RESIDENCE_AUTOMATIC_REPAIR_SQLITE_FAILURE =
+            "log.residence.automatic-repair-sqlite-read-failure";
+    private static final String RESIDENCE_AUTOMATIC_REPAIR_API_FAILURE =
+            "log.residence.automatic-repair-api-failure";
+    private static final String RESIDENCE_AUTOMATIC_REPAIR_CONSISTENT =
+            "log.residence.automatic-repair-consistent";
+    private static final String RESIDENCE_AUTOMATIC_REPAIR_COMPLETED =
+            "log.residence.automatic-repair-completed";
+    private static final String RESIDENCE_AUTOMATIC_REPAIR_FAILED =
+            "log.residence.automatic-repair-failed";
+    private static final String PERIODIC_VOTE_SETTLEMENT_FAILURE =
+            "log.scheduler.periodic.vote-settlement-failure";
+    private static final String PROVISION_APPROVAL_STARTED =
+            "log.provision.approval-started";
+    private static final String PROVISION_DATABASE_PREPARED =
+            "log.provision.database-prepared";
+    private static final String PROVISION_PROJECTION_STARTED =
+            "log.provision.projection-started";
+    private static final String PROVISION_REFUND_FAILURE =
+            "log.provision.refund-failure";
+    private static final String PROVISION_PROJECTION_EXCEPTION =
+            "log.provision.projection-exception";
+    private static final String PROVISION_UI_CALLBACK =
+            "log.provision.ui-callback";
+    private static final String PROVISION_STORAGE_UNAVAILABLE_DETAIL =
+            "dialog.provision.storage-unavailable-detail";
+    private static final String PROVISION_STORAGE_UNAVAILABLE_ACTION =
+            "dialog.provision.storage-unavailable-recovery-action";
+    private static final String PROVISION_BUSY_DETAIL = "dialog.provision.busy-detail";
+    private static final String PROVISION_APPLICATION_NOT_FOUND_DETAIL =
+            "dialog.provision.application-not-found-detail";
+    private static final String PROVISION_RESIDENCE_CHECK_ACTION =
+            "dialog.provision.residence-check-recovery-action";
+    private static final String PROVISION_LIFECYCLE_START_FAILED_DETAIL =
+            "dialog.provision.lifecycle-start-failed-detail";
+    private static final String PROVISION_LIFECYCLE_RETRY_ACTION =
+            "dialog.provision.lifecycle-recovery-action";
+    private static final String PROVISION_REFRESH_APPLICATION_ACTION =
+            "dialog.provision.refresh-application-action";
+    private static final String PROVISION_SITE_VALIDATION_DETAIL =
+            "dialog.provision.site-validation-failed-detail";
+    private static final String PROVISION_SITE_VALIDATION_ACTION =
+            "dialog.provision.site-validation-recovery-action";
+    private static final String PROVISION_RESIDENCE_NAME_CONFLICT_DETAIL =
+            "dialog.provision.residence-name-conflict-detail";
+    private static final String PROVISION_RESIDENCE_NAME_CONFLICT_ACTION =
+            "dialog.provision.residence-name-conflict-recovery-action";
+    private static final String PROVISION_FEE_FAILURE_DETAIL =
+            "dialog.provision.fee-failed-detail";
+    private static final String PROVISION_FEE_FAILURE_ACTION =
+            "dialog.provision.fee-failed-recovery-action";
+    private static final String PROVISION_DATA_WRITE_ACTION =
+            "dialog.provision.data-write-recovery-action";
+    private static final String PROVISION_PREPARATION_WRITE_FAILED_DETAIL =
+            "dialog.provision.preparation-write-failed-detail";
+    private static final String PROVISION_PROJECTION_START_FAILED_DETAIL =
+            "dialog.provision.projection-start-failed-detail";
+    private static final String PROVISION_PROJECTION_SAVE_FAILED_DETAIL =
+            "dialog.provision.projection-save-failed-detail";
+    private static final String PROVISION_RESULT_READ_FAILED_DETAIL =
+            "dialog.provision.result-read-failed-detail";
+    private static final String PROVISION_PROJECTION_RESULT_ACTION =
+            "dialog.provision.projection-result-recovery-action";
+    private static final String PROVISION_RESIDENCE_RETRY_ACTION =
+            "dialog.provision.residence-retry-action";
+    private static final String PROVISION_DEFAULT_TELEPORT_WORLD_DETAIL =
+            "dialog.provision.default-teleport-world-unloaded-detail";
+    private static final String PROVISION_DEFAULT_TELEPORT_HEIGHT_DETAIL =
+            "dialog.provision.default-teleport-height-invalid-detail";
+    private static final String PROVISION_DEFAULT_TELEPORT_SPACE_DETAIL =
+            "dialog.provision.default-teleport-space-invalid-detail";
+    private static final String PROVISION_DEFAULT_TELEPORT_ROLLED_BACK_DETAIL =
+            "dialog.provision.default-teleport-failed-rolled-back-detail";
+    private static final String PROVISION_DEFAULT_TELEPORT_ROLLBACK_FAILED_DETAIL =
+            "dialog.provision.default-teleport-failed-rollback-failed-detail";
+    private static final String PROVISION_LAND_WITH_TELEPORT_DETAIL =
+            "dialog.provision.land-created-with-default-teleport-detail";
+    private static final String PROVISION_RETRY_APPROVAL_ACTION =
+            "dialog.provision.retry-approval-action";
+    private static final String PROVISION_REFRESH_STATE_ACTION =
+            "dialog.provision.refresh-state-action";
+    private static final String PROVISION_RECOVERY_REFRESH_ACTION =
+            "dialog.provision.recovery-refresh-action";
+    private static final String PROVISION_RECOVERY_INSPECTION_FAILED_DETAIL =
+            "dialog.provision.recovery-inspection-failed-detail";
+    private static final String PROVISION_RECOVERY_VERIFY_ACTION =
+            "dialog.provision.recovery-verify-action";
+    private static final String PROVISION_RECOVERY_HEALTHY_DETAIL =
+            "dialog.provision.recovery-healthy-projection-detail";
+    private static final String PROVISION_RECOVERY_HEALTHY_ACTION =
+            "dialog.provision.recovery-healthy-projection-action";
+    private static final String PROVISION_RECOVERY_CONTROL_CHECK_FAILED_DETAIL =
+            "dialog.provision.recovery-control-check-failed-detail";
+    private static final String PROVISION_RECOVERY_CLEANUP_FAILED_DETAIL =
+            "dialog.provision.recovery-cleanup-failed-detail";
+    private static final String PROVISION_RECOVERY_CLEANUP_API_FAILED_DETAIL =
+            "dialog.provision.recovery-cleanup-api-failed-detail";
+    private static final String PROVISION_RECOVERY_CLEANUP_ACTION =
+            "dialog.provision.recovery-cleanup-action";
+    private static final String PROVISION_RECOVERY_REFUND_FAILED_DETAIL =
+            "dialog.provision.recovery-refund-failed-detail";
+    private static final String PROVISION_RECOVERY_REFUND_ACTION =
+            "dialog.provision.recovery-refund-action";
+    private static final String PROVISION_RECOVERY_REFUND_CONFIRMATION_FAILED_DETAIL =
+            "dialog.provision.recovery-refund-confirmation-failed-detail";
+    private static final String PROVISION_RECOVERY_REFUND_CONFIRMATION_ACTION =
+            "dialog.provision.recovery-refund-confirmation-action";
+    private static final String PROVISION_RECOVERY_EXTERNAL_RESIDENCE =
+            "log.provision.recovery-external-residence";
+    private static final String PROVISION_RECOVERY_PROJECTION_CLEANED =
+            "log.provision.recovery-projection-cleaned";
+    private static final String PROVISION_RECOVERY_UNLOCK_REASON =
+            "log.provision.recovery-unlock-reason";
+    private static final String PROVISION_RECOVERY_CANCEL_REFUND_REASON =
+            "log.provision.recovery-cancel-refund-reason";
+    private static final String PROVISION_RECOVERY_FORCE_CLEANUP_REASON =
+            "log.provision.recovery-force-cleanup-reason";
+    private static final String PROVISION_RECOVERY_REASON_WITH_INSPECTION =
+            "log.provision.recovery-reason-with-inspection";
+    private static final String RESIDENCE_TELEPORT_AUDIT_SUCCESS =
+            "log.residence.teleport-point-audit-success";
+    private static final String RESIDENCE_TELEPORT_AUDIT_FAILURE =
+            "log.residence.teleport-point-audit-failure";
+    private static final String RESIDENCE_TELEPORT_AUDIT_WRITE_FAILURE =
+            "log.residence.teleport-point-audit-write-failure";
+    private static final String RESIDENCE_RECONCILIATION_AUDIT_SUCCESS =
+            "log.residence.reconciliation-audit-success";
+    private static final String RESIDENCE_RECONCILIATION_AUDIT_FAILURE =
+            "log.residence.reconciliation-audit-failure";
+    private static final String RESIDENCE_RECONCILIATION_AUDIT_WRITE_FAILURE =
+            "log.residence.reconciliation-audit-write-failure";
     private final TianjiTownPlugin plugin;
     private final DatabaseGate database;
     private final TownRepository repository;
@@ -75,19 +303,23 @@ final class TownRuntime {
                 plugin.getServer()::isPrimaryThread);
         this.finance = new EconomyRepository(database.dataSource(),
                 plugin.getServer()::isPrimaryThread);
-        this.economySettings = EconomySettings.load(plugin.getConfig());
+        this.economySettings = EconomySettings.load(plugin.getConfig(),
+                plugin.messages()::plainText);
         this.settlement = new VaultSettlementService(plugin.getServer(),
-                economySettings.settlementAccount(), economySettings.fallbackScale());
+                economySettings.settlementAccount(), economySettings.fallbackScale(),
+                plugin.messages()::plainText);
         this.territories = new TerritoryService(finance, sitePolicy, plugin.messages(),
                 economySettings, settlement.scale());
         this.buffs = new BuffRuntime(plugin, this,
                 new CommerceRepository(database.dataSource(),
                         plugin.getServer()::isPrimaryThread),
-                BuffSettings.load(plugin.getConfig(), settlement.scale()));
+                BuffSettings.load(plugin.getConfig(), settlement.scale(),
+                        plugin.messages()::plainText));
         this.bonuses = new TownBonusRuntime(plugin, this,
                 new TownBonusRepository(database.dataSource(),
                         plugin.getServer()::isPrimaryThread),
-                TownBonusSettings.load(plugin.getConfig()), java.util.Objects.requireNonNull(
+                TownBonusSettings.load(plugin.getConfig(), plugin.messages()::plainText),
+                java.util.Objects.requireNonNull(
                 plugin.getServer().getPluginManager().getPlugin("QuickShop-Hikari"),
                 "QuickShop-Hikari"));
         this.pendingTaxes = new RetryingWorkQueue<>(new RetryingWorkQueue.Scheduler() {
@@ -95,7 +327,7 @@ final class TownRuntime {
             public void executeAsync(Runnable task) {
                 if (!plugin.runAsync(task)) {
                     throw new java.util.concurrent.RejectedExecutionException(
-                            "插件生命周期已停止");
+                            plugin.messages().plainText(SCHEDULER_LIFECYCLE_STOPPED));
                 }
             }
 
@@ -103,7 +335,7 @@ final class TownRuntime {
             public void schedule(Runnable task, long delayTicks) {
                 if (!plugin.runMainLater(task, delayTicks)) {
                     throw new java.util.concurrent.RejectedExecutionException(
-                            "插件生命周期已停止");
+                            plugin.messages().plainText(SCHEDULER_LIFECYCLE_STOPPED));
                 }
             }
         }, 20L * 5, 20L * 30, this::recordQuickShopTax, this::handleQuickShopTaxFailure);
@@ -112,7 +344,7 @@ final class TownRuntime {
             public void executeAsync(Runnable task) {
                 if (!plugin.runAsync(task)) {
                     throw new java.util.concurrent.RejectedExecutionException(
-                            "插件生命周期已停止");
+                            plugin.messages().plainText(SCHEDULER_LIFECYCLE_STOPPED));
                 }
             }
 
@@ -120,7 +352,7 @@ final class TownRuntime {
             public void schedule(Runnable task, long delayTicks) {
                 if (!plugin.runMainLater(task, delayTicks)) {
                     throw new java.util.concurrent.RejectedExecutionException(
-                            "插件生命周期已停止");
+                            plugin.messages().plainText(SCHEDULER_LIFECYCLE_STOPPED));
                 }
             }
         }, 20L * 5, 20L * 30, this::recordExternalIncomeTax,
@@ -146,34 +378,42 @@ final class TownRuntime {
                     @Override
                     public void retryFailed(EconomyRepository.EconomyOperation operation,
                                             int attempt, String detail) {
-                        plugin.getLogger().warning("捐款自动补偿第 " + attempt
-                                + " 次尝试失败: operation=" + operation.operationId()
-                                + ", error=" + detail);
+                        plugin.getLogger().warning(plugin.messages().plainText(
+                                DONATION_COMPENSATION_RETRY_FAILED, Map.of(
+                                        "attempt", attempt,
+                                        "operation", operation.operationId(),
+                                        "detail", safeText(detail))));
                     }
 
                     @Override
                     public void finalizationFailed(EconomyRepository.EconomyOperation operation,
                                                    int attempt, String detail) {
-                        plugin.getLogger().warning("捐款外部余额已恢复，但第 " + attempt
-                                + " 次 SQLite 收尾失败: operation=" + operation.operationId()
-                                + ", error=" + detail);
+                        plugin.getLogger().warning(plugin.messages().plainText(
+                                DONATION_COMPENSATION_FINALIZATION_FAILED, Map.of(
+                                        "attempt", attempt,
+                                        "operation", operation.operationId(),
+                                        "detail", safeText(detail))));
                     }
 
                     @Override
                     public void recovered(EconomyRepository.EconomyOperation operation,
                                           int attempts) {
-                        plugin.getLogger().info("捐款自动补偿已恢复玩家余额，正在复核消费锁: operation="
-                                + operation.operationId() + ", attempts=" + attempts);
+                        plugin.getLogger().info(plugin.messages().plainText(
+                                DONATION_COMPENSATION_RECOVERED, Map.of(
+                                        "operation", operation.operationId(),
+                                        "attempts", attempts)));
                         reconcileSettlementAfterCompensation(operation);
                     }
 
                     @Override
                     public void exhausted(EconomyRepository.EconomyOperation operation,
                                           String detail) {
-                        plugin.getLogger().severe("捐款自动补偿达到重试上限，消费锁保持不变: operation="
-                                + operation.operationId() + ", error=" + detail);
+                        plugin.getLogger().severe(plugin.messages().plainText(
+                                DONATION_COMPENSATION_EXHAUSTED, Map.of(
+                                        "operation", operation.operationId(),
+                                        "detail", safeText(detail))));
                     }
-                });
+                }, plugin.messages()::plainText);
     }
 
     private void reconcileSettlementAfterCompensation(
@@ -183,8 +423,10 @@ final class TownRuntime {
             try {
                 externalBalance = settlement.balanceMinor();
             } catch (RuntimeException exception) {
-                plugin.getLogger().severe("自动补偿后的清算余额读取失败，消费锁保持不变: operation="
-                        + operation.operationId() + ", error=" + safeMessage(exception));
+                plugin.getLogger().severe(plugin.messages().plainText(
+                        DONATION_SETTLEMENT_BALANCE_READ_FAILURE, Map.of(
+                                "operation", operation.operationId(),
+                                "detail", safeText(safeMessage(exception)))));
                 return;
             }
             plugin.runAsync(() -> {
@@ -192,14 +434,17 @@ final class TownRuntime {
                     EconomyRepository.Reconciliation reconciliation =
                             finance.reconcileSettlement(externalBalance);
                     if (!reconciliation.healthy()) {
-                        plugin.getLogger().severe("自动补偿完成但清算仍有短款，消费锁保持不变: operation="
-                                + operation.operationId() + ", external="
-                                + reconciliation.externalBalanceMinor() + ", required="
-                                + reconciliation.requiredMinor());
+                        plugin.getLogger().severe(plugin.messages().plainText(
+                                DONATION_SETTLEMENT_SHORTFALL, Map.of(
+                                        "operation", operation.operationId(),
+                                        "external", reconciliation.externalBalanceMinor(),
+                                        "required", reconciliation.requiredMinor())));
                     }
                 } catch (RuntimeException exception) {
-                    plugin.getLogger().severe("自动补偿后的清算复核失败，消费锁保持不变: operation="
-                            + operation.operationId() + ", error=" + safeMessage(exception));
+                    plugin.getLogger().severe(plugin.messages().plainText(
+                            DONATION_SETTLEMENT_RECONCILIATION_FAILURE, Map.of(
+                                    "operation", operation.operationId(),
+                                    "detail", safeText(safeMessage(exception)))));
                 }
             });
         });
@@ -278,16 +523,17 @@ final class TownRuntime {
                 try {
                     refreshTaxPolicies();
                 } catch (RuntimeException exception) {
-                    plugin.getLogger().warning("刷新 QuickShop 税率内存映射失败: "
-                            + safeMessage(exception));
+                    plugin.getLogger().warning(plugin.messages().plainText(
+                            QUICK_SHOP_TAX_REFRESH_FAILURE,
+                            Map.of("detail", safeText(safeMessage(exception)))));
                 }
             }
             boolean previous = databaseAvailable.getAndSet(healthy);
             if (healthy && !previous) {
-                plugin.getLogger().info("SQLite 连接已恢复，写操作重新开放。");
+                plugin.getLogger().info(plugin.messages().plainText(SQLITE_RECOVERED));
                 flushPendingTaxes();
             } else if (!healthy && previous) {
-                plugin.getLogger().severe("SQLite 连接中断，写操作已锁定；Residence 保护保持不变。");
+                plugin.getLogger().severe(plugin.messages().plainText(SQLITE_INTERRUPTED));
             }
         });
     }
@@ -298,11 +544,12 @@ final class TownRuntime {
                 finance.initializeAccounts();
                 refreshTaxPolicies();
                 int recovered = repository.recoverInterruptedProvisions(
-                        "服务器在 Residence 投影完成前停止，启动时已转为可重试失败状态");
+                        plugin.messages().plainText(INTERRUPTED_PROVISION_REASON));
                 databaseAvailable.set(true);
                 if (recovered > 0) {
-                    plugin.getLogger().warning("已恢复 " + recovered
-                            + " 个中断的建镇流程；申请进入 PROVISION_FAILED，等待管理员重试。");
+                    plugin.getLogger().warning(plugin.messages().plainText(
+                            INTERRUPTED_PROVISIONS_RECOVERED,
+                            Map.of("count", recovered)));
                 }
                 List<EconomyRepository.ExpansionOperation> expansions =
                         finance.pendingExpansions();
@@ -319,7 +566,9 @@ final class TownRuntime {
                 if (exception instanceof TownRepository.StorageUnavailableException) {
                     databaseAvailable.set(false);
                 }
-                plugin.getLogger().severe("恢复中断建镇流程失败: " + safeMessage(exception));
+                plugin.getLogger().severe(plugin.messages().plainText(
+                        INTERRUPTED_PROVISION_RECOVERY_FAILURE,
+                        Map.of("detail", safeText(safeMessage(exception)))));
             }
         });
     }
@@ -347,27 +596,37 @@ final class TownRuntime {
                                     state.members());
                         } catch (RuntimeException | LinkageError exception) {
                             LandProtectionService.Result failure =
-                                    LandProtectionService.Result.failure(
-                                            "Residence API 不可用: " + safeMessage(exception));
-                            plugin.getLogger().severe("Residence 对账失败 " + state.town().id()
-                                    + ": " + failure.message());
+                                    LandProtectionService.Result.failureCode(
+                                            LandProtectionService.ResultCode.RESIDENCE_API_UNAVAILABLE,
+                                            Map.of("detail", safeText(safeMessage(exception))));
+                            plugin.getLogger().severe(plugin.messages().plainText(
+                                    RESIDENCE_RECONCILIATION_FAILURE, Map.of(
+                                            "town", state.town().id(),
+                                            "detail", safeText(LandProtectionMessages.detail(
+                                                    plugin.messages(), failure)))));
                             recordLandAudit(null, "SYSTEM", state.town().id(), false, failure);
                             continue;
                         }
                         if (inspection.state()
                                 == LandProtectionService.ProjectionState.HEALTHY) {
                             recordLandAudit(null, "SYSTEM", state.town().id(), false,
-                                    LandProtectionService.Result.ok(inspection.message()));
+                                    LandProtectionService.Result.fromHealthyInspection(inspection));
                             continue;
                         }
-                        plugin.getLogger().warning("Residence 对账发现异常 " + state.town().id()
-                                + ": " + inspection.message() + "；正在读取最新 SQLite 记录修复。");
-                        repairLandFromDatabase(state.town().id(), inspection.message());
+                        String detectedDifference = safeText(LandProtectionMessages.detail(
+                                plugin.messages(), inspection));
+                        plugin.getLogger().warning(plugin.messages().plainText(
+                                RESIDENCE_RECONCILIATION_DIFFERENCE, Map.of(
+                                        "town", state.town().id(),
+                                        "detail", detectedDifference)));
+                        repairLandFromDatabase(state.town().id(), detectedDifference);
                     }
                 });
             } catch (RuntimeException exception) {
                 databaseAvailable.set(false);
-                plugin.getLogger().severe("Residence 对账读取 SQLite 失败: " + safeMessage(exception));
+                plugin.getLogger().severe(plugin.messages().plainText(
+                        RESIDENCE_RECONCILIATION_SQLITE_FAILURE,
+                        Map.of("detail", safeText(safeMessage(exception)))));
             }
         });
     }
@@ -381,16 +640,18 @@ final class TownRuntime {
                 TownSnapshot town = repository.findTown(townId).orElse(null);
                 if (town == null || town.status() != TownStatus.ACTIVE) {
                     pendingLandRepairs.remove(townId);
-                    plugin.getLogger().warning("Residence 自动修复已取消，小镇数据库版本已不存在或非 "
-                            + "ACTIVE: " + townId);
+                    plugin.getLogger().warning(plugin.messages().plainText(
+                            RESIDENCE_AUTOMATIC_REPAIR_CANCELLED,
+                            Map.of("town", townId)));
                     return;
                 }
                 TownMembers latest = new TownMembers(town, repository.listLandAccessIds(townId),
                         finance.territoryUnits(townId));
                 if (hasUnsettledProjection(latest)) {
                     pendingLandRepairs.remove(townId);
-                    plugin.getLogger().info("Residence 自动修复已延后，小镇仍有未完成的领地投影: "
-                            + townId);
+                    plugin.getLogger().info(plugin.messages().plainText(
+                            RESIDENCE_AUTOMATIC_REPAIR_DELAYED,
+                            Map.of("town", townId)));
                     return;
                 }
                 databaseAvailable.set(true);
@@ -404,8 +665,10 @@ final class TownRuntime {
                         || exception instanceof EconomyRepository.StorageUnavailableException) {
                     databaseAvailable.set(false);
                 }
-                plugin.getLogger().severe("Residence 自动修复读取最新 SQLite 记录失败 "
-                        + townId + ": " + safeMessage(exception));
+                plugin.getLogger().severe(plugin.messages().plainText(
+                        RESIDENCE_AUTOMATIC_REPAIR_SQLITE_FAILURE, Map.of(
+                                "town", townId,
+                                "detail", safeText(safeMessage(exception)))));
             }
         });
         if (!submitted) {
@@ -429,23 +692,36 @@ final class TownRuntime {
                 outcome = AutomaticLandReconciler.reconcile(landProtection,
                         state.town().residenceName(), areas, state.members());
             } catch (RuntimeException | LinkageError exception) {
-                LandProtectionService.Result failure = LandProtectionService.Result.failure(
-                        "Residence API 不可用: " + safeMessage(exception));
-                plugin.getLogger().severe("Residence 对账自动修复失败 " + state.town().id()
-                        + ": " + failure.message());
+                LandProtectionService.Result failure = LandProtectionService.Result.failureCode(
+                        LandProtectionService.ResultCode.RESIDENCE_API_UNAVAILABLE,
+                        Map.of("detail", safeText(safeMessage(exception))));
+                plugin.getLogger().severe(plugin.messages().plainText(
+                        RESIDENCE_AUTOMATIC_REPAIR_API_FAILURE, Map.of(
+                                "town", state.town().id(),
+                                "detail", safeText(LandProtectionMessages.detail(
+                                        plugin.messages(), failure)))));
                 recordLandAudit(null, "SYSTEM", state.town().id(), true, failure);
                 return;
             }
             if (!outcome.repairAttempted()) {
-                plugin.getLogger().info("Residence 投影在读取最新 SQLite 记录后已一致 "
-                        + state.town().id() + ": " + detectedDifference);
+                plugin.getLogger().info(plugin.messages().plainText(
+                        RESIDENCE_AUTOMATIC_REPAIR_CONSISTENT, Map.of(
+                                "town", state.town().id(),
+                                "detail", safeText(detectedDifference))));
             } else if (outcome.result().success()) {
-                plugin.getLogger().warning("Residence 对账发现异常并已依照最新 SQLite 记录自动修复 "
-                        + state.town().id() + ": " + outcome.inspection().message());
+                plugin.getLogger().warning(plugin.messages().plainText(
+                        RESIDENCE_AUTOMATIC_REPAIR_COMPLETED, Map.of(
+                                "town", state.town().id(),
+                                "detail", safeText(LandProtectionMessages.detail(
+                                        plugin.messages(), outcome.inspection())))));
             } else {
-                plugin.getLogger().severe("Residence 对账自动修复失败 " + state.town().id()
-                        + ": 检查=" + outcome.inspection().message() + "，修复="
-                        + outcome.result().message());
+                plugin.getLogger().severe(plugin.messages().plainText(
+                        RESIDENCE_AUTOMATIC_REPAIR_FAILED, Map.of(
+                                "town", state.town().id(),
+                                "inspection", safeText(LandProtectionMessages.detail(
+                                        plugin.messages(), outcome.inspection())),
+                                "repair", safeText(LandProtectionMessages.detail(
+                                        plugin.messages(), outcome.result())))));
             }
             recordLandAudit(null, "SYSTEM", state.town().id(),
                     outcome.repairAttempted(), outcome.result());
@@ -483,7 +759,9 @@ final class TownRuntime {
                 if (exception instanceof GovernanceRepository.StorageUnavailableException) {
                     databaseAvailable.set(false);
                 }
-                plugin.getLogger().severe("治理投票定时结算失败: " + safeMessage(exception));
+                plugin.getLogger().severe(plugin.messages().plainText(
+                        PERIODIC_VOTE_SETTLEMENT_FAILURE, Map.of(
+                                "detail", safeText(safeMessage(exception)))));
             }
         });
     }
@@ -499,23 +777,25 @@ final class TownRuntime {
     void provision(CommandSender sender, UUID applicationId, UUID reviewerId,
                    String reviewerName, String reason, String idempotencyKey,
         Consumer<ProvisionResult> completion) {
-        plugin.getLogger().info("建镇审批开始 application=" + applicationId
-                + " at=" + Instant.now());
+        plugin.getLogger().info(plugin.messages().plainText(PROVISION_APPROVAL_STARTED,
+                Map.of("application", applicationId, "time", Instant.now())));
         if (!databaseAvailable.get()) {
             plugin.messages().send(sender, "chat.runtime.storage-locked");
-            completion.accept(ProvisionResult.failure(null, "SQLite 当前不可用。",
-                    "恢复数据库后返回审核列表重试"));
+            completion.accept(ProvisionResult.failure(null,
+                    ProvisionResult.MessageRef.configured(PROVISION_STORAGE_UNAVAILABLE_DETAIL),
+                    ProvisionResult.MessageRef.configured(PROVISION_STORAGE_UNAVAILABLE_ACTION)));
             return;
         }
         if (!provisions.tryBegin(applicationId)) {
             plugin.messages().send(sender, "chat.runtime.provision-duplicate");
-            completion.accept(ProvisionResult.busy("该申请已有创建流程正在执行。"));
+            completion.accept(ProvisionResult.busy(
+                    ProvisionResult.MessageRef.configured(PROVISION_BUSY_DETAIL)));
             return;
         }
         if (!plugin.runAsync(() -> {
             try {
                 ApplicationSnapshot application = repository.findApplication(applicationId)
-                        .orElseThrow(() -> new IllegalArgumentException("申请不存在"));
+                        .orElseThrow(ApplicationNotFoundException::new);
                 long feeMinor = application.applicationFeeMinor() > 0
                         ? application.applicationFeeMinor()
                         : APPLICATION_FEE.movePointRight(settlement.scale())
@@ -528,21 +808,28 @@ final class TownRuntime {
                         provisions.finish(application.id());
                         handleFailure(sender, exception);
                         completion.accept(ProvisionResult.failure(application,
-                                safeMessage(exception),
-                                "检查 Residence 和申请资料后返回审核列表重试"));
+                                ProvisionResult.MessageRef.literal(safeText(safeMessage(exception))),
+                                ProvisionResult.MessageRef.configured(
+                                        PROVISION_RESIDENCE_CHECK_ACTION)));
                     }
                 };
                 if (!plugin.runMain(start)) {
                     provisions.finish(application.id());
                     completion.accept(ProvisionResult.failure(application,
-                            "插件生命周期已停止，未能启动建镇流程。",
-                            "重新启动服务端后返回审核列表重试"));
+                            ProvisionResult.MessageRef.configured(
+                                    PROVISION_LIFECYCLE_START_FAILED_DETAIL),
+                            ProvisionResult.MessageRef.configured(PROVISION_LIFECYCLE_RETRY_ACTION)));
                 }
             } catch (RuntimeException exception) {
                 provisions.finish(applicationId);
                 handleFailure(sender, exception);
-                ProvisionResult result = ProvisionResult.failure(null, safeMessage(exception),
-                        "返回审核列表刷新申请状态后重试");
+                ProvisionResult result = exception instanceof ApplicationNotFoundException
+                        ? ProvisionResult.failure(null,
+                        ProvisionResult.MessageRef.configured(PROVISION_APPLICATION_NOT_FOUND_DETAIL),
+                        ProvisionResult.MessageRef.configured(PROVISION_REFRESH_APPLICATION_ACTION))
+                        : ProvisionResult.failure(null,
+                        ProvisionResult.MessageRef.literal(safeText(safeMessage(exception))),
+                        ProvisionResult.MessageRef.configured(PROVISION_REFRESH_APPLICATION_ACTION));
                 if (!plugin.runMain(() -> completion.accept(result))) {
                     completion.accept(result);
                 }
@@ -550,8 +837,9 @@ final class TownRuntime {
         })) {
             provisions.finish(applicationId);
             completion.accept(ProvisionResult.failure(null,
-                    "插件生命周期已停止，未能启动建镇流程。",
-                    "重新启动服务端后返回审核列表重试"));
+                    ProvisionResult.MessageRef.configured(
+                            PROVISION_LIFECYCLE_START_FAILED_DETAIL),
+                    ProvisionResult.MessageRef.configured(PROVISION_LIFECYCLE_RETRY_ACTION)));
         }
     }
 
@@ -566,22 +854,33 @@ final class TownRuntime {
         if (!environment.valid()) {
             provisions.finish(application.id());
             completion.accept(ProvisionResult.failure(application,
-                    "批准前选址复核失败: " + environment.error(),
-                    "要求申请人修改选址后重新提交"));
+                    ProvisionResult.MessageRef.configured(PROVISION_SITE_VALIDATION_DETAIL,
+                            Map.of("detail", safeText(environment.error()))),
+                    ProvisionResult.MessageRef.configured(PROVISION_SITE_VALIDATION_ACTION)));
             return;
         }
         LandProtectionService.Collision nameCollision = landProtection.findNameCollision(
                 application.text().normalizedResidenceName());
+        if (nameCollision.code() != null) {
+            provisions.finish(application.id());
+            completion.accept(ProvisionResult.failure(application,
+                    ProvisionResult.MessageRef.literal(safeText(
+                            LandProtectionMessages.detail(plugin.messages(), nameCollision))),
+                    ProvisionResult.MessageRef.configured(PROVISION_RESIDENCE_CHECK_ACTION)));
+            return;
+        }
         if (nameCollision.occupied()) {
             LandProtectionService.Inspection inspection = application.townId() == null
-                    ? LandProtectionService.Inspection.invalid("尚未创建临时小镇")
+                    ? LandProtectionService.Inspection.invalid("MISSING_TEMPORARY_TOWN")
                     : landProtection.inspect(application.text().normalizedResidenceName(),
                     application.territory(), expectedMembers);
             if (inspection.state() != LandProtectionService.ProjectionState.HEALTHY) {
                 provisions.finish(application.id());
                 completion.accept(ProvisionResult.failure(application,
-                        "领地名与已存在的领地重复。",
-                        "解除锁定并要求申请人修改小镇代码"));
+                        ProvisionResult.MessageRef.configured(
+                                PROVISION_RESIDENCE_NAME_CONFLICT_DETAIL),
+                        ProvisionResult.MessageRef.configured(
+                                PROVISION_RESIDENCE_NAME_CONFLICT_ACTION)));
                 return;
             }
         }
@@ -591,11 +890,13 @@ final class TownRuntime {
                     plugin.getServer().getOfflinePlayer(application.applicantId()), feeMinor);
             if (!payment.success()) {
                 provisions.finish(application.id());
+                String paymentDetail = safeText(payment.message());
                 plugin.messages().send(sender, "chat.runtime.fee-failed", Map.of(
-                        "amount", money(feeMinor), "detail", payment.message()));
+                        "amount", money(feeMinor), "detail", paymentDetail));
                 completion.accept(ProvisionResult.failure(application,
-                        "申请费扣取失败: " + payment.message(),
-                        "确认申请人余额后返回审核列表重试"));
+                        ProvisionResult.MessageRef.configured(PROVISION_FEE_FAILURE_DETAIL,
+                                Map.of("detail", paymentDetail)),
+                        ProvisionResult.MessageRef.configured(PROVISION_FEE_FAILURE_ACTION)));
                 return;
             }
         }
@@ -605,14 +906,15 @@ final class TownRuntime {
                         application.id(), reviewerId, reviewerName, reason, idempotencyKey,
                         feeMinor, playerName(application.applicantId()));
                 databaseAvailable.set(true);
-                plugin.getLogger().info("建镇数据库准备完成 application=" + application.id()
-                        + " at=" + Instant.now());
+                plugin.getLogger().info(plugin.messages().plainText(PROVISION_DATABASE_PREPARED,
+                        Map.of("application", application.id(), "time", Instant.now())));
                 if (!plugin.runMain(() -> projectProvision(sender, application.id(), provisioning,
                         completion))) {
                     provisions.finish(application.id());
                     completion.accept(ProvisionResult.failure(application,
-                            "插件生命周期已停止，未能开始领地投影。",
-                            "重新启动服务端后返回审核列表重试"));
+                            ProvisionResult.MessageRef.configured(
+                                    PROVISION_PROJECTION_START_FAILED_DETAIL),
+                            ProvisionResult.MessageRef.configured(PROVISION_LIFECYCLE_RETRY_ACTION)));
                 }
             } catch (RuntimeException exception) {
                 Runnable failed = () -> {
@@ -621,15 +923,16 @@ final class TownRuntime {
                                 plugin.getServer().getOfflinePlayer(application.applicantId()),
                                 feeMinor);
                         if (!refund.success()) {
-                            plugin.getLogger().severe("建镇申请数据库写入失败且申请费自动返还失败: "
-                                    + refund.message());
+                            plugin.getLogger().severe(plugin.messages().plainText(
+                                    PROVISION_REFUND_FAILURE,
+                                    Map.of("detail", safeText(refund.message()))));
                         }
                     }
                     provisions.finish(application.id());
                     handleFailure(sender, exception);
                     completion.accept(ProvisionResult.failure(application,
-                            safeMessage(exception),
-                            "修正申请资料或外部依赖后返回审核列表重试"));
+                            ProvisionResult.MessageRef.literal(safeText(safeMessage(exception))),
+                            ProvisionResult.MessageRef.configured(PROVISION_DATA_WRITE_ACTION)));
                 };
                 if (!plugin.runMain(failed)) {
                     failed.run();
@@ -638,8 +941,9 @@ final class TownRuntime {
         })) {
             provisions.finish(application.id());
             completion.accept(ProvisionResult.failure(application,
-                    "插件生命周期已停止，未能写入建镇准备状态。",
-                    "重新启动服务端后返回审核列表重试"));
+                ProvisionResult.MessageRef.configured(
+                        PROVISION_PREPARATION_WRITE_FAILED_DETAIL),
+                ProvisionResult.MessageRef.configured(PROVISION_LIFECYCLE_RETRY_ACTION)));
         }
     }
 
@@ -658,14 +962,16 @@ final class TownRuntime {
                 }
             })) {
                 completion.accept(ProvisionResult.failure(null,
-                        "插件生命周期已停止，无法读取建镇结果。",
-                        "重新启动服务端后返回审核列表刷新状态"));
+                        ProvisionResult.MessageRef.configured(
+                                PROVISION_RESULT_READ_FAILED_DETAIL),
+                        ProvisionResult.MessageRef.configured(
+                                PROVISION_PROJECTION_RESULT_ACTION)));
             }
             return;
         }
         try {
-            plugin.getLogger().info("建镇领地投影开始 application=" + applicationId
-                    + " at=" + Instant.now());
+            plugin.getLogger().info(plugin.messages().plainText(PROVISION_PROJECTION_STARTED,
+                    Map.of("application", applicationId, "time", Instant.now())));
             // 碰撞由创建服务检查，使重试能够识别并复用本镇已经创建的系统投影。
             SitePolicy.Validation validation = sitePolicy.validateEnvironment(
                     provisioning.town().territory());
@@ -673,27 +979,32 @@ final class TownRuntime {
                     ? landProtection.create(provisioning.town().residenceName(),
                     provisioning.town().territory(),
                     provisioning.members())
-                    : LandProtectionService.Result.failure("批准时选址复核失败: " + validation.error());
+                    : LandProtectionService.Result.failure(plugin.messages().plainText(
+                            PROVISION_SITE_VALIDATION_DETAIL,
+                            Map.of("detail", safeText(validation.error()))));
             LandProtectionService.Result completedLand = land.success()
                     ? setDefaultTeleportPoint(provisioning.town(), land) : land;
             if (!plugin.runAsync(() -> finishProvision(sender, applicationId, completedLand,
                     completion))) {
                 provisions.finish(applicationId);
                 completion.accept(ProvisionResult.failure(null,
-                        "插件生命周期已停止，无法保存领地投影结果。",
-                        "重新启动服务端后返回审核列表刷新状态"));
+                        ProvisionResult.MessageRef.configured(
+                                PROVISION_PROJECTION_SAVE_FAILED_DETAIL),
+                        ProvisionResult.MessageRef.configured(
+                                PROVISION_PROJECTION_RESULT_ACTION)));
             }
         } catch (RuntimeException | LinkageError exception) {
             // create/set-default-tp 可能在主线程直接抛出；仍要把申请落到
             // PROVISION_FAILED，再回调 UI，避免审核页一直停留在 APPROVED_PROVISIONING。
-            String detail = safeMessage(exception);
-            plugin.getLogger().severe("建镇领地投影异常 application=" + applicationId
-                    + ": " + detail);
+            String detail = safeText(safeMessage(exception));
+            plugin.getLogger().severe(plugin.messages().plainText(PROVISION_PROJECTION_EXCEPTION,
+                    Map.of("application", applicationId, "detail", detail)));
             LandProtectionService.Result failed = LandProtectionService.Result.failure(detail);
             if (!plugin.runAsync(() -> finishProvision(sender, applicationId, failed, completion))) {
                 provisions.finish(applicationId);
                 completion.accept(ProvisionResult.failure(null,
-                        detail, "检查 Residence 后返回审核列表重试"));
+                        ProvisionResult.MessageRef.literal(detail),
+                        ProvisionResult.MessageRef.configured(PROVISION_RESIDENCE_RETRY_ACTION)));
             }
         }
     }
@@ -706,19 +1017,22 @@ final class TownRuntime {
             world = plugin.getServer().getWorld(center.worldName());
         }
         if (world == null) {
-            return LandProtectionService.Result.failure("默认传送点世界未加载");
+            return LandProtectionService.Result.failure(plugin.messages().plainText(
+                    PROVISION_DEFAULT_TELEPORT_WORLD_DETAIL));
         }
         int blockX = Math.addExact(Math.multiplyExact(center.x(), 16), 8);
         int blockZ = Math.addExact(Math.multiplyExact(center.z(), 16), 8);
         int blockY = world.getHighestBlockYAt(blockX, blockZ) + 1;
         if (blockY <= world.getMinHeight() || blockY + 1 >= world.getMaxHeight()) {
-            return LandProtectionService.Result.failure("初始领地中心没有安全的默认传送高度");
+            return LandProtectionService.Result.failure(plugin.messages().plainText(
+                    PROVISION_DEFAULT_TELEPORT_HEIGHT_DETAIL));
         }
         Location location = new Location(world, blockX + 0.5D, blockY, blockZ + 0.5D);
         if (!location.getBlock().isPassable()
                 || !location.getBlock().getRelative(0, 1, 0).isPassable()
                 || !location.getBlock().getRelative(0, -1, 0).getType().isSolid()) {
-            return LandProtectionService.Result.failure("初始领地中心没有安全的默认落脚空间");
+            return LandProtectionService.Result.failure(plugin.messages().plainText(
+                    PROVISION_DEFAULT_TELEPORT_SPACE_DETAIL));
         }
         LandProtectionService.Result teleport = landProtection.setTeleportPoint(
                 town.residenceName(), world.getUID(), world.getName(), location.getX(),
@@ -726,11 +1040,21 @@ final class TownRuntime {
         if (!teleport.success()) {
             LandProtectionService.Result cleanup = landProtection.remove(town.residenceName(),
                     town.territory());
-            return LandProtectionService.Result.failure("默认传送点设置失败: "
-                    + teleport.message() + (cleanup.success() ? "；新建投影已回滚"
-                    : "；新建投影回滚失败: " + cleanup.message()));
+            String teleportDetail = safeText(LandProtectionMessages.detail(plugin.messages(), teleport));
+            if (cleanup.success()) {
+                return LandProtectionService.Result.failure(plugin.messages().plainText(
+                        PROVISION_DEFAULT_TELEPORT_ROLLED_BACK_DETAIL,
+                        Map.of("detail", teleportDetail)));
+            }
+            return LandProtectionService.Result.failure(plugin.messages().plainText(
+                    PROVISION_DEFAULT_TELEPORT_ROLLBACK_FAILED_DETAIL,
+                    Map.of("detail", teleportDetail,
+                            "cleanup", safeText(LandProtectionMessages.detail(
+                                    plugin.messages(), cleanup)))));
         }
-        return LandProtectionService.Result.ok(land.message() + "；已设置安全默认传送点");
+        return LandProtectionService.Result.ok(plugin.messages().plainText(
+                PROVISION_LAND_WITH_TELEPORT_DETAIL,
+                Map.of("detail", safeText(LandProtectionMessages.detail(plugin.messages(), land)))));
     }
 
     private void finishProvision(CommandSender sender, UUID applicationId,
@@ -738,7 +1062,7 @@ final class TownRuntime {
                                  Consumer<ProvisionResult> completion) {
         try {
             boolean completed = land.success();
-            String completedDetail = land.message();
+            String completedDetail = safeText(LandProtectionMessages.detail(plugin.messages(), land));
             ApplicationSnapshot application = repository.finishProvision(
                     applicationId, completed, completedDetail);
             if (completed) {
@@ -752,21 +1076,25 @@ final class TownRuntime {
                 plugin.messages().send(sender, completed ? "chat.runtime.provision-success"
                         : "chat.runtime.provision-failed", completed
                         ? Map.of() : Map.of("detail", completedDetail));
-                plugin.getLogger().info("建镇 UI 回调 application=" + applicationId
-                        + " at=" + Instant.now() + " success=" + completed);
+                plugin.getLogger().info(plugin.messages().plainText(PROVISION_UI_CALLBACK,
+                        Map.of("application", applicationId, "time", Instant.now(),
+                                "success", completed)));
                 completion.accept(completed ? ProvisionResult.success(application)
-                        : ProvisionResult.failure(application, completedDetail,
-                        "可重试批准，或解除锁定后要求申请人修改"));
+                        : ProvisionResult.failure(application,
+                        ProvisionResult.MessageRef.literal(completedDetail),
+                        ProvisionResult.MessageRef.configured(PROVISION_RETRY_APPROVAL_ACTION)));
             };
             if (!plugin.runMain(callback)) {
                 completion.accept(completed ? ProvisionResult.success(application)
-                        : ProvisionResult.failure(application, completedDetail,
-                        "可重试批准，或解除锁定后要求申请人修改"));
+                        : ProvisionResult.failure(application,
+                        ProvisionResult.MessageRef.literal(completedDetail),
+                        ProvisionResult.MessageRef.configured(PROVISION_RETRY_APPROVAL_ACTION)));
             }
         } catch (RuntimeException exception) {
             handleFailure(sender, exception);
-            ProvisionResult result = ProvisionResult.failure(null, safeMessage(exception),
-                    "返回审核列表刷新状态后重试");
+            ProvisionResult result = ProvisionResult.failure(null,
+                    ProvisionResult.MessageRef.literal(safeText(safeMessage(exception))),
+                    ProvisionResult.MessageRef.configured(PROVISION_REFRESH_STATE_ACTION));
             if (!plugin.runMain(() -> completion.accept(result))) {
                 completion.accept(result);
             }
@@ -790,7 +1118,8 @@ final class TownRuntime {
                         mode, completion));
             } catch (RuntimeException exception) {
                 plugin.runMain(() -> completion.accept(ProvisionResult.failure(null,
-                        safeMessage(exception), "返回审核列表刷新状态")));
+                        ProvisionResult.MessageRef.literal(safeText(safeMessage(exception))),
+                        ProvisionResult.MessageRef.configured(PROVISION_RECOVERY_REFRESH_ACTION))));
             }
         });
     }
@@ -805,14 +1134,16 @@ final class TownRuntime {
                     failed.town().territory(), failed.members());
         } catch (RuntimeException | LinkageError exception) {
             completion.accept(ProvisionResult.failure(null,
-                    "无法验证失败申请的 Residence 投影: " + safeMessage(exception),
-                    "Residence 恢复后再次执行安全恢复"));
+                    ProvisionResult.MessageRef.configured(
+                            PROVISION_RECOVERY_INSPECTION_FAILED_DETAIL,
+                            Map.of("detail", safeText(safeMessage(exception)))),
+                    ProvisionResult.MessageRef.configured(PROVISION_RECOVERY_VERIFY_ACTION)));
             return;
         }
         if (inspection.state() == LandProtectionService.ProjectionState.HEALTHY) {
             completion.accept(ProvisionResult.failure(null,
-                    "检测到边界和所有权均正确的受控 Residence 投影，拒绝解锁。",
-                    "先执行领地对账并完成原创建流程"));
+                    ProvisionResult.MessageRef.configured(PROVISION_RECOVERY_HEALTHY_DETAIL),
+                    ProvisionResult.MessageRef.configured(PROVISION_RECOVERY_HEALTHY_ACTION)));
             return;
         }
         if (inspection.state() == LandProtectionService.ProjectionState.INVALID) {
@@ -821,44 +1152,67 @@ final class TownRuntime {
                 controlled = landProtection.isControlledProjection(failed.town().residenceName());
             } catch (RuntimeException | LinkageError exception) {
                 completion.accept(ProvisionResult.failure(null,
-                        "无法确认异常 Residence 是否属于系统: " + safeMessage(exception),
-                        "Residence 恢复后再次执行安全恢复"));
+                        ProvisionResult.MessageRef.configured(
+                                PROVISION_RECOVERY_CONTROL_CHECK_FAILED_DETAIL,
+                                Map.of("detail", safeText(safeMessage(exception)))),
+                        ProvisionResult.MessageRef.configured(PROVISION_RECOVERY_VERIFY_ACTION)));
                 return;
             }
             if (!controlled) {
                 // 同名但属于玩家的 Residence 不是临时小镇投影，必须保留，
                 // 同时允许管理员清理 SQLite 临时数据并要求申请人换代码。
-                plugin.getLogger().warning("失败申请发现同名外部 Residence，保留外部领地并继续回滚申请数据 application="
-                        + failed.applicationId());
+                plugin.getLogger().warning(plugin.messages().plainText(
+                        PROVISION_RECOVERY_EXTERNAL_RESIDENCE,
+                        Map.of("application", failed.applicationId())));
             } else {
                 LandProtectionService.Result cleanup;
+                String cleanupFailureKey = PROVISION_RECOVERY_CLEANUP_FAILED_DETAIL;
+                String cleanupExceptionDetail = null;
                 try {
                     cleanup = landProtection.remove(failed.town().residenceName(),
                             failed.town().territory());
                 } catch (RuntimeException | LinkageError exception) {
-                    cleanup = LandProtectionService.Result.failure(
-                            "清理失败投影时 Residence API 异常: " + safeMessage(exception));
+                    cleanup = LandProtectionService.Result.failureCode(
+                            LandProtectionService.ResultCode.RESIDENCE_API_UNAVAILABLE,
+                            Map.of("detail", safeText(safeMessage(exception))));
+                    cleanupFailureKey = PROVISION_RECOVERY_CLEANUP_API_FAILED_DETAIL;
+                    cleanupExceptionDetail = safeText(safeMessage(exception));
                 }
                 if (!cleanup.success()) {
+                    String cleanupDetail = cleanupExceptionDetail == null
+                            ? safeText(LandProtectionMessages.detail(plugin.messages(), cleanup))
+                            : cleanupExceptionDetail;
                     completion.accept(ProvisionResult.failure(null,
-                            "检测到异常 Residence 投影，且无法安全移除: " + cleanup.message(),
-                            "请先人工恢复或移除该受控投影后再执行恢复"));
+                            ProvisionResult.MessageRef.configured(
+                                    cleanupFailureKey, Map.of("detail", cleanupDetail)),
+                            ProvisionResult.MessageRef.configured(PROVISION_RECOVERY_CLEANUP_ACTION)));
                     return;
                 }
-                plugin.getLogger().warning("失败建镇投影已按受控边界安全清理 application="
-                        + failed.applicationId() + ": " + cleanup.message());
+                plugin.getLogger().warning(plugin.messages().plainText(
+                        PROVISION_RECOVERY_PROJECTION_CLEANED,
+                        Map.of("application", failed.applicationId(),
+                                "detail", safeText(LandProtectionMessages.detail(
+                                        plugin.messages(), cleanup)))));
             }
         }
+        String externalInspectionDetail = safeText(LandProtectionMessages.detail(
+                plugin.messages(), inspection));
         String reason = switch (mode) {
-            case UNLOCK_FOR_CHANGES -> "管理员解除失败锁定并要求申请人修改";
-            case CANCEL_AND_REFUND -> "管理员取消创建失败申请并退款";
-            case FORCE_CLEANUP -> "管理员强制清理创建失败申请";
+            case UNLOCK_FOR_CHANGES -> plugin.messages().plainText(
+                    PROVISION_RECOVERY_UNLOCK_REASON);
+            case CANCEL_AND_REFUND -> plugin.messages().plainText(
+                    PROVISION_RECOVERY_CANCEL_REFUND_REASON);
+            case FORCE_CLEANUP -> plugin.messages().plainText(
+                    PROVISION_RECOVERY_FORCE_CLEANUP_REASON);
         };
+        String recoveryReason = plugin.messages().plainText(
+                PROVISION_RECOVERY_REASON_WITH_INSPECTION,
+                Map.of("reason", safeText(reason), "inspection", externalInspectionDetail));
         plugin.runAsync(() -> {
             try {
                 ApplicationSnapshot recovered = repository.recoverFailedProvision(
                         failed.applicationId(), administrator.getUniqueId(),
-                        administrator.getName(), reason + "；外部检查=" + inspection.message(),
+                        administrator.getName(), recoveryReason,
                         mode);
                 if (mode == TownRepository.RecoveryMode.UNLOCK_FOR_CHANGES) {
                     plugin.runMain(() -> completion.accept(ProvisionResult.success(recovered)));
@@ -868,7 +1222,8 @@ final class TownRuntime {
                         completion));
             } catch (RuntimeException exception) {
                 plugin.runMain(() -> completion.accept(ProvisionResult.failure(null,
-                        safeMessage(exception), "返回审核列表刷新状态后重试")));
+                        ProvisionResult.MessageRef.literal(safeText(safeMessage(exception))),
+                        ProvisionResult.MessageRef.configured(PROVISION_REFRESH_STATE_ACTION))));
             }
         });
     }
@@ -881,8 +1236,9 @@ final class TownRuntime {
                 application.applicationFeeMinor());
         if (!refund.success()) {
             completion.accept(ProvisionResult.failure(application,
-                    "临时数据已安全清理，但申请费退款失败: " + refund.message(),
-                    "申请费保持 REFUND_PENDING；修复 Vault 后重试退款"));
+                    ProvisionResult.MessageRef.configured(PROVISION_RECOVERY_REFUND_FAILED_DETAIL,
+                            Map.of("detail", safeText(refund.message()))),
+                    ProvisionResult.MessageRef.configured(PROVISION_RECOVERY_REFUND_ACTION)));
             return;
         }
         plugin.runAsync(() -> {
@@ -893,8 +1249,11 @@ final class TownRuntime {
                 plugin.runMain(() -> completion.accept(ProvisionResult.success(completed)));
             } catch (RuntimeException exception) {
                 plugin.runMain(() -> completion.accept(ProvisionResult.failure(application,
-                        "Vault 已退款但数据库确认失败: " + safeMessage(exception),
-                        "停止重复退款并由管理员执行清算对账")));
+                        ProvisionResult.MessageRef.configured(
+                                PROVISION_RECOVERY_REFUND_CONFIRMATION_FAILED_DETAIL,
+                                Map.of("detail", safeText(safeMessage(exception)))),
+                        ProvisionResult.MessageRef.configured(
+                                PROVISION_RECOVERY_REFUND_CONFIRMATION_ACTION))));
             }
         });
     }
@@ -912,20 +1271,26 @@ final class TownRuntime {
                     location.getX(), location.getY(), location.getZ(),
                     location.getYaw(), location.getPitch());
         } catch (RuntimeException | LinkageError exception) {
-            result = LandProtectionService.Result.failure(
-                    "Residence API 不可用: " + safeMessage(exception));
+            result = LandProtectionService.Result.failureCode(
+                    LandProtectionService.ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", safeText(safeMessage(exception))));
         }
         LandProtectionService.Result completed = result;
+        String completedDetail = safeText(LandProtectionMessages.detail(plugin.messages(), completed));
+        String auditReason = plugin.messages().plainText(completed.success()
+                ? RESIDENCE_TELEPORT_AUDIT_SUCCESS : RESIDENCE_TELEPORT_AUDIT_FAILURE);
         plugin.runAsync(() -> {
             try {
                 repository.recordAudit(actor.getUniqueId(), actor.getName(),
                         "TOWN_TELEPORT_POINT_SET", "TOWN", town.id().toString(),
-                        completed.success() ? "镇长设置领地传送点" : "设置传送点失败",
+                        auditReason,
                         location.getWorld().getName() + " " + location.getX() + ","
                                 + location.getY() + "," + location.getZ() + " · "
-                                + completed.message());
+                                + completedDetail);
             } catch (RuntimeException exception) {
-                plugin.getLogger().warning("写入传送点审计失败: " + safeMessage(exception));
+                plugin.getLogger().warning(plugin.messages().plainText(
+                        RESIDENCE_TELEPORT_AUDIT_WRITE_FAILURE,
+                        Map.of("detail", safeText(safeMessage(exception)))));
             }
         });
         completion.accept(completed);
@@ -935,7 +1300,8 @@ final class TownRuntime {
         reconcileAction(sender, town, members, repair, result -> plugin.messages().send(sender,
                         "chat.runtime.reconcile", Map.of(
                                 "color", result.success() ? "§a" : "§c",
-                                "town", town.profile().name(), "detail", result.message())),
+                                "town", town.profile().name(), "detail",
+                                LandProtectionMessages.detail(plugin.messages(), result))),
                 exception -> handleFailure(sender, exception));
     }
 
@@ -955,8 +1321,9 @@ final class TownRuntime {
                         result = landProtection.reconcile(town.residenceName(), areas, members,
                                 repair);
                     } catch (RuntimeException | LinkageError exception) {
-                        result = LandProtectionService.Result.failure(
-                                "Residence API 不可用: " + safeMessage(exception));
+                        result = LandProtectionService.Result.failureCode(
+                                LandProtectionService.ResultCode.RESIDENCE_API_UNAVAILABLE,
+                                Map.of("detail", safeText(safeMessage(exception))));
                     }
                     recordLandAudit(actorId(sender), sender.getName(), town.id(), repair, result);
                     success.accept(result);
@@ -968,15 +1335,21 @@ final class TownRuntime {
     }
 
     private void recordLandAudit(UUID actorId, String actorName, UUID townId, boolean repair,
-                                 LandProtectionService.Result result) {
+                                  LandProtectionService.Result result) {
+        String resultDetail = safeText(LandProtectionMessages.detail(plugin.messages(), result));
+        String auditReason = plugin.messages().plainText(result.success()
+                ? RESIDENCE_RECONCILIATION_AUDIT_SUCCESS
+                : RESIDENCE_RECONCILIATION_AUDIT_FAILURE);
         plugin.runAsync(() -> {
             try {
                 repository.recordAudit(actorId, actorName,
                         repair ? "LAND_RECONCILE_REPAIR" : "LAND_RECONCILE_CHECK", "TOWN",
-                        townId.toString(), result.success() ? "对账完成" : "对账失败",
-                        result.message());
+                        townId.toString(), auditReason,
+                        resultDetail);
             } catch (RuntimeException exception) {
-                plugin.getLogger().warning("写入领地对账审计失败: " + safeMessage(exception));
+                plugin.getLogger().warning(plugin.messages().plainText(
+                        RESIDENCE_RECONCILIATION_AUDIT_WRITE_FAILURE,
+                        Map.of("detail", safeText(safeMessage(exception)))));
             }
         });
     }
@@ -1000,16 +1373,19 @@ final class TownRuntime {
     private void applyQuickShopSubsidy(QuickShopTaxAdapter.SuccessfulTax tax,
                                        EconomyRepository.SubsidyReservation reservation) {
         VaultSettlementService.Result subsidy = reservation.grantedMinor() == 0
-                ? VaultSettlementService.Result.success("本周期补贴额度已用完")
+                ? VaultSettlementService.Result.success(plugin.messages().plainText(
+                        QUICK_SHOP_TAX_SUBSIDY_QUOTA_EXHAUSTED))
                 : settlement.adjustSettlement(reservation.grantedMinor());
         if (subsidy.success()) {
             pendingTaxes.submit(tax);
             return;
         }
+        String subsidyDetail = subsidy.message();
         plugin.runAsync(() -> finance.cancelQuickShopSubsidy(tax.businessKey(),
-                subsidy.message()));
-        plugin.getLogger().severe("QuickShop 税收服务器补贴入账失败，税款账本暂不写入: "
-                + subsidy.message());
+                subsidyDetail));
+        plugin.getLogger().severe(plugin.messages().plainText(
+                QUICK_SHOP_TAX_SUBSIDY_SETTLEMENT_FAILURE,
+                Map.of("detail", safeText(subsidyDetail))));
     }
 
     void flushPendingTaxes() {
@@ -1037,9 +1413,10 @@ final class TownRuntime {
         if (exception instanceof EconomyRepository.StorageUnavailableException) {
             databaseAvailable.set(false);
         }
-        plugin.getLogger().severe("QuickShop 税款 " + tax.businessKey()
-                + " 已进入清算账户但账本暂未写入，将自动重试: "
-                + safeMessage(exception));
+        plugin.getLogger().severe(plugin.messages().plainText(
+                QUICK_SHOP_TAX_LEDGER_WRITE_FAILURE,
+                Map.of("businessKey", safeText(tax.businessKey()),
+                        "detail", safeText(safeMessage(exception)))));
     }
 
     JobsIncomeTaxAdapter.TaxResult acceptJobsIncomeTax(
@@ -1053,8 +1430,9 @@ final class TownRuntime {
         VaultSettlementService.Result transferred = settlement.adjustSettlement(
                 Math.multiplyExact(tax.taxMinor(), 2));
         if (!transferred.success()) {
-            plugin.getLogger().severe("Jobs 收入税转入清算账户失败，已保留玩家原始收入: "
-                    + transferred.message());
+            plugin.getLogger().severe(plugin.messages().plainText(
+                    JOBS_INCOME_TAX_SETTLEMENT_FAILURE,
+                    Map.of("detail", safeText(transferred.message()))));
             return JobsIncomeTaxAdapter.TaxResult.unchanged(earning.grossAmount());
         }
         pendingIncomeTaxes.submit(tax);
@@ -1073,17 +1451,20 @@ final class TownRuntime {
         VaultSettlementService.Result transferred = settlement.transferFromPlayer(
                 earning.player(), tax.taxMinor());
         if (!transferred.success()) {
-            plugin.getLogger().severe("GlobalMarketPlus 收入税扣取失败，未写入小镇账本: "
-                    + transferred.message());
+            plugin.getLogger().severe(plugin.messages().plainText(
+                    GLOBAL_MARKET_PLUS_INCOME_TAX_DEBIT_FAILURE,
+                    Map.of("detail", safeText(transferred.message()))));
             return;
         }
         VaultSettlementService.Result subsidy = settlement.adjustSettlement(tax.taxMinor());
         if (!subsidy.success()) {
             VaultSettlementService.Result refunded = settlement.transferToPlayer(
                     earning.player(), tax.taxMinor());
-            plugin.getLogger().severe("GlobalMarketPlus 税收服务器补贴入账失败，税款"
-                    + (refunded.success() ? "已返还玩家: " : "返还玩家也失败: ")
-                    + subsidy.message());
+            String messageKey = refunded.success()
+                    ? GLOBAL_MARKET_PLUS_SUBSIDY_SETTLEMENT_REFUNDED
+                    : GLOBAL_MARKET_PLUS_SUBSIDY_SETTLEMENT_REFUND_FAILED;
+            plugin.getLogger().severe(plugin.messages().plainText(messageKey,
+                    Map.of("detail", safeText(subsidy.message()))));
             return;
         }
         pendingIncomeTaxes.submit(tax);
@@ -1129,8 +1510,11 @@ final class TownRuntime {
         if (exception instanceof EconomyRepository.StorageUnavailableException) {
             databaseAvailable.set(false);
         }
-        plugin.getLogger().severe(tax.source() + " 税款 " + tax.businessKey()
-                + " 已进入清算账户但账本暂未写入，将自动重试: " + safeMessage(exception));
+        plugin.getLogger().severe(plugin.messages().plainText(
+                EXTERNAL_INCOME_TAX_LEDGER_WRITE_FAILURE,
+                Map.of("source", safeText(tax.source()),
+                        "businessKey", safeText(tax.businessKey()),
+                        "detail", safeText(safeMessage(exception)))));
     }
 
     void reconcileSettlement() {
@@ -1138,19 +1522,23 @@ final class TownRuntime {
         try {
             external = settlement.balanceMinor();
         } catch (RuntimeException exception) {
-            plugin.getLogger().severe("读取 Vault 清算账户失败: " + safeMessage(exception));
+            plugin.getLogger().severe(plugin.messages().plainText(
+                    SETTLEMENT_BALANCE_READ_FAILURE,
+                    Map.of("detail", safeText(safeMessage(exception)))));
             return;
         }
         plugin.runAsync(() -> {
             try {
                 EconomyRepository.Reconciliation result = finance.reconcileSettlement(external);
                 if (!result.healthy()) {
-                    plugin.getLogger().severe("清算账户少于小镇分账负债，所有小镇消费已锁定: 外部="
-                            + money(result.externalBalanceMinor()) + "，应有="
-                            + money(result.requiredMinor()));
+                    plugin.getLogger().severe(plugin.messages().plainText(SETTLEMENT_SHORTFALL,
+                            Map.of("external", money(result.externalBalanceMinor()),
+                                    "required", money(result.requiredMinor()))));
                 }
             } catch (RuntimeException exception) {
-                plugin.getLogger().severe("清算账户对账失败: " + safeMessage(exception));
+                plugin.getLogger().severe(plugin.messages().plainText(
+                        SETTLEMENT_RECONCILIATION_FAILURE,
+                        Map.of("detail", safeText(safeMessage(exception)))));
             }
         });
     }
@@ -1159,16 +1547,18 @@ final class TownRuntime {
                       Consumer<EconomyRepository.LedgerMutation> success,
                       Consumer<RuntimeException> failure) {
         if (!consumptionEnabled()) {
-            failure.accept(new IllegalStateException("公共资金新消费入口已由功能开关暂停"));
+            failure.accept(new IllegalStateException(
+                    plugin.messages().plainText(CONSUMPTION_PAUSED)));
             return;
         }
         executeExternalOperation(player, () -> {
             EconomyRepository.TownFinance account = finance.findFinanceByPlayer(
                     player.getUniqueId()).orElseThrow(() ->
-                    new IllegalArgumentException("你不属于任何小镇"));
+                    new IllegalArgumentException(plugin.messages().plainText(TOWN_REQUIRED)));
             String key = "donation:" + UUID.randomUUID();
             return finance.prepareOperation(account.townId(), "DONATION", amountMinor,
-                    player.getUniqueId(), player.getName(), key, "成员捐款");
+                    player.getUniqueId(), player.getName(), key,
+                    plugin.messages().plainText(DONATION_OPERATION_REASON));
         }, operation -> settlement.transferFromPlayer(player, operation.amountMinor()), success,
                 failure);
     }
@@ -1193,7 +1583,8 @@ final class TownRuntime {
         }
         write(mayor, () -> {
             EconomyRepository.TaxChange change = finance.changeTaxRate(townId,
-                    mayor.getUniqueId(), basisPoints, mayor.getName(), "镇长通过公共资金界面修改");
+                    mayor.getUniqueId(), basisPoints, mayor.getName(),
+                    plugin.messages().plainText(TAX_RATE_CHANGE_REASON));
             refreshTaxPolicies();
             return change;
         }, change -> {
@@ -1269,7 +1660,8 @@ final class TownRuntime {
                            Consumer<EconomyRepository.ExpansionBatchOperation> success,
                            Consumer<RuntimeException> failure) {
         if (!consumptionEnabled()) {
-            failure.accept(new IllegalStateException("公共资金新消费入口已由功能开关暂停"));
+            failure.accept(new IllegalStateException(
+                    plugin.messages().plainText(CONSUMPTION_PAUSED)));
             return;
         }
         readAction(mayor, () -> territories.batchPreview(mayor.getUniqueId(), selections),
@@ -1278,12 +1670,14 @@ final class TownRuntime {
                         SitePolicy.Validation validation = territories.validate(candidate);
                         if (!validation.valid()) {
                             failure.accept(new IllegalArgumentException(
-                                    "扩张环境复核失败: " + validation.error()));
+                                    plugin.messages().plainText(EXPANSION_VALIDATION_FAILED,
+                                            Map.of("detail", safeText(validation.error())))));
                             return;
                         }
                     }
                     if (requestId == null || requestId.isBlank()) {
-                        failure.accept(new IllegalArgumentException("批量扩张幂等键不能为空"));
+                        failure.accept(new IllegalArgumentException(
+                                plugin.messages().plainText(EXPANSION_BATCH_REQUEST_ID_REQUIRED)));
                         return;
                     }
                     String key = "expansion-batch:" + preview.account().townId() + ":"
@@ -1307,7 +1701,8 @@ final class TownRuntime {
                             }
                             if (batch.status().equals("REFUNDED")) {
                                 throw new EconomyRepository.ConflictException(
-                                        "该批量扩张操作已经退款，请重新选择区域");
+                                        plugin.messages().plainText(
+                                                EXPANSION_BATCH_ALREADY_REFUNDED));
                             }
                             plugin.runMain(() -> projectExpansionBatch(mayor, batch, success,
                                     failure));
@@ -1323,14 +1718,16 @@ final class TownRuntime {
                               Consumer<EconomyRepository.ExpansionOperation> success,
                               Consumer<RuntimeException> failure) {
         if (!consumptionEnabled()) {
-            failure.accept(new IllegalStateException("公共资金新消费入口已由功能开关暂停"));
+            failure.accept(new IllegalStateException(
+                    plugin.messages().plainText(CONSUMPTION_PAUSED)));
             return;
         }
         readAction(mayor, previewSupplier, preview -> {
             SitePolicy.Validation validation = territories.validate(preview);
             if (!validation.valid()) {
                 failure.accept(new IllegalArgumentException(
-                        "扩张环境复核失败: " + validation.error()));
+                        plugin.messages().plainText(EXPANSION_VALIDATION_FAILED,
+                                Map.of("detail", safeText(validation.error())))));
                 return;
             }
             plugin.runAsync(() -> {
@@ -1394,23 +1791,27 @@ final class TownRuntime {
                     new LandProtectionService.Area(operation.residenceAreaName(),
                             operation.unit().territory()), members);
         } catch (RuntimeException | LinkageError exception) {
-            attempted = LandProtectionService.Result.failure(
-                    "Residence API 不可用: " + safeMessage(exception));
+            attempted = LandProtectionService.Result.failureCode(
+                    LandProtectionService.ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", safeText(safeMessage(exception))));
         }
         LandProtectionService.Result result = attempted;
+        String resultDetail = LandProtectionMessages.detail(plugin.messages(), result);
         plugin.runAsync(() -> {
             try {
                 if (result.success()) {
                     finance.completeExpansion(operation.expansionId());
                 } else {
-                    finance.refundExpansion(operation.expansionId(), result.message());
+                    finance.refundExpansion(operation.expansionId(),
+                            resultDetail);
                 }
                 plugin.runMain(() -> {
                     if (result.success()) {
                         success.accept(operation);
                     } else {
                         failure.accept(new IllegalStateException(
-                                "Residence 扩张失败，公共资金已自动退款: " + result.message()));
+                                plugin.messages().plainText(EXPANSION_FAILED_REFUNDED,
+                                        Map.of("detail", safeText(resultDetail)))));
                     }
                 });
             } catch (RuntimeException exception) {
@@ -1458,8 +1859,9 @@ final class TownRuntime {
                     expansion.residenceAreaName());
         } catch (RuntimeException | LinkageError exception) {
             rollbackExpansionBatchAreas(mayor, batch, addedAreas,
-                    new IllegalStateException("无法确认 Residence 原有区域: "
-                            + safeMessage(exception), exception), failure);
+                    new IllegalStateException(plugin.messages().plainText(
+                            EXPANSION_AREA_PRESENCE_CHECK_FAILED,
+                            Map.of("detail", safeText(safeMessage(exception)))), exception), failure);
             return;
         }
         LandProtectionService.Result result;
@@ -1468,12 +1870,16 @@ final class TownRuntime {
                     new LandProtectionService.Area(expansion.residenceAreaName(),
                             expansion.unit().territory()), members);
         } catch (RuntimeException | LinkageError exception) {
-            result = LandProtectionService.Result.failure(
-                    "Residence API 不可用: " + safeMessage(exception));
+            result = LandProtectionService.Result.failureCode(
+                    LandProtectionService.ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", safeText(safeMessage(exception))));
         }
         if (!result.success()) {
             rollbackExpansionBatchAreas(mayor, batch, addedAreas,
-                    new IllegalStateException("Residence 批量扩张失败: " + result.message()), failure);
+                    new IllegalStateException(plugin.messages().plainText(
+                            EXPANSION_BATCH_FAILED,
+                            Map.of("detail", safeText(
+                                    LandProtectionMessages.detail(plugin.messages(), result))))), failure);
             return;
         }
         if (!alreadyPresent) {
@@ -1499,17 +1905,21 @@ final class TownRuntime {
                 LandProtectionService.Result cleanup = landProtection.removeArea(
                         batch.expansions().getFirst().residenceName(), area);
                 if (!cleanup.success()) {
-                    cleanupErrors.add(area + ": " + cleanup.message());
+                    cleanupErrors.add(area + ": " + safeText(
+                            LandProtectionMessages.detail(plugin.messages(), cleanup)));
                 }
             } catch (RuntimeException | LinkageError exception) {
-                cleanupErrors.add(area + ": " + safeMessage(exception));
+                cleanupErrors.add(area + ": " + safeText(safeMessage(exception)));
             }
         }
         if (!cleanupErrors.isEmpty()) {
-            plugin.getLogger().severe("批量扩张外部区域回滚失败 batch=" + batch.batchId()
-                    + ": " + String.join("; ", cleanupErrors));
-            failure.accept(new IllegalStateException(cause.getMessage()
-                    + "；部分 Residence 区域未能回滚，批次保留待恢复", cause));
+            plugin.getLogger().severe(plugin.messages().plainText(
+                    EXPANSION_BATCH_ROLLBACK_FAILED,
+                    Map.of("batch", batch.batchId(),
+                            "cleanup", safeText(String.join("; ", cleanupErrors)))));
+            failure.accept(new IllegalStateException(plugin.messages().plainText(
+                    EXPANSION_BATCH_ROLLBACK_PARTIAL,
+                    Map.of("cause", safeText(cause.getMessage()))), cause));
             return;
         }
         plugin.runAsync(() -> {
@@ -1531,13 +1941,18 @@ final class TownRuntime {
                             () -> addExpansionArea(org.bukkit.Bukkit.getConsoleSender(),
                                     expansion, members,
                                     ignored -> plugin.getLogger().info(
-                                            "已恢复领地扩张 " + expansion.expansionId()),
+                                            plugin.messages().plainText(EXPANSION_RECOVERED,
+                                                    Map.of("expansion", expansion.expansionId()))),
                                     exception -> plugin.getLogger().severe(
-                                            "恢复领地扩张失败 " + expansion.expansionId()
-                                                    + ": " + safeMessage(exception))));
+                                            plugin.messages().plainText(EXPANSION_RECOVERY_FAILED,
+                                                    Map.of("expansion", expansion.expansionId(),
+                                                            "detail", safeText(
+                                                                    safeMessage(exception)))))));
                 } catch (RuntimeException exception) {
-                    plugin.getLogger().severe("恢复领地扩张失败 " + expansion.expansionId()
-                            + ": " + safeMessage(exception));
+                    plugin.getLogger().severe(plugin.messages().plainText(
+                            EXPANSION_RECOVERY_FAILED,
+                            Map.of("expansion", expansion.expansionId(),
+                                    "detail", safeText(safeMessage(exception)))));
                 }
             });
         }
@@ -1547,9 +1962,13 @@ final class TownRuntime {
             List<EconomyRepository.ExpansionBatchOperation> batches) {
         for (EconomyRepository.ExpansionBatchOperation batch : batches) {
             projectExpansionBatch(org.bukkit.Bukkit.getConsoleSender(), batch,
-                    completed -> plugin.getLogger().info("已恢复批量领地扩张 " + batch.batchId()),
-                    exception -> plugin.getLogger().severe("恢复批量领地扩张失败 "
-                            + batch.batchId() + ": " + safeMessage(exception)));
+                    completed -> plugin.getLogger().info(plugin.messages().plainText(
+                            EXPANSION_BATCH_RECOVERED,
+                            Map.of("batch", safeText(batch.batchId())))),
+                    exception -> plugin.getLogger().severe(plugin.messages().plainText(
+                            EXPANSION_BATCH_RECOVERY_FAILED,
+                            Map.of("batch", safeText(batch.batchId()),
+                                    "detail", safeText(safeMessage(exception))))));
         }
     }
 
@@ -1570,7 +1989,7 @@ final class TownRuntime {
                                           Consumer<RuntimeException> failure) {
         if (!databaseAvailable.get()) {
             failure.accept(new EconomyRepository.StorageUnavailableException(
-                    "SQLite 当前不可用，资金操作已锁定", null));
+                    plugin.messages().plainText(STORAGE_UNAVAILABLE), null));
             return;
         }
         plugin.runAsync(() -> {
@@ -1597,7 +2016,9 @@ final class TownRuntime {
             availability = settlement.checkAvailability();
         } catch (RuntimeException exception) {
             availability = VaultSettlementService.Result.failure(
-                    "Vault 清算账户预检异常: " + safeMessage(exception), false, false);
+                    plugin.messages().plainText(EXTERNAL_PREFLIGHT_FAILED,
+                            Map.of("detail", safeText(safeMessage(exception)))),
+                    false, false);
         }
         if (!availability.success()) {
             finishFailedExternalOperation(sender, operation, availability, failure);
@@ -1627,7 +2048,8 @@ final class TownRuntime {
             result = external.apply(operation);
         } catch (RuntimeException exception) {
             result = VaultSettlementService.Result.failure(
-                    "Vault 外部调用异常，资金结果需要人工复核: " + safeMessage(exception),
+                    plugin.messages().plainText(EXTERNAL_OPERATION_FAILED,
+                            Map.of("detail", safeText(safeMessage(exception)))),
                     false, true);
         }
         if (!result.success()) {
@@ -1658,13 +2080,17 @@ final class TownRuntime {
                             && operation.actorId() != null;
                     if (automaticRefund) {
                         donationCompensations.submit(operation);
-                        plugin.getLogger().warning("捐款退款暂时失败，已锁定小镇消费并启动自动补偿: "
-                                + "operation=" + operation.operationId() + ", town="
-                                + operation.townId() + ", error=" + result.message());
+                        plugin.getLogger().warning(plugin.messages().plainText(
+                                EXTERNAL_OPERATION_COMPENSATION_AUTO,
+                                Map.of("operation", safeText(operation.operationId()),
+                                        "town", safeText(operation.townId()),
+                                        "detail", safeText(result.message()))));
                     } else {
-                        plugin.getLogger().severe("资金操作需要人工补偿，已锁定小镇消费: operation="
-                                + operation.operationId() + ", town=" + operation.townId()
-                                + ", error=" + result.message());
+                        plugin.getLogger().severe(plugin.messages().plainText(
+                                EXTERNAL_OPERATION_COMPENSATION_MANUAL,
+                                Map.of("operation", safeText(operation.operationId()),
+                                        "town", safeText(operation.townId()),
+                                        "detail", safeText(result.message()))));
                     }
                 } else {
                     finance.cancelOperation(operation.operationId(), result.message());
@@ -1678,15 +2104,16 @@ final class TownRuntime {
         });
     }
 
-    private static String compensationHint(EconomyRepository.EconomyOperation operation,
-                                           VaultSettlementService.Result result) {
+    private String compensationHint(EconomyRepository.EconomyOperation operation,
+                                    VaultSettlementService.Result result) {
         if (!result.compensationRequired()) {
             return "";
         }
-        return result.playerRefundRequired() && operation.operationType().equals("DONATION")
+        String key = result.playerRefundRequired()
+                && operation.operationType().equals("DONATION")
                 && operation.actorId() != null
-                ? "；该镇消费已临时锁定，系统正在自动补偿"
-                : "；该镇消费已锁定，需人工补偿";
+                ? COMPENSATION_AUTO : COMPENSATION_MANUAL;
+        return plugin.messages().plainText(key);
     }
 
     void refreshTaxPolicies() {
@@ -1717,14 +2144,17 @@ final class TownRuntime {
                         try {
                             finance.backfillLedgerActorName(playerId, name);
                         } catch (RuntimeException exception) {
-                            plugin.getLogger().warning("回填账本玩家名失败 " + playerId + ": "
-                                    + safeMessage(exception));
+                            plugin.getLogger().warning(plugin.messages().plainText(
+                                    LEDGER_ACTOR_NAME_BACKFILL_FAILURE,
+                                    Map.of("playerId", safeText(playerId),
+                                            "detail", safeText(safeMessage(exception)))));
                         }
                     }));
                 });
             } catch (RuntimeException exception) {
-                plugin.getLogger().warning("扫描历史 UUID 操作人失败: "
-                        + safeMessage(exception));
+                plugin.getLogger().warning(plugin.messages().plainText(
+                        LEDGER_ACTOR_SCAN_FAILURE,
+                        Map.of("detail", safeText(safeMessage(exception)))));
             }
         });
     }
@@ -1758,7 +2188,7 @@ final class TownRuntime {
                                    Consumer<T> success, Consumer<RuntimeException> failure) {
         if (write && !databaseAvailable.get()) {
             failure.accept(new TownRepository.StorageUnavailableException(
-                    "SQLite 当前不可用，写操作已锁定", null));
+                    plugin.messages().plainText(STORAGE_WRITE_LOCKED), null));
             return;
         }
         plugin.runAsync(() -> {
@@ -1777,9 +2207,12 @@ final class TownRuntime {
         if (exception instanceof RuntimeException runtimeException) {
             markStorageFailure(runtimeException);
         }
+        String detail = exception instanceof ApplicationNotFoundException
+                ? plugin.messages().plainText(PROVISION_APPLICATION_NOT_FOUND_DETAIL)
+                : safeText(safeMessage(exception));
         plugin.runMain(
                 () -> plugin.messages().send(sender, "chat.runtime.operation-failed",
-                        Map.of("detail", safeMessage(exception))));
+                        Map.of("detail", detail)));
     }
 
     private void reportActionFailure(RuntimeException exception,
@@ -1806,6 +2239,13 @@ final class TownRuntime {
     private static String safeMessage(Throwable throwable) {
         String message = throwable.getMessage();
         return message == null || message.isBlank() ? throwable.getClass().getSimpleName() : message;
+    }
+
+    private static String safeText(Object value) {
+        return String.valueOf(value).replace('&', '＆').replace('§', '�');
+    }
+
+    private static final class ApplicationNotFoundException extends RuntimeException {
     }
 
     private record TownMembers(TownSnapshot town, List<UUID> members,

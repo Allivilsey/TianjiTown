@@ -1,8 +1,12 @@
 package cn.tianji.town.paper;
 
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -59,11 +63,37 @@ class TownCommandParserTest {
     void rejectsMissingReasonAndInsertedPlaceholder() {
         assertThrows(IllegalArgumentException.class, () -> TownCommandParser.namedReason(
                 new String[]{"application", "change", "天际之城"}, 2, TOWNS));
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        TownCommandParser.ParseException exception = assertThrows(TownCommandParser.ParseException.class,
                 () -> TownCommandParser.namedReason(new String[]{
-                        "application", "approve", "天际之城", "<原因>"
+                        "application", "approve", "天际之城", "<reason>"
                 }, 2, TOWNS));
 
-        assertEquals("请将 <原因> 替换为实际内容", exception.getMessage());
+        assertEquals("chat.parser.placeholder", exception.messageKey());
+        assertEquals(Map.of("placeholder", "<reason>"), exception.placeholders());
+        assertEquals("chat.parser.placeholder", exception.getMessage());
+    }
+
+    @Test
+    void resolvesParserErrorFromMessagesAndHonorsReload(@TempDir Path temporaryDirectory)
+            throws Exception {
+        PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
+        TownCommandParser.ParseException exception = assertThrows(
+                TownCommandParser.ParseException.class,
+                () -> TownCommandParser.namedAction(new String[]{
+                        "land", "reconcile", "天际之城", "rotate"
+                }, 2, TOWNS, List.of("repair")));
+
+        assertEquals("chat.parser.unsupported-action", exception.messageKey());
+        assertEquals(Map.of("action", "rotate"), exception.placeholders());
+        assertEquals("不支持的操作参数: rotate",
+                messages.plainText(exception.messageKey(), exception.placeholders()));
+
+        YamlConfiguration configuration = new YamlConfiguration();
+        configuration.set("chat.parser.unsupported-action", "自定义操作参数错误: {action}");
+        configuration.save(temporaryDirectory.resolve("messages.yml").toFile());
+        messages.reload();
+
+        assertEquals("自定义操作参数错误: rotate",
+                messages.plainText(exception.messageKey(), exception.placeholders()));
     }
 }

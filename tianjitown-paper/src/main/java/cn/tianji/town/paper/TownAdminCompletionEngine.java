@@ -14,16 +14,20 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
 final class TownAdminCompletionEngine {
     private static final int MAX_SUGGESTIONS = 100;
-    private static final String REASON_HINT = "<原因>";
-    private static final String PLAYER_HINT = "<玩家>";
     private static final List<String> ROOTS = List.of(
             "help", "status", "reload", "audit", "station", "handbook", "application", "town",
             "member", "mayor", "vote", "land", "money", "tax", "ledger", "expand",
             "buff", "maintenance", "diagnose", "backup");
+    private final BiFunction<String, Map<String, ?>, String> messageResolver;
+
+    TownAdminCompletionEngine(BiFunction<String, Map<String, ?>, String> messageResolver) {
+        this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
+    }
 
     List<String> complete(String[] args, Snapshot snapshot, Dynamic dynamic) {
         Objects.requireNonNull(args, "args");
@@ -87,7 +91,7 @@ final class TownAdminCompletionEngine {
                 || candidate.status() == ApplicationStatus.UNDER_REVIEW;
         List<String> names = snapshot.applications().stream().filter(predicate)
                 .map(ApplicationCandidate::name).toList();
-        return nameThenHint(args, 2, names, REASON_HINT);
+        return nameThenHint(args, 2, names, reasonHint());
     }
 
     private List<String> town(String[] args, Snapshot snapshot) {
@@ -99,7 +103,7 @@ final class TownAdminCompletionEngine {
             return completePhrase(args, 2, names);
         }
         if (args[1].equalsIgnoreCase("delete")) {
-            return nameThenHint(args, 2, names, REASON_HINT);
+            return nameThenHint(args, 2, names, reasonHint());
         }
         return List.of();
     }
@@ -132,13 +136,13 @@ final class TownAdminCompletionEngine {
                         .map(PlayerCandidate::label).toList();
             }
             List<String> playerSuggestions = filter(
-                    players.isEmpty() ? List.of(PLAYER_HINT) : players, current(args));
+                    players.isEmpty() ? List.of(playerHint()) : players, current(args));
             return merge(phraseSuggestions, playerSuggestions);
         }
         if (tailLength == 2 && args[1].equalsIgnoreCase("role")) {
             return filter(List.of("MEMBER", "DEPUTY_MAYOR"), current(args));
         }
-        return tailLength == 2 ? hint(current(args), REASON_HINT) : List.of();
+        return tailLength == 2 ? reasonHint(current(args)) : List.of();
     }
 
     private List<String> vote(String[] args, Snapshot snapshot, Dynamic dynamic) {
@@ -152,7 +156,7 @@ final class TownAdminCompletionEngine {
         if (action.equals("cancel")) {
             return switch (args.length) {
                 case 3 -> filter(List.of("<voteId>"), args[2]);
-                case 4 -> hint(current(args), REASON_HINT);
+                case 4 -> reasonHint(current(args));
                 default -> List.of();
             };
         }
@@ -169,7 +173,7 @@ final class TownAdminCompletionEngine {
             List<String> players = memberLabels(snapshot, dynamic,
                     townIdByName(snapshot, match.name()));
             return merge(phraseSuggestions, filter(
-                    players.isEmpty() ? List.of(PLAYER_HINT) : players, current(args)));
+                    players.isEmpty() ? List.of(playerHint()) : players, current(args)));
         }
         return List.of();
     }
@@ -193,9 +197,9 @@ final class TownAdminCompletionEngine {
             List<String> players = memberLabels(snapshot, dynamic,
                     townIdByName(snapshot, match.name()));
             return merge(phraseSuggestions, filter(
-                    players.isEmpty() ? List.of(PLAYER_HINT) : players, current(args)));
+                    players.isEmpty() ? List.of(playerHint()) : players, current(args)));
         }
-        return tailLength == 2 ? hint(current(args), REASON_HINT) : List.of();
+        return tailLength == 2 ? reasonHint(current(args)) : List.of();
     }
 
     private List<String> land(String[] args, Snapshot snapshot, Dynamic dynamic) {
@@ -250,11 +254,11 @@ final class TownAdminCompletionEngine {
         }
         if ((root.equals("money") && args[1].equalsIgnoreCase("adjust")
                 || root.equals("tax")) && tail == 1) {
-            return merge(phraseSuggestions, hint(current(args), "<金额>"));
+            return merge(phraseSuggestions, amountHint(current(args)));
         }
         if ((root.equals("money") && args[1].equalsIgnoreCase("adjust")
                 || root.equals("tax")) && tail == 2) {
-            return hint(current(args), REASON_HINT);
+            return reasonHint(current(args));
         }
         return phraseSuggestions;
     }
@@ -279,7 +283,7 @@ final class TownAdminCompletionEngine {
         }
         return switch (tail) {
             case 1 -> merge(phrases, hint(current(args), "<buffKey>"));
-            case 2 -> hint(current(args), REASON_HINT);
+            case 2 -> reasonHint(current(args));
             default -> List.of();
         };
     }
@@ -295,6 +299,26 @@ final class TownAdminCompletionEngine {
 
     private List<String> hint(String current, String hint) {
         return current.isEmpty() ? List.of(hint) : List.of();
+    }
+
+    private List<String> reasonHint(String current) {
+        return hint(current, reasonHint());
+    }
+
+    private List<String> amountHint(String current) {
+        return hint(current, resolveHint(TownAdminCompletionHints.AMOUNT_KEY));
+    }
+
+    private String reasonHint() {
+        return resolveHint(TownAdminCompletionHints.REASON_KEY);
+    }
+
+    private String playerHint() {
+        return resolveHint(TownAdminCompletionHints.PLAYER_KEY);
+    }
+
+    private String resolveHint(String key) {
+        return TownAdminCompletionHints.resolve(messageResolver, key);
     }
 
     private List<String> memberLabels(Snapshot snapshot, Dynamic dynamic, UUID townId) {

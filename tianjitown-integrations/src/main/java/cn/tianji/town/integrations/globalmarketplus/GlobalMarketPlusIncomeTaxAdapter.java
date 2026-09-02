@@ -11,12 +11,14 @@ import org.bukkit.plugin.Plugin;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -29,6 +31,7 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
     private final Plugin globalMarketPlus;
     private final BooleanSupplier taxEnabled;
     private final Consumer<Earning> processor;
+    private final BiFunction<String, Map<String, ?>, String> messageResolver;
     private final Set<Event> seenEvents = Collections.newSetFromMap(
             Collections.synchronizedMap(new WeakHashMap<>()));
     private final UUID startupId = UUID.randomUUID();
@@ -37,11 +40,13 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
 
     public GlobalMarketPlusIncomeTaxAdapter(Plugin owner, Plugin globalMarketPlus,
                                             BooleanSupplier taxEnabled,
-                                            Consumer<Earning> processor) {
+                                            Consumer<Earning> processor,
+                                            BiFunction<String, Map<String, ?>, String> messageResolver) {
         this.owner = Objects.requireNonNull(owner, "owner");
         this.globalMarketPlus = Objects.requireNonNull(globalMarketPlus, "globalMarketPlus");
         this.taxEnabled = Objects.requireNonNull(taxEnabled, "taxEnabled");
         this.processor = Objects.requireNonNull(processor, "processor");
+        this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
     }
 
     public Capability register() {
@@ -60,12 +65,14 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
             owner.getServer().getPluginManager().registerEvent(auctionEvent, listener,
                     EventPriority.MONITOR, safeExecutor(auctionEvent, this::onAuction), owner,
                     true);
-            return Capability.success("GlobalMarketPlus "
-                    + globalMarketPlus.getPluginMeta().getVersion()
-                    + " 成交与拍卖结果事件已通过能力检查");
+            return Capability.success(resolveMessage(
+                    "diagnostic.global-market-plus.capability-success",
+                    Map.of("version", String.valueOf(
+                            globalMarketPlus.getPluginMeta().getVersion()))));
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
-            return Capability.failure("GlobalMarketPlus 收入税 API 能力检查失败: "
-                    + message(exception));
+            return Capability.failure(resolveMessage(
+                    "diagnostic.global-market-plus.capability-failure",
+                    Map.of("detail", message(exception))));
         }
     }
 
@@ -97,7 +104,7 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
             long merchandiseId = ((Number) call(merchandise, "getMerchandiseUID")).longValue();
             dispatch(receiver, received, "transaction:" + merchandiseId);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
-            logEventFailure("成交收入税处理失败", exception);
+            logEventFailure("log.global-market-plus.transaction-failure", exception);
         }
     }
 
@@ -121,7 +128,7 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
             dispatch(receiver, amountAfterNativeTax(price, nativeTax),
                     "auction:" + merchandiseId);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
-            logEventFailure("拍卖收入税处理失败", exception);
+            logEventFailure("log.global-market-plus.auction-failure", exception);
         }
     }
 
@@ -170,7 +177,7 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
             try {
                 processor.accept(new Earning(player, receiverName, gross, businessKey));
             } catch (RuntimeException | LinkageError exception) {
-                logEventFailure("主线程收入税处理失败", exception);
+                logEventFailure("log.global-market-plus.main-thread-failure", exception);
             }
         };
         if (!owner.isEnabled()) {
@@ -225,13 +232,22 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
     private EventExecutor safeExecutor(Class<? extends Event> expectedType,
                                        Consumer<Event> consumer) {
         return ThirdPartyEventExecutor.filtered(expectedType, consumer,
-                exception -> logEventFailure("事件边界捕获异常", exception));
+                exception -> logEventFailure("log.global-market-plus.boundary-failure", exception));
     }
 
-    private void logEventFailure(String context, Throwable throwable) {
+    private void logEventFailure(String messageKey, Throwable throwable) {
         if (eventFailureLogged.compareAndSet(false, true)) {
-            owner.getLogger().severe("GlobalMarketPlus " + context + ": " + message(throwable)
-                    + "；同类后续错误将被抑制");
+            owner.getLogger().severe(resolveMessage(messageKey,
+                    Map.of("detail", message(throwable))));
+        }
+    }
+
+    private String resolveMessage(String key, Map<String, ?> placeholders) {
+        try {
+            String resolved = messageResolver.apply(key, placeholders);
+            return resolved == null || resolved.isBlank() ? key : resolved;
+        } catch (RuntimeException | LinkageError exception) {
+            return key + " " + placeholders;
         }
     }
 
@@ -268,8 +284,9 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
     }
 
     private static String message(Throwable throwable) {
-        return throwable.getMessage() == null ? throwable.getClass().getSimpleName()
+        String detail = throwable.getMessage() == null ? throwable.getClass().getSimpleName()
                 : throwable.getMessage();
+        return detail.replace('&', '＆').replace('§', '�');
     }
 
     public record Earning(OfflinePlayer player, String receiverName, double grossAmount,

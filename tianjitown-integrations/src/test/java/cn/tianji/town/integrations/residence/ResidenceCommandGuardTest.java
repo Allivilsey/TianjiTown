@@ -44,4 +44,15 @@ class ResidenceCommandGuardTest {
         assertTrue(ResidenceCommandGuard.parse("/res tp sky extra").protectedOperation());
         assertTrue(ResidenceCommandGuard.parse("/res tp").protectedOperation());
     }
+
+    @Test
+    void resolvesFailureLogWithSanitizedExceptionDetail() {
+        String rendered = ResidenceCommandGuard.resolveFailureMessage((key, placeholders) -> {
+            assertEquals("log.residence.command-guard-failure", key);
+            assertEquals("boom＆�", placeholders.get("detail"));
+            return "custom residence failure: " + placeholders.get("detail");
+        }, new IllegalStateException("boom&§"));
+
+        assertEquals("custom residence failure: boom＆�", rendered);
+    }
 }

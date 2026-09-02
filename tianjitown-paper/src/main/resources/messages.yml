@@ -8,12 +8,144 @@ system:
   invalid-menu-data: '&c界面数据已过期，请重新打开后再试。'
   # {detail} 为具体失败原因。
   operation-failed: '&c这项操作错误：{detail}'
+  # {key} 为未找到配置值的消息键；这是消息文件可用时的运行期回退。
+  missing-message: '&c缺少消息配置: {key}'
+
+# 建镇申请资料校验消息；{minimum}/{maximum} 为边界，{index} 为规则序号。
+validation:
+  application:
+    name-length: '&c名称长度必须为 {minimum}~{maximum}'
+    name-characters: '&c名称只能包含文字、数字、空格、下划线、连字符和间隔点'
+    name-format: '&c名称含有不允许的格式或控制字符'
+    residence-name-length: '&c小镇代码长度必须为 {minimum}~{maximum}'
+    residence-name-characters: '&c小镇代码只能包含英文字母，不允许空格、数字或特殊符号'
+    description-length: '&c简介不能超过 {maximum} 字符'
+    description-format: '&c简介含有不允许的格式或控制字符'
+    rule-count: '&c规则数量必须为 {minimum}~{maximum}'
+    rule-length: '&c规则 {index} 不能超过 {maximum} 字符'
+    rule-format: '&c规则 {index} 含有不允许的格式或控制字符'
+  # 规则编辑器数据校验消息；无占位符。
+  rule-editor:
+    display-index: '&c规则显示序号必须从 1 开始'
+    page-version: '&c规则页面版本不能为负数'
+    rule-index: '&c规则索引不能为负数'
+  # Vault 清算服务的输入校验；金额均为最小货币单位，精度范围为 0~8。
+  vault:
+    account-name-required: '清算账户名不能为空'
+    scale-range: 'Vault 金额精度必须在 0~8 之间'
+    donation-amount-positive: '捐款金额必须大于 0'
+    refund-amount-positive: '补偿金额必须大于 0'
+    return-amount-positive: '返还金额必须大于 0'
+    adjustment-non-zero: '调整金额不能为 0'
+  # 捐款自动补偿输入校验。
+  donation:
+    compensation-operation: '只有带玩家身份的捐款操作可以自动补偿'
+  # Buff 配置校验；{key}=Buff key，{path}=配置路径，{value}=非法值，{maximum}=目录上限。
+  buff:
+    unknown: '&c未知 Buff: {key}'
+    catalog-required: '&cbuffs.catalog 至少需要一个 Buff'
+    catalog-limit: '&cbuffs.catalog 最多支持 {maximum} 个 Buff'
+    duplicate-key: '&c重复 Buff key: {key}'
+    purchasing-roles-required: '&c{path} 至少需要一个角色'
+    section-required: '&c{path} 必须为配置节'
+    value-required: '&c{path} 不能为空'
+    price-overflow: '&c金额超过 long 次级单位上限'
+    price-range: '&c{path} 产生的价格超出次级货币单位范围'
+    enum-unsupported: '&c{path} 的值不受支持: {value}'
+  # 通用配置值校验；{path}=配置路径。
+  configuration:
+    boolean-type: '&c{path} 必须为布尔值'
+    int-range: '&c{path} 超出 int 范围'
+    value-required: '&c{path} 不能为空'
+    number-type: '&c{path} 必须为数字'
+    finite-number: '&c{path} 必须为有限数'
+    text-type: '&c{path} 必须为文本'
+    decimal-text: '&c{path} 必须为十进制文本'
+    string-list-type: '&c{path} 必须为文本列表'
+    list-type: '&c{path} 必须为列表'
+    integer-type: '&c{path} 必须为整数'
+    long-range: '&c{path} 必须为 long 范围内的整数'
+  # 运行时配置结构、世界引用和范围校验；{path}=配置路径，{minimum}/{maximum}=允许范围，
+  # {world}=世界名，{worlds}=多个未加载世界名，数据库目录错误中的 {path}=解析后的目录路径。
+  runtime-configuration:
+    beacon-worlds-unloaded: '&cterritory.beacon.allowed-worlds 包含未加载世界: {worlds}'
+    database-file-required: '&cdatabase.file 不能为空'
+    database-file-path-invalid: '&cdatabase.file 必须指向数据库文件'
+    database-directory-create-failure: '&c无法创建 SQLite 目录: {path}'
+    blacklist-type: '&ctown.site.blacklist 必须为区域列表'
+    blacklist-world-unloaded: '&ctown.site.blacklist 包含未加载世界: {world}'
+    blacklist-bounds: '&ctown.site.blacklist 区域最小坐标不能大于最大坐标'
+    blacklist-text-required: '&c{path} 必须为非空文本'
+    blacklist-integer-type: '&c{path} 必须为整数'
+    blacklist-integer-range: '&c{path} 必须为 int 范围内的整数'
+    range: '&c{path} 必须在 {minimum}~{maximum} 范围内'
+  # 经济设置校验消息；{path}=配置路径，{minimum}/{maximum}=允许的金额精度边界。
+  economy:
+    settlement-account-required: '&c{path} 不能为空'
+    money-scale-range: '&c{path} 必须在 {minimum}~{maximum} 之间'
+    expansion-cost-positive: '&c{path} 必须大于 0'
+    weekly-subsidy-limit-negative: '&c{path} 不能小于 0'
+    twelve-hour-subsidy-limit-negative: '&c{path} 不能小于 0'
+    twelve-hour-limit-exceeds-weekly: '&c{path} 不能大于每周限额'
+    expansion-cost-overflow: '&c金额超过 long 次级货币单位上限'
+    expansion-cost-range: '&c{path} 价格超出次级货币单位范围'
+  # 治理时长配置校验消息；{path}=配置路径。
+  governance:
+    duration-non-negative: '&c{path} 必须为可安全计算的非负整数'
+    duration-positive: '&c{path} 必须为可安全计算的正整数'
+  # 建筑返还、信标增强和定时备份配置校验消息；{path}=配置路径，{value}=非法材料值，
+  # {minimum}/{maximum}=允许范围；refresh-interval-ticks 的范围单位为 tick，diagnostic-days 为天。
+  bonus:
+    building-refund-chance-range: '&c{path} 必须在 (0, 1] 范围内'
+    integer-range: '&c{path} 超出整数范围'
+    building-refund-weekly-limit-range: '&c{path} 必须在 {minimum}~{maximum} 范围内'
+    building-refund-retention-range: '&c{path} 必须在 {minimum}~{maximum} 范围内'
+    building-refund-reset-zone-invalid: '&c{path} 不是有效时区'
+    building-refund-blacklist-required: '&c{path} 至少需要一个方块或分组'
+    building-refund-blacklist-material-invalid: '&c建筑返还黑名单材料无效: {value}'
+    beacon-refresh-interval-range: '&c{path} 必须在 {minimum}~{maximum} 范围内'
+    beacon-worlds-required: '&c{path} 至少需要一个世界'
+    diagnostic-days-range: '&c{path} 必须在 {minimum}~{maximum} 天之间'
+    backup-range: '&c定时备份间隔或保留数量超出安全范围'
+    backup-directory-required: '&c{path} 不能为空'
+  # 在线备份目录校验；{path}=配置中的相对路径或解析后的目录路径。
+  backup:
+    absolute-path: '备份目录必须位于插件数据目录内，不能使用绝对路径: {path}'
+    relative-path-escape: '相对备份目录不能超出插件数据目录: {path}'
+    symlink-escape: '备份目录通过符号链接或联接超出插件数据目录: {path}'
+    not-directory: '备份目录指向文件: {path}'
+    real-path-verification-failure: '无法验证备份目录真实路径: {path}'
+  # SitePolicy 预览参数和黑名单回退校验；{key}=区域字段。
+  site:
+    areas-required: '领地预览至少需要一个区域'
+    world-mismatch: '领地预览区域必须位于同一世界'
+    focus-missing: '领地中心不在预览区域中'
+    blacklist-integer-required: '缺少整数 {key}'
+    blacklist-bounds-invalid: '区域最小值不能大于最大值'
+  # TerritoryService 扩张校验消息；批量选择失败、身份校验和批量请求状态不含动态占位符。
+  territory:
+    batch-selection-required: '请至少选择一个领地单元'
+    batch-capacity-exceeded: '批量扩张后超过领地单元上限'
+    batch-grid-out-of-bounds: '选中的领地单元超出 5×5 扩张网格'
+    batch-duplicate-selection: '批量扩张包含重复领地单元'
+    batch-occupied-selection: '选中的领地单元已经被占领'
+    batch-not-connected: '批量选区必须与现有领地四方向连通'
+    batch-request-id-required: '批量扩张幂等键不能为空'
+    batch-already-refunded: '该批量扩张操作已经退款，请重新选择区域'
+    town-required: '你不属于任何小镇'
+    mayor-required: '只有镇长可以使用公共资金扩张'
+    origin-missing: '初始领地单元缺失'
+    capacity-reached: '领地单元已达到配置上限'
 
 handbook:
   # 通过小镇手册打开玩家入口后的领取结果。
   received: '&a小镇手册已放入你的背包。'
   # {minutes} 为剩余冷却时间（分钟）。
   cooldown: '&e每小时可以领取一次小镇手册，请在 {minutes} 分钟后再试。'
+  # 发放手册物品的书名、显示名和页面内容；页面中的换行由 YAML 双引号保留。
+  item-title: '小镇手册'
+  item-display-name: '&6小镇手册'
+  item-pages: "&6小镇服务\n\n&0右键本手册可打开小镇菜单。\n\n&8本物品通过内部标识识别，改名不会复制其功能。"
 
 station:
   # 管理员设置、移除公共服务台或专属服务台时的结果。
@@ -71,6 +203,7 @@ chat:
     info-status: '&7状态: &a有效'
     list-title: '&6小镇服务台列表（{count}）'
     list-empty: '&7当前没有已登记的服务台。'
+    public-owner: '公共'
     list-entry: '&e{id} &7{location} · {owner} &8[{status}&8]'
     list-entry-console: '&e{id} &7{location} · {owner} &8[{status}&8]'
     world-unloaded: '&c服务台所在世界当前未加载。'
@@ -85,13 +218,19 @@ chat:
     status-mismatch: '&c登记不一致'
 
   # 玩家传送到小镇领地或预览领地边界时的提示。
-  # 占位符：{scope}=预览范围，{duration}=粒子显示时长（秒）。
+  # 占位符：{scope}=预览范围标签，{count}=领地单元数量，{duration}=粒子显示时长（秒）。
   site:
     world-unloaded: '&c领地所在世界当前未加载。'
     teleport-failed: '&c无法传送到领地传送点。'
     teleported: '&a已传送至领地传送点。'
     wrong-world: '&c预览领地不在当前世界。'
+    preview-scope-single: '5×5 区块'
+    preview-scope-multiple: '{count} 个领地单元'
     preview-started: '&e已显示 {scope} 的完整三维边界，粒子将持续约 {duration} 秒。'
+
+  # 玩家申请操作的资源状态详情。
+  application:
+    not-found: '申请不存在'
 
   # 登录、申请、投票、税率和成员关系变化产生的主动通知。
   # 占位符：{town}=小镇名，{count}=数量，{rate}=税率，{reason}=原因，{applicant}=申请人，{member}=成员名。
@@ -104,6 +243,9 @@ chat:
     application-approved: '&a你的小镇“{town}”已获批准并创建完成。'
     application-needs-changes: '&e你的小镇申请需要补充资料：{reason} '
     application-rejected: '&c你的小镇申请已被拒绝：{reason} '
+    # 申请没有审核原因时使用的默认原因。
+    application-needs-changes-default-reason: '请查看申请详情'
+    application-rejected-default-reason: '未提供原因'
     application-provision-failed: '&c你的小镇已通过审核，但自动创建暂时失败；管理员会处理。 '
     member-removed: '&c你已被移出当前小镇。'
     visitor-added: '&a你已被加入一个小镇的访客名单，并获得该镇领地权限。'
@@ -119,7 +261,7 @@ chat:
     initial-member-response-rejected: '&e{member} 已拒绝成为建镇初始成员。'
 
   # /townadmin 命令直接返回的消息。
-  # 除特别说明外，{detail} 表示后端操作返回的详细结果。
+  # 除特别说明外，{detail} 表示后端操作返回的详细结果；{report}/{file}=文件路径。
   admin:
     no-permission: '&c没有权限。'
     reload: '&a配置与 messages.yml 已重新读取；税收/消费、Buff 商店和领地加成开关立即生效。SQLite、清算账户、金额精度和商品定义需重启后生效。'
@@ -131,12 +273,16 @@ chat:
     status-buffs: '&7- Buff 商店: {state}，配置商品={count}'
     status-refund: '&7- 建筑返还: {state}，黑名单={blacklist}，周上限={limit}'
     status-beacon: '&7- 信标增强: {state}'
-    status-diagnostic: '&7- 最近统一诊断: {detail}{report}'
-    status-backup: '&7- 最近在线备份: {detail}{file}'
+    status-diagnostic: '&7- 最近统一诊断: {detail}，报告={report}'
+    status-diagnostic-no-report: '&7- 最近统一诊断: {detail}'
+    status-backup: '&7- 最近在线备份: {detail}，文件={file}'
+    status-backup-no-file: '&7- 最近在线备份: {detail}'
     status-player-entry: '&7- 玩家入口: {state}'
 
     # 维护模式和启动确认按钮相关消息。
     maintenance-status: '&6维护模式: &f{state}'
+    maintenance-status-enabled: '&6维护模式: &f已开启'
+    maintenance-status-disabled: '&6维护模式: &f已关闭'
     maintenance-enabled: '&e维护模式已开启；服务台、手册、玩家界面和表单提交现已暂停。'
     maintenance-disabled: '&a维护模式已关闭；玩家入口已恢复。'
     confirm-invalid: '&c确认链接无效，请重新发出危险操作命令。'
@@ -150,12 +296,28 @@ chat:
     cancel-expired: '&c确认已过期，无需取消。'
     cancel-not-owner: '&c该确认不属于你。'
 
-    # 审计、服务台管理和申请审核列表消息。
+    # /townadmin Tab 补全中的参数位置提示；仅用于显示，不是可提交的命令参数。
+    completion:
+      reason-hint: '<原因>'
+      player-hint: '<玩家>'
+      amount-hint: '<金额>'
+
+    # 系统操作参数；这些消息会作为参数错误详情嵌入 argument-error。
+    usage-diagnose: '用法: /townadmin diagnose [1~180天]'
+    usage-backup: '用法: /townadmin backup'
+    usage-maintenance: '用法: /townadmin maintenance <on|off|status>'
+    usage-audit: '用法: /townadmin audit [1~200]'
+    audit-limit-integer: 'audit 数量必须是 1~200 的整数'
+    audit-limit-range: 'audit 数量必须在 1~200'
+
+    # 审计、服务台管理和申请审核列表消息；{action}=申请审核动作，{town}=小镇名。
     audit-title: '&6最近审计记录:'
     audit-record: '&7#{id} {created} {actor} {action} {target-type}/{target-id} 原因={reason}'
     station-player-only: '&c该服务台操作需要游戏内管理员看向讲台执行。'
     station-help-create: '&e/townadmin station create|remove|info（玩家看向讲台）'
     station-help-list: '&e/townadmin station list'
+    usage-application-review: '用法: /townadmin application {action} <小镇全名> <原因>'
+    application-not-found: '找不到待处理申请 “{town}”'
     pending-applications: '&6待处理申请: {count}'
     application-entry: '&e{town} &7申请人={applicant}'
     handbook-target: '&c目标玩家必须在线。用法: /townadmin handbook <player>'
@@ -164,7 +326,13 @@ chat:
     application-rejected: '&a申请已拒绝，选址预留已释放。'
     application-change-sent: '&a已要求申请人补充资料。'
 
-    # 小镇、成员、镇长和治理投票管理消息。
+    # 小镇、成员、镇长、治理投票和领地管理消息；{action}=投票创建动作，{town}=小镇名，
+    # {count}=批量操作的小镇数量，{detail}=技术详情。
+    usage-town: '用法: /townadmin town <view|delete> <小镇全名>'
+    usage-town-delete: '用法: /townadmin town delete <小镇全名> <原因>'
+    town-not-found: '找不到小镇 “{town}”'
+    town-delete-confirmation: '删除小镇“{town}”（审计记录会保留）'
+    town-action-unsupported: 'town 只支持 view 或 delete'
     town-title: '&6{town} [代码 {code}]'
     town-status: '&7status={status} mayor={mayor} version={version}'
     town-territory: '&7领地={world} {x},{z} Residence={residence} projection={projection}'
@@ -172,15 +340,52 @@ chat:
     town-delete-residence-failed: '&c小镇已安全归档，但领地移除失败：{detail}。名称、小镇代码和区块仍保持锁定；处理后可重复执行删除命令。'
     role-invalid: '&c角色只支持 DEPUTY_MAYOR 或 MEMBER；MAYOR 请使用镇长转移流程。'
     role-updated: '&a成员角色已调整为 {role}。'
+    usage-member: '用法: /townadmin member <add|remove|role> <小镇全名> <玩家> <原因|角色>'
+    member-action-unsupported: 'member 只支持 add、remove 或 role'
     member-added: '&a成员已添加。'
     member-removed: '&a成员已移除。'
+    usage-vote: '用法: /townadmin vote <create-kick|create-mayor|settle|cancel> <小镇全名|voteId> ...'
+    usage-vote-cancel: '用法: /townadmin vote cancel <voteId> <原因>'
+    vote-action-unsupported: 'vote 只支持 create-kick、create-mayor、settle 或 cancel'
+    usage-vote-create: '用法: /townadmin vote {action} <小镇全名> <玩家>'
+    vote-town-not-found: '找不到可操作的小镇'
+    member-town-not-found: '找不到可操作的小镇 “{town}”'
     vote-status: '&a投票状态: {status}，赞成/门槛: {yes}/{required}'
     vote-cancelled: '&a投票已取消: {id}'
     governance-invalid: '&c治理配置无效: {detail}'
     vote-created: '&a投票已创建: {id}，有效选民={voters}，通过门槛={required}'
+    usage-mayor: '用法: /townadmin mayor transfer <小镇全名> <玩家> <原因>'
     mayor-emergency-transfer: '&a镇长已紧急转移。'
+    usage-land: '用法: /townadmin land <preview|reconcile|rebuild> <小镇全名|all>'
     land-player-only: '&c领地粒子预览只能由游戏内玩家执行。'
+    land-action-unsupported: 'land 只支持 preview/reconcile/rebuild'
     settlement-reconcile-submitted: '&a已提交清算账户对账；差额不足会立即锁定全部小镇消费。'
+    # 管理员资金、税率、账本、扩张和 Buff 命令；{town}=小镇名，{buff}=Buff 显示名，
+    # {permission}=权限节点。
+    usage-money-root: '用法: /townadmin money <view|adjust|reconcile> ...'
+    usage-money: '用法: /townadmin money <view|adjust> <小镇全名> [金额 原因]'
+    usage-money-adjust: '用法: /townadmin money adjust <小镇全名> <带符号金额> <原因>'
+    town-not-found-generic: '小镇不存在'
+    money-adjust-zero: '调整金额不能为 0'
+    money-action-unsupported: 'money 只支持 view、adjust 或 reconcile'
+    usage-tax: '用法: /townadmin tax set <小镇全名> <百分比> <原因>'
+    tax-action-unsupported: 'tax 只支持 set'
+    usage-ledger: '用法: /townadmin ledger view <小镇全名>'
+    ledger-action-unsupported: 'ledger 只支持 view'
+    usage-expand: '用法: /townadmin expand <view|preview> <小镇全名> [方向]'
+    expand-direction-required: '必须指定 north/east/south/west'
+    expand-action-unsupported: 'expand 只支持 view 或 preview'
+    usage-buff-root: '用法: /townadmin buff <list|grant> ...'
+    usage-buff-list: '用法: /townadmin buff list <小镇全名>'
+    buff-purchase-paused: '公共 Buff 新购买已由功能开关暂停'
+    usage-buff-grant: '用法: /townadmin buff grant <小镇全名> <buffKey> <原因>'
+    buff-purchase-confirmation: '为小镇“{town}”代购 Buff “{buff}”并扣除公共资金'
+    buff-action-unsupported: 'buff 只支持 list 或 grant；公共 Buff 不接受退款'
+    town-archived: '小镇“{town}”已归档，请重新发起操作'
+    no-operable-town: '没有可操作的小镇'
+    town-record-not-found: '找不到小镇记录'
+    permission-missing: '缺少权限 {permission}'
+    confirmation-stale: '小镇“{town}”在确认期间发生变化，请重新发起操作'
     finance-balance: '&6{town} 公共余额: &f{balance}，锁定={locked}，原因={reason}'
     ledger-title: '&6完整公共账本（最新 {count} 条）'
     ledger-record: '&7{created} &f{type} &e{amount} &8余额={balance} {note}'
@@ -193,9 +398,11 @@ chat:
     buff-purchase-complete: '&aBuff 代购完成，公共余额: {balance}'
     land-rebuild-success: '&a{town}: {detail}'
     land-rebuild-failure: '&c{town}: {detail}'
+    land-rebuild-confirmation-all: '移除并重建全部 {count} 个小镇的 Residence 投影'
+    land-rebuild-confirmation-town: '移除并重建小镇“{town}”的 Residence 投影'
     runtime-not-ready: '&c小镇系统尚未就绪。请先使用 /townadmin status 查看启动门禁。'
 
-    # 管理帮助文本；修改命令用法时请同步检查 Tab 补全和权限逻辑。
+    # 管理帮助文本；{version}=插件版本，{topic}=输入的帮助分类；修改命令用法时请同步检查 Tab 补全和权限逻辑。
     help-application-list: '&e/townadmin application list'
     help-application-review: '&e/townadmin application approve|reject|change <小镇全名> <原因>'
     help-title: '&6TianjiTown {version} 管理帮助'
@@ -271,11 +478,17 @@ chat:
     tax-range: '&c税率必须在 5%~25% 之间，并按 1% 递增。'
     operation-failed: '&c操作失败: {detail}'
 
+  # 公共 Buff 购买失败详情；{detail}=运行时异常详情。
+  buff:
+    shop-paused: '公共 Buff 商店当前暂停新购买'
+    application-failure-refunded: 'Buff 应用失败，已自动取消并退回公共资金: {detail}'
+
   # 领地碰撞、黑名单和 WorldBorder 校验的详细原因。
   # 这些文本通常会作为 Dialog 或操作失败详情显示。
   site-validation:
     residence-unavailable: '暂时无法检查附近是否已有领地：{detail}'
     residence-collision: '所选范围与已有领地“{name}”重叠'
+    residence-name-conflict: '领地名与已存在的领地重复。'
     expansion-collision: '扩张范围与其他领地“{name}”重叠'
     world-unloaded: '目标世界当前未加载'
     blacklist-collision: '所选范围与出生点、活动区或其他保留区域重叠'
@@ -283,11 +496,65 @@ chat:
     worldborder-unconfigured: '当前世界暂不支持在这里建立小镇'
     worldborder-outside: '所选范围距离世界边界太近，请换一个位置'
 
+  # Residence 领地适配器的结构化结果详情；由 LandProtectionService 代码映射。
+  # 占位符：{world}=世界名，{residence}=领地名，{area}=区域名，{owner}=所有者，
+  # {member}=玩家 UUID，{flag}=权限标记，{detail}/{cleanup}=技术详情。
+  land-protection:
+    world-unloaded: '目标世界未加载: {world}'
+    api-unavailable: 'Residence API 不可用: {detail}'
+    projection-missing: '缺少 Residence 投影 {residence}'
+    initial-projection-collision: '目标 5×5 区块与 Residence 冲突: {residence}'
+    projection-create-rejected: 'Residence API 拒绝创建系统领地 {residence}'
+    projection-create-readback-failed: 'Residence 创建后无法按名称读取: {residence}'
+    projection-already-absent: 'Residence 已不存在'
+    projection-removed: 'Residence 已移除'
+    projection-still-present: 'Residence 移除后仍可读取: {residence}'
+    projection-remove-rejected: '拒绝移除同名但并非当前小镇投影的 Residence: {residence}'
+    rebuild-owner-mismatch: '同名 Residence 不属于受控服务端账户，拒绝重建: {residence}'
+    controlled-projection-missing: '缺少受控 Residence 投影 {residence}'
+    teleport-point-outside-projection: '传送点不在本镇 Residence 内'
+    teleport-point-updated: 'Residence 传送点已更新: {residence}'
+    expansion-projection-missing: '缺少待扩张的 Residence 投影 {residence}'
+    projection-owner-not-controlled: 'Residence 所有者不是受控服务端账户: {owner}'
+    area-owner-not-controlled: '同名 Residence 不属于受控服务端账户，拒绝移除区域'
+    area-bounds-mismatch: '同名 Residence 区域边界不一致: {area}'
+    expansion-collision: '目标 5×5 区块与 Residence 冲突: {residence}'
+    area-add-rejected: 'Residence API 拒绝添加区域 {area}'
+    area-add-rollback-failed: 'Residence API 不可用: {detail}；新增区域回滚失败: {cleanup}'
+    expansion-area-already-absent: 'Residence 扩张区域已不存在'
+    main-area-removal-rejected: '拒绝移除 Residence 主区域'
+    area-still-present: 'Residence 区域移除后仍可读取: {area}'
+    expansion-area-removed: 'Residence 扩张区域已移除'
+    projection-rebuilt-from-database: 'Residence 投影已依照数据库重建: {residence}'
+    main-area-missing: '多区域 Residence 缺少 main 区域'
+    database-area-create-failed: '依照数据库创建区域失败，区域={area}；不完整投影已清理，后续对账将重试'
+    database-rebuild-collision: '数据库领地与外部 Residence 冲突，拒绝重建: {residence}'
+    database-rebuild-remove-failed: 'Residence 旧投影移除后仍可读取，无法按数据库重建: {residence}'
+    projection-auto-repaired: 'Residence 投影已依照数据库自动修复: {residence}'
+    area-count-mismatch: 'Residence 区域数量与数据库不一致'
+    area-missing-or-bounds-mismatch: 'Residence 区域缺失或边界不一致: {area}'
+    projection-bounds-or-area-count-mismatch: 'Residence 边界或区域数量不一致'
+    projection-boundary-mismatch: 'Residence 边界不覆盖预期的 5×5 区块'
+    explosion-flag-mismatch: 'Residence 爆炸保护标记不一致: {flag}'
+    explosion-flag-write-failed: '无法写入 Residence 爆炸保护标记: {flag}'
+    membership-mismatch: 'Residence 成员权限列表与数据库不一致'
+    member-padd-permission-mismatch: '成员 {member} 的 padd 权限组不一致'
+    member-ignite-permission-mismatch: '成员 {member} 的点火权限不一致'
+    member-padd-permission-write-failed: '无法写入成员 {member} 的 padd 权限组'
+    member-ignite-permission-write-failed: '无法写入成员 {member} 的点火权限'
+    projection-healthy: 'Residence 投影正常: {residence}'
+    unsupported-teleport-point: '&c当前领地适配器不支持设置传送点。'
+    unsupported-multi-area: '&c当前领地适配器不支持多区域 Residence。'
+    unsupported-add-area: '&c当前领地适配器不支持扩张区域。'
+    unsupported-remove-area: '&c当前领地适配器不支持移除扩张区域。'
+
   # 建筑返还、信标加成、统一诊断和定时备份相关消息。
   bonus:
     backup-disabled: '&c定时备份已在配置中关闭。'
     backup-started: '&e正在创建 SQLite 在线备份与配置快照……'
-    backup-result-success: '&a{detail}{file}'
+    # {detail}=备份结果详情，{file}=数据库备份文件路径；无文件时使用 no-file 键。
+    backup-result-success: '&a{detail}；文件={file}'
+    backup-result-success-no-file: '&a{detail}'
     backup-result-failure: '&c{detail}'
     diagnostic-range: '诊断范围必须在 1~180 天之间'
     diagnostic-running: '&e已有统一诊断正在运行，请稍后查看结果。'
@@ -331,13 +598,334 @@ chat:
   # 启动门禁和外部服务失败时可复用的详细描述。
   lifecycle:
     storage-unavailable: '小镇资金服务暂时不可用'
+    storage-write-locked: 'SQLite 当前不可用，写操作已锁定'
     residence-unavailable: '领地服务暂时不可用：{detail}'
     external-preflight-failed: '暂时无法确认公共资金余额：{detail}'
     external-failed: '资金操作结果需要管理员复核：{detail}'
     expansion-validation-failed: '暂时无法确认该区域能否扩张：{detail}'
     expansion-failed-refunded: '领地扩张未成功，费用已退回公共资金：{detail}'
+    # {detail}=Residence/运行时技术详情；{cause}=批量回滚前的原始失败原因。
+    expansion-area-presence-check-failed: '无法确认 Residence 原有区域: {detail}'
+    expansion-batch-failed: 'Residence 批量扩张失败: {detail}'
+    expansion-batch-rollback-partial: '{cause}；部分 Residence 区域未能回滚，批次保留待恢复'
     compensation-auto: '；该小镇暂时无法使用公共资金，请联系管理员处理。'
     compensation-manual: '；该小镇暂时无法使用公共资金，请联系管理员处理。'
+
+# PluginMessages 校验诊断；{key}=缺失或格式不正确的消息键。
+diagnostic:
+  messages:
+    required-message-missing: '缺少必需的消息配置: {key}'
+    required-vote-missing: '缺少必需的投票消息配置: {key}'
+    range-format-missing: '缺少范围输入格式配置: {key}'
+    range-format-unsupported: '{key} 只支持 %s 占位符，不支持浮点格式'
+    range-format-placeholder-count: '{key} 必须恰好包含两个未转义的 %s 占位符'
+  # 启动依赖、数据库和配置门禁；{dependency}=插件名，{version}=插件版本，{detail}=技术详情，
+  # {schema}=当前配置 schema，{supported}=支持的 schema。
+  lifecycle:
+    startup-checking: '正在执行启动门禁'
+    admin-command-missing: 'plugin.yml 缺少 townadmin'
+    config-schema-gate-failed: '配置 schema 门禁未通过'
+    configuration-validation-passed: 'OK 配置类型、范围与世界引用校验通过'
+    configuration-validation-failed: 'FAIL 配置校验: {detail}'
+    business-config-gate-failed: '业务配置门禁未通过'
+    synchronous-gate-failed: '同步门禁未通过'
+    dependency-missing: 'FAIL {dependency} 未安装'
+    dependency-disabled: 'FAIL {dependency} {version}（未启用）'
+    dependency-probe-failure: 'FAIL {dependency} 依赖探测异常: {detail}'
+    vault-economy-unavailable: 'FAIL Vault Economy provider=不可用 (Vault 未启用，已跳过服务探测)'
+    database-gate-failed: 'FAIL SQLite/Flyway: {detail}'
+    database-gate-locked: '数据库门禁未通过'
+    database-config-invalid: 'FAIL SQLite config: {detail}'
+    database-config-gate-failed: '数据库配置无效'
+    config-schema-too-new: 'FAIL config schema={schema} 高于本插件支持的 {supported}，拒绝降级读取'
+    config-schema-upgrade-required: 'FAIL config schema={schema} 不能直接安全升级到 {supported}；请先按对应版本升级手册处理'
+    runtime-activation-failure: 'FAIL 业务运行时激活异常: {detail}'
+    runtime-gate-failed: '业务运行时门禁未通过'
+    runtime-initialization-failure: 'FAIL 业务配置、WorldBorder、玩家界面或清算账户: {detail}'
+    world-border-ready: 'OK WorldBorder 边界 API 已接入'
+    dialog-ui-ready: 'OK 玩家界面=DIALOG'
+    runtime-features-ready: 'OK 建筑返还、信标增强、启动诊断与定时备份已启用'
+  # 调度参数校验；无占位符。
+  scheduler:
+    negative-delay: 'delayTicks 不能为负数'
+  # GlobalMarketPlus 能力检查摘要；{version}=插件版本，{detail}=技术异常详情。
+  global-market-plus:
+    capability-success: 'GlobalMarketPlus {version} 成交与拍卖结果事件已通过能力检查'
+    capability-failure: 'GlobalMarketPlus 收入税 API 能力检查失败: {detail}'
+  # Jobs 能力检查摘要；{version}=插件版本，{detail}=技术异常详情。
+  jobs:
+    capability-success: 'Jobs {version} 收入事件、异步转主线程结算与可变付款金额已通过能力检查'
+    capability-failure: 'Jobs 收入税 API 能力检查失败: {detail}'
+  # QuickShop 历史探针诊断详情；{detail}=反射或第三方异常详情，{type}=API 类型名。
+  quick-shop:
+    history-version-unsupported: 'QuickShop 版本未通过交易历史适配器验证'
+    history-query-constructor-missing: 'MetricQuery 构造器不存在'
+    history-result-type-invalid: 'QuickShop 交易历史返回类型异常'
+    history-read-failure: 'QuickShop 交易历史读取失败: {detail}'
+    api-target-type-mismatch: '目标对象未实现 QuickShop API: {type}'
+    history-success: '已读取 QuickShop transaction metric 历史'
+    # QuickShop 税务能力检查；{minimum}/{version}=版本，{detail}=技术异常详情。
+    tax-version-unsupported: 'QuickShop-Hikari 版本至少为 {minimum}，当前为 {version}；动态税已保持关闭'
+    tax-capability-success: 'QuickShop {version} 税率、交易账户、精确事件分流和成功事件签名已通过能力检查'
+    tax-capability-failure: 'QuickShop 税务 API 能力检查失败: {detail}'
+    invalid-amount: 'QuickShop 返回了无效金额'
+  # Vault Economy 能力检查详情；{detail}=第三方异常详情。
+  vault:
+    economy-not-registered: 'Vault 未注册 Economy 服务'
+    economy-provider-enabled: '正常'
+    economy-provider-disabled: 'Economy provider 未启用'
+    economy-probe-failure: 'Vault Economy 探测异常: {detail}'
+    provider-unavailable: 'Vault Economy provider 不可用'
+    provider-probe-failure: 'Vault Economy provider 探测异常: {detail}'
+    invalid-amount: 'Vault 返回了无效金额'
+    main-thread-required: 'Vault Economy API 必须在 Paper 主线程调用'
+    # 清算服务结果；{account}=清算账户名，{detail}=Vault 或第三方返回的安全详情。
+    settlement:
+      account-resolve-failure: '无法解析 Vault 离线清算账户: {detail}'
+      scale-read-failure: '无法读取 Vault 金额精度: {detail}'
+      account-ready: '清算账户已就绪'
+      account-create-failure: 'Vault provider 无法创建或重新读取离线清算账户 {account}'
+      account-initialization-failure: 'Vault 清算账户初始化异常: {detail}'
+      balance-read-failure: 'Vault 清算余额读取异常: {detail}'
+      account-available: 'Vault 清算账户可用'
+      account-unavailable: 'Vault 清算账户不可用: {detail}'
+      player-debit-failure: '玩家扣款失败: {detail}'
+      settlement-credit-failure: '清算账户入账失败: {detail}'
+      funds-transferred: '资金已转入清算账户'
+      player-debit-compensated: '玩家扣款已自动补偿'
+      player-compensation-failure: '玩家自动补偿失败: {detail}'
+      settlement-debit-failure: '清算账户扣款失败: {detail}'
+      funds-returned: '资金已返还玩家'
+      player-credit-failure: '玩家返还入账失败: {detail}'
+      account-adjusted: '清算账户调整完成'
+      account-adjustment-failure: '清算账户调整失败: {detail}'
+      account-not-available: 'Vault 离线清算账户不可用: {account}'
+      account-check-failure: 'Vault 离线清算账户检查异常: {detail}'
+  # 捐款自动补偿调用产生的诊断详情；{detail}=外部余额调用异常详情。
+  donation:
+    compensation-call-failure: 'Vault 自动补偿调用异常: {detail}'
+  # 公共 Buff 运行时技术详情；{attribute}=属性标识，{amount}=最大生命值数值。
+  buff:
+    missing-attribute: '玩家缺少 Attribute: {attribute}'
+    max-health-missing: '玩家缺少 MAX_HEALTH Attribute'
+    max-health-invalid: '玩家 MAX_HEALTH Attribute 数值无效: {amount}'
+  # TownBonusRuntime 统一诊断报告中的固定行；无占位符。
+  bonus:
+    settlement-account-unavailable: 'Vault ERROR 清算账户不可读取'
+    quick-shop-reconciliation-incomplete: 'QuickShop reconciliation=INCOMPLETE（历史不可用或超过 1000 条上限）'
+  # WorldBorder 反射适配器诊断；这些文本可能作为选址失败详情或启动门禁详情显示。
+  world-border:
+    main-thread-required: 'WorldBorder API 必须在 Paper 主线程调用'
+    plugin-disabled: 'WorldBorder 未启用'
+    api-capability-missing: 'WorldBorder 缺少 Config.Border/BorderData.insideBorder 能力'
+    invalid-return: 'WorldBorder insideBorder 返回值无效'
+    api-inaccessible: 'WorldBorder API 不可访问'
+    api-call-failed: 'WorldBorder API 调用失败'
+    api-load-failure: 'WorldBorder API 无法加载'
+  # 在线备份运行约束与技术诊断。
+  backup:
+    main-thread-required: 'SQLite 备份不能在 Paper 主线程执行'
+    filename-exhausted: '同一秒内备份任务过多，无法分配唯一文件名'
+    sha256-unavailable: '运行环境缺少 SHA-256'
+
+# GlobalMarketPlus 事件处理日志；{detail}=异常详情，同类错误只记录一次。
+log:
+  # 插件停服期间的资源清理和异步任务等待；{detail}=异常详情，{active}=未结束任务数，{player}=玩家 UUID。
+  lifecycle:
+    ui-close-failure: '停服关闭玩家界面失败: {detail}'
+    ui-viewer-close-failure: '关闭玩家小镇界面失败 {player}: {detail}'
+    async-shutdown-timeout: '等待异步任务结束超时，仍有 {active} 个任务；将继续关闭数据源。请检查阻塞的第三方 API。'
+    beacon-cleanup-failure: '停服清理信标效果失败: {detail}'
+    buff-cleanup-failure: '停服清理公共 Buff 失败: {detail}'
+    database-close-failure: '关闭 SQLite 数据源失败: {detail}'
+    residence-names-load-failure: '读取系统 Residence 名称清单失败: {detail}'
+    runtime-started: '业务运行时启动完成；玩家入口仅限服务台和小镇手册。'
+    runtime-locked: '{reason}；TianjiTown 所有写功能保持锁定。使用 /townadmin status 查看详情。'
+    sqlite-recovered: 'SQLite 连接已恢复，写操作重新开放。'
+    sqlite-interrupted: 'SQLite 连接中断，写操作已锁定；Residence 保护保持不变。'
+    interrupted-provision-reason: '服务器在 Residence 投影完成前停止，启动时已转为可重试失败状态'
+    interrupted-provisions-recovered: '已恢复 {count} 个中断的建镇流程；申请进入 PROVISION_FAILED，等待管理员重试。'
+    interrupted-provision-recovery-failure: '恢复中断建镇流程失败: {detail}'
+    # 账本历史操作人回填；{playerId}=玩家 UUID，{detail}=异常详情。
+    ledger-actor-name-backfill-failure: '回填账本玩家名失败 {playerId}: {detail}'
+    ledger-actor-scan-failure: '扫描历史 UUID 操作人失败: {detail}'
+  # 服务台配置登记解析日志；{detail}=异常详情，{key}=缺失整数的配置字段。
+  station:
+    invalid-record: '忽略无效的小镇服务台登记: {detail}'
+    invalid-record-missing-integer: '忽略无效的小镇服务台登记: 缺少整数 {key}'
+  # 建镇审批和领地投影过程日志；{application}=申请 UUID，{time}=事件时间，
+  # {detail}=技术详情，{success}=流程是否完成。
+  provision:
+    approval-started: '建镇审批开始 application={application} at={time}'
+    database-prepared: '建镇数据库准备完成 application={application} at={time}'
+    projection-started: '建镇领地投影开始 application={application} at={time}'
+    refund-failure: '建镇申请数据库写入失败且申请费自动返还失败: {detail}'
+    projection-exception: '建镇领地投影异常 application={application}: {detail}'
+    ui-callback: '建镇 UI 回调 application={application} at={time} success={success}'
+    # 失败申请恢复日志和审计快照；{application}=申请 UUID，{detail}=领地或技术详情，
+    # {reason}/{inspection}=事件发生时的文本快照。
+    recovery-external-residence: '失败申请发现同名外部 Residence，保留外部领地并继续回滚申请数据 application={application}'
+    recovery-projection-cleaned: '失败建镇投影已按受控边界安全清理 application={application}: {detail}'
+    recovery-unlock-reason: '管理员解除失败锁定并要求申请人修改'
+    recovery-cancel-refund-reason: '管理员取消创建失败申请并退款'
+    recovery-force-cleanup-reason: '管理员强制清理创建失败申请'
+    recovery-reason-with-inspection: '{reason}；外部检查={inspection}'
+  # 领地扩张外部投影与恢复日志；{batch}/{expansion}=稳定操作 ID，{cleanup}/{detail}=技术详情。
+  expansion:
+    batch-rollback-failed: '批量扩张外部区域回滚失败 batch={batch}: {cleanup}'
+    recovered: '已恢复领地扩张 {expansion}'
+    recovery-failed: '恢复领地扩张失败 {expansion}: {detail}'
+    batch-recovered: '已恢复批量领地扩张 {batch}'
+    batch-recovery-failed: '恢复批量领地扩张失败 {batch}: {detail}'
+  # TownRuntime 外部资金操作补偿日志；{operation}/{town}=稳定 ID，{detail}=结算详情。
+  external-operation:
+    compensation-auto: '捐款退款暂时失败，已锁定小镇消费并启动自动补偿: operation={operation}, town={town}, error={detail}'
+    compensation-manual: '资金操作需要人工补偿，已锁定小镇消费: operation={operation}, town={town}, error={detail}'
+  # 管理员确认操作日志；{detail}=操作启动异常详情。
+  admin:
+    confirmation-start-failure: '危险操作启动失败: {detail}'
+    # 管理员命令 Tab 补全缓存日志；{detail}=刷新异常详情。
+    completion-cache-restored: '管理员命令补全缓存已恢复。'
+    completion-cache-refresh-failed: '刷新管理员命令补全缓存失败，将继续使用旧缓存: {detail}'
+    # 删除小镇时 Residence 清理失败日志；{town}=小镇名，{residence}=领地名，{detail}=技术详情。
+    town-delete-residence-failure: '删除小镇后 Residence 移除失败 {town}/{residence}: {detail}'
+    # 成员角色调整写入审计记录的事件快照；无占位符。
+    member-role-change-reason: '管理员调整成员角色'
+    # 治理配置无效时拒绝创建投票的日志；{detail}=配置校验详情。
+    governance-vote-creation-rejected: '拒绝创建治理投票: {detail}'
+  # 插件边界内的异步与主线程回调；{detail}=异常详情。
+  scheduler:
+    async-task-failure: '异步任务异常，已在插件边界隔离: {detail}'
+    main-thread-callback-failure: '主线程回调异常，已在插件边界隔离: {detail}'
+    main-thread-callback-submit-failure: '主线程回调提交失败: {detail}'
+    lifecycle-stopped: '插件生命周期已停止'
+    quick-shop-tax-refresh-failure: '刷新 QuickShop 税率内存映射失败: {detail}'
+    # 周期任务失败日志；{detail}=异常详情，同一任务的持续失败只记录首次。
+    periodic:
+      sqlite-recovery-failure: 'SQLite 恢复检查失败，后续周期仍会继续尝试: {detail}'
+      residence-reconciliation-failure: 'Residence 对账失败，后续周期仍会继续尝试: {detail}'
+      vote-settlement-failure: '投票结算失败，后续周期仍会继续尝试: {detail}'
+      settlement-reconciliation-failure: '清算对账失败，后续周期仍会继续尝试: {detail}'
+      territory-bonus-index-refresh-failure: '领地加成索引刷新失败，后续周期仍会继续尝试: {detail}'
+      beacon-effect-refresh-failure: '信标效果刷新失败，后续周期仍会继续尝试: {detail}'
+      refund-counter-cleanup-failure: '返还计数清理失败，后续周期仍会继续尝试: {detail}'
+      startup-diagnostic-failure: '启动诊断失败，后续周期仍会继续尝试: {detail}'
+      scheduled-backup-failure: '定时备份失败，后续周期仍会继续尝试: {detail}'
+  # TownBonusRuntime 建筑返还、信标、缓存和备份日志；{detail}=异常或结果详情，{file}=备份数据库路径。
+  bonus:
+    index-refresh-failure: '刷新领地加成缓存失败，将继续使用旧快照: {detail}'
+    refund-counter-cleanup-failure: '清理建筑返还周计数失败: {detail}'
+    scheduled-backup-success: '{detail}；文件={file}'
+    beacon-refresh-object-failure: '信标刷新遇到已失效的玩家、世界或依赖对象，已跳过该对象: {detail}'
+    beacon-record-object-failure: '信标对象在延迟回调前已失效，已跳过记录: {detail}'
+    beacon-cleanup-object-failure: '清理托管信标效果时对象已失效: {detail}'
+    diagnostic-report-write-failure: '写入一键诊断报告失败: {detail}'
+  global-market-plus:
+    transaction-failure: 'GlobalMarketPlus 成交收入税处理失败: {detail}；同类后续错误将被抑制'
+    auction-failure: 'GlobalMarketPlus 拍卖收入税处理失败: {detail}；同类后续错误将被抑制'
+    main-thread-failure: 'GlobalMarketPlus 主线程收入税处理失败: {detail}；同类后续错误将被抑制'
+    boundary-failure: 'GlobalMarketPlus 事件边界捕获异常: {detail}；同类后续错误将被抑制'
+    income-tax-debit-failure: 'GlobalMarketPlus 收入税扣取失败，未写入小镇账本: {detail}'
+    subsidy-settlement-failure-refunded: 'GlobalMarketPlus 税收服务器补贴入账失败，税款已返还玩家: {detail}'
+    subsidy-settlement-failure-refund-failed: 'GlobalMarketPlus 税收服务器补贴入账失败，税款返还玩家也失败: {detail}'
+  # Jobs 事件处理日志；{detail}=异常详情，同类错误只记录一次。
+  jobs:
+    payment-failure: 'Jobs 收入税处理失败，已保留玩家原始收入: {detail}；同类后续错误将被抑制'
+    await-interrupted: '等待 Jobs 主线程税务结算时被中断'
+    await-timeout: '等待 Jobs 主线程税务结算超时'
+    main-thread-failure: 'Jobs 主线程税务结算失败'
+    boundary-failure: 'Jobs 事件边界捕获异常: {detail}；同类后续错误将被抑制'
+    income-tax-settlement-failure: 'Jobs 收入税转入清算账户失败，已保留玩家原始收入: {detail}'
+  # 外部收入税账本写入重试日志；{source}=稳定来源标识，{businessKey}=业务键，{detail}=异常详情。
+  external-income-tax:
+    ledger-write-failure: '{source} 税款 {businessKey} 已进入清算账户但账本暂未写入，将自动重试: {detail}'
+  # QuickShop 税务事件和 TownRuntime 入账日志；{detail}=异常详情，{businessKey}=交易业务键。
+  quick-shop:
+    tax-event-failure: 'QuickShop 税率事件处理失败: {detail}；同类后续错误将被抑制'
+    transaction-account-failure: 'QuickShop 税款账户切换失败: {detail}；同类后续错误将被抑制'
+    success-settlement-failure: 'QuickShop 成功交易入账事件处理失败: {detail}；同类后续错误将被抑制'
+    boundary-failure: 'QuickShop 事件边界捕获异常: {detail}；同类后续错误将被抑制'
+    subsidy-quota-exhausted: '本周期补贴额度已用完'
+    subsidy-settlement-failure: 'QuickShop 税收服务器补贴入账失败，税款账本暂不写入: {detail}'
+    tax-ledger-write-failure: 'QuickShop 税款 {businessKey} 已进入清算账户但账本暂未写入，将自动重试: {detail}'
+  # Residence 命令、成员同步和删除保护日志；{detail}=异常详情，{residence}=领地名，
+  # {town}=小镇 UUID，同类错误只记录一次。
+  residence:
+    member-sync-failure: '同步 Residence 成员失败 town={town}: {detail}'
+    command-guard-failure: 'Residence 命令保护异常，已按失败关闭策略拒绝命令: {detail}；同类后续错误将被抑制'
+    non-player-deletion-cancelled: '系统领地删除保护事件已取消；来源=非玩家，领地={residence}'
+    deletion-recovery-failure: 'Residence 删除后的对账恢复失败: {detail}；同类后续错误将被抑制'
+    deletion-guard-failure: 'Residence 删除保护异常，已按失败关闭策略取消删除: {detail}；同类后续错误将被抑制'
+    # TownRuntime 周期对账和自动修复；{town}=小镇 UUID，{detail}=检查或技术详情，
+    # {inspection}/{repair}=自动修复前后的结构化结果详情。
+    reconciliation-failure: 'Residence 对账失败 {town}: {detail}'
+    reconciliation-difference: 'Residence 对账发现异常 {town}: {detail}；正在读取最新 SQLite 记录修复。'
+    reconciliation-sqlite-read-failure: 'Residence 对账读取 SQLite 失败: {detail}'
+    automatic-repair-cancelled: 'Residence 自动修复已取消，小镇数据库版本已不存在或非 ACTIVE: {town}'
+    automatic-repair-delayed: 'Residence 自动修复已延后，小镇仍有未完成的领地投影: {town}'
+    automatic-repair-sqlite-read-failure: 'Residence 自动修复读取最新 SQLite 记录失败 {town}: {detail}'
+    automatic-repair-api-failure: 'Residence 对账自动修复失败 {town}: {detail}'
+    automatic-repair-consistent: 'Residence 投影在读取最新 SQLite 记录后已一致 {town}: {detail}'
+    automatic-repair-completed: 'Residence 对账发现异常并已依照最新 SQLite 记录自动修复 {town}: {detail}'
+    automatic-repair-failed: 'Residence 对账自动修复失败 {town}: 检查={inspection}，修复={repair}'
+    # 传送点和领地对账审计快照；{detail}=技术或结果详情。
+    teleport-point-audit-success: '镇长设置领地传送点'
+    teleport-point-audit-failure: '设置传送点失败'
+    teleport-point-audit-write-failure: '写入传送点审计失败: {detail}'
+    reconciliation-audit-success: '对账完成'
+    reconciliation-audit-failure: '对账失败'
+    reconciliation-audit-write-failure: '写入领地对账审计失败: {detail}'
+  # Vault 清算调用日志；{detail}=第三方异常详情，同类空结果和异常结果需要人工复核。
+  vault:
+    settlement:
+      player-debit-ambiguous: 'Vault 玩家扣款调用异常，资金结果需要人工复核: {detail}'
+      settlement-credit-ambiguous: 'Vault 清算账户入账调用异常，资金结果需要人工复核: {detail}'
+      player-compensation-ambiguous: 'Vault 玩家自动补偿调用异常，资金结果需要人工复核: {detail}'
+      player-refund-ambiguous: 'Vault 玩家退款调用异常，资金结果需要人工复核: {detail}'
+      settlement-debit-ambiguous: 'Vault 清算账户扣款调用异常，资金结果需要人工复核: {detail}'
+      player-credit-ambiguous: 'Vault 玩家返还入账调用异常，资金结果需要人工复核: {detail}'
+      settlement-compensation-ambiguous: 'Vault 清算账户自动补偿调用异常，资金结果需要人工复核: {detail}'
+      account-adjustment-ambiguous: 'Vault 清算账户调整调用异常，资金结果需要人工复核: {detail}'
+      empty-response: 'Vault 调用返回结果为空，资金结果需要人工复核'
+  # 捐款自动补偿调用日志；{operation}=操作 ID，{attempt}/{attempts}=尝试次数，
+  # {external}/{required}=最小货币单位余额，{detail}=技术详情。
+  donation:
+    compensation-resolved: '玩家扣款已由自动补偿恢复'
+    compensation-retry-failed: '捐款自动补偿第 {attempt} 次尝试失败: operation={operation}, error={detail}'
+    compensation-finalization-failed: '捐款外部余额已恢复，但第 {attempt} 次 SQLite 收尾失败: operation={operation}, error={detail}'
+    compensation-recovered: '捐款自动补偿已恢复玩家余额，正在复核消费锁: operation={operation}, attempts={attempts}'
+    compensation-exhausted: '捐款自动补偿达到重试上限，消费锁保持不变: operation={operation}, error={detail}'
+    settlement-balance-read-failure: '自动补偿后的清算余额读取失败，消费锁保持不变: operation={operation}, error={detail}'
+    settlement-shortfall: '自动补偿完成但清算仍有短款，消费锁保持不变: operation={operation}, external={external}, required={required}'
+    settlement-reconciliation-failure: '自动补偿后的清算复核失败，消费锁保持不变: operation={operation}, error={detail}'
+    # 成员捐款操作写入账本时使用的事件原因快照；无占位符。
+    operation-reason: '成员捐款'
+  # 周期清算账户对账日志；{external}/{required}=已格式化的金额，{detail}=技术详情。
+  settlement:
+    balance-read-failure: '读取 Vault 清算账户失败: {detail}'
+    shortfall: '清算账户少于小镇分账负债，所有小镇消费已锁定: 外部={external}，应有={required}'
+    reconciliation-failure: '清算账户对账失败: {detail}'
+  # 税率修改写入审计日志时使用的事件原因快照；无占位符。
+  tax:
+    rate-change-reason: '镇长通过公共资金界面修改'
+  # SitePolicy 领地预览和黑名单解析日志；{detail}=异常详情，{path}=配置路径。
+  site:
+    preview-invalidated: '领地预览对象已失效，任务已结束: {detail}'
+    preview-cancel-failed: '取消领地预览任务失败: {detail}'
+    blacklist-invalid-area: '{path} 存在无效区域: {detail}'
+  # 公共 Buff 运行时日志；{player}=玩家 UUID，{detail}=异常详情，{attribute}=属性标识，
+  # {actual}=当前 modifier 摘要，{amount}=期望数值，{operation}=属性操作。
+  buff:
+    refresh-failure: '刷新玩家公共 Buff 失败 {player}: {detail}'
+    refresh-check-failure: '检查玩家公共 Buff 失败 {player}，将在稍后重试: {detail}'
+    # 该原因在补偿成功时写入账本，使用写入时的文案快照；{detail}=应用异常详情。
+    refund-reason: 'Buff 应用失败自动补偿: {detail}'
+    expiration-schedule-failure: '安排公共 Buff 到期检查失败 {player}: {detail}'
+    expiration-cleanup-failure: '公共 Buff 到期清理失败 {player}，将在稍后重试: {detail}'
+    expiration-cancel-failure: '取消公共 Buff 到期检查失败 {player}: {detail}'
+    attribute-repair-missing: '检测到玩家 {player} 的 Buff Attribute 异常（{attribute}，实际 缺失，期望 amount={amount}, operation={operation}），已自动修复'
+    attribute-repair-mismatch: '检测到玩家 {player} 的 Buff Attribute 异常（{attribute}，实际 {actual}，期望 amount={amount}, operation={operation}），已自动修复'
+    cleanup-invalid-object: '清理玩家公共 Buff 时对象已失效: {detail}；同类后续错误将被抑制'
 
 # Dialog 界面文本。
 dialog:
@@ -360,6 +948,44 @@ dialog:
     select-again: '&e重新选择'
     reopen: '&e重新打开'
     continue-processing: '&a继续'
+
+  # 主入口和主菜单文本；{town}=小镇名称，{balance}=已格式化公共资金，{taxRate}=已格式化税率，
+  # {count}=当前数量，{maximum}=配置上限，{message}=已过滤颜色代码的管理员意见。
+  main:
+    loading-title: '&6小镇服务 · 正在读取'
+    title: '&6小镇服务'
+    town-summary: '&6{town}'
+    finance-summary: '&7公共资金: &f{balance} &8| &7税率: &f{taxRate}'
+    territory-summary: '&7领地单元: &f{count}/{maximum}'
+    no-pending: '&7当前没有待办事项'
+    town-info: '&e小镇资料'
+    finance: '&6公共资产'
+    governance: '&e成员管理'
+    pending: '&7待办中心'
+    pending-count: '&b待办中心 · {count}'
+    personal: '&f个人与帮助'
+    application-title: '&6小镇申请'
+    application-incomplete: '&7请继续完成申请流程'
+    application-review: '&c管理员意见: {message}'
+    application-continue: '&e继续小镇申请'
+    no-town: '&7你当前尚未加入任何小镇'
+    no-town-actions: '&7可以申请建立小镇或加入现有小镇'
+    create-application: '&a申请建立小镇'
+    join-application: '&a申请加入小镇'
+    my-join-applications: '&e我的入镇申请'
+    handbook: '&6领取小镇手册'
+    admin-review: '&7管理员审核'
+    admin-review-count: '&e管理员审核 · {count}'
+
+  # 成员治理菜单文本；{town}=小镇名称，{count}=待处理申请数量。
+  governance:
+    title: '&6成员管理'
+    town-summary: '&7小镇: &f{town}'
+    pending-joins: '&7待处理入镇申请: &f{count}'
+    members: '&e小镇成员'
+    applications: '&7入镇申请'
+    applications-count: '&b入镇申请 · {count}'
+    visitors: '&e访客管理'
 
   votes:
     type-kick: '&f投票移除成员'
@@ -421,8 +1047,21 @@ dialog:
     identity: '&7身份: &f{role}'
     current-identity: '&7你的身份: &f{role}'
 
+  # 访客管理菜单文本；{count}=访客数量，{player}=已过滤颜色代码的玩家名，{page}=从 1 开始的页码。
   visitor:
     current-count: '&7当前访客: &f{count}'
+    title: '&6访客管理'
+    list: '&e访客列表'
+    invite: '&a邀请'
+    entry-player: '&f{player}'
+    invite-player: '&e{player}'
+    list-empty: '&7暂无访客'
+    list-empty-hint: '&7可返回访客管理页面邀请在线玩家'
+    no-candidates: '&7没有可邀请的在线玩家'
+    previous: '&e上一页'
+    next: '&e下一页'
+    list-title: '&6小镇访客 · 第 {page} 页'
+    invite-title: '&6邀请访客 · 第 {page} 页'
 
   town:
     residence-name: '&7小镇领地名: {name}'
@@ -707,6 +1346,56 @@ dialog:
     invitation-rejected-message: '&f你已拒绝成为该小镇的初始成员。'
     operation-failed-title: '&6操作未完成'
 
+  # 管理员建镇流程结果详情和恢复建议；{detail}=外部依赖或校验详情，{cleanup}=回滚详情。
+  provision:
+    success-detail: '&f小镇创建完成。'
+    busy-recovery-action: '&7返回审核列表后刷新状态'
+    timeout-detail: '&f服务器在限定时间内没有返回最终结果。'
+    timeout-recovery-action: '&7返回审核列表并刷新状态；不要重复扣费'
+    storage-unavailable-detail: '&fSQLite 当前不可用。'
+    storage-unavailable-recovery-action: '&7恢复数据库后返回审核列表重试'
+    busy-detail: '&f该申请已有创建流程正在执行。'
+    application-not-found-detail: '&f申请不存在'
+    residence-check-recovery-action: '&7检查 Residence 和申请资料后返回审核列表重试'
+    lifecycle-start-failed-detail: '&f插件生命周期已停止，未能启动建镇流程。'
+    lifecycle-recovery-action: '&7重新启动服务端后返回审核列表重试'
+    refresh-application-action: '&7返回审核列表刷新申请状态后重试'
+    site-validation-failed-detail: '&f批准前选址复核失败: {detail}'
+    site-validation-recovery-action: '&7要求申请人修改选址后重新提交'
+    residence-name-conflict-detail: '&f领地名与已存在的领地重复。'
+    residence-name-conflict-recovery-action: '&7解除锁定并要求申请人修改小镇代码'
+    fee-failed-detail: '&f申请费扣取失败: {detail}'
+    fee-failed-recovery-action: '&7确认申请人余额后返回审核列表重试'
+    data-write-recovery-action: '&7修正申请资料或外部依赖后返回审核列表重试'
+    preparation-write-failed-detail: '&f插件生命周期已停止，未能写入建镇准备状态。'
+    projection-start-failed-detail: '&f插件生命周期已停止，未能开始领地投影。'
+    result-read-failed-detail: '&f插件生命周期已停止，无法读取建镇结果。'
+    projection-save-failed-detail: '&f插件生命周期已停止，无法保存领地投影结果。'
+    projection-result-recovery-action: '&7重新启动服务端后返回审核列表刷新状态'
+    residence-retry-action: '&7检查 Residence 后返回审核列表重试'
+    default-teleport-world-unloaded-detail: '&f默认传送点世界未加载'
+    default-teleport-height-invalid-detail: '&f初始领地中心没有安全的默认传送高度'
+    default-teleport-space-invalid-detail: '&f初始领地中心没有安全的默认落脚空间'
+    default-teleport-failed-rolled-back-detail: '&f默认传送点设置失败: {detail}；新建投影已回滚'
+    default-teleport-failed-rollback-failed-detail: '&f默认传送点设置失败: {detail}；新建投影回滚失败: {cleanup}'
+    land-created-with-default-teleport-detail: '&f{detail}；已设置安全默认传送点'
+    retry-approval-action: '&7可重试批准，或解除锁定后要求申请人修改'
+    refresh-state-action: '&7返回审核列表刷新状态后重试'
+    # 失败申请恢复结果；{detail}=技术或领地详情。
+    recovery-refresh-action: '&7返回审核列表刷新状态'
+    recovery-inspection-failed-detail: '&f无法验证失败申请的 Residence 投影: {detail}'
+    recovery-verify-action: '&7Residence 恢复后再次执行安全恢复'
+    recovery-healthy-projection-detail: '&f检测到边界和所有权均正确的受控 Residence 投影，拒绝解锁。'
+    recovery-healthy-projection-action: '&7先执行领地对账并完成原创建流程'
+    recovery-control-check-failed-detail: '&f无法确认异常 Residence 是否属于系统: {detail}'
+    recovery-cleanup-failed-detail: '&f检测到异常 Residence 投影，且无法安全移除: {detail}'
+    recovery-cleanup-api-failed-detail: '&f检测到异常 Residence 投影，且无法安全移除: 清理失败投影时 Residence API 异常: {detail}'
+    recovery-cleanup-action: '&7请先人工恢复或移除该受控投影后再执行恢复'
+    recovery-refund-failed-detail: '&f临时数据已安全清理，但申请费退款失败: {detail}'
+    recovery-refund-action: '&7申请费保持 REFUND_PENDING；修复 Vault 后重试退款'
+    recovery-refund-confirmation-failed-detail: '&fVault 已退款但数据库确认失败: {detail}'
+    recovery-refund-confirmation-action: '&7停止重复退款并由管理员执行清算对账'
+
   # 税率设置及保存结果。
   tax:
     title: '&6设置收入税率'
@@ -745,6 +1434,7 @@ dialog:
       other-town-detail: '属于其他小镇：{town}'
       capacity-detail: '可拥有的领地区域已达到上限'
       expandable-detail: '可使用公共资金扩张'
+      unavailable-detail: '当前区域暂时不可扩张'
       not-adjacent-detail: '只能扩张与已有领地边缘相连的区域'
       grid: '&7区域坐标: {x},{z}'
       price: '&6价格: {price}'
@@ -798,6 +1488,7 @@ dialog:
     add-tooltip: '&7添加后会显示在规则列表中'
     delete: '&c删除第 {index} 条'
     delete-tooltip: '&c删除第 {index} 条规则；其余规则会自动重新编号'
+    delete-request-invalid: '&c规则删除请求无效，请刷新界面'
     limit-reached: '&f小镇规则最多 50 条。'
     refresh-title: '&6规则已更新'
     refresh-message: '&f规则已被其他操作修改，请刷新后再试。'

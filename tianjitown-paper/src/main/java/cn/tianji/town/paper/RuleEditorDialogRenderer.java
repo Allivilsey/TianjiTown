@@ -4,8 +4,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BiFunction;
 
 /**
  * Stable layout model for a rule editor dialog. Rules are rendered in the dialog body, before
@@ -16,13 +18,26 @@ final class RuleEditorDialogRenderer {
     static final int PREVIEW_WIDTH = 250;
     static final int DELETE_WIDTH = 28;
     static final int ADD_WIDTH = 130;
+    private static final String DISPLAY_INDEX_INVALID =
+            "validation.rule-editor.display-index";
+    private static final String PAGE_VERSION_INVALID =
+            "validation.rule-editor.page-version";
+    private static final String RULE_INDEX_INVALID = "validation.rule-editor.rule-index";
+    private static final String DELETE_REQUEST_INVALID = "dialog.rules.delete-request-invalid";
 
     private RuleEditorDialogRenderer() {
     }
 
     static Layout layout(UUID pageId, long pageVersion, List<String> rules) {
+        return layout(pageId, pageVersion, rules, RuleEditorDialogRenderer::fallbackMessage);
+    }
+
+    static Layout layout(UUID pageId, long pageVersion, List<String> rules,
+                         BiFunction<String, Map<String, ?>, String> messageResolver) {
         Objects.requireNonNull(pageId, "pageId");
         Objects.requireNonNull(rules, "rules");
+        Objects.requireNonNull(messageResolver, "messageResolver");
+        requireNonNegative(pageVersion, PAGE_VERSION_INVALID, messageResolver);
         List<Row> rows = new ArrayList<>(rules.size());
         for (int index = 0; index < rules.size(); index++) {
             String rule = Objects.requireNonNull(rules.get(index), "rule");
@@ -30,6 +45,14 @@ final class RuleEditorDialogRenderer {
                     new DeleteTarget(pageId, pageVersion, index, rule)));
         }
         return new Layout(List.copyOf(rows));
+    }
+
+    private static void requireNonNegative(long value, String messageKey,
+                                           BiFunction<String, Map<String, ?>, String>
+                                                   messageResolver) {
+        if (value < 0) {
+            throw new IllegalArgumentException(resolveMessage(messageResolver, messageKey));
+        }
     }
 
     record Layout(List<Row> rows) {
@@ -59,7 +82,7 @@ final class RuleEditorDialogRenderer {
     record Row(int displayIndex, String rule, DeleteTarget deleteTarget) {
         Row {
             if (displayIndex < 1) {
-                throw new IllegalArgumentException("displayIndex 必须从 1 开始");
+                throw new IllegalArgumentException(DISPLAY_INDEX_INVALID);
             }
             rule = Objects.requireNonNull(rule, "rule");
             deleteTarget = Objects.requireNonNull(deleteTarget, "deleteTarget");
@@ -74,10 +97,10 @@ final class RuleEditorDialogRenderer {
         DeleteTarget {
             pageId = Objects.requireNonNull(pageId, "pageId");
             if (pageVersion < 0) {
-                throw new IllegalArgumentException("pageVersion 不能为负数");
+                throw new IllegalArgumentException(PAGE_VERSION_INVALID);
             }
             if (ruleIndex < 0) {
-                throw new IllegalArgumentException("ruleIndex 不能为负数");
+                throw new IllegalArgumentException(RULE_INDEX_INVALID);
             }
             expectedRule = Objects.requireNonNull(expectedRule, "expectedRule");
         }
@@ -89,17 +112,54 @@ final class RuleEditorDialogRenderer {
         }
 
         static DeleteTarget decode(String value) {
+            return decode(value, RuleEditorDialogRenderer::fallbackMessage);
+        }
+
+        static DeleteTarget decode(String value,
+                                   BiFunction<String, Map<String, ?>, String> messageResolver) {
+            Objects.requireNonNull(messageResolver, "messageResolver");
             String[] parts = Objects.requireNonNull(value, "value").split(":", 4);
             if (parts.length != 4 || parts[3].isEmpty()) {
-                throw new IllegalArgumentException("规则删除请求无效，请刷新界面");
+                throw invalidDeleteRequest(messageResolver);
             }
             try {
                 return new DeleteTarget(UUID.fromString(parts[0]), Long.parseLong(parts[1]),
                         Integer.parseInt(parts[2]), new String(Base64.getUrlDecoder()
                         .decode(parts[3]), StandardCharsets.UTF_8));
             } catch (IllegalArgumentException exception) {
-                throw new IllegalArgumentException("规则删除请求无效，请刷新界面", exception);
+                throw invalidDeleteRequest(messageResolver, exception);
             }
         }
+
+        private static IllegalArgumentException invalidDeleteRequest(
+                BiFunction<String, Map<String, ?>, String> messageResolver) {
+            return invalidDeleteRequest(messageResolver, null);
+        }
+
+        private static IllegalArgumentException invalidDeleteRequest(
+                BiFunction<String, Map<String, ?>, String> messageResolver,
+                IllegalArgumentException cause) {
+            String message = resolveMessage(messageResolver, DELETE_REQUEST_INVALID);
+            return cause == null
+                    ? new IllegalArgumentException(message)
+                    : new IllegalArgumentException(message, cause);
+        }
+    }
+
+    private static String resolveMessage(
+            BiFunction<String, Map<String, ?>, String> messageResolver, String key) {
+        try {
+            String message = messageResolver.apply(key, Map.of());
+            if (message != null && !message.isBlank()) {
+                return message;
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // Validation still needs a stable message key if the message file is unavailable.
+        }
+        return fallbackMessage(key, Map.of());
+    }
+
+    static String fallbackMessage(String key, Map<String, ?> placeholders) {
+        return key;
     }
 }
