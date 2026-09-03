@@ -16,14 +16,14 @@ record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, String se
     private static final int MINIMUM_MONEY_SCALE = 0;
     private static final int MAXIMUM_MONEY_SCALE = 8;
     private static final String SETTLEMENT_ACCOUNT_REQUIRED =
-            "validation.economy.settlement-account-required";
+            "validation.common.value-required";
     private static final String MONEY_SCALE_RANGE = "validation.economy.money-scale-range";
     private static final String EXPANSION_COST_POSITIVE =
             "validation.economy.expansion-cost-positive";
     private static final String WEEKLY_SUBSIDY_LIMIT_NEGATIVE =
-            "validation.economy.weekly-subsidy-limit-negative";
+            "validation.common.non-negative";
     private static final String TWELVE_HOUR_SUBSIDY_LIMIT_NEGATIVE =
-            "validation.economy.twelve-hour-subsidy-limit-negative";
+            "validation.common.non-negative";
     private static final String TWELVE_HOUR_LIMIT_EXCEEDS_WEEKLY =
             "validation.economy.twelve-hour-limit-exceeds-weekly";
     private static final String EXPANSION_COST_OVERFLOW =

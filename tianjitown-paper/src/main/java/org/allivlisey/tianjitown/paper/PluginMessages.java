@@ -13,6 +13,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.List;
 import java.util.Objects;
 
 final class PluginMessages {
@@ -22,6 +23,111 @@ final class PluginMessages {
             "TT-MESSAGES-BOOTSTRAP-RESOURCE-READ-FAILED";
     private static final String BOOTSTRAP_MISSING_MESSAGE =
             "TT-MESSAGES-MISSING-KEY: {key}";
+    /** Canonical key -> pre-merge keys accepted from existing user messages.yml files. */
+    private static final Map<String, List<String>> LEGACY_ALIASES = Map.ofEntries(
+            Map.entry("dialog.common.previous", List.of("dialog.votes.previous",
+                    "dialog.town-members.previous", "dialog.visitor.previous",
+                    "dialog.join.previous", "dialog.town-join.previous",
+                    "dialog.admin.previous", "dialog.ledger.previous")),
+            Map.entry("dialog.common.next", List.of("dialog.votes.next",
+                    "dialog.town-members.next", "dialog.visitor.next", "dialog.join.next",
+                    "dialog.town-join.next", "dialog.admin.next", "dialog.ledger.next")),
+            Map.entry("dialog.common.expires", List.of("dialog.votes.expires",
+                    "dialog.votes.entry.deadline", "dialog.tooltip.votes.expires",
+                    "dialog.tooltip.votes.entry.deadline", "dialog.tooltip.my-join.expires",
+                    "dialog.tooltip.town-join.entry-expires")),
+            Map.entry("dialog.votes.type-kick", List.of("dialog.tooltip.votes.type-kick")),
+            Map.entry("dialog.votes.type-replace-mayor", List.of(
+                    "dialog.tooltip.votes.type-replace-mayor")),
+            Map.entry("dialog.votes.status-open", List.of("dialog.tooltip.votes.status-open")),
+            Map.entry("dialog.votes.status-passed", List.of("dialog.tooltip.votes.status-passed")),
+            Map.entry("dialog.votes.status-rejected", List.of("dialog.tooltip.votes.status-rejected")),
+            Map.entry("dialog.votes.status-cancelled", List.of("dialog.tooltip.votes.status-cancelled")),
+            Map.entry("dialog.votes.approve", List.of("dialog.tooltip.votes.approve")),
+            Map.entry("dialog.votes.reject", List.of("dialog.tooltip.votes.reject")),
+            Map.entry("dialog.votes.cancel", List.of("dialog.tooltip.votes.cancel")),
+            Map.entry("dialog.votes.target", List.of("dialog.tooltip.votes.target")),
+            Map.entry("dialog.votes.voters", List.of("dialog.tooltip.votes.voters")),
+            Map.entry("dialog.votes.threshold", List.of("dialog.tooltip.votes.threshold")),
+            Map.entry("dialog.votes.tally", List.of("dialog.tooltip.votes.tally")),
+            Map.entry("dialog.votes.already-voted", List.of("dialog.tooltip.votes.already-voted")),
+            Map.entry("dialog.votes.ineligible", List.of("dialog.tooltip.votes.ineligible")),
+            Map.entry("dialog.votes.entry.approve-count", List.of(
+                    "dialog.tooltip.votes.entry.approve-count")),
+            Map.entry("dialog.votes.entry.oppose-count", List.of(
+                    "dialog.tooltip.votes.entry.oppose-count")),
+            Map.entry("dialog.votes.once", List.of("dialog.tooltip.votes.once")),
+            Map.entry("dialog.votes.cancel-only", List.of("dialog.tooltip.votes.cancel-only")),
+            Map.entry("dialog.votes.cancel-irreversible", List.of(
+                    "dialog.tooltip.votes.cancel-irreversible")),
+            Map.entry("validation.common.value-required", List.of("validation.buff.value-required",
+                    "validation.configuration.value-required",
+                    "validation.economy.settlement-account-required",
+                    "validation.bonus.backup-directory-required")),
+            Map.entry("validation.common.range", List.of("validation.runtime-configuration.range",
+                    "validation.bonus.building-refund-weekly-limit-range",
+                    "validation.bonus.building-refund-retention-range",
+                    "validation.bonus.beacon-refresh-interval-range")),
+            Map.entry("validation.common.integer-type", List.of(
+                    "validation.configuration.integer-type",
+                    "validation.runtime-configuration.blacklist-integer-type")),
+            Map.entry("validation.common.non-negative", List.of(
+                    "validation.economy.weekly-subsidy-limit-negative",
+                    "validation.economy.twelve-hour-subsidy-limit-negative")),
+            Map.entry("chat.station.invalid-data", List.of("chat.station.invalid-copy",
+                    "chat.station.invalid-interaction")),
+            Map.entry("dialog.common.application-member-select", List.of(
+                    "dialog.tooltip.application-members.select",
+                    "dialog.application.member-select-hint")),
+            Map.entry("dialog.common.application-member-save", List.of(
+                    "dialog.tooltip.application-members.save", "dialog.application.save-hint")),
+            Map.entry("dialog.common.town", List.of("dialog.transfer.town", "dialog.finance.town",
+                    "dialog.rules.town", "dialog.review.town", "dialog.donation.town")),
+            Map.entry("dialog.common.town-description", List.of("dialog.town.description",
+                    "dialog.join.town-description", "dialog.admin.description",
+                    "dialog.tooltip.join.town-description", "dialog.application.description")),
+            Map.entry("dialog.common.town-code", List.of("dialog.join.town-code",
+                    "dialog.tooltip.join.town-code", "dialog.tooltip.admin.entry-code")),
+            Map.entry("dialog.common.admin-review-message", List.of("dialog.main.application-review",
+                    "dialog.tooltip.main.application-review", "dialog.application.review-message")),
+            Map.entry("dialog.common.name", List.of("dialog.admin.name", "dialog.application.name")),
+            Map.entry("dialog.common.residence-name", List.of("dialog.admin.residence-name",
+                    "dialog.application.residence-name")),
+            Map.entry("dialog.common.applicant", List.of("dialog.admin.applicant",
+                    "dialog.application.applicant")),
+            Map.entry("dialog.common.application-status", List.of("dialog.admin.status-line",
+                    "dialog.application.status-line")),
+            Map.entry("dialog.common.rules", List.of("dialog.join.town-rules", "dialog.admin.rules")),
+            Map.entry("dialog.common.error", List.of("dialog.review.error", "dialog.donation.error")),
+            Map.entry("dialog.common.finance-title", List.of("dialog.main.finance",
+                    "dialog.finance.title", "dialog.finance.summary-title")),
+            Map.entry("dialog.common.town-name", List.of("dialog.main.town-summary",
+                    "dialog.town.summary-title", "dialog.join.town-name")),
+            Map.entry("dialog.common.rules-title", List.of("dialog.rules.title",
+                    "dialog.application.rules-label")),
+            Map.entry("dialog.common.draft-saved-title", List.of("dialog.notice.form-draft-saved-title",
+                    "dialog.notice.draft-saved-title")),
+            Map.entry("dialog.common.handbook", List.of("dialog.main.handbook",
+                    "dialog.personal.handbook")),
+            Map.entry("dialog.common.confirmation-required", List.of(
+                    "dialog.tooltip.member-detail.kick-confirm",
+                    "dialog.tooltip.transfer.accept-confirm")),
+            Map.entry("dialog.common.preview-site", List.of("dialog.tooltip.application.preview-site",
+                    "dialog.tooltip.admin.preview")),
+            Map.entry("dialog.common.join-application-limit", List.of(
+                    "dialog.tooltip.main.my-applications-limit", "dialog.tooltip.join.submit-limit")),
+            Map.entry("dialog.common.irreversible", List.of(
+                    "dialog.tooltip.personal.disband-irreversible",
+                    "dialog.confirmation.irreversible")),
+            Map.entry("dialog.common.unknown-player", List.of("dialog.ledger.unknown-player")),
+            Map.entry("dialog.common.territory-units", List.of("dialog.main.territory-summary",
+                    "dialog.finance.territory-units")),
+            Map.entry("dialog.common.applications-count", List.of(
+                    "dialog.governance.applications-count", "dialog.pending.applications-count")),
+            Map.entry("dialog.common.reject", List.of("dialog.transfer.reject", "dialog.admin.reject")),
+            Map.entry("dialog.common.town-entry-title", List.of("dialog.my-join.entry-title",
+                    "dialog.admin.entry-title")));
+    private static final Map<String, String> LEGACY_TO_CANONICAL = legacyToCanonical();
     private final File file;
     private volatile YamlConfiguration configuration;
 
@@ -33,6 +139,7 @@ final class PluginMessages {
     void reload() {
         // 先读取玩家配置，再挂载 JAR 内默认值；这样升级时无需覆盖玩家已有的自定义文案。
         YamlConfiguration loaded = YamlConfiguration.loadConfiguration(file);
+        migrateLegacyMessages(loaded);
         InputStream resource = PluginMessages.class.getResourceAsStream("/messages.yml");
         if (resource == null) {
             throw new IllegalStateException(BOOTSTRAP_RESOURCE_MISSING);
@@ -47,6 +154,28 @@ final class PluginMessages {
         }
         configuration = loaded;
         validateRequiredMessages();
+    }
+
+    private static void migrateLegacyMessages(YamlConfiguration loaded) {
+        for (Map.Entry<String, List<String>> entry : LEGACY_ALIASES.entrySet()) {
+            if (loaded.isSet(entry.getKey())) {
+                continue;
+            }
+            for (String legacyKey : entry.getValue()) {
+                String value = loaded.getString(legacyKey);
+                if (value != null && !value.isBlank()) {
+                    loaded.set(entry.getKey(), value);
+                    break;
+                }
+            }
+        }
+    }
+
+    private static Map<String, String> legacyToCanonical() {
+        Map<String, String> aliases = new java.util.HashMap<>();
+        LEGACY_ALIASES.forEach((canonical, legacyKeys) -> legacyKeys.forEach(
+                legacy -> aliases.put(legacy, canonical)));
+        return Map.copyOf(aliases);
     }
 
     private void validateRequiredMessages() {
@@ -126,20 +255,18 @@ final class PluginMessages {
                 "dialog.votes.status-open", "dialog.votes.status-passed",
                 "dialog.votes.status-rejected", "dialog.votes.status-cancelled",
                 "dialog.votes.approve", "dialog.votes.reject", "dialog.votes.cancel",
-                "dialog.votes.target", "dialog.votes.threshold", "dialog.votes.tally",
-                "dialog.votes.expires", "dialog.votes.already-voted",
+                "dialog.votes.target", "dialog.votes.voters", "dialog.votes.threshold",
+                "dialog.votes.tally", "dialog.common.expires", "dialog.votes.already-voted",
                 "dialog.votes.ineligible",
-                "dialog.votes.pending", "dialog.votes.previous", "dialog.votes.next",
+                "dialog.votes.pending", "dialog.common.previous", "dialog.common.next",
                 "dialog.votes.back-governance", "dialog.votes.back-list",
                 "dialog.votes.detail-type",
                 "dialog.votes.once", "dialog.votes.cancel-only",
                 "dialog.votes.cancel-irreversible", "dialog.votes.status-line",
                 "dialog.votes.empty", "dialog.votes.empty-hint",
                 "dialog.votes.list-title", "dialog.votes.detail-title",
-                "dialog.tooltip.votes.entry.approve-count",
-                "dialog.tooltip.votes.entry.oppose-count",
-                "dialog.tooltip.votes.entry.deadline")) {
-            String value = configuration.getString(key);
+                "dialog.votes.entry.approve-count", "dialog.votes.entry.oppose-count")) {
+            String value = configuration.getString(canonicalKey(key));
             if (value == null || value.isBlank()) {
                 throw configurationFailure("diagnostic.messages.required-vote-missing",
                         Map.of("key", key));
@@ -154,7 +281,7 @@ final class PluginMessages {
     }
 
     boolean hasMessage(String key) {
-        String value = configuration.getString(key);
+        String value = configuration.getString(canonicalKey(key));
         return value != null && !value.isBlank();
     }
 
@@ -164,7 +291,7 @@ final class PluginMessages {
     }
 
     private void requireMessage(String key) {
-        String value = configuration.getString(key);
+        String value = configuration.getString(canonicalKey(key));
         if (value == null || value.isBlank()) {
             throw configurationFailure("diagnostic.messages.required-message-missing",
                     Map.of("key", key));
@@ -172,7 +299,7 @@ final class PluginMessages {
     }
 
     private void validateRangeFormat(String key) {
-        String format = configuration.getString(key);
+        String format = configuration.getString(canonicalKey(key));
         if (format == null || format.isBlank()) {
             throw configurationFailure("diagnostic.messages.range-format-missing",
                     Map.of("key", key));
@@ -244,7 +371,7 @@ final class PluginMessages {
 
     private String resolve(String key, Map<String, ?> placeholders, String fallback) {
         // 聊天消息和 Dialog 共用占位符替换逻辑，保证重载后的文本行为一致。
-        String message = configuration.getString(key);
+        String message = configuration.getString(canonicalKey(key));
         if (message == null || message.isBlank()) {
             message = fallback;
         }
@@ -253,6 +380,10 @@ final class PluginMessages {
                     String.valueOf(entry.getValue()));
         }
         return message;
+    }
+
+    private static String canonicalKey(String key) {
+        return LEGACY_TO_CANONICAL.getOrDefault(key, key);
     }
 
     void send(CommandSender recipient, String key) {

@@ -22,9 +22,9 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
             "validation.bonus.building-refund-chance-range";
     private static final String INTEGER_RANGE = "validation.bonus.integer-range";
     private static final String REFUND_WEEKLY_LIMIT_RANGE =
-            "validation.bonus.building-refund-weekly-limit-range";
+            "validation.common.range";
     private static final String REFUND_RETENTION_RANGE =
-            "validation.bonus.building-refund-retention-range";
+            "validation.common.range";
     private static final String RESET_ZONE_INVALID =
             "validation.bonus.building-refund-reset-zone-invalid";
     private static final String BLACKLIST_REQUIRED =
@@ -32,14 +32,14 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
     private static final String BLACKLIST_MATERIAL_INVALID =
             "validation.bonus.building-refund-blacklist-material-invalid";
     private static final String BEACON_REFRESH_INTERVAL_RANGE =
-            "validation.bonus.beacon-refresh-interval-range";
+            "validation.common.range";
     private static final String BEACON_WORLDS_REQUIRED =
             "validation.bonus.beacon-worlds-required";
     private static final String DIAGNOSTIC_DAYS_RANGE =
             "validation.bonus.diagnostic-days-range";
     private static final String BACKUP_RANGE = "validation.bonus.backup-range";
     private static final String BACKUP_DIRECTORY_REQUIRED =
-            "validation.bonus.backup-directory-required";
+            "validation.common.value-required";
 
     static TownBonusSettings load(ConfigurationSection config) {
         return load(config, ConfigurationValues::fallbackMessage);

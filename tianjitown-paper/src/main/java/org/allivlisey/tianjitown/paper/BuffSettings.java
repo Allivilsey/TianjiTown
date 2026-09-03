@@ -31,7 +31,7 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs,
     private static final String PURCHASING_ROLES_REQUIRED =
             "validation.buff.purchasing-roles-required";
     private static final String SECTION_REQUIRED = "validation.buff.section-required";
-    private static final String VALUE_REQUIRED = "validation.buff.value-required";
+    private static final String VALUE_REQUIRED = "validation.common.value-required";
     private static final String PRICE_OVERFLOW = "validation.buff.price-overflow";
     private static final String PRICE_RANGE = "validation.buff.price-range";
     private static final String ENUM_UNSUPPORTED = "validation.buff.enum-unsupported";

@@ -769,7 +769,7 @@ class PluginMessagesTest {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
 
         assertEquals("§7小镇领地名: 青石镇",
-                messages.text("dialog.town.residence-name", Map.of("name", "青石镇")));
+                messages.text("dialog.common.residence-name", Map.of("residence", "青石镇")));
     }
 
     @Test
@@ -1466,6 +1466,18 @@ class PluginMessagesTest {
         configuration.save(temporaryDirectory.resolve("messages.yml").toFile());
 
         assertDoesNotThrow(() -> new PluginMessages(temporaryDirectory.toFile()));
+    }
+
+    @Test
+    void migratesLegacyMessageOverridesToTheCanonicalKey() throws Exception {
+        YamlConfiguration configuration = new YamlConfiguration();
+        configuration.set("dialog.votes.previous", "&d旧版上一页");
+        configuration.save(temporaryDirectory.resolve("messages.yml").toFile());
+
+        PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
+
+        assertEquals("§d旧版上一页", messages.text("dialog.common.previous"));
+        assertEquals("§d旧版上一页", messages.text("dialog.votes.previous"));
     }
 
     private void assertInvalidRangeFormat(String key, String format) throws Exception {

@@ -34,6 +34,11 @@ system:
 
 # 建镇申请资料校验消息；{minimum}/{maximum} 为边界，{index} 为规则序号。
 validation:
+  common:
+    value-required: '&c{path} 不能为空'
+    range: '&c{path} 必须在 {minimum}~{maximum} 范围内'
+    integer-type: '&c{path} 必须为整数'
+    non-negative: '&c{path} 不能小于 0'
   application:
     name-length: '&c名称长度必须为 {minimum}~{maximum}'
     name-characters: '&c名称只能包含文字、数字、空格、下划线、连字符和间隔点'
@@ -70,7 +75,6 @@ validation:
     duplicate-key: '&c重复 Buff key: {key}'
     purchasing-roles-required: '&c{path} 至少需要一个角色'
     section-required: '&c{path} 必须为配置节'
-    value-required: '&c{path} 不能为空'
     price-overflow: '&c金额超过 long 次级单位上限'
     price-range: '&c{path} 产生的价格超出次级货币单位范围'
     enum-unsupported: '&c{path} 的值不受支持: {value}'
@@ -78,14 +82,12 @@ validation:
   configuration:
     boolean-type: '&c{path} 必须为布尔值'
     int-range: '&c{path} 超出 int 范围'
-    value-required: '&c{path} 不能为空'
     number-type: '&c{path} 必须为数字'
     finite-number: '&c{path} 必须为有限数'
     text-type: '&c{path} 必须为文本'
     decimal-text: '&c{path} 必须为十进制文本'
     string-list-type: '&c{path} 必须为文本列表'
     list-type: '&c{path} 必须为列表'
-    integer-type: '&c{path} 必须为整数'
     long-range: '&c{path} 必须为 long 范围内的整数'
   # 运行时配置结构、世界引用和范围校验；{path}=配置路径，{minimum}/{maximum}=允许范围，
   # {world}=世界名，{worlds}=多个未加载世界名，数据库目录错误中的 {path}=解析后的目录路径。
@@ -98,16 +100,11 @@ validation:
     blacklist-world-unloaded: '&ctown.site.blacklist 包含未加载世界: {world}'
     blacklist-bounds: '&ctown.site.blacklist 区域最小坐标不能大于最大坐标'
     blacklist-text-required: '&c{path} 必须为非空文本'
-    blacklist-integer-type: '&c{path} 必须为整数'
     blacklist-integer-range: '&c{path} 必须为 int 范围内的整数'
-    range: '&c{path} 必须在 {minimum}~{maximum} 范围内'
   # 经济设置校验消息；{path}=配置路径，{minimum}/{maximum}=允许的金额精度边界。
   economy:
-    settlement-account-required: '&c{path} 不能为空'
     money-scale-range: '&c{path} 必须在 {minimum}~{maximum} 之间'
     expansion-cost-positive: '&c{path} 必须大于 0'
-    weekly-subsidy-limit-negative: '&c{path} 不能小于 0'
-    twelve-hour-subsidy-limit-negative: '&c{path} 不能小于 0'
     twelve-hour-limit-exceeds-weekly: '&c{path} 不能大于每周限额'
     expansion-cost-overflow: '&c金额超过 long 次级货币单位上限'
     expansion-cost-range: '&c{path} 价格超出次级货币单位范围'
@@ -120,16 +117,12 @@ validation:
   bonus:
     building-refund-chance-range: '&c{path} 必须在 (0, 1] 范围内'
     integer-range: '&c{path} 超出整数范围'
-    building-refund-weekly-limit-range: '&c{path} 必须在 {minimum}~{maximum} 范围内'
-    building-refund-retention-range: '&c{path} 必须在 {minimum}~{maximum} 范围内'
     building-refund-reset-zone-invalid: '&c{path} 不是有效时区'
     building-refund-blacklist-required: '&c{path} 至少需要一个方块或分组'
     building-refund-blacklist-material-invalid: '&c建筑返还黑名单材料无效: {value}'
-    beacon-refresh-interval-range: '&c{path} 必须在 {minimum}~{maximum} 范围内'
     beacon-worlds-required: '&c{path} 至少需要一个世界'
     diagnostic-days-range: '&c{path} 必须在 {minimum}~{maximum} 天之间'
     backup-range: '&c定时备份间隔或保留数量超出安全范围'
-    backup-directory-required: '&c{path} 不能为空'
   # 在线备份目录校验；{path}=配置中的相对路径或解析后的目录路径。
   backup:
     absolute-path: '备份目录必须位于插件数据目录内，不能使用绝对路径: {path}'
@@ -213,7 +206,7 @@ chat:
     target-lectern: '&c请看向 6 格内的讲台后重试。'
     target-station: '&c请看向 6 格内的小镇服务台后重试。'
     already-exists: '&e该讲台已经是小镇服务台。'
-    invalid-copy: '&c该讲台数据异常。'
+    invalid-data: '&c该讲台数据异常。'
     restored: '&a已恢复该小镇服务台标记，ID: {id}'
     created: '&a已创建小镇服务台，ID: {id}'
     unregistered: '&c当前讲台未注册为小镇服务台。'
@@ -227,12 +220,10 @@ chat:
     list-empty: '&7当前没有已登记的服务台。'
     public-owner: '公共'
     list-entry: '&e{id} &7{location} · {owner} &8[{status}&8]'
-    list-entry-console: '&e{id} &7{location} · {owner} &8[{status}&8]'
     world-unloaded: '&c服务台所在世界当前未加载。'
     block-changed: '&c服务台方块已变化或登记不一致，无法传送。'
     teleported: '&a已传送至小镇服务台。'
     teleport-failed: '&c无法传送至小镇服务台。'
-    invalid-interaction: '&c该讲台数据异常。'
     status-world-unloaded: '&c世界未加载'
     status-chunk-unloaded: '&7区块未加载'
     status-block-changed: '&c方块已变化'
@@ -991,32 +982,55 @@ dialog:
     # 玩家名称回退；{playerId}=玩家 UUID 去掉连字符后的末 8 位。
     unknown: '未知'
     unknown-player: '未知玩家（{playerId}）'
+    previous: '&e上一页'
+    next: '&e下一页'
+    expires: '&7到期: {time}'
+    town: '&7小镇: {town}'
+    town-name: '&6{town}'
+    town-description: '&7简介: {description}'
+    town-code: '&7小镇代码: {code}'
+    residence-name: '&7小镇领地名: {residence}'
+    name: '&7名称: {name}'
+    applicant: '&7申请人: {applicant}'
+    application-status: '&7申请状态: {status}'
+    admin-review-message: '&c管理员意见: {message}'
+    rules: '&7规则: {rules}'
+    error: '&c{error}'
+    finance-title: '&6公共资产'
+    rules-title: '&6小镇规则'
+    draft-saved-title: '&6草稿已保存'
+    handbook: '&6领取小镇手册'
+    confirmation-required: '&7需要再次确认'
+    preview-site: '&7传送至领地中心并显示火焰边界'
+    join-application-limit: '&7同时最多申请 3 个小镇'
+    irreversible: '&c此操作不可撤销'
+    territory-units: '&7领地单元: &f{count}/{maximum}'
+    applications-count: '&b入镇申请 · {count}'
+    reject: '&c拒绝'
+    town-entry-title: '&e{town}'
+    application-member-select: '&7点击后从在线玩家列表中选择'
+    application-member-save: '&8保存后系统会邀请两名成员确认'
 
   # 主入口和主菜单文本；{town}=小镇名称，{balance}=已格式化公共资金，{taxRate}=已格式化税率，
   # {count}=当前数量，{maximum}=配置上限，{message}=已过滤颜色代码的管理员意见。
   main:
     loading-title: '&6小镇服务 · 正在读取'
     title: '&6小镇服务'
-    town-summary: '&6{town}'
     finance-summary: '&7公共资金: &f{balance} &8| &7税率: &f{taxRate}'
-    territory-summary: '&7领地单元: &f{count}/{maximum}'
     no-pending: '&7当前没有待办事项'
     town-info: '&e小镇资料'
-    finance: '&6公共资产'
     governance: '&e成员管理'
     pending: '&7待办中心'
     pending-count: '&b待办中心 · {count}'
     personal: '&f个人与帮助'
     application-title: '&6小镇申请'
     application-incomplete: '&7请继续完成申请流程'
-    application-review: '&c管理员意见: {message}'
     application-continue: '&e继续小镇申请'
     no-town: '&7你当前尚未加入任何小镇'
     no-town-actions: '&7可以申请建立小镇或加入现有小镇'
     create-application: '&a申请建立小镇'
     join-application: '&a申请加入小镇'
     my-join-applications: '&e我的入镇申请'
-    handbook: '&6领取小镇手册'
     admin-review: '&7管理员审核'
     admin-review-count: '&e管理员审核 · {count}'
 
@@ -1027,7 +1041,6 @@ dialog:
     pending-joins: '&7待处理入镇申请: &f{count}'
     members: '&e小镇成员'
     applications: '&7入镇申请'
-    applications-count: '&b入镇申请 · {count}'
     visitors: '&e访客管理'
 
   # 治理投票菜单文本；{count}=选民/投票数量，{target}=已过滤玩家名，{time}=截止时间，
@@ -1055,21 +1068,17 @@ dialog:
     voters: '&7有效选民: {count}'
     threshold: '&7通过门槛: {required}'
     tally: '&7当前赞成/反对: {yes}/{no}'
-    expires: '&7到期: {time}'
     already-voted: '&7你已经投票'
     ineligible: '&7你不在冻结选民快照中'
     pending: '&b待投票'
     entry-title: '{type} · {target}'
     pending-entry-title: '{pending} · {type} · {target}'
-    previous: '&e上一页'
-    next: '&e下一页'
     back-governance: '&7返回成员管理'
     back-list: '&7返回投票列表'
     detail-type: '&6{type}'
     entry:
       approve-count: '&7赞成: {yes}/{required}'
       oppose-count: '&7反对: {no}'
-      deadline: '&7到期: {time}'
     once: '&7每位玩家只能投一次'
     cancel-only: '&7仅发起人可操作'
     cancel-irreversible: '&c终止后不可恢复'
@@ -1086,8 +1095,6 @@ dialog:
     heading: '&6{town} 的成员 · 第 {page} 页'
     item: '&f{index}. {name} &7· {role}'
     empty: '&7暂无成员'
-    previous: '&e上一页'
-    next: '&e下一页'
 
   # 成员详情菜单；{name}=已过滤颜色代码的玩家名，{id}=玩家 UUID。
   member-detail:
@@ -1102,7 +1109,6 @@ dialog:
   transfer:
     title: '镇长转让确认'
     summary-title: '&6接任镇长邀请'
-    town: '&7小镇: {town}'
     expires: '&7有效期至: {time}'
     consequence: '&c接受后原镇长降为普通成员'
     accept: '&a接受并接任'
@@ -1126,8 +1132,6 @@ dialog:
     list-empty: '&7暂无访客'
     list-empty-hint: '&7可返回访客管理页面邀请在线玩家'
     no-candidates: '&7没有可邀请的在线玩家'
-    previous: '&e上一页'
-    next: '&e下一页'
     list-title: '&6小镇访客 · 第 {page} 页'
     invite-title: '&6邀请访客 · 第 {page} 页'
 
@@ -1137,7 +1141,6 @@ dialog:
     count-title: '&6待办中心 · {count}'
     empty-title: '&7当前没有待办'
     decisions-only: '&7只显示需要你作出决定的事项'
-    applications-count: '&b入镇申请 · {count}'
     transfer: '&e镇长转让邀请'
 
   # 个人中心菜单文本；{player}/{town}=已过滤颜色代码的玩家名/小镇名。
@@ -1147,19 +1150,14 @@ dialog:
     no-town: '&7当前没有小镇身份'
     town: '&7所在小镇: &f{town}'
     handbook-hint: '&7手册丢失后可以在这里重新领取'
-    handbook: '&6领取小镇手册'
     disband: '&4解散小镇'
     leave: '&c退出小镇'
 
   # 公共资金菜单文本；{town}=已过滤颜色代码的小镇名，{balance}/{amount}=已格式化金额，
   # {rate}=已格式化税率，{count}/{maximum}=领地单元数量，{refresh}=补贴刷新时间，{reason}=锁定原因。
   finance:
-    title: '&6公共资产'
-    summary-title: '&6公共资产'
-    town: '&7小镇: {town}'
     balance: '&7公共余额: &f{balance}'
     tax-rate: '&7统一收入税率: &f{rate}'
-    territory-units: '&7领地单元: &f{count}/{maximum}'
     subsidy-twelve-hour: '&7QuickShop 补贴剩余（12 小时）: &f{amount} &8· 刷新 {refresh}'
     subsidy-week: '&7QuickShop 补贴剩余（本周）: &f{amount} &8· 刷新 {refresh}'
     locked: '&c资金已因清算差异锁定: {reason}'
@@ -1172,9 +1170,7 @@ dialog:
   town:
     # 小镇详情菜单；{town}=已过滤颜色代码的小镇名，{description}=简介。
     title: '&6小镇详情'
-    summary-title: '&6{town}'
     residence-name: '&7小镇领地名: {name}'
-    description: '&7简介: {description}'
     rule-count: '&7规则数: {count}'
     rules: '&e阅读小镇规则'
     members: '&e成员列表'
@@ -1204,21 +1200,14 @@ dialog:
   # {description}=已过滤颜色代码的简介，{rules}=已过滤颜色代码并合并的规则，{page}=从 1 开始的页码。
   join:
     list-title: '&6申请加入小镇 · 第 {page} 页'
-    town-name: '&6{town}'
     town-title: '&6申请加入 · {town}'
-    town-code: '&7小镇代码: {code}'
-    town-description: '&7简介: {description}'
-    town-rules: '&7规则: {rules}'
     apply: '&a提交入镇申请'
     empty-title: '&7暂无开放的小镇'
     empty-hint: '&7稍后再来查看'
-    previous: '&e上一页'
-    next: '&e下一页'
 
   # 玩家自己的入镇申请列表；{town}=已过滤颜色代码的小镇名，{count}=申请数量。
   my-join:
     list-title: '&6我的入镇申请 · {count}'
-    entry-title: '&e{town}'
 
   # 镇长待处理入镇申请列表；{applicant}=已过滤颜色代码的申请人，{count}=申请数量，
   # {page}=从 1 开始的页码。
@@ -1226,8 +1215,6 @@ dialog:
     entry-title: '&e{applicant}'
     list-empty: '&7暂无待处理入镇申请'
     list-empty-hint: '&7新的申请会出现在待办中心'
-    previous: '&e上一页'
-    next: '&e下一页'
     list-title: '&6入镇申请 · {count} · 第 {page} 页'
 
   # 管理员建镇申请列表与审核详情；{town}/{applicant}=已过滤颜色代码的名称，
@@ -1236,25 +1223,15 @@ dialog:
   # {world}/{x}/{z}=选址世界与区块坐标，{error}=已过滤颜色代码的创建错误。
   admin:
     list-title: '&6申请审核 · {count} · 第 {page} 页'
-    entry-title: '&e{town}'
     list-empty: '&7暂无待审核申请'
     list-empty-hint: '&7收到新申请时会播放提醒音效'
-    previous: '&e上一页'
-    next: '&e下一页'
     summary-title: '&6申请详情'
-    applicant: '&7申请人: {applicant}'
-    status-line: '&7申请状态: {status}'
     submitted-at: '&7提交时间: {time}'
     updated-at: '&7更新时间: {time}'
     not-submitted: '尚未提交'
-    name: '&7名称: {name}'
-    residence-name: '&7小镇领地名: {residence}'
-    description: '&7简介: {description}'
-    rules: '&7规则: {rules}'
     territory: '&7选址: {world} {x},{z}'
     creation-error: '&c创建错误: {error}'
     approve: '&a批准'
-    reject: '&c拒绝'
     request-changes: '&e要求补件'
     retry-approve: '&a重试批准'
     unlock-for-changes: '&e解除锁定并要求修改'
@@ -1275,11 +1252,9 @@ dialog:
       pending: '&7集中处理需要你作出决定的事项'
       personal: '&7领取手册、退出或解散小镇'
       application-summary: '&7点击查看摘要'
-      application-review: '&c管理员意见: {message}'
       create-application: '&7使用分步表单填写申请资料'
       join-towns: '&7浏览小镇并提交 48 小时有效申请'
       my-applications-count: '&7待处理: {count}'
-      my-applications-limit: '&7同时最多申请 3 个小镇'
       handbook: '&7手册丢失后可在服务台重新领取'
       admin-review-pending: '&6有未完成的建镇申请'
       admin-review-empty: '&7查看建镇申请列表'
@@ -1304,7 +1279,6 @@ dialog:
     personal:
       handbook: '&7将手册放入背包；背包已满时掉落在脚下'
       disband-only: '&c仅剩镇长一人时可执行'
-      disband-irreversible: '&c此操作不可撤销'
       leave: '&7退出后 24 小时内不能申请新镇'
     finance:
       donation: '&7输入捐款金额'
@@ -1344,67 +1318,31 @@ dialog:
     member-detail:
       max-deputies: '&7每个小镇最多 3 名副镇长'
       kick-now: '&c立即移出小镇并收回领地权限'
-      kick-confirm: '&7需要再次确认'
       transfer-expiry: '&7候选成员必须在 24 小时内接受'
       vote-kick-threshold: '&7赞成票必须严格超过有效选民的 50%'
       replace-mayor-threshold: '&7发起 2/3 强制更换镇长投票'
     transfer:
-      accept-confirm: '&7需要再次确认'
       reject-close: '&7本次请求将立即关闭'
-    votes:
-      type-kick: '&f投票移除成员'
-      type-replace-mayor: '&f强制更换镇长'
-      status-open: '&b进行中'
-      status-passed: '&a已通过'
-      status-rejected: '&c未通过'
-      status-cancelled: '&7已终止'
-      approve: '&a赞成'
-      reject: '&c反对'
-      cancel: '&c终止本次投票'
-      target: '&7目标: {target}'
-      voters: '&7有效选民: {count}'
-      threshold: '&7通过门槛: {required}'
-      tally: '&7当前赞成/反对: {yes}/{no}'
-      expires: '&7到期: {time}'
-      already-voted: '&7你已经投票'
-      ineligible: '&7你不在冻结选民快照中'
-      entry:
-        approve-count: '&7赞成: {yes}/{required}'
-        oppose-count: '&7反对: {no}'
-        deadline: '&7到期: {time}'
-      once: '&7每位玩家只能投一次'
-      cancel-only: '&7仅发起人可操作'
-      cancel-irreversible: '&c终止后不可恢复'
     join:
-      town-code: '&7小镇代码: {code}'
-      town-description: '&7简介: {description}'
       town-apply: '&7点击查看规则并申请加入'
       submit-expiry: '&7申请有效期 48 小时'
       submit-limit: '&7同时最多申请 3 个小镇'
     my-join:
-      expires: '&7到期: {time}'
       withdraw: '&7点击可撤回申请'
     town-join:
       entry-created: '&7申请时间: {time}'
-      entry-expires: '&7到期: {time}'
       entry-review: '&7点击审核'
       approve: '&7批准后立即成为小镇成员'
       reject: '&7拒绝后 24 小时内不能再次申请本镇'
     admin:
-      entry-code: '&7小镇代码: {code}'
       entry-review: '&7点击查看并处理'
       approve: '&7创建小镇及其 5×5 初始领地'
       reject: '&7填写拒绝原因'
       change: '&7填写需要申请人修改的内容'
       retry: '&7重新创建小镇初始领地'
-      preview: '&7传送至领地中心并显示火焰边界'
-    application-members:
-      select: '&7点击后从在线玩家列表中选择'
-      save: '&8保存后系统会邀请两名成员确认'
 
   # 二次确认页的标题和操作后果。
   confirmation:
-    irreversible: '&c此操作不可撤销'
     check-details: '&7请确认信息无误'
     submit-application-title: '&6确认提交申请'
     submit-application-consequence: '&7提交后需等待管理员审核'
@@ -1531,11 +1469,9 @@ dialog:
     donation-success-message: "&f已向小镇捐款 {amount}\n当前公共余额: {balance}"
     draft-not-saved-title: '&6草稿未保存'
     draft-incomplete-title: '&6草稿尚未完成'
-    form-draft-saved-title: '&6草稿已保存'
     form-draft-saved-message: '&f已保存小镇申请草稿'
     profile-saved-title: '&6小镇资料已保存'
     profile-saved-message: '&f新的简介和规则已经生效。'
-    draft-saved-title: '&6草稿已保存'
     reminder-cooldown-title: '&6暂时无法再次提醒'
     reminder-forbidden-title: '&6无法提醒'
     reminder-forbidden-message: '&f只有申请人可以重新发送初始成员邀请。'
@@ -1654,9 +1590,6 @@ dialog:
     entry-actor: '&7操作人: &f{actor}'
     entry-time: '&7时间: &f{time}'
     entry-note: '&8{note}'
-    previous: '&e上一页'
-    next: '&e下一页'
-    unknown-player: '未知玩家（{playerId}）'
     type:
       quickshop-tax: 'QuickShop 税收'
       jobs-tax: 'Jobs 税收'
@@ -1742,7 +1675,6 @@ dialog:
 
   # 规则确认和规则查看。
   rules:
-    town: '&7小镇: {town}'
     revision: '&7新规则版本: {revision}'
     locked-hint: '&c确认前不能继续使用其他小镇功能'
     acknowledgement: '&6我已阅读并理解以上规则'
@@ -1752,7 +1684,6 @@ dialog:
     later-tooltip: '&8关闭界面；小镇功能仍保持锁定'
     required-title: '&6请确认小镇规则'
     required-message: '&f勾选“我已阅读并理解以上规则”后才能继续。'
-    title: '&6小镇规则'
     current-heading: '&6{town} · 当前规则'
     edit-title: '&6编辑小镇规则'
     edit-heading: '&6{town} · 规则预览'
@@ -1778,7 +1709,6 @@ dialog:
   review:
     change-heading: '&e要求补充资料'
     reject-heading: '&c拒绝申请'
-    town: '&7小镇: {town}'
     change-guidance: '&f请写明需要申请人补充或修改的内容。'
     reject-guidance: '&f请写明拒绝原因，便于申请人理解和改进。'
     change-label: '&6修改要求'
@@ -1790,7 +1720,6 @@ dialog:
     submit-tooltip: '&8操作将立即记录并通知申请人'
     empty-error: '&c原因不能为空。'
     too-long-error: '&c原因不能超过 500 个字符。'
-    error: '&c{error}'
 
   # 建镇申请和资料编辑表单。
   application:
@@ -1800,7 +1729,6 @@ dialog:
     basics-heading: '&6第 1 / 3 步 · 基础资料和简介'
     basics-guidance: '&7填写小镇名称、代码和简介；代码由 1～12 个英文字母组成，并作为小镇领地名。'
     description-label: '&6小镇简介'
-    rules-label: '&6小镇规则'
     # 申请字段的标签、校验要求和填写建议；无占位符，由 ApplicationField 按需读取。
     field:
       name:
@@ -1831,9 +1759,7 @@ dialog:
     content-guidance: '&7请添加 1～50 条需要小镇成员遵守的规则。'
     member-one-placeholder: '&e<小镇初始成员一>'
     member-two-placeholder: '&e<小镇初始成员二>'
-    member-select-hint: '&7点击后从在线玩家列表中选择'
     save: '&a保存'
-    save-hint: '&8保存后系统会邀请两名成员确认'
     save-draft: '&e保存草稿并退出'
     save-draft-tooltip: '&7保存当前步骤和已填写内容，稍后可继续'
     complete: '&a完成资料并发送邀请'
@@ -1875,11 +1801,6 @@ dialog:
     # 建镇申请详情摘要；动态值均为已过滤颜色代码的玩家/申请文本，{status} 为消息键
     # 解析后的申请状态或初始成员状态，{index} 为从 1 开始的规则序号。
     summary-title: '&6申请摘要'
-    applicant: '&7申请人: {applicant}'
-    status-line: '&7申请状态: {status}'
-    name: '&7名称: {name}'
-    residence-name: '&7小镇领地名: {residence}'
-    description: '&7简介: {description}'
     initial-member: '&7初始成员: {player} &8[{status}]'
     initial-member-status:
       pending: '待确认'
@@ -1887,7 +1808,6 @@ dialog:
       rejected: '已拒绝'
     rule: '&7规则 {index}: {rule}'
     territory-center: '&7中心区块: {x}, {z}'
-    review-message: '&c管理员意见: {message}'
     last-error: '&c自动创建错误: {error}'
     edit: '&e编辑申请资料'
     remind: '&e提醒初始成员'
@@ -1901,10 +1821,8 @@ dialog:
   donation:
     title: '&6向小镇捐款'
     amount-label: '&6捐款金额'
-    town: '&7小镇: {town}'
     balance: '&7当前公共余额: {balance}'
     amount-hint: '&7金额必须大于 0，最多保留 {scale} 位小数'
-    error: '&c{error}'
     confirm: '&a确认捐款'
     confirm-tooltip: '&8从个人余额转入公共资金'
     invalid-amount: '&c金额格式无效，请输入有效数额。'

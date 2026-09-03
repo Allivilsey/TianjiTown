@@ -153,7 +153,7 @@ final class TownUiController implements Listener {
                 plugin.messages().send(player, "chat.station.already-exists",
                         Map.of("id", existingId));
             } else {
-                plugin.messages().send(player, "chat.station.invalid-copy");
+                plugin.messages().send(player, "chat.station.invalid-data");
             }
             return false;
         }
@@ -668,7 +668,7 @@ final class TownUiController implements Listener {
             if (stationId == null || stationId.isBlank()
                     || registeredStation(block, stationId, stationRecords()) == null) {
                 // 复制或移动后的标记不享有绕过 Residence 的资格。
-                plugin.messages().send(event.getPlayer(), "chat.station.invalid-interaction");
+                plugin.messages().send(event.getPlayer(), "chat.station.invalid-data");
                 return;
             }
             event.setCancelled(true);
@@ -778,7 +778,7 @@ final class TownUiController implements Listener {
                 summary.add(dialogText("main.finance-summary", Map.of(
                         "balance", runtime.money(finance.balanceMinor()),
                         "taxRate", TownRuntime.percent(finance.taxRateBps()))));
-                summary.add(dialogText("main.territory-summary", Map.of(
+                summary.add(dialogText("common.territory-units", Map.of(
                         "count", finance.unitCount(),
                         "maximum", runtime.economySettings().maximumUnits())));
             }
@@ -786,12 +786,12 @@ final class TownUiController implements Listener {
                     ? dialogText("votes.main-pending", Map.of("total", pendingTotal,
                     "joins", pendingJoins, "votes", pendingVotes, "transfers", pendingTransfer))
                     : dialogText("main.no-pending"));
-            items.add(new MenuItem(0, button(Material.BELL, dialogText("main.town-summary", Map.of(
+            items.add(new MenuItem(0, button(Material.BELL, dialogText("common.town-name", Map.of(
                     "town", town.profile().name())),
                     summary, null, null)));
             items.add(new MenuItem(10, button(Material.WRITTEN_BOOK, dialogText("main.town-info"),
                     List.of(dialogText("tooltip.main.town")), "TOWN", town.id().toString())));
-            items.add(new MenuItem(12, button(Material.EMERALD_BLOCK, dialogText("main.finance"),
+            items.add(new MenuItem(12, button(Material.EMERALD_BLOCK, dialogText("common.finance-title"),
                     List.of(dialogText("tooltip.main.finance")), "FINANCE", "0")));
             items.add(new MenuItem(14, button(Material.GOLDEN_HELMET, dialogText("main.governance"),
                     List.of(dialogText("tooltip.main.governance")), "GOVERNANCE_CENTER", null)));
@@ -806,12 +806,12 @@ final class TownUiController implements Listener {
             items.add(new MenuItem(0, button(Material.PAPER, dialogText("main.application-title"),
                     List.of(application.reviewMessage() == null
                             ? dialogText("main.application-incomplete")
-                            : dialogText("main.application-review", Map.of(
+                            : dialogText("common.admin-review-message", Map.of(
                                     "message", safeText(application.reviewMessage())))), null, null)));
             items.add(new MenuItem(11, button(Material.MAP, dialogText("main.application-continue"),
                     List.of(application.reviewMessage() == null
                             ? dialogText("tooltip.main.application-summary")
-                            : dialogText("tooltip.main.application-review",
+                            : dialogText("common.admin-review-message",
                             Map.of("message", safeText(application.reviewMessage())))),
                     "APPLICATION", application.id().toString())));
         } else {
@@ -831,10 +831,10 @@ final class TownUiController implements Listener {
                         dialogText("main.my-join-applications"),
                         List.of(dialogText("tooltip.main.my-applications-count",
                                         Map.of("count", dashboard.joinApplications().size())),
-                                dialogText("tooltip.main.my-applications-limit")),
+                                dialogText("common.join-application-limit")),
                         "MY_JOIN_APPLICATIONS", null)));
             }
-            items.add(new MenuItem(31, button(Material.WRITTEN_BOOK, dialogText("main.handbook"),
+            items.add(new MenuItem(31, button(Material.WRITTEN_BOOK, dialogText("common.handbook"),
                     List.of(dialogText("tooltip.main.handbook")), "GIVE_HANDBOOK", null)));
         }
         if (player.hasPermission("tianjitown.admin")) {
@@ -885,7 +885,7 @@ final class TownUiController implements Listener {
             if (governance.canReviewApplications()) {
                 items.add(new MenuItem(14, button(pendingJoins > 0
                                 ? Material.ENCHANTED_BOOK : Material.BOOK,
-                        pendingJoins > 0 ? dialogText("governance.applications-count",
+                        pendingJoins > 0 ? dialogText("common.applications-count",
                                 Map.of("count", pendingJoins))
                                 : dialogText("governance.applications"),
                         List.of(dialogText("tooltip.governance.applications")),
@@ -950,12 +950,12 @@ final class TownUiController implements Listener {
                         List.of(dialogText("visitor.list-empty-hint")), null, null)));
             }
             if (page > 0) {
-                items.add(new MenuItem(45, button(Material.ARROW, dialogText("visitor.previous"),
+                items.add(new MenuItem(45, button(Material.ARROW, dialogText("common.previous"),
                         List.of(),
                         "VISITOR_LIST", townId + ":" + (page - 1))));
             }
             if (view.page().hasNext()) {
-                items.add(new MenuItem(53, button(Material.ARROW, dialogText("visitor.next"), List.of(),
+                items.add(new MenuItem(53, button(Material.ARROW, dialogText("common.next"), List.of(),
                         "VISITOR_LIST", townId + ":" + (page + 1))));
             }
             openMenu(player, 54, dialogText("visitor.list-title", Map.of("page", page + 1)),
@@ -993,12 +993,12 @@ final class TownUiController implements Listener {
                         List.of(), null, null)));
             }
             if (page > 0) {
-                items.add(new MenuItem(45, button(Material.ARROW, dialogText("visitor.previous"),
+                items.add(new MenuItem(45, button(Material.ARROW, dialogText("common.previous"),
                         List.of(),
                         "VISITOR_INVITE", townId + ":" + (page - 1))));
             }
             if (hasNext(candidates, page, 8)) {
-                items.add(new MenuItem(53, button(Material.ARROW, dialogText("visitor.next"), List.of(),
+                items.add(new MenuItem(53, button(Material.ARROW, dialogText("common.next"), List.of(),
                         "VISITOR_INVITE", townId + ":" + (page + 1))));
             }
             openMenu(player, 54, dialogText("visitor.invite-title", Map.of("page", page + 1)),
@@ -1045,7 +1045,7 @@ final class TownUiController implements Listener {
                             : List.of(dialogText("votes.pending-empty-hint")), null, null)));
             if (pendingJoins > 0) {
                 items.add(new MenuItem(10, button(Material.ENCHANTED_BOOK,
-                        dialogText("pending.applications-count", Map.of("count", pendingJoins)),
+                        dialogText("common.applications-count", Map.of("count", pendingJoins)),
                         List.of(dialogText("tooltip.pending.applications")),
                         "JOIN_APPLICATIONS", town.id().toString())));
             }
@@ -1077,13 +1077,13 @@ final class TownUiController implements Listener {
                                     "town", safeText(town.profile().name()))),
                             dialogText("personal.handbook-hint")), null, null)));
             items.add(new MenuItem(10, button(Material.WRITTEN_BOOK,
-                    dialogText("personal.handbook"),
+                    dialogText("common.handbook"),
                     List.of(dialogText("tooltip.personal.handbook")),
                     "GIVE_HANDBOOK", null)));
             if (town != null && town.mayorId().equals(player.getUniqueId())) {
                 items.add(new MenuItem(16, button(Material.TNT, dialogText("personal.disband"),
                         List.of(dialogText("tooltip.personal.disband-only"),
-                                dialogText("tooltip.personal.disband-irreversible")),
+                                dialogText("common.irreversible")),
                         "CONFIRM_DISBAND", town.id() + ":" + town.version())));
             } else if (town != null) {
                 items.add(new MenuItem(16, button(Material.OAK_DOOR, dialogText("personal.leave"),
@@ -1108,12 +1108,12 @@ final class TownUiController implements Listener {
     private void renderFinance(Player player, FinanceView view) {
         EconomyRepository.TownFinance account = view.account();
         List<String> summary = new ArrayList<>(List.of(
-                dialogText("finance.town", Map.of("town", safeText(account.townName()))),
+                dialogText("common.town", Map.of("town", safeText(account.townName()))),
                 dialogText("finance.balance", Map.of("balance",
                         safeText(runtime.money(account.balanceMinor())))),
                 dialogText("finance.tax-rate", Map.of("rate",
                         safeText(TownRuntime.percent(account.taxRateBps())))),
-                dialogText("finance.territory-units", Map.of("count", account.unitCount(),
+                dialogText("common.territory-units", Map.of("count", account.unitCount(),
                         "maximum", runtime.economySettings().maximumUnits())),
                 dialogText("finance.subsidy-twelve-hour", Map.of("amount", safeText(
                                 runtime.money(view.subsidyQuota().twelveHourRemainingMinor())),
@@ -1127,7 +1127,7 @@ final class TownUiController implements Listener {
         }
         List<MenuItem> items = new ArrayList<>();
         items.add(new MenuItem(4, button(account.locked() ? Material.REDSTONE_BLOCK
-                : Material.EMERALD_BLOCK, dialogText("finance.summary-title"), summary, null, null)));
+                : Material.EMERALD_BLOCK, dialogText("common.finance-title"), summary, null, null)));
         if (runtime.consumptionEnabled()) {
             items.add(new MenuItem(10, button(Material.SUNFLOWER,
                     dialogText("finance.donation"),
@@ -1153,7 +1153,7 @@ final class TownUiController implements Listener {
             items.add(new MenuItem(16, button(Material.FILLED_MAP, dialogText("finance.expansion"),
                     List.of(dialogText("tooltip.finance.expansion")), "EXPANSION_MENU", null)));
         }
-        openMenu(player, 27, dialogText("finance.title"),
+        openMenu(player, 27, dialogText("common.finance-title"),
                 new DialogRoute("MAIN", null), items);
         if (account.hasUnreadTaxChange()) {
             actions.acknowledgeTaxRevision(player, account.taxRevision(), outcome ->
@@ -1265,7 +1265,7 @@ final class TownUiController implements Listener {
                 String actorId = entry.actorId() == null ? "" : entry.actorId().toString()
                         .replace("-", "");
                 String suffix = actorId.length() > 24 ? actorId.substring(24) : actorId;
-                actor = dialogText("ledger.unknown-player", Map.of("playerId", suffix));
+                actor = dialogText("common.unknown-player", Map.of("playerId", suffix));
             }
             items.add(new MenuItem(slot++, button(income ? Material.LIME_DYE : Material.RED_DYE,
                     dialogText("ledger.entry-title", Map.of("amount", amount,
@@ -1279,11 +1279,11 @@ final class TownUiController implements Listener {
                                     safeText(entry.note())))), null, null)));
         }
         if (ledger.page() > 0) {
-            items.add(new MenuItem(20, button(Material.ARROW, dialogText("ledger.previous"),
+            items.add(new MenuItem(20, button(Material.ARROW, dialogText("common.previous"),
                     List.of(), "LEDGER", String.valueOf(ledger.page() - 1))));
         }
         if (ledger.entries().size() == 6) {
-            items.add(new MenuItem(21, button(Material.ARROW, dialogText("ledger.next"),
+            items.add(new MenuItem(21, button(Material.ARROW, dialogText("common.next"),
                     List.of(), "LEDGER", String.valueOf(ledger.page() + 1))));
         }
         openMenu(player, 27, dialogText("ledger.page-title", Map.of("page", ledger.page() + 1)),
@@ -1596,7 +1596,7 @@ final class TownUiController implements Listener {
     }
 
     private void renderRulesConfirmation(Player player, MemberGovernanceSnapshot governance) {
-        Component rules = dialogComponent("rules.town", Map.of(
+        Component rules = dialogComponent("common.town", Map.of(
                         "town", safeText(governance.townName())))
                 .append(Component.newline())
                 .append(dialogComponent("rules.revision", Map.of(
@@ -1640,14 +1640,14 @@ final class TownUiController implements Listener {
 
     private void openApplication(Player player, ApplicationSnapshot application) {
         List<String> summary = new ArrayList<>(List.of(
-                dialogText("application.applicant", Map.of(
+                dialogText("common.applicant", Map.of(
                         "applicant", safeText(displayName(application.applicantId())))),
-                dialogText("application.status-line", Map.of(
+                dialogText("common.application-status", Map.of(
                         "status", dialogText(ApplicationStatusText.messageKey(application.status())))),
-                dialogText("application.name", Map.of("name", safeText(application.text().name()))),
-                dialogText("application.residence-name", Map.of(
+                dialogText("common.name", Map.of("name", safeText(application.text().name()))),
+                dialogText("common.residence-name", Map.of(
                         "residence", safeText(application.text().normalizedResidenceName()))),
-                dialogText("application.description", Map.of(
+                dialogText("common.town-description", Map.of(
                         "description", safeText(application.text().description())))));
         for (InitialMemberConfirmation member : application.initialMembers()) {
             summary.add(dialogText("application.initial-member", Map.of(
@@ -1665,7 +1665,7 @@ final class TownUiController implements Listener {
                     "z", application.territory().center().z())));
         }
         if (application.reviewMessage() != null) {
-            summary.add(dialogText("application.review-message", Map.of(
+            summary.add(dialogText("common.admin-review-message", Map.of(
                     "message", safeText(application.reviewMessage()))));
         }
         if (application.lastError() != null) {
@@ -1696,7 +1696,7 @@ final class TownUiController implements Listener {
             if (application.territory() != null) {
                 items.add(new MenuItem(14, button(Material.ENDER_EYE,
                         dialogText("application.preview-site"),
-                        List.of(dialogText("tooltip.application.preview-site")), "PREVIEW_SITE",
+                        List.of(dialogText("common.preview-site")), "PREVIEW_SITE",
                         application.id().toString())));
                 boolean confirmed = application.initialMembersConfirmed();
                 items.add(new MenuItem(16, button(confirmed ? Material.LIME_CONCRETE
@@ -1738,11 +1738,11 @@ final class TownUiController implements Listener {
             TownSnapshot town = view.town();
             MemberGovernanceSnapshot governance = view.governance();
             List<MenuItem> items = new ArrayList<>();
-            items.add(new MenuItem(4, button(Material.BELL, dialogText("town.summary-title", Map.of(
+            items.add(new MenuItem(4, button(Material.BELL, dialogText("common.town-name", Map.of(
                             "town", safeText(town.profile().name()))),
-                    List.of(dialogText("town.residence-name", Map.of(
+                    List.of(dialogText("common.residence-name", Map.of(
                                     "name", safeText(town.residenceName()))),
-                            dialogText("town.description", Map.of(
+                            dialogText("common.town-description", Map.of(
                                     "description", safeText(town.profile().description()))),
                             dialogText("town.rule-count", Map.of(
                                     "count", town.profile().rules().size()))), null, null)));
@@ -1799,7 +1799,7 @@ final class TownUiController implements Listener {
                                     "rule", safeText(town.profile().rules().get(index)))));
                 }
             }
-            openDialogPage(player, dialogText("rules.title"), List.of(
+            openDialogPage(player, dialogText("common.rules-title"), List.of(
                             DialogBody.plainMessage(content, 420)),
                     List.of(), DialogBase.DialogAfterAction.NONE,
                     session -> DialogType.notice(returnButton(player, session,
@@ -1977,13 +1977,13 @@ final class TownUiController implements Listener {
                     DialogBase.DialogAfterAction.NONE, session -> {
                         List<ActionButton> actions = new ArrayList<>();
                         if (page > 0) {
-                            actions.add(ActionButton.create(dialogComponent("town-members.previous"),
+                            actions.add(ActionButton.create(dialogComponent("common.previous"),
                                     null, 170, dialogAction(player, session,
                                             "TOWN_MEMBER_OVERVIEW",
                                             townId + ":" + (page - 1))));
                         }
                         if (memberPage.hasNext()) {
-                            actions.add(ActionButton.create(dialogComponent("town-members.next"),
+                            actions.add(ActionButton.create(dialogComponent("common.next"),
                                     null, 170, dialogAction(player, session,
                                             "TOWN_MEMBER_OVERVIEW",
                                             townId + ":" + (page + 1))));
@@ -2028,12 +2028,12 @@ final class TownUiController implements Listener {
             }
             if (page > 0) {
                 items.add(new MenuItem(45, button(Material.ARROW,
-                        dialogText("town-members.previous"), List.of(),
+                        dialogText("common.previous"), List.of(),
                         "MEMBERS", townId + ":" + (page - 1))));
             }
             if (memberPage.hasNext()) {
                 items.add(new MenuItem(53, button(Material.ARROW,
-                        dialogText("town-members.next"), List.of(),
+                        dialogText("common.next"), List.of(),
                         "MEMBERS", townId + ":" + (page + 1))));
             }
             openMenu(player, 54, dialogText("town-members.title", Map.of("page", page + 1)),
@@ -2077,7 +2077,7 @@ final class TownUiController implements Listener {
                 items.add(new MenuItem(12, button(Material.RED_CONCRETE,
                         dialogText("member-detail.kick"),
                         List.of(dialogText("tooltip.member-detail.kick-now"),
-                                dialogText("tooltip.member-detail.kick-confirm")),
+                            dialogText("common.confirmation-required")),
                         "CONFIRM_KICK_MEMBER", townId + ":" + targetId + ":" + page)));
             }
             if (viewerIsMayor && !targetIsMayor) {
@@ -2120,18 +2120,18 @@ final class TownUiController implements Listener {
             List<MenuItem> items = List.of(
                     new MenuItem(4, button(Material.NETHER_STAR,
                             dialogText("transfer.summary-title"),
-                            List.of(dialogText("transfer.town", Map.of(
+                            List.of(dialogText("common.town", Map.of(
                                             "town", safeText(governance.townName()))),
                                     dialogText("transfer.expires", Map.of(
                                             "time", safeText(transfer.expiresAt()))),
                                     dialogText("transfer.consequence")), null, null)),
                     new MenuItem(11, button(Material.LIME_CONCRETE,
                             dialogText("transfer.accept"),
-                            List.of(dialogText("tooltip.transfer.accept-confirm")),
+                            List.of(dialogText("common.confirmation-required")),
                             "CONFIRM_TRANSFER_DECISION",
                             transfer.id() + ":true")),
                     new MenuItem(15, button(Material.RED_CONCRETE,
-                            dialogText("transfer.reject"),
+                            dialogText("common.reject"),
                             List.of(dialogText("tooltip.transfer.reject-close")),
                             "CONFIRM_TRANSFER_DECISION",
                             transfer.id() + ":false")));
@@ -2160,11 +2160,11 @@ final class TownUiController implements Listener {
                         dialogText(pending ? "votes.pending-entry-title" : "votes.entry-title",
                                 Map.of("pending", dialogText("votes.pending"),
                                         "type", voteLabel(vote.type()), "target", target)),
-                        List.of(dialogText("tooltip.votes.entry.approve-count", Map.of(
+                        List.of(dialogText("votes.entry.approve-count", Map.of(
                                         "yes", vote.yesVotes(), "required", vote.requiredYes())),
-                                dialogText("tooltip.votes.entry.oppose-count",
+                                dialogText("votes.entry.oppose-count",
                                         Map.of("no", vote.noVotes())),
-                                dialogText("tooltip.votes.entry.deadline",
+                                dialogText("common.expires",
                                         Map.of("time", vote.endsAt()))),
                         "VOTE_DETAIL", vote.id().toString())));
             }
@@ -2173,11 +2173,11 @@ final class TownUiController implements Listener {
                         List.of(dialogText("votes.empty-hint")), null, null)));
             }
             if (page > 0) {
-                items.add(new MenuItem(45, button(Material.ARROW, dialogText("votes.previous"), List.of(),
+                items.add(new MenuItem(45, button(Material.ARROW, dialogText("common.previous"), List.of(),
                         "VOTES_PAGE", townId + ":" + (page - 1))));
             }
             if (hasNext(votes, page, 8)) {
-                items.add(new MenuItem(53, button(Material.ARROW, dialogText("votes.next"), List.of(),
+                items.add(new MenuItem(53, button(Material.ARROW, dialogText("common.next"), List.of(),
                         "VOTES_PAGE", townId + ":" + (page + 1))));
             }
             openMenu(player, 54, dialogText("votes.list-title", Map.of("page", page + 1)),
@@ -2211,15 +2211,15 @@ final class TownUiController implements Listener {
                             dialogText("votes.threshold", Map.of("required", vote.requiredYes())),
                             dialogText("votes.tally", Map.of("yes", vote.yesVotes(),
                                     "no", vote.noVotes())),
-                            dialogText("votes.expires", Map.of("time", vote.endsAt()))),
+                            dialogText("common.expires", Map.of("time", vote.endsAt()))),
                     null, null)));
             if (vote.viewerEligible() && !vote.viewerVoted()) {
                 items.add(new MenuItem(11, button(Material.LIME_CONCRETE,
                         dialogText("votes.approve"),
-                        List.of(dialogText("tooltip.votes.once")), "CAST_VOTE", vote.id() + ":true")));
+                        List.of(dialogText("votes.once")), "CAST_VOTE", vote.id() + ":true")));
                 items.add(new MenuItem(15, button(Material.RED_CONCRETE,
                         dialogText("votes.reject"),
-                        List.of(dialogText("tooltip.votes.once")), "CAST_VOTE", vote.id() + ":false")));
+                        List.of(dialogText("votes.once")), "CAST_VOTE", vote.id() + ":false")));
             } else {
                 items.add(new MenuItem(13, button(Material.GRAY_DYE,
                         vote.viewerVoted() ? dialogText("votes.already-voted")
@@ -2229,8 +2229,8 @@ final class TownUiController implements Listener {
             if (vote.createdBy().equals(player.getUniqueId())) {
                 items.add(new MenuItem(18, button(Material.BARRIER,
                         dialogText("votes.cancel"),
-                        List.of(dialogText("tooltip.votes.cancel-only"),
-                                dialogText("tooltip.votes.cancel-irreversible")),
+                        List.of(dialogText("votes.cancel-only"),
+                                dialogText("votes.cancel-irreversible")),
                         "CONFIRM_CANCEL_VOTE", vote.id().toString())));
             }
             openMenu(player, 27, dialogText("votes.detail-title"),
@@ -2287,11 +2287,11 @@ final class TownUiController implements Listener {
             for (int index = 0; index < visible.size(); index++) {
                 TownSnapshot town = visible.get(index);
                 items.add(new MenuItem(index, button(Material.BELL,
-                        dialogText("join.town-name", Map.of(
+                        dialogText("common.town-name", Map.of(
                                 "town", safeText(town.profile().name()))),
-                        List.of(dialogText("tooltip.join.town-code", Map.of(
+                        List.of(dialogText("common.town-code", Map.of(
                                         "code", safeText(town.profile().residenceName()))),
-                                dialogText("tooltip.join.town-description", Map.of(
+                                dialogText("common.town-description", Map.of(
                                         "description", safeText(preview(
                                                 town.profile().description(), 80)))),
                                 dialogText("tooltip.join.town-apply")),
@@ -2304,12 +2304,12 @@ final class TownUiController implements Listener {
             }
             if (page > 0) {
                 items.add(new MenuItem(45, button(Material.ARROW,
-                        dialogText("join.previous"), List.of(),
+                        dialogText("common.previous"), List.of(),
                         "JOIN_TOWNS_PAGE", String.valueOf(page - 1))));
             }
             if (hasNext(towns, page, 8)) {
                 items.add(new MenuItem(53, button(Material.ARROW,
-                        dialogText("join.next"), List.of(),
+                        dialogText("common.next"), List.of(),
                         "JOIN_TOWNS_PAGE", String.valueOf(page + 1))));
             }
             openMenu(player, 54, dialogText("join.list-title", Map.of("page", page + 1)),
@@ -2324,20 +2324,20 @@ final class TownUiController implements Listener {
                         plugin.messages().plainText("chat.runtime.town-unavailable"))), town -> {
             List<MenuItem> items = List.of(
                     new MenuItem(4, button(Material.BELL,
-                            dialogText("join.town-name", Map.of(
+                            dialogText("common.town-name", Map.of(
                                     "town", safeText(town.profile().name()))),
-                            List.of(dialogText("join.town-code", Map.of(
+                            List.of(dialogText("common.town-code", Map.of(
                                             "code", safeText(town.profile().residenceName()))),
-                                    dialogText("join.town-description", Map.of(
+                                    dialogText("common.town-description", Map.of(
                                             "description", safeText(town.profile().description()))),
-                                    dialogText("join.town-rules", Map.of("rules", town.profile().rules()
+                                    dialogText("common.rules", Map.of("rules", town.profile().rules()
                                             .stream().map(TownUiController::safeText)
                                             .collect(java.util.stream.Collectors.joining(" | "))))),
                             null, null)),
                     new MenuItem(13, button(Material.LIME_CONCRETE,
                             dialogText("join.apply"),
                             List.of(dialogText("tooltip.join.submit-expiry"),
-                                    dialogText("tooltip.join.submit-limit")),
+                                    dialogText("common.join-application-limit")),
                             "CONFIRM_APPLY_JOIN", town.id().toString())));
             openMenu(player, 27, dialogText("join.town-title", Map.of(
                             "town", safeText(town.profile().name()))),
@@ -2352,9 +2352,9 @@ final class TownUiController implements Listener {
                     for (int index = 0; index < Math.min(applications.size(), 45); index++) {
                         JoinApplicationSnapshot application = applications.get(index);
                         items.add(new MenuItem(index, button(Material.PAPER,
-                                dialogText("my-join.entry-title", Map.of(
+                                dialogText("common.town-entry-title", Map.of(
                                         "town", safeText(application.townName()))),
-                                List.of(dialogText("tooltip.my-join.expires", Map.of(
+                                List.of(dialogText("common.expires", Map.of(
                                                 "time", safeText(application.expiresAt()))),
                                         dialogText("tooltip.my-join.withdraw")),
                                 "CONFIRM_CANCEL_JOIN", application.id().toString())));
@@ -2383,7 +2383,7 @@ final class TownUiController implements Listener {
                                 "applicant", safeText(name))),
                         List.of(dialogText("tooltip.town-join.entry-created", Map.of(
                                         "time", safeText(application.createdAt()))),
-                                dialogText("tooltip.town-join.entry-expires", Map.of(
+                                dialogText("common.expires", Map.of(
                                         "time", safeText(application.expiresAt()))),
                                 dialogText("tooltip.town-join.entry-review")),
                         "JOIN_APPLICATION", application.id().toString())));
@@ -2395,12 +2395,12 @@ final class TownUiController implements Listener {
             }
             if (page > 0) {
                 items.add(new MenuItem(45, button(Material.ARROW,
-                        dialogText("town-join.previous"), List.of(),
+                        dialogText("common.previous"), List.of(),
                         "JOIN_APPLICATIONS_PAGE", townId + ":" + (page - 1))));
             }
             if (hasNext(applications, page, 8)) {
                 items.add(new MenuItem(53, button(Material.ARROW,
-                        dialogText("town-join.next"), List.of(),
+                        dialogText("common.next"), List.of(),
                         "JOIN_APPLICATIONS_PAGE", townId + ":" + (page + 1))));
             }
             openMenu(mayor, 54, dialogText("town-join.list-title", Map.of(
@@ -2452,9 +2452,9 @@ final class TownUiController implements Listener {
             for (int index = 0; index < visible.size(); index++) {
                 ApplicationSnapshot application = visible.get(index);
                 items.add(new MenuItem(index, button(Material.WRITABLE_BOOK,
-                        dialogText("admin.entry-title", Map.of(
+                        dialogText("common.town-entry-title", Map.of(
                                 "town", safeText(application.text().name()))),
-                        List.of(dialogText("tooltip.admin.entry-code", Map.of(
+                        List.of(dialogText("common.town-code", Map.of(
                                         "code", safeText(application.text().residenceName()))),
                                 dialogText("tooltip.admin.entry-review")),
                         "ADMIN_APPLICATION", application.id().toString())));
@@ -2464,12 +2464,12 @@ final class TownUiController implements Listener {
                         List.of(dialogText("admin.list-empty-hint")), null, null)));
             }
             if (page > 0) {
-                items.add(new MenuItem(45, button(Material.ARROW, dialogText("admin.previous"),
+                items.add(new MenuItem(45, button(Material.ARROW, dialogText("common.previous"),
                         List.of(),
                         "ADMIN_APPLICATIONS_PAGE", String.valueOf(page - 1))));
             }
             if (hasNext(applications, page, 8)) {
-                items.add(new MenuItem(53, button(Material.ARROW, dialogText("admin.next"),
+                items.add(new MenuItem(53, button(Material.ARROW, dialogText("common.next"),
                         List.of(),
                         "ADMIN_APPLICATIONS_PAGE", String.valueOf(page + 1))));
             }
@@ -2494,18 +2494,18 @@ final class TownUiController implements Listener {
             String rules = application.text().rules().stream().map(TownUiController::safeText)
                     .collect(java.util.stream.Collectors.joining(" | "));
             List<String> summary = new ArrayList<>(List.of(
-                    dialogText("admin.applicant", Map.of(
+                    dialogText("common.applicant", Map.of(
                             "applicant", safeText(displayName(application.applicantId())))),
-                    dialogText("admin.status-line", Map.of("status",
+                    dialogText("common.application-status", Map.of("status",
                             dialogText(ApplicationStatusText.messageKey(application.status())))),
                     dialogText("admin.submitted-at", Map.of("time", submittedAt)),
                     dialogText("admin.updated-at", Map.of("time", safeText(application.updatedAt()))),
-                    dialogText("admin.name", Map.of("name", safeText(application.text().name()))),
-                    dialogText("admin.residence-name", Map.of(
+                    dialogText("common.name", Map.of("name", safeText(application.text().name()))),
+                    dialogText("common.residence-name", Map.of(
                             "residence", safeText(application.text().normalizedResidenceName()))),
-                    dialogText("admin.description", Map.of(
+                    dialogText("common.town-description", Map.of(
                             "description", safeText(application.text().description()))),
-                    dialogText("admin.rules", Map.of("rules", rules))));
+                    dialogText("common.rules", Map.of("rules", rules))));
             if (application.territory() != null) {
                 summary.add(dialogText("admin.territory", Map.of(
                         "world", safeText(application.territory().center().worldName()),
@@ -2526,7 +2526,7 @@ final class TownUiController implements Listener {
                         List.of(dialogText("tooltip.admin.approve")), "CONFIRM_ADMIN_APPROVE",
                         application.id().toString())));
                 items.add(new MenuItem(12, button(Material.RED_CONCRETE,
-                        dialogText("admin.reject"),
+                        dialogText("common.reject"),
                         List.of(dialogText("tooltip.admin.reject")), "CONFIRM_ADMIN_REJECT",
                         application.id().toString())));
                 items.add(new MenuItem(14, button(Material.ORANGE_CONCRETE,
@@ -2556,7 +2556,7 @@ final class TownUiController implements Listener {
             if (application.territory() != null) {
                 items.add(new MenuItem(16, button(Material.ENDER_EYE,
                         dialogText("admin.preview-site"),
-                        List.of(dialogText("tooltip.admin.preview")), "ADMIN_PREVIEW_SITE",
+                        List.of(dialogText("common.preview-site")), "ADMIN_PREVIEW_SITE",
                         application.id().toString())));
             }
             openMenu(admin, 27, dialogText("admin.detail-title", Map.of(
@@ -3424,14 +3424,14 @@ final class TownUiController implements Listener {
             Component explanation = dialogComponent(requestChanges
                             ? "review.change-heading" : "review.reject-heading")
                     .append(Component.newline())
-                    .append(dialogComponent("review.town", Map.of(
+                    .append(dialogComponent("common.town", Map.of(
                             "town", application.text().name())))
                     .append(Component.newline())
                     .append(dialogComponent(requestChanges
                             ? "review.change-guidance" : "review.reject-guidance"));
             if (error != null) {
                 explanation = explanation.append(Component.newline()).append(Component.newline())
-                        .append(dialogComponent("review.error", Map.of("error", error)));
+                        .append(dialogComponent("common.error", Map.of("error", error)));
             }
             DialogInput reasonInput = DialogInput.text("review_reason", 400,
                     dialogComponent(requestChanges ? "review.change-label" : "review.reject-label"),
@@ -3588,7 +3588,7 @@ final class TownUiController implements Listener {
         persistApplicationForm(player, form, step, ignored -> {
             if (exitAfterSave) {
                 applicationForms.remove(player.getUniqueId(), form);
-                openNotice(player, dialogText("notice.form-draft-saved-title"),
+                openNotice(player, dialogText("common.draft-saved-title"),
                         dialogText("notice.form-draft-saved-message"),
                         dialogText("common.back"), "MAIN", null);
             } else {
@@ -3880,13 +3880,13 @@ final class TownUiController implements Listener {
                 InitialMemberDialogLayout.Action.FIRST_MEMBER, button(Material.PLAYER_HEAD,
                 first.isBlank() ? dialogText("application.member-one-placeholder")
                         : "§a" + first,
-                List.of(dialogText("application.member-select-hint")),
+                List.of(dialogText("common.application-member-select")),
                 "SELECT_INITIAL_MEMBER",
                 form.id() + ":0"),
                 InitialMemberDialogLayout.Action.SECOND_MEMBER, button(Material.PLAYER_HEAD,
                 second.isBlank() ? dialogText("application.member-two-placeholder")
                         : "§a" + second,
-                List.of(dialogText("application.member-select-hint")),
+                List.of(dialogText("common.application-member-select")),
                 "SELECT_INITIAL_MEMBER",
                 form.id() + ":1"),
                 InitialMemberDialogLayout.Action.PREVIOUS, button(Material.ARROW,
@@ -3894,7 +3894,7 @@ final class TownUiController implements Listener {
                 "APPLICATION_MEMBERS_PREVIOUS", form.id().toString()),
                 InitialMemberDialogLayout.Action.COMPLETE, button(Material.WRITABLE_BOOK,
                 dialogText("application.complete"),
-                List.of(dialogText("application.save-hint")),
+                List.of(dialogText("common.application-member-save")),
                 "SAVE_APPLICATION_DRAFT",
                 form.id().toString()),
                 InitialMemberDialogLayout.Action.SAVE_DRAFT, button(Material.CHEST,
@@ -4049,13 +4049,13 @@ final class TownUiController implements Listener {
                 .orElseThrow(() -> new IllegalArgumentException(
                         plugin.messages().plainText("chat.runtime.town-required"))), account -> {
             List<String> description = new ArrayList<>(List.of(
-                    dialogText("donation.town", Map.of("town", safeText(account.townName()))),
+                    dialogText("common.town", Map.of("town", safeText(account.townName()))),
                     dialogText("donation.balance", Map.of(
                             "balance", safeText(runtime.money(account.balanceMinor())))),
                     dialogText("donation.amount-hint", Map.of(
                             "scale", runtime.settlement().scale()))));
             if (error != null && !error.isBlank()) {
-                description.add(dialogText("donation.error", Map.of("error", safeText(error))));
+                description.add(dialogText("common.error", Map.of("error", safeText(error))));
             }
             ItemStack summary = button(Material.SUNFLOWER,
                     dialogText("donation.title"),
@@ -4185,7 +4185,7 @@ final class TownUiController implements Listener {
                     handleApplicationSaveOutcome(player, form, outcome, application -> {
                 clearPersistedDraft(player);
                 notifyInitialMembers(application);
-                openNotice(player, dialogText("notice.draft-saved-title"),
+                openNotice(player, dialogText("common.draft-saved-title"),
                         plugin.messages().text("application.draft-saved"),
                         dialogText("common.continue-processing"),
                         "APPLICATION", application.id().toString());
@@ -4196,7 +4196,7 @@ final class TownUiController implements Listener {
                     handleApplicationSaveOutcome(player, form, outcome, application -> {
                 clearPersistedDraft(player);
                 notifyInitialMembers(application);
-                openNotice(player, dialogText("notice.draft-saved-title"),
+                openNotice(player, dialogText("common.draft-saved-title"),
                         plugin.messages().text("application.draft-saved"),
                         dialogText("common.continue-processing"),
                         "APPLICATION", application.id().toString());
@@ -4499,7 +4499,7 @@ final class TownUiController implements Listener {
         boolean irreversible = confirmedAction.equals("DISBAND")
                 || confirmedAction.equals("CANCEL_VOTE");
         String body = consequence + "\n" + (irreversible
-                ? dialogText("confirmation.irreversible")
+                ? dialogText("common.irreversible")
                 : dialogText("confirmation.check-details"));
         DialogRoute parent = new DialogRoute(returnAction, returnTarget);
         openDialogPage(player, title,

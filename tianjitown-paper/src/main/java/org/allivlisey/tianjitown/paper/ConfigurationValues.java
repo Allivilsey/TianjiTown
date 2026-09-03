@@ -11,7 +11,7 @@ import java.util.function.BiFunction;
 final class ConfigurationValues {
     private static final String BOOLEAN_TYPE = "validation.configuration.boolean-type";
     private static final String INT_RANGE = "validation.configuration.int-range";
-    private static final String VALUE_REQUIRED = "validation.configuration.value-required";
+    private static final String VALUE_REQUIRED = "validation.common.value-required";
     private static final String NUMBER_TYPE = "validation.configuration.number-type";
     private static final String FINITE_NUMBER = "validation.configuration.finite-number";
     private static final String TEXT_TYPE = "validation.configuration.text-type";
@@ -19,7 +19,7 @@ final class ConfigurationValues {
     private static final String STRING_LIST_TYPE =
             "validation.configuration.string-list-type";
     private static final String LIST_TYPE = "validation.configuration.list-type";
-    private static final String INTEGER_TYPE = "validation.configuration.integer-type";
+    private static final String INTEGER_TYPE = "validation.common.integer-type";
     private static final String LONG_RANGE = "validation.configuration.long-range";
 
     private ConfigurationValues() {

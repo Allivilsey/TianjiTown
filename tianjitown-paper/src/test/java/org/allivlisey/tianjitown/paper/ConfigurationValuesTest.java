@@ -19,14 +19,14 @@ class ConfigurationValuesTest {
     private static final List<String> MESSAGE_KEYS = List.of(
             "validation.configuration.boolean-type",
             "validation.configuration.int-range",
-            "validation.configuration.value-required",
+            "validation.common.value-required",
             "validation.configuration.number-type",
             "validation.configuration.finite-number",
             "validation.configuration.text-type",
             "validation.configuration.decimal-text",
             "validation.configuration.string-list-type",
             "validation.configuration.list-type",
-            "validation.configuration.integer-type",
+            "validation.common.integer-type",
             "validation.configuration.long-range");
 
     @TempDir
@@ -38,14 +38,14 @@ class ConfigurationValuesTest {
         Map<String, String> expected = Map.ofEntries(
                 Map.entry("validation.configuration.boolean-type", "config.value 必须为布尔值"),
                 Map.entry("validation.configuration.int-range", "config.value 超出 int 范围"),
-                Map.entry("validation.configuration.value-required", "config.value 不能为空"),
+                Map.entry("validation.common.value-required", "config.value 不能为空"),
                 Map.entry("validation.configuration.number-type", "config.value 必须为数字"),
                 Map.entry("validation.configuration.finite-number", "config.value 必须为有限数"),
                 Map.entry("validation.configuration.text-type", "config.value 必须为文本"),
                 Map.entry("validation.configuration.decimal-text", "config.value 必须为十进制文本"),
                 Map.entry("validation.configuration.string-list-type", "config.value 必须为文本列表"),
                 Map.entry("validation.configuration.list-type", "config.value 必须为列表"),
-                Map.entry("validation.configuration.integer-type", "config.value 必须为整数"),
+                Map.entry("validation.common.integer-type", "config.value 必须为整数"),
                 Map.entry("validation.configuration.long-range",
                         "config.value 必须为 long 范围内的整数"));
 
@@ -71,7 +71,7 @@ class ConfigurationValuesTest {
         assertValidation("validation.configuration.int-range",
                 () -> ConfigurationValues.integer(config, "int-range", 0, resolver));
 
-        assertValidation("validation.configuration.value-required",
+        assertValidation("validation.common.value-required",
                 () -> ConfigurationValues.integer(config, "missing", resolver));
 
         config.set("number", "1");
@@ -103,7 +103,7 @@ class ConfigurationValuesTest {
                 () -> ConfigurationValues.list(config, "list", resolver));
 
         config.set("integer", "not-an-integer");
-        assertValidation("validation.configuration.integer-type",
+        assertValidation("validation.common.integer-type",
                 () -> ConfigurationValues.longInteger(config, "integer", 0, resolver));
 
         config.set("long-range", 1.5D);

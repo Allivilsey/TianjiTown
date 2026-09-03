@@ -25,10 +25,10 @@ final class RuntimeConfigurationValidator {
     private static final String BLACKLIST_TEXT_REQUIRED =
             "validation.runtime-configuration.blacklist-text-required";
     private static final String BLACKLIST_INTEGER_TYPE =
-            "validation.runtime-configuration.blacklist-integer-type";
+            "validation.common.integer-type";
     private static final String BLACKLIST_INTEGER_RANGE =
             "validation.runtime-configuration.blacklist-integer-range";
-    private static final String RANGE = "validation.runtime-configuration.range";
+    private static final String RANGE = "validation.common.range";
 
     private RuntimeConfigurationValidator() {
     }
