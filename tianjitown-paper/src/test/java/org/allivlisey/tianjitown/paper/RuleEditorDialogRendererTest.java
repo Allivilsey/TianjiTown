@@ -84,7 +84,6 @@ class RuleEditorDialogRendererTest {
         assertEquals("&c规则页面版本不能为负数", pageVersion.getMessage());
         assertEquals("&c规则删除请求无效，请刷新界面", deleteRequest.getMessage());
         for (String key : List.of(
-                "validation.rule-editor.display-index",
                 "validation.rule-editor.page-version",
                 "validation.rule-editor.rule-index",
                 "dialog.rules.delete-request-invalid")) {

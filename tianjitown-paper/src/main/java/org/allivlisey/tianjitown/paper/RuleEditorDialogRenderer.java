@@ -18,8 +18,6 @@ final class RuleEditorDialogRenderer {
     static final int PREVIEW_WIDTH = 250;
     static final int DELETE_WIDTH = 28;
     static final int ADD_WIDTH = 130;
-    private static final String DISPLAY_INDEX_INVALID =
-            "validation.rule-editor.display-index";
     private static final String PAGE_VERSION_INVALID =
             "validation.rule-editor.page-version";
     private static final String RULE_INDEX_INVALID = "validation.rule-editor.rule-index";
@@ -81,9 +79,6 @@ final class RuleEditorDialogRenderer {
 
     record Row(int displayIndex, String rule, DeleteTarget deleteTarget) {
         Row {
-            if (displayIndex < 1) {
-                throw new IllegalArgumentException(DISPLAY_INDEX_INVALID);
-            }
             rule = Objects.requireNonNull(rule, "rule");
             deleteTarget = Objects.requireNonNull(deleteTarget, "deleteTarget");
         }

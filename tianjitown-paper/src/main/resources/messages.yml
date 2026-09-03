@@ -25,13 +25,12 @@ validation:
     residence-name-length: '&c小镇代码长度必须为 {minimum}~{maximum}'
     residence-name-characters: '&c小镇代码只能包含英文字母，不允许空格、数字或特殊符号'
     description-length: '&c简介不能超过 {maximum} 字符'
-    description-format: '&c简介含有不允许的格式或控制字符'
+    description-format: '&c简介含有不允许的格式或字符'
     rule-count: '&c规则数量必须为 {minimum}~{maximum}'
     rule-length: '&c规则 {index} 不能超过 {maximum} 字符'
-    rule-format: '&c规则 {index} 含有不允许的格式或控制字符'
+    rule-format: '&c规则 {index} 含有不允许的格式或字符'
   # 规则编辑器数据校验消息；无占位符。
   rule-editor:
-    display-index: '&c规则显示序号必须从 1 开始'
     page-version: '&c规则页面版本不能为负数'
     rule-index: '&c规则索引不能为负数'
   # Vault 清算服务的输入校验；金额均为最小货币单位，精度范围为 0~8。
