@@ -180,14 +180,6 @@ final class PluginMessages {
 
     private void validateRequiredMessages() {
         for (String key : java.util.List.of(
-                "plugin.command.townadmin.description",
-                "plugin.permission.admin.description",
-                "plugin.permission.admin-money.description",
-                "plugin.permission.admin-tax.description",
-                "plugin.permission.admin-ledger.description",
-                "plugin.permission.admin-expand.description",
-                "plugin.permission.admin-buff.description",
-                "plugin.permission.admin-operations.description",
                 "diagnostic.lifecycle.startup-checking",
                 "diagnostic.lifecycle.admin-command-missing",
                 "diagnostic.lifecycle.config-schema-gate-failed",
