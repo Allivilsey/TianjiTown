@@ -10,7 +10,7 @@
     <packaging>pom</packaging>
 
     <name>TianjiTown</name>
-    <description>天际服单服小镇系统</description>
+    <description>天际服小镇系统</description>
 
     <modules>
         <module>tianjitown-core</module>
