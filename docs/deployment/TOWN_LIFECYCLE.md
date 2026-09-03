@@ -11,7 +11,7 @@
 3. 确认 Vault 已注册可用的 XConomy `Economy` 服务，Residence、Vault、XConomy 和 QuickShop-Hikari 均已启用。
 4. 确认 `database.file` 指向 TianjiTown 专用的空 SQLite 文件，其父目录对服务器进程可写。
 5. 使用 `/wb` 为各世界配置 WorldBorder，并按实际地图设置 `minimum-buffer-chunks`。选址要求目标世界已加载且配置了 WorldBorder，5×5 区块及其缓冲范围必须位于边界内。
-6. 使用 `scripts/backup_plugins.sh` 备份 Residence、QuickShop H2、XConomy/清算账户，并用 `scripts/backup_sqlite.sh` 备份 TianjiTown SQLite，完成一次隔离恢复演练。
+6. 在停服时间点归档 Residence、QuickShop H2、XConomy/清算账户，并用 `scripts/backup_sqlite.sh` 备份 TianjiTown SQLite，完成一次隔离恢复演练。
 
 ## 安装或升级
 

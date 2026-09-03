@@ -114,7 +114,6 @@ final class TownAdminCommand implements CommandExecutor {
                 case "expand" -> expand(sender, runtime, args);
                 case "buff" -> buff(sender, runtime, args);
                 case "diagnose" -> diagnose(sender, runtime, args);
-                case "backup" -> backup(sender, runtime, args);
                 default -> {
                     send(sender, "chat.admin.unknown-command", Map.of("command", args[0]));
                     yield true;
@@ -158,14 +157,6 @@ final class TownAdminCommand implements CommandExecutor {
                 send(sender, "chat.admin.status-diagnostic", Map.of(
                         "detail", diagnostic.detail(), "report", safeText(diagnostic.report())));
             }
-            OnlineBackupService.Result backup = runtime.bonuses().lastBackup();
-            if (backup.databaseFile() == null) {
-                send(sender, "chat.admin.status-backup-no-file", Map.of(
-                        "detail", backup.detail()));
-            } else {
-                send(sender, "chat.admin.status-backup", Map.of(
-                        "detail", backup.detail(), "file", safeText(backup.databaseFile())));
-            }
         }
         send(sender, "chat.admin.status-player-entry", Map.of("state",
                 maintenanceMode() ? "MAINTENANCE" : "OPEN"));
@@ -178,14 +169,6 @@ final class TownAdminCommand implements CommandExecutor {
         int days = args.length == 2 ? Integer.parseInt(args[1])
                 : runtime.bonuses().settings().operations().quickShopDiagnosticDays();
         runtime.bonuses().diagnose(sender, days);
-        return true;
-    }
-
-    private boolean backup(CommandSender sender, TownRuntime runtime, String[] args) {
-        if (args.length != 1) {
-            throw messageArgument("chat.admin.usage-backup");
-        }
-        runtime.bonuses().createBackup(sender);
         return true;
     }
 
@@ -1107,7 +1090,6 @@ final class TownAdminCommand implements CommandExecutor {
         send(sender, "chat.admin.help-system-maintenance");
         send(sender, "chat.admin.help-system-audit");
         send(sender, "chat.admin.help-system-diagnose");
-        send(sender, "chat.admin.help-system-backup");
     }
 
     private void economyHelp(CommandSender sender, String topic) {

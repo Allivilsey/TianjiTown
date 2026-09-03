@@ -36,5 +36,5 @@ permissions:
     description: 查询和代购公共 Buff
     default: op
   tianjitown.admin.operations:
-    description: 执行统一诊断与在线备份
+    description: 执行统一诊断
     default: op

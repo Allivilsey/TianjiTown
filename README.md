@@ -50,10 +50,9 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin maintenance <on|off|status>
 /townadmin audit [1~200]
 /townadmin diagnose [1~180天]
-/townadmin backup
 ```
 
-`reload` 会重读可热更新的配置和 `messages.yml`；SQLite 文件和超时参数需重启。维护模式会暂停服务台、手册、玩家界面和表单提交，不会移除现有 Residence 保护。`diagnose` 生成 SQLite、Residence、Vault 与 QuickShop 历史统一报告；`backup` 创建 SQLite 在线一致性备份、配置快照与 SHA-256。
+`reload` 会重读可热更新的配置和 `messages.yml`；SQLite 文件和超时参数需重启。维护模式会暂停服务台、手册、玩家界面和表单提交，不会移除现有 Residence 保护。`diagnose` 生成 SQLite、Residence、Vault 与 QuickShop 历史统一报告；SQLite 和依赖插件的备份需按停服运维流程执行。
 
 ### 服务台与手册
 
@@ -131,7 +130,7 @@ Buff 目录位于 `config.yml` 的 `buffs` 配置节。公共 Buff 不受世界�
 
 ### 领地加成
 
-建筑返还与领地信标位于 `config.yml` 的 `territory` 配置节，诊断和备份位于 `operations` 配置节。建筑返还以 25% 概率处理生存模式成员在本镇有效 Residence 内放置的安全单方块，成功时只播放拾取音效，不展示内部额度。镇长或副镇长切换信标效果时，系统记录数据库中尚未存在或等级更高的效果，不再扫描区块中的信标。
+建筑返还与领地信标位于 `config.yml` 的 `territory` 配置节，诊断位于 `operations` 配置节。建筑返还以 25% 概率处理生存模式成员在本镇有效 Residence 内放置的安全单方块，成功时只播放拾取音效，不展示内部额度。镇长或副镇长切换信标效果时，系统记录数据库中尚未存在或等级更高的效果，不再扫描区块中的信标。
 
 ## 玩家入口
 

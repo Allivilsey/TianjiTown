@@ -116,10 +116,3 @@ territory:
 operations:
   # 插件每次成功启动后自动执行一次统一诊断；运行期间可使用 /townadmin diagnose 手动执行。
   quickshop-diagnostic-days: 7
-  backup:
-    # 在线备份只覆盖 TianjiTown SQLite 与 config.yml；依赖插件需按运维手册统一备份。
-    # 目录必须是 plugins/TianjiTown 下的相对路径，禁止绝对路径或 ../ 逃逸。
-    enabled: true
-    interval-hours: 6
-    retention-count: 14
-    directory: backups

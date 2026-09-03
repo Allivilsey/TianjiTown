@@ -119,8 +119,6 @@ public final class TianjiTownPlugin extends JavaPlugin {
             "log.scheduler.periodic.refund-counter-cleanup-failure";
     private static final String PERIODIC_STARTUP_DIAGNOSTIC_FAILURE =
             "log.scheduler.periodic.startup-diagnostic-failure";
-    private static final String PERIODIC_SCHEDULED_BACKUP_FAILURE =
-            "log.scheduler.periodic.scheduled-backup-failure";
     private final AtomicReference<GateStatus> gateStatus = new AtomicReference<>(
             new GateStatus(GateStatus.State.CHECKING, List.of(BOOTSTRAP_GATE_DETAIL)));
     private final AtomicLong lifecycleGeneration = new AtomicLong();
@@ -642,14 +640,6 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 () -> runPeriodic(PERIODIC_STARTUP_DIAGNOSTIC_FAILURE,
                         runtime.bonuses()::diagnoseAtStartup),
                 STARTUP_DIAGNOSTIC_DELAY_TICKS);
-        if (runtime.bonuses().settings().operations().backup().enabled()) {
-            getServer().getScheduler().runTaskTimer(this,
-                    () -> runPeriodic(PERIODIC_SCHEDULED_BACKUP_FAILURE,
-                            runtime.bonuses()::createScheduledBackup),
-                    20L * 60,
-                    20L * 60 * 60 * runtime.bonuses().settings().operations()
-                            .backup().interval().toHours());
-        }
         List<String> details = new ArrayList<>(previousDetails);
         details.add("OK " + databaseDetail);
         details.add((quickShopCapability.available() ? "OK " : "WARN ")

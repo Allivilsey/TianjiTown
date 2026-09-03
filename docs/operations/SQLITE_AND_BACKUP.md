@@ -14,13 +14,9 @@ TianjiTown 默认使用 `plugins/TianjiTown/tianjitown.db`，也可在 `config.y
 
 ## 备份
 
-上线前备份 Residence、QuickShop-Hikari、XConomy/Vault 和 TianjiTown。插件文件可用：
+上线前在同一停服时间点备份 Residence、QuickShop-Hikari、XConomy/Vault 和 TianjiTown。依赖插件数据需由运维工具或人工归档，TianjiTown 不提供在线配置快照。
 
-```bash
-scripts/backup_plugins.sh /path/to/plugins backups
-```
-
-SQLite 在线一致性备份可用：
+SQLite 数据库备份需由停服运维流程单独执行：
 
 ```bash
 bash scripts/backup_sqlite.sh \

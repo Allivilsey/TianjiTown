@@ -56,14 +56,6 @@ final class TownBonusRuntime implements Listener {
             "log.bonus.index-refresh-failure";
     private static final String REFUND_COUNTER_CLEANUP_FAILURE =
             "log.bonus.refund-counter-cleanup-failure";
-    private static final String BACKUP_RESULT_SUCCESS =
-            "chat.bonus.backup-result-success";
-    private static final String BACKUP_RESULT_SUCCESS_NO_FILE =
-            "chat.bonus.backup-result-success-no-file";
-    private static final String BACKUP_RESULT_FAILURE =
-            "chat.bonus.backup-result-failure";
-    private static final String SCHEDULED_BACKUP_SUCCESS =
-            "log.bonus.scheduled-backup-success";
     private static final String BEACON_REFRESH_OBJECT_FAILURE =
             "log.bonus.beacon-refresh-object-failure";
     private static final String BEACON_RECORD_OBJECT_FAILURE =
@@ -83,7 +75,6 @@ final class TownBonusRuntime implements Listener {
     private final TownBonusRepository repository;
     private final TownBonusSettings settings;
     private final QuickShopHistoryProbe quickShopHistory;
-    private final OnlineBackupService backups;
     private final AtomicReference<TownBonusRepository.BonusIndex> index = new AtomicReference<>(
             new TownBonusRepository.BonusIndex(Map.of(), Map.of(), Map.of(), Map.of(), Map.of()));
     private final Map<PlayerEffectKey, ManagedEffect> managedEffects = new HashMap<>();
@@ -103,18 +94,12 @@ final class TownBonusRuntime implements Listener {
         this.quickShopHistory = new QuickShopHistoryProbe(quickShop,
                 host.settlement().accountId(), host.settlement().scale(),
                 plugin.messages()::plainText);
-        this.backups = new OnlineBackupService(plugin, host.database(),
-                settings.operations().backup());
         this.lastDiagnostic = new AtomicReference<>(new DiagnosticResult(false, null,
                 plugin.messages().text("chat.bonus.diagnostic-not-run"), null));
     }
 
     TownBonusSettings settings() {
         return settings;
-    }
-
-    OnlineBackupService.Result lastBackup() {
-        return backups.lastResult();
     }
 
     DiagnosticResult lastDiagnostic() {
@@ -159,48 +144,6 @@ final class TownBonusRuntime implements Listener {
                 plugin.getLogger().warning(plugin.messages().plainText(
                         REFUND_COUNTER_CLEANUP_FAILURE,
                         Map.of("detail", safeText(safeMessage(exception)))));
-            }
-        });
-    }
-
-    void createBackup(CommandSender sender) {
-        if (!settings.operations().backup().enabled()) {
-            plugin.messages().send(sender, "chat.bonus.backup-disabled");
-            return;
-        }
-        plugin.messages().send(sender, "chat.bonus.backup-started");
-        plugin.runAsync(() -> {
-            OnlineBackupService.Result result = backups.create();
-            plugin.runMain(() -> {
-                if (!result.success()) {
-                    plugin.messages().send(sender, BACKUP_RESULT_FAILURE,
-                            Map.of("detail", safeText(result.detail())));
-                    return;
-                }
-                if (result.databaseFile() == null) {
-                    plugin.messages().send(sender, BACKUP_RESULT_SUCCESS_NO_FILE,
-                            Map.of("detail", safeText(result.detail())));
-                    return;
-                }
-                plugin.messages().send(sender, BACKUP_RESULT_SUCCESS,
-                        Map.of("detail", safeText(result.detail()),
-                                "file", safeText(result.databaseFile())));
-            });
-        });
-    }
-
-    void createScheduledBackup() {
-        if (!settings.operations().backup().enabled()) {
-            return;
-        }
-        plugin.runAsync(() -> {
-            OnlineBackupService.Result result = backups.create();
-            if (result.success()) {
-                plugin.getLogger().info(plugin.messages().plainText(SCHEDULED_BACKUP_SUCCESS,
-                        Map.of("detail", safeText(result.detail()),
-                                "file", safeText(result.databaseFile()))));
-            } else {
-                plugin.getLogger().severe(result.detail());
             }
         });
     }

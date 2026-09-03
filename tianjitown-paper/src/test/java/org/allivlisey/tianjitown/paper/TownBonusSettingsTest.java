@@ -29,7 +29,6 @@ class TownBonusSettingsTest {
         assertTrue(settings.buildingRefund().blacklist().contains(Material.REDSTONE_BLOCK));
         assertTrue(settings.buildingRefund().blacklist().contains(Material.CHEST));
         assertEquals(100, settings.beacon().refreshIntervalTicks());
-        assertEquals(14, settings.operations().backup().retentionCount());
     }
 
     @Test
@@ -72,9 +71,7 @@ class TownBonusSettingsTest {
                 "validation.bonus.building-refund-blacklist-required",
                 "validation.bonus.building-refund-blacklist-material-invalid",
                 "validation.bonus.beacon-refresh-interval-range",
-                "validation.bonus.diagnostic-days-range",
-                "validation.bonus.backup-range",
-                "validation.bonus.backup-directory-required");
+                "validation.bonus.diagnostic-days-range");
 
         for (String key : keys) {
             String rendered = messages.plainText(key, placeholders);
@@ -114,11 +111,6 @@ class TownBonusSettingsTest {
                 messages.plainText("validation.bonus.diagnostic-days-range",
                         Map.of("path", "operations.quickshop-diagnostic-days", "minimum", 1,
                                 "maximum", 180)));
-        assertEquals("定时备份间隔或保留数量超出安全范围",
-                messages.plainText("validation.bonus.backup-range"));
-        assertEquals("operations.backup.directory 不能为空",
-                messages.plainText("validation.bonus.backup-directory-required",
-                        Map.of("path", "operations.backup.directory")));
     }
 
     @Test
@@ -160,13 +152,6 @@ class TownBonusSettingsTest {
         assertFailure(messages, diagnosticDays,
                 "operations.quickshop-diagnostic-days 必须在 1~180 天之间");
 
-        YamlConfiguration backup = configuration("STONE", "0.25");
-        backup.set("operations.backup.interval-hours", 0);
-        assertFailure(messages, backup, "定时备份间隔或保留数量超出安全范围");
-
-        YamlConfiguration directory = configuration("STONE", "0.25");
-        directory.set("operations.backup.directory", " ");
-        assertFailure(messages, directory, "operations.backup.directory 不能为空");
     }
 
     @Test
@@ -215,11 +200,6 @@ class TownBonusSettingsTest {
                     refresh-interval-ticks: 100
                   operations:
                     quickshop-diagnostic-days: 7
-                    backup:
-                      enabled: true
-                      interval-hours: 6
-                      retention-count: 14
-                      directory: backups
                 """.formatted(chance, material));
         return config;
     }

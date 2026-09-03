@@ -18,7 +18,6 @@ class TownAdminPermissionsTest {
         assertScopedCommand(TownAdminPermissions.BUFF, "buff");
         assertScopedCommand(TownAdminPermissions.OPERATIONS, "diagnose");
         Predicate<String> operations = Set.of(TownAdminPermissions.OPERATIONS)::contains;
-        assertTrue(TownAdminPermissions.canUseRoot(operations, "backup"));
         assertTrue(TownAdminPermissions.canUseRoot(operations, "status"));
         assertTrue(TownAdminPermissions.canViewHelpTopic(operations, "system"));
     }

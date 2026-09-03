@@ -14,7 +14,7 @@ TianjiTown 是面向单个 Paper 服务器的小镇治理与统一经济插件�
 - 固定网格领地扩张和 Residence 权限同步；
 - 使用公共资金购买和叠加公共 Buff；
 - 领地内建筑方块概率返还和小镇信标效果覆盖；
-- 审计、领地对账、清算账户对账、统一诊断和 SQLite 在线备份。
+- 审计、领地对账、清算账户对账和统一诊断。
 
 ## 2. 玩家快速上手
 
@@ -347,7 +347,6 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 | 建筑返还重置时区 | Asia/Shanghai | 周一 00:00 |
 | 信标效果刷新周期 | 100 tick | 只刷新已记录效果，不扫描信标 |
 | 启动诊断 | 每次成功启动 1 次 | 默认检查近 7 天 QuickShop 历史；运行期间可手动执行 |
-| 自动备份周期 | 6 小时 | 默认保留 14 份 |
 
 ## 14. 管理功能与命令
 
@@ -361,7 +360,6 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 /townadmin maintenance <on|off|status>
 /townadmin audit [1~200]
 /townadmin diagnose [1~180天]
-/townadmin backup
 
 /townadmin station create|remove|info
 /townadmin station list
@@ -424,7 +422,7 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 | `tianjitown.admin.ledger` | 查询公共账本 |
 | `tianjitown.admin.expand` | 扩张查询和预览 |
 | `tianjitown.admin.buff` | Buff 查询和代购 |
-| `tianjitown.admin.operations` | 状态、统一诊断和在线备份 |
+| `tianjitown.admin.operations` | 状态和统一诊断 |
 
 小镇生命周期、成员、投票、领地重建、服务台、重载、维护和审计等命令要求完整的 `tianjitown.admin` 权限。
 
@@ -441,7 +439,7 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 
 QuickShop 历史最多读取 1000 条；超过时报告为 `INCOMPLETE`，不会误报完全一致。诊断报告保存在插件目录的 `diagnostics` 下，保留最近 30 份。
 
-在线备份使用 SQLite `VACUUM INTO` 创建一致性副本，同时保存 `config.yml` 和 SHA-256。默认每 6 小时执行一次并保留 14 份；备份目录只允许配置为 `plugins/TianjiTown` 内的相对路径。该备份不包含 Residence、QuickShop 和 XConomy 数据，生产恢复仍需要这些依赖的同时间点备份。
+插件不执行在线配置或数据库备份。生产恢复仍需要按运维流程在同一停服时间点分别准备 SQLite、Residence、QuickShop 和 XConomy 的备份。
 
 ## 16. 功能边界
 

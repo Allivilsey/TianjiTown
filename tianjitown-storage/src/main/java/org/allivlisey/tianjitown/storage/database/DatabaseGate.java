@@ -6,9 +6,6 @@ import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.MigrationVersion;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -130,35 +127,6 @@ public final class DatabaseGate implements AutoCloseable {
     public String schemaVersion() {
         MigrationInfo current = flyway.info().current();
         return current == null ? "none" : current.getVersion().toString();
-    }
-
-    public void onlineBackup(Path target) {
-        Path normalized = target.toAbsolutePath().normalize();
-        try {
-            Path parent = normalized.getParent();
-            if (parent == null) {
-                throw new IllegalArgumentException("备份目标必须包含目录");
-            }
-            Files.createDirectories(parent);
-            if (Files.exists(normalized)) {
-                throw new IllegalArgumentException("拒绝覆盖已有备份: " + normalized);
-            }
-        } catch (IOException exception) {
-            throw new IllegalStateException("无法准备 SQLite 备份目录: " + normalized, exception);
-        }
-        String escaped = normalized.toString().replace("'", "''");
-        try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement()) {
-            statement.execute("VACUUM main INTO '" + escaped + "'");
-        } catch (SQLException exception) {
-            try {
-                Files.deleteIfExists(normalized);
-            } catch (IOException cleanupFailure) {
-                exception.addSuppressed(cleanupFailure);
-            }
-            throw new IllegalStateException("SQLite 在线备份失败: " + exception.getMessage(),
-                    exception);
-        }
     }
 
     @Override

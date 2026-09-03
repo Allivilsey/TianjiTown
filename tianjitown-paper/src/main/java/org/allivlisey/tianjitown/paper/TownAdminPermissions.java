@@ -22,7 +22,6 @@ final class TownAdminPermissions {
             Map.entry("buff", BUFF),
             Map.entry("status", OPERATIONS),
             Map.entry("diagnose", OPERATIONS),
-            Map.entry("backup", OPERATIONS),
             Map.entry("system", OPERATIONS));
     private static final List<String> SCOPED_PERMISSIONS = List.copyOf(
             SCOPED_ROOTS.values());

@@ -22,7 +22,7 @@ final class TownAdminCompletionEngine {
     private static final List<String> ROOTS = List.of(
             "help", "status", "reload", "audit", "station", "handbook", "application", "town",
             "member", "mayor", "vote", "land", "money", "tax", "ledger", "expand",
-            "buff", "maintenance", "diagnose", "backup");
+            "buff", "maintenance", "diagnose");
     private final BiFunction<String, Map<String, ?>, String> messageResolver;
 
     TownAdminCompletionEngine(BiFunction<String, Map<String, ?>, String> messageResolver) {

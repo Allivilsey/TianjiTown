@@ -70,7 +70,7 @@ validation:
     twelve-hour-limit-exceeds-weekly: '&c{path} 不能大于每周限额'
     expansion-cost-overflow: '&c金额超过上限'
     expansion-cost-range: '&c{path} 价格超出次级货币单位范围'
-  # 建筑返还、信标增强和定时备份配置校验消息；{path}=配置路径，{value}=非法材料值，
+  # 建筑返还、信标增强和统一诊断校验消息；{path}=配置路径，{value}=非法材料值，
   # {minimum}/{maximum}=允许范围；refresh-interval-ticks 的范围单位为 tick，diagnostic-days 为天。
   bonus:
     building-refund-chance-range: '&c{path} 必须在 (0, 1] 范围内'
@@ -79,14 +79,6 @@ validation:
     building-refund-blacklist-required: '&c{path} 至少需要一个方块或分组'
     building-refund-blacklist-material-invalid: '&c建筑返还黑名单材料无效: {value}'
     diagnostic-days-range: '&c{path} 必须在 {minimum}~{maximum} 天之间'
-    backup-range: '&c定时备份间隔或保留数量超出安全范围'
-  # 在线备份目录校验；{path}=配置中的相对路径或解析后的目录路径。
-  backup:
-    absolute-path: '备份目录必须位于插件数据目录内，不能使用绝对路径: {path}'
-    relative-path-escape: '相对备份目录不能超出插件数据目录: {path}'
-    symlink-escape: '备份目录通过符号链接或联接超出插件数据目录: {path}'
-    not-directory: '备份目录指向文件: {path}'
-    real-path-verification-failure: '无法验证备份目录真实路径: {path}'
   # SitePolicy 预览参数校验。
   site:
     areas-required: '领地预览至少需要一个区域'
@@ -248,8 +240,6 @@ chat:
     status-beacon: '&7- 信标增强: {state}'
     status-diagnostic: '&7- 最近统一诊断: {detail}，报告={report}'
     status-diagnostic-no-report: '&7- 最近统一诊断: {detail}'
-    status-backup: '&7- 最近在线备份: {detail}，文件={file}'
-    status-backup-no-file: '&7- 最近在线备份: {detail}'
     status-player-entry: '&7- 玩家入口: {state}'
 
     # 维护模式和启动确认按钮相关消息。
@@ -277,7 +267,6 @@ chat:
 
     # 系统操作参数；这些消息会作为参数错误详情嵌入 argument-error。
     usage-diagnose: '用法: /townadmin diagnose [1~180天]'
-    usage-backup: '用法: /townadmin backup'
     usage-maintenance: '用法: /townadmin maintenance <on|off|status>'
     usage-audit: '用法: /townadmin audit [1~200]'
     audit-limit-integer: 'audit 数量必须是 1~200 的整数'
@@ -382,7 +371,7 @@ chat:
     help-placeholder-hint: '&8Tab 补全中的 <原因> 是位置提示，请替换为实际内容。'
     help-forbidden: '&c没有该帮助分类的权限。'
     help-unknown: '&c未知帮助分类：{topic}'
-    help-entry-system: '&esystem &7状态、重载、维护、审计、统一诊断与在线备份'
+    help-entry-system: '&esystem &7状态、重载、维护、审计与统一诊断'
     help-entry-station: '&estation &7服务台与小镇手册'
     help-entry-application: '&eapplication &7申请审批'
     help-entry-town: '&etown &7小镇查看与删除'
@@ -400,7 +389,6 @@ chat:
     help-system-maintenance: '&e/townadmin maintenance <on|off|status> &7管理维护模式'
     help-system-audit: '&e/townadmin audit [1~200] &7查看最近审计记录'
     help-system-diagnose: '&e/townadmin diagnose [1~180天] &7生成统一对账诊断报告'
-    help-system-backup: '&e/townadmin backup &7立即创建 SQLite 在线备份与配置快照'
     help-economy-title: '&6公共经济与领地扩张'
     help-economy-money-view: '&e/townadmin money view <小镇全名>'
     help-economy-money-adjust: '&e/townadmin money adjust <小镇全名> <带符号金额> <原因>'
@@ -522,14 +510,8 @@ chat:
     unsupported-add-area: '&c当前领地适配器不支持扩张区域。'
     unsupported-remove-area: '&c当前领地适配器不支持移除扩张区域。'
 
-  # 建筑返还、信标加成、统一诊断和定时备份相关消息。
+  # 建筑返还、信标加成和统一诊断相关消息。
   bonus:
-    backup-disabled: '&c定时备份已在配置中关闭。'
-    backup-started: '&e正在创建 SQLite 在线备份与配置快照……'
-    # {detail}=备份结果详情，{file}=数据库备份文件路径；无文件时使用 no-file 键。
-    backup-result-success: '&a{detail}；文件={file}'
-    backup-result-success-no-file: '&a{detail}'
-    backup-result-failure: '&c{detail}'
     diagnostic-range: '诊断范围必须在 1~180 天之间'
     diagnostic-running: '&e已有统一诊断正在运行，请稍后查看结果。'
     diagnostic-started: '&e正在检查 SQLite、Residence、Vault 与 QuickShop 历史……'
@@ -539,12 +521,6 @@ chat:
     diagnostic-summary-failure: '&c统一诊断发现异常，请查看报告'
     diagnostic-not-run: '尚未执行'
     diagnostic-line: '&7- {line}'
-
-  # 在线备份结果详情；{checksum}=备份文件 SHA-256，{detail}=错误或结果详情。
-  backup:
-    not-run: '尚未执行'
-    success-detail: 'SQLite 在线备份与配置快照已完成，SHA-256={checksum}'
-    failure-detail: '备份失败: {detail}'
 
   # Residence 外部命令和领地删除保护提示。
   residence:
@@ -618,7 +594,7 @@ diagnostic:
     runtime-initialization-failure: 'FAIL 业务配置、WorldBorder、玩家界面或清算账户: {detail}'
     world-border-ready: 'OK WorldBorder 边界 API 已接入'
     dialog-ui-ready: 'OK 玩家界面=DIALOG'
-    runtime-features-ready: 'OK 建筑返还、信标增强、启动诊断与定时备份已启用'
+    runtime-features-ready: 'OK 建筑返还、信标增强与启动诊断已启用'
   # 调度参数校验；无占位符。
   scheduler:
     negative-delay: 'delayTicks 不能为负数'
@@ -696,12 +672,6 @@ diagnostic:
     api-inaccessible: 'WorldBorder API 不可访问'
     api-call-failed: 'WorldBorder API 调用失败'
     api-load-failure: 'WorldBorder API 无法加载'
-  # 在线备份运行约束与技术诊断。
-  backup:
-    main-thread-required: 'SQLite 备份不能在 Paper 主线程执行'
-    filename-exhausted: '同一秒内备份任务过多，无法分配唯一文件名'
-    sha256-unavailable: '运行环境缺少 SHA-256'
-
 # GlobalMarketPlus 事件处理日志；{detail}=异常详情，同类错误只记录一次。
 log:
   # 插件停服期间的资源清理和异步任务等待；{detail}=异常详情，{active}=未结束任务数，{player}=玩家 UUID。
@@ -792,12 +762,10 @@ log:
       beacon-effect-refresh-failure: '信标效果刷新失败，后续周期仍会继续尝试: {detail}'
       refund-counter-cleanup-failure: '返还计数清理失败，后续周期仍会继续尝试: {detail}'
       startup-diagnostic-failure: '启动诊断失败，后续周期仍会继续尝试: {detail}'
-      scheduled-backup-failure: '定时备份失败，后续周期仍会继续尝试: {detail}'
-  # TownBonusRuntime 建筑返还、信标、缓存和备份日志；{detail}=异常或结果详情，{file}=备份数据库路径。
+  # TownBonusRuntime 建筑返还、信标、缓存和诊断报告日志；{detail}=异常或结果详情。
   bonus:
     index-refresh-failure: '刷新领地加成缓存失败，将继续使用旧快照: {detail}'
     refund-counter-cleanup-failure: '清理建筑返还周计数失败: {detail}'
-    scheduled-backup-success: '{detail}；文件={file}'
     beacon-refresh-object-failure: '信标刷新遇到已失效的玩家、世界或依赖对象，已跳过该对象: {detail}'
     beacon-record-object-failure: '信标对象在延迟回调前已失效，已跳过记录: {detail}'
     beacon-cleanup-object-failure: '清理托管信标效果时对象已失效: {detail}'

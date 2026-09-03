@@ -3,8 +3,6 @@ package org.allivlisey.tianjitown.paper;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 
-import java.nio.file.Path;
-import java.time.Duration;
 import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.util.Arrays;
@@ -34,10 +32,6 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
             "validation.common.range";
     private static final String DIAGNOSTIC_DAYS_RANGE =
             "validation.bonus.diagnostic-days-range";
-    private static final String BACKUP_RANGE = "validation.bonus.backup-range";
-    private static final String BACKUP_DIRECTORY_REQUIRED =
-            "validation.common.value-required";
-
     static TownBonusSettings load(ConfigurationSection config) {
         return load(config, ConfigurationValues::fallbackMessage);
     }
@@ -125,27 +119,12 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
         String root = "operations";
         int diagnosticsDays = integer(config, root + ".quickshop-diagnostic-days", 7,
                 messageResolver);
-        long backupHours = ConfigurationValues.longInteger(config, root + ".backup.interval-hours", 6,
-                messageResolver);
-        int retention = integer(config, root + ".backup.retention-count", 14, messageResolver);
-        String directory = ConfigurationValues.text(config, root + ".backup.directory", "backups",
-                messageResolver);
         if (diagnosticsDays < 1 || diagnosticsDays > 180) {
             throw invalid(messageResolver, DIAGNOSTIC_DAYS_RANGE,
                     Map.of("path", root + ".quickshop-diagnostic-days", "minimum", 1,
                             "maximum", 180));
         }
-        if (backupHours < 1 || backupHours > 24L * 30 || retention < 2 || retention > 1000) {
-            throw invalid(messageResolver, BACKUP_RANGE, Map.of());
-        }
-        if (directory == null || directory.isBlank()) {
-            throw invalid(messageResolver, BACKUP_DIRECTORY_REQUIRED,
-                    Map.of("path", root + ".backup.directory"));
-        }
-        return new Operations(diagnosticsDays, new Backup(
-                        ConfigurationValues.bool(config, root + ".backup.enabled", true,
-                                messageResolver),
-                        Duration.ofHours(backupHours), retention, Path.of(directory)));
+        return new Operations(diagnosticsDays);
     }
 
     private static double decimal(ConfigurationSection config, String path, double defaultValue,
@@ -245,9 +224,6 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
     record BeaconEnhancement(boolean enabled, long refreshIntervalTicks) {
     }
 
-    record Operations(int quickShopDiagnosticDays, Backup backup) {
-    }
-
-    record Backup(boolean enabled, Duration interval, int retentionCount, Path directory) {
+    record Operations(int quickShopDiagnosticDays) {
     }
 }

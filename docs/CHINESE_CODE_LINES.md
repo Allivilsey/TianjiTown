@@ -62,7 +62,6 @@
 - tianjitown-paper/src/main/java/cn/tianji/town/paper/DonationCompensationCoordinator.java: 40, 43, 53, 81, 106
 - tianjitown-paper/src/main/java/cn/tianji/town/paper/EconomySettings.java: 40, 43, 46, 49, 53, 57, 61, 67
 - tianjitown-paper/src/main/java/cn/tianji/town/paper/GovernanceSettings.java: 58-59
-- tianjitown-paper/src/main/java/cn/tianji/town/paper/OnlineBackupService.java: 43, 93, 98, 115, 119, 122, 146, 180
 - tianjitown-paper/src/main/java/cn/tianji/town/paper/PluginMessages.java: 35, 69, 83, 95, 101, 121
 - tianjitown-paper/src/main/java/cn/tianji/town/paper/ProvisionResult.java: 15, 24, 29
 - tianjitown-paper/src/main/java/cn/tianji/town/paper/RetryingWorkQueue.java: 25, 28, 116
@@ -152,7 +151,6 @@
 - ✅ `DonationCompensationCoordinator.java`: 53, 81, 106
 - ✅ `EconomySettings.java`: 40, 43, 46, 49, 53, 57, 61, 67
 - ✅ `GovernanceSettings.java`: 58-59
-- ✅ `OnlineBackupService.java`: 43, 93, 98, 115, 119, 122, 146, 180
 - ✅ `PluginMessages.java`: 35, 69, 83, 95, 101, 121
 - ✅ `ProvisionResult.java`: 15, 24, 29
 - ❌ `RetryingWorkQueue.java`: 25, 28, 116

@@ -13,7 +13,7 @@
 - 执行 `/townadmin status`，保留当前运行环境与门禁结果。
 - 首次启动后确认业务表为空，安装门禁记录为 1 行。
 - 在隔离环境通过正常建镇与删除流程验证 Residence 创建、成员权限、边界读取和清理；不在管理员命令中暴露独立测试入口。
-- 使用 [`SQLITE_AND_BACKUP.md`](../operations/SQLITE_AND_BACKUP.md) 中的方法完成一次在线备份和隔离恢复。
+- 使用 [`SQLITE_AND_BACKUP.md`](../operations/SQLITE_AND_BACKUP.md) 中的方法完成一次 SQLite 备份，并按停服流程完成隔离恢复。
 - 可用下列命令生成 JAR 哈希和启动日志事实报告；该报告只读，不参与启动判定：
 
 ```bash

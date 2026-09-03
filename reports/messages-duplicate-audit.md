@@ -57,13 +57,13 @@
 
 注意：`PluginMessages.validateRequiredMessages()` 当前显式校验 3 个 `dialog.tooltip.votes.entry.*` 键；合并时需同步更新该校验和相关测试。
 
-### 3. 通用配置校验（4 组，11 个键）
+### 3. 通用配置校验（4 组，10 个键）
 
 建议放入 `validation.common`，各校验器共同引用：
 
 | 建议公共键 | 当前重复键 | 文案 |
 | --- | --- | --- |
-| `validation.common.value-required` | `validation.buff.value-required`、`validation.configuration.value-required`、`validation.economy.settlement-account-required`、`validation.bonus.backup-directory-required` | `&c{path} 不能为空` |
+| `validation.common.value-required` | `validation.buff.value-required`、`validation.configuration.value-required`、`validation.economy.settlement-account-required` | `&c{path} 不能为空` |
 | `validation.common.range` | `validation.runtime-configuration.range`、`validation.bonus.building-refund-weekly-limit-range`、`validation.bonus.building-refund-retention-range`、`validation.bonus.beacon-refresh-interval-range` | `&c{path} 必须在 {minimum}~{maximum} 范围内` |
 | `validation.common.integer-type` | `validation.configuration.integer-type` | `&c{path} 必须为整数` |
 | `validation.common.non-negative` | `validation.economy.weekly-subsidy-limit-negative`、`validation.economy.twelve-hour-subsidy-limit-negative` | `&c{path} 不能小于 0` |
@@ -117,13 +117,11 @@
 - `chat.admin.town-not-found-generic`、`chat.runtime.town-not-found`：`小镇不存在`
 - `validation.vault.adjustment-non-zero`、`chat.admin.money-adjust-zero`：`调整金额不能为 0`
 - `chat.land-protection.initial-projection-collision`、`chat.land-protection.expansion-collision`：`目标 5×5 区块与 Residence 冲突: {residence}`
-- `chat.bonus.backup-result-failure`、`chat.bonus.diagnostic-failed`：`&c{detail}`
 
 ## P3：重复但建议保留独立键
 
 这些键当前文本相同，或只在展示颜色上不同，但语义生命周期不同，保留独立配置更清晰：
 
-- `chat.bonus.diagnostic-not-run` 与 `chat.backup.not-run`：诊断状态和备份状态都显示“尚未执行”，未来很可能分别扩充。
 - `chat.lifecycle.compensation-auto` 与 `chat.lifecycle.compensation-manual`：自动补偿和人工补偿是不同恢复分支，即使当前后缀相同也应允许分别定制。
 - `log.donation.operation-reason` 与 `dialog.ledger.type.donation`：一个是写入时的原因快照，一个是账本类型标签。
 - `handbook.item-title` 与 `handbook.item-display-name`：书本内部标题和物品显示名属于不同 Minecraft 字段，颜色要求也不同。

@@ -62,25 +62,6 @@ class DatabaseGateTest {
     }
 
     @Test
-    void createsConsistentOnlineBackupWithoutOverwriting() throws Exception {
-        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("online-source.db");
-        Path backup = temporaryDirectory.resolve("backup").resolve("town.db");
-        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
-                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
-            assertTrue(gate.verifyAndMigrate().healthy());
-            gate.onlineBackup(backup);
-            assertTrue(java.nio.file.Files.isRegularFile(backup));
-            assertThrows(IllegalArgumentException.class, () -> gate.onlineBackup(backup));
-        }
-        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + backup);
-             Statement statement = connection.createStatement();
-             ResultSet result = statement.executeQuery("PRAGMA quick_check")) {
-            assertTrue(result.next());
-            assertEquals("ok", result.getString(1));
-        }
-    }
-
-    @Test
     void rejectsReadOnlyDatabaseBeforeReportingHealthy() {
         Path database = temporaryDirectory.resolve("read-only.db").toAbsolutePath();
         initializeDatabase("jdbc:sqlite:" + database);

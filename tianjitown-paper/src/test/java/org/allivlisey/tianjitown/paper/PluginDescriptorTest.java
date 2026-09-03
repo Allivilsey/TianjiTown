@@ -64,7 +64,7 @@ class PluginDescriptorTest {
         assertTrue(descriptor.contains("description: TianjiTown 全部管理权限"));
         for (String localizedText : List.of("查询、调整和对账小镇公共资金", "强制调整小镇统一收入税率",
                 "查询小镇完整公共账本", "查询和代办小镇领地扩张", "查询和代购公共 Buff",
-                "执行统一诊断与在线备份")) {
+                "执行统一诊断")) {
             assertTrue(descriptor.contains("description: " + localizedText), localizedText);
         }
         assertTrue(descriptor.contains("usage: /townadmin help"));

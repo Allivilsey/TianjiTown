@@ -9,7 +9,7 @@
 3. 在隔离环境恢复生产副本，以 `1.3.0` 确认基线后替换为 `1.4.0`；不得直接在唯一生产副本上首次验证迁移。
 4. 按地图和经济规模配置 `territory.building-refund`、`territory.beacon` 与 `operations`。返还黑名单默认包含红石类别和高获取难度方块。
 5. 启动后确认 `/townadmin status` 显示 config schema `10`、Flyway schema `7.0` 和 `READY`；插件会在启动阶段自动执行一次统一诊断。
-6. 执行 `/townadmin diagnose 7` 和 `/townadmin backup`，保存报告、备份文件及 SHA-256。
+6. 执行 `/townadmin diagnose 7`，保存诊断报告；SQLite 另按运维手册停服备份。
 
 ## 领地加成验收
 
@@ -20,7 +20,7 @@
 - 核对只有本镇镇长和副镇长可以编辑信标效果；普通成员、访客和他镇管理者均被拒绝。
 - 破坏信标、使金字塔失效、归档/变更领地、关闭功能、重载插件和停服时，托管效果应被清理。
 
-## 统一诊断与备份验收
+## 统一诊断验收
 
 `/townadmin diagnose [天数]` 必须同时给出：
 
@@ -31,7 +31,7 @@
 
 QuickShop 查询最多读取 1000 条时报告标记 `INCOMPLETE`，不得误报为完全一致。报告写入 `plugins/TianjiTown/diagnostics`，只保留最近 30 份。
 
-自动备份使用 SQLite `VACUUM INTO`，同时保存 `config.yml` 和 SHA-256。它不替代 Residence、QuickShop、XConomy 的同时间点备份。至少执行一次隔离恢复，并重新运行 `PRAGMA quick_check`、Flyway 校验和统一诊断。
+至少执行一次隔离恢复，并重新运行 `PRAGMA quick_check`、Flyway 校验和统一诊断。
 
 ## 回滚
 

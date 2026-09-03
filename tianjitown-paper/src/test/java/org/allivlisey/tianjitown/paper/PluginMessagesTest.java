@@ -77,7 +77,7 @@ class PluginMessagesTest {
                 messages.plainText("diagnostic.lifecycle.world-border-ready"));
         assertEquals("OK 玩家界面=DIALOG",
                 messages.plainText("diagnostic.lifecycle.dialog-ui-ready"));
-        assertEquals("OK 建筑返还、信标增强、启动诊断与定时备份已启用",
+        assertEquals("OK 建筑返还、信标增强与启动诊断已启用",
                 messages.plainText("diagnostic.lifecycle.runtime-features-ready"));
         assertEquals("WorldBorder API 无法加载",
                 messages.plainText("diagnostic.world-border.api-load-failure"));
@@ -123,8 +123,7 @@ class PluginMessagesTest {
                 "log.scheduler.periodic.territory-bonus-index-refresh-failure", "领地加成索引刷新",
                 "log.scheduler.periodic.beacon-effect-refresh-failure", "信标效果刷新",
                 "log.scheduler.periodic.refund-counter-cleanup-failure", "返还计数清理",
-                "log.scheduler.periodic.startup-diagnostic-failure", "启动诊断",
-                "log.scheduler.periodic.scheduled-backup-failure", "定时备份");
+                "log.scheduler.periodic.startup-diagnostic-failure", "启动诊断");
         periodicLabels.forEach((key, label) -> assertEquals(
                 label + "失败，后续周期仍会继续尝试: periodic boom",
                 messages.plainText(key, Map.of("detail", "periodic boom"))));
@@ -184,8 +183,7 @@ class PluginMessagesTest {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
         Map<String, ?> placeholders = Map.of(
                 "detail", "操作已完成",
-                "report", "diagnostics/diagnostic.txt",
-                "file", "backups/tianjitown.db");
+                "report", "diagnostics/diagnostic.txt");
 
         assertEquals("&6维护模式: &f已开启",
                 messages.rawText("chat.admin.maintenance-status-enabled"));
@@ -193,8 +191,6 @@ class PluginMessagesTest {
                 messages.rawText("chat.admin.maintenance-status-disabled"));
         assertEquals("用法: /townadmin diagnose [1~180天]",
                 messages.plainText("chat.admin.usage-diagnose"));
-        assertEquals("用法: /townadmin backup",
-                messages.plainText("chat.admin.usage-backup"));
         assertEquals("用法: /townadmin maintenance <on|off|status>",
                 messages.plainText("chat.admin.usage-maintenance"));
         assertEquals("用法: /townadmin audit [1~200]",
@@ -207,10 +203,6 @@ class PluginMessagesTest {
                 messages.rawText("chat.admin.status-diagnostic", placeholders));
         assertEquals("&7- 最近统一诊断: 操作已完成",
                 messages.rawText("chat.admin.status-diagnostic-no-report", placeholders));
-        assertEquals("&7- 最近在线备份: 操作已完成，文件=backups/tianjitown.db",
-                messages.rawText("chat.admin.status-backup", placeholders));
-        assertEquals("&7- 最近在线备份: 操作已完成",
-                messages.rawText("chat.admin.status-backup-no-file", placeholders));
         assertEquals("危险操作启动失败: operation boom",
                 messages.plainText("log.admin.confirmation-start-failure",
                         Map.of("detail", "operation boom")));
@@ -224,15 +216,12 @@ class PluginMessagesTest {
                 "chat.admin.maintenance-status-enabled",
                 "chat.admin.maintenance-status-disabled",
                 "chat.admin.usage-diagnose",
-                "chat.admin.usage-backup",
                 "chat.admin.usage-maintenance",
                 "chat.admin.usage-audit",
                 "chat.admin.audit-limit-integer",
                 "chat.admin.audit-limit-range",
                 "chat.admin.status-diagnostic",
                 "chat.admin.status-diagnostic-no-report",
-                "chat.admin.status-backup",
-                "chat.admin.status-backup-no-file",
                 "log.admin.confirmation-start-failure",
                 "log.admin.completion-cache-restored",
                 "log.admin.completion-cache-refresh-failed")) {
@@ -591,7 +580,6 @@ class PluginMessagesTest {
                 "chat.admin.help-system-maintenance",
                 "chat.admin.help-system-audit",
                 "chat.admin.help-system-diagnose",
-                "chat.admin.help-system-backup",
                 "chat.admin.help-economy-title",
                 "chat.admin.help-economy-money-view",
                 "chat.admin.help-economy-money-adjust",
