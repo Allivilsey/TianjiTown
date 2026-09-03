@@ -926,7 +926,7 @@ dialog:
     reject: '&c拒绝'
     town-entry-title: '&e{town}'
     application-member-select: '&7点击后从在线玩家列表中选择'
-    application-member-save: '&8保存后系统会邀请两名成员确认'
+    application-member-save: '&8保存并通知选择的小镇初始成员'
 
   # 主入口和主菜单文本；{town}=小镇名称，{balance}=已格式化公共资金，{taxRate}=已格式化税率，
   # {count}=当前数量，{maximum}=配置上限，{message}=已过滤颜色代码的管理员意见。
@@ -1119,8 +1119,8 @@ dialog:
     list-title: '&6申请加入小镇 · 第 {page} 页'
     town-title: '&6申请加入 · {town}'
     apply: '&a提交入镇申请'
-    empty-title: '&7暂无开放的小镇'
-    empty-hint: '&7稍后再来查看'
+    empty-title: '&7暂无可申请的小镇'
+    empty-hint: '&7你可以尝试申请创建自己的小镇'
 
   # 玩家自己的入镇申请列表；{town}=已过滤颜色代码的小镇名，{count}=申请数量。
   my-join:
@@ -1141,7 +1141,7 @@ dialog:
   admin:
     list-title: '&6申请审核 · {count} · 第 {page} 页'
     list-empty: '&7暂无待审核申请'
-    list-empty-hint: '&7收到新申请时会播放提醒音效'
+    list-empty-hint: '&7去痛痛快快的上个厕所吧'
     summary-title: '&6申请详情'
     submitted-at: '&7提交时间: {time}'
     updated-at: '&7更新时间: {time}'
@@ -1169,10 +1169,10 @@ dialog:
       pending: '&7集中处理需要你作出决定的事项'
       personal: '&7领取手册、退出或解散小镇'
       application-summary: '&7点击查看摘要'
-      create-application: '&7使用分步表单填写申请资料'
-      join-towns: '&7浏览小镇并提交 48 小时有效申请'
+      create-application: '&7填写申请资料'
+      join-towns: '&7浏览可加入的小镇列表'
       my-applications-count: '&7待处理: {count}'
-      handbook: '&7手册丢失后可在服务台重新领取'
+      handbook: '&7点击领取小镇手册'
       admin-review-pending: '&6有未完成的建镇申请'
       admin-review-empty: '&7查看建镇申请列表'
     governance:
@@ -1379,7 +1379,7 @@ dialog:
     basics-invalid-title: '&6基础资料需要修改'
     content-invalid-title: '&6简介或规则需要修改'
     no-candidates-title: '&6没有可选玩家'
-    no-candidates-message: '&f至少需要两名其他在线玩家才能保存草稿。'
+    no-candidates-message: '&f当前没有在线的无镇籍玩家'
     player-unavailable-title: '&6玩家不可用'
     player-unavailable-message: '&f该玩家已经离线，请重新选择。'
     donation-success-title: '&6捐款成功'
@@ -1609,7 +1609,7 @@ dialog:
     add: '&a添加规则'
     add-tooltip: '&7添加后会显示在规则列表中'
     delete: '&c删除第 {index} 条'
-    delete-tooltip: '&c删除第 {index} 条规则；其余规则会自动重新编号'
+    delete-tooltip: '&c删除第 {index} 条规则'
     delete-request-invalid: '&c规则删除请求无效，请刷新界面'
     limit-reached: '&f小镇规则最多 50 条。'
     refresh-title: '&6规则已更新'
@@ -1640,10 +1640,10 @@ dialog:
 
   # 建镇申请和资料编辑表单。
   application:
-    title: '&6申请建立小镇'
+    title: '&6小镇申请'
     name-label: '&6小镇名称'
     code-label: '&6小镇代码'
-    basics-heading: '&6第 1 / 3 步 · 基础资料和简介'
+    basics-heading: '&6第 1 / 3 步 · 基础资料'
     basics-guidance: '&7填写小镇名称、代码和简介；代码由 1～12 个英文字母组成，并作为小镇领地名。'
     description-label: '&6小镇简介'
     # 申请字段的标签、校验要求和填写建议；无占位符，由 ApplicationField 按需读取。
@@ -1673,16 +1673,16 @@ dialog:
         requirement: '必须填写另一名在线且无镇籍的其他玩家'
         suggestion: '两名成员都确认后才可提交申请'
     content-heading: '&6第 2 / 3 步 · 小镇规则'
-    content-guidance: '&7请添加 1～50 条需要小镇成员遵守的规则。'
+    content-guidance: '&7 在此填写小镇规则'
     member-one-placeholder: '&e<小镇初始成员一>'
     member-two-placeholder: '&e<小镇初始成员二>'
     save: '&a保存'
     save-draft: '&e保存草稿并退出'
-    save-draft-tooltip: '&7保存当前步骤和已填写内容，稍后可继续'
+    save-draft-tooltip: '&7保存已填写内容'
     complete: '&a完成资料并发送邀请'
-    incomplete-members-hint: '&7允许成员尚未选择完整'
+    incomplete-members-hint: '&7保存已填写内容'
     discard-draft: '&c放弃草稿'
-    discard-draft-hint: '&c删除已持久化的未提交内容'
+    discard-draft-hint: '&c删除当前草稿'
     status:
       draft: '&f草稿'
       site-selected: '&f已选址'
