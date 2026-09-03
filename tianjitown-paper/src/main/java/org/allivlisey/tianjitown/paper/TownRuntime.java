@@ -89,12 +89,12 @@ final class TownRuntime {
     private static final String EXTERNAL_PREFLIGHT_FAILED =
             "chat.lifecycle.external-preflight-failed";
     private static final String EXTERNAL_OPERATION_FAILED = "chat.lifecycle.external-failed";
-    private static final String COMPENSATION_AUTO = "chat.lifecycle.compensation-auto";
-    private static final String COMPENSATION_MANUAL = "chat.lifecycle.compensation-manual";
-    private static final String EXTERNAL_OPERATION_COMPENSATION_AUTO =
-            "log.external-operation.compensation-auto";
-    private static final String EXTERNAL_OPERATION_COMPENSATION_MANUAL =
-            "log.external-operation.compensation-manual";
+    private static final String REFUND_AUTO = "chat.lifecycle.refund-auto";
+    private static final String MANUAL_REVIEW = "chat.lifecycle.manual-review";
+    private static final String EXTERNAL_OPERATION_REFUND_AUTO =
+            "log.external-operation.refund-auto";
+    private static final String EXTERNAL_OPERATION_MANUAL_REVIEW =
+            "log.external-operation.manual-review";
     private static final String LEDGER_ACTOR_NAME_BACKFILL_FAILURE =
             "log.lifecycle.ledger-actor-name-backfill-failure";
     private static final String LEDGER_ACTOR_SCAN_FAILURE =
@@ -110,14 +110,14 @@ final class TownRuntime {
             "log.lifecycle.interrupted-provisions-recovered";
     private static final String INTERRUPTED_PROVISION_RECOVERY_FAILURE =
             "log.lifecycle.interrupted-provision-recovery-failure";
-    private static final String DONATION_COMPENSATION_RETRY_FAILED =
-            "log.donation.compensation-retry-failed";
-    private static final String DONATION_COMPENSATION_FINALIZATION_FAILED =
-            "log.donation.compensation-finalization-failed";
-    private static final String DONATION_COMPENSATION_RECOVERED =
-            "log.donation.compensation-recovered";
-    private static final String DONATION_COMPENSATION_EXHAUSTED =
-            "log.donation.compensation-exhausted";
+    private static final String DONATION_REFUND_RETRY_FAILED =
+            "log.donation.refund-retry-failed";
+    private static final String DONATION_REFUND_FINALIZATION_FAILED =
+            "log.donation.refund-finalization-failed";
+    private static final String DONATION_REFUND_RECOVERED =
+            "log.donation.refund-recovered";
+    private static final String DONATION_REFUND_EXHAUSTED =
+            "log.donation.refund-exhausted";
     private static final String DONATION_SETTLEMENT_BALANCE_READ_FAILURE =
             "log.donation.settlement-balance-read-failure";
     private static final String DONATION_SETTLEMENT_SHORTFALL =
@@ -280,7 +280,7 @@ final class TownRuntime {
     private final Map<UUID, QuickShopTaxAdapter.TaxPolicy> taxPolicies = new ConcurrentHashMap<>();
     private final RetryingWorkQueue<QuickShopTaxAdapter.SuccessfulTax> pendingTaxes;
     private final RetryingWorkQueue<EconomyRepository.ExternalIncomeTax> pendingIncomeTaxes;
-    private final DonationCompensationCoordinator donationCompensations;
+    private final DonationRefundCoordinator donationRefunds;
     private final AtomicBoolean databaseAvailable = new AtomicBoolean(true);
     private final AtomicBoolean quickShopTaxAvailable = new AtomicBoolean(false);
     private final ProvisionCoordinator provisions = new ProvisionCoordinator();
@@ -313,7 +313,7 @@ final class TownRuntime {
         this.buffs = new BuffRuntime(plugin, this,
                 new CommerceRepository(database.dataSource(),
                         plugin.getServer()::isPrimaryThread),
-                BuffSettings.load(plugin.getConfig(), settlement.scale(), plugin.messages()));
+                BuffSettings.load(plugin.getConfig(), plugin.messages()));
         this.bonuses = new TownBonusRuntime(plugin, this,
                 new TownBonusRepository(database.dataSource(),
                         plugin.getServer()::isPrimaryThread),
@@ -356,11 +356,11 @@ final class TownRuntime {
             }
         }, 20L * 5, 20L * 30, this::recordExternalIncomeTax,
                 this::handleExternalIncomeTaxFailure);
-        this.donationCompensations = createDonationCompensationCoordinator();
+        this.donationRefunds = createDonationRefundCoordinator();
     }
 
-    private DonationCompensationCoordinator createDonationCompensationCoordinator() {
-        return new DonationCompensationCoordinator(new DonationCompensationCoordinator.Scheduler() {
+    private DonationRefundCoordinator createDonationRefundCoordinator() {
+        return new DonationRefundCoordinator(new DonationRefundCoordinator.Scheduler() {
             @Override
             public void runMainLater(Runnable task, long delayTicks) {
                 plugin.runMainLater(task, delayTicks);
@@ -373,12 +373,12 @@ final class TownRuntime {
         }, (playerId, amountMinor) -> settlement.refundDebitedPlayer(
                 plugin.getServer().getOfflinePlayer(playerId), amountMinor),
                 (operationId, detail) -> finance.resolveCompensation(operationId, detail),
-                new DonationCompensationCoordinator.Listener() {
+                new DonationRefundCoordinator.Listener() {
                     @Override
                     public void retryFailed(EconomyRepository.EconomyOperation operation,
                                             int attempt, String detail) {
                         plugin.getLogger().warning(plugin.messages().plainText(
-                                DONATION_COMPENSATION_RETRY_FAILED, Map.of(
+                                DONATION_REFUND_RETRY_FAILED, Map.of(
                                         "attempt", attempt,
                                         "operation", operation.operationId(),
                                         "detail", safeText(detail))));
@@ -388,7 +388,7 @@ final class TownRuntime {
                     public void finalizationFailed(EconomyRepository.EconomyOperation operation,
                                                    int attempt, String detail) {
                         plugin.getLogger().warning(plugin.messages().plainText(
-                                DONATION_COMPENSATION_FINALIZATION_FAILED, Map.of(
+                                DONATION_REFUND_FINALIZATION_FAILED, Map.of(
                                         "attempt", attempt,
                                         "operation", operation.operationId(),
                                         "detail", safeText(detail))));
@@ -398,24 +398,24 @@ final class TownRuntime {
                     public void recovered(EconomyRepository.EconomyOperation operation,
                                           int attempts) {
                         plugin.getLogger().info(plugin.messages().plainText(
-                                DONATION_COMPENSATION_RECOVERED, Map.of(
+                                DONATION_REFUND_RECOVERED, Map.of(
                                         "operation", operation.operationId(),
                                         "attempts", attempts)));
-                        reconcileSettlementAfterCompensation(operation);
+                        reconcileSettlementAfterRefund(operation);
                     }
 
                     @Override
                     public void exhausted(EconomyRepository.EconomyOperation operation,
                                           String detail) {
                         plugin.getLogger().severe(plugin.messages().plainText(
-                                DONATION_COMPENSATION_EXHAUSTED, Map.of(
+                                DONATION_REFUND_EXHAUSTED, Map.of(
                                         "operation", operation.operationId(),
                                         "detail", safeText(detail))));
                     }
                 }, plugin.messages()::plainText);
     }
 
-    private void reconcileSettlementAfterCompensation(
+    private void reconcileSettlementAfterRefund(
             EconomyRepository.EconomyOperation operation) {
         plugin.runMain(() -> {
             long externalBalance;
@@ -2075,18 +2075,18 @@ final class TownRuntime {
                 if (result.compensationRequired()) {
                     finance.requireCompensation(operation.operationId(), result.message());
                     boolean automaticRefund = result.playerRefundRequired()
-                            && operation.operationType().equals("DONATION")
+                            && "DONATION".equals(operation.operationType())
                             && operation.actorId() != null;
                     if (automaticRefund) {
-                        donationCompensations.submit(operation);
+                        donationRefunds.submit(operation);
                         plugin.getLogger().warning(plugin.messages().plainText(
-                                EXTERNAL_OPERATION_COMPENSATION_AUTO,
+                                EXTERNAL_OPERATION_REFUND_AUTO,
                                 Map.of("operation", safeText(operation.operationId()),
                                         "town", safeText(operation.townId()),
                                         "detail", safeText(result.message()))));
                     } else {
                         plugin.getLogger().severe(plugin.messages().plainText(
-                                EXTERNAL_OPERATION_COMPENSATION_MANUAL,
+                                EXTERNAL_OPERATION_MANUAL_REVIEW,
                                 Map.of("operation", safeText(operation.operationId()),
                                         "town", safeText(operation.townId()),
                                         "detail", safeText(result.message()))));
@@ -2096,22 +2096,22 @@ final class TownRuntime {
                 }
                 plugin.runMain(() -> failure.accept(
                         new IllegalStateException(result.message()
-                                + compensationHint(operation, result))));
+                                + refundHint(operation, result))));
             } catch (RuntimeException exception) {
                 reportActionFailure(exception, failure);
             }
         });
     }
 
-    private String compensationHint(EconomyRepository.EconomyOperation operation,
-                                    VaultSettlementService.Result result) {
+    private String refundHint(EconomyRepository.EconomyOperation operation,
+                              VaultSettlementService.Result result) {
         if (!result.compensationRequired()) {
             return "";
         }
         String key = result.playerRefundRequired()
-                && operation.operationType().equals("DONATION")
+                && "DONATION".equals(operation.operationType())
                 && operation.actorId() != null
-                ? COMPENSATION_AUTO : COMPENSATION_MANUAL;
+                ? REFUND_AUTO : MANUAL_REVIEW;
         return plugin.messages().plainText(key);
     }
 

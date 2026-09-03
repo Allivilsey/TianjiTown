@@ -34,23 +34,18 @@ validation:
     account-name-required: '清算账户名不能为空'
     scale-range: 'Vault 金额精度必须在 0~8 之间'
     donation-amount-positive: '捐款金额必须大于 0'
-    refund-amount-positive: '补偿金额必须大于 0'
+    refund-amount-positive: '退款金额必须大于 0'
     return-amount-positive: '返还金额必须大于 0'
     adjustment-non-zero: '调整金额不能为 0'
-  # 捐款自动补偿输入校验。
+  # 捐款自动退款输入校验。
   donation:
-    compensation-operation: '只有带玩家身份的捐款操作可以自动补偿'
-  # Buff 配置校验；{key}=Buff key，{path}=配置路径，{value}=非法值，{maximum}=目录上限。
+    refund-operation: '玩家信息错误，请联系管理员'
+  # Buff 配置校验；{key}=Buff key，{path}=配置路径，{value}=非法值。
   buff:
     unknown: '&c未知 Buff: {key}'
     label-required: '&cBuff {key} 缺少显示标签，请在 messages.yml 添加 dialog.buff.labels.{key}'
-    catalog-required: '&cbuffs.catalog 至少需要一个 Buff'
-    catalog-limit: '&cbuffs.catalog 最多支持 {maximum} 个 Buff'
     duplicate-key: '&c重复 Buff key: {key}'
-    purchasing-roles-required: '&c{path} 至少需要一个角色'
     section-required: '&c{path} 必须为配置节'
-    price-overflow: '&c金额超过上限'
-    price-range: '&c{path} 产生的价格超出次级货币单位范围'
     enum-unsupported: '&c{path} 的值不受支持: {value}'
   # 通用配置值校验；{path}=配置路径。
   configuration:
@@ -601,8 +596,8 @@ chat:
     expansion-area-presence-check-failed: '无法确认 Residence 原有区域: {detail}'
     expansion-batch-failed: 'Residence 批量扩张失败: {detail}'
     expansion-batch-rollback-partial: '{cause}；部分 Residence 区域未能回滚，批次保留待恢复'
-    compensation-auto: '；该小镇暂时无法使用公共资金，请联系管理员处理。'
-    compensation-manual: '；该小镇暂时无法使用公共资金，请联系管理员处理。'
+    refund-auto: '；该小镇暂时无法使用公共资金，请联系管理员处理。'
+    manual-review: '；该小镇暂时无法使用公共资金，请联系管理员处理。'
 
 # PluginMessages 校验诊断；{key}=缺失或格式不正确的消息键。
 diagnostic:
@@ -685,8 +680,8 @@ diagnostic:
       player-debit-failure: '玩家扣款失败: {detail}'
       settlement-credit-failure: '清算账户入账失败: {detail}'
       funds-transferred: '资金已转入清算账户'
-      player-debit-compensated: '玩家扣款已自动补偿'
-      player-compensation-failure: '玩家自动补偿失败: {detail}'
+      player-debit-refunded: '玩家扣款已自动退款'
+      player-refund-failure: '玩家自动退款失败: {detail}'
       settlement-debit-failure: '清算账户扣款失败: {detail}'
       funds-returned: '资金已返还玩家'
       player-credit-failure: '玩家返还入账失败: {detail}'
@@ -694,9 +689,9 @@ diagnostic:
       account-adjustment-failure: '清算账户调整失败: {detail}'
       account-not-available: 'Vault 离线清算账户不可用: {account}'
       account-check-failure: 'Vault 离线清算账户检查异常: {detail}'
-  # 捐款自动补偿调用产生的诊断详情；{detail}=外部余额调用异常详情。
+  # 捐款自动退款调用产生的诊断详情；{detail}=外部余额调用异常详情。
   donation:
-    compensation-call-failure: 'Vault 自动补偿调用异常: {detail}'
+    refund-call-failure: 'Vault 自动退款调用异常: {detail}'
   # 公共 Buff 运行时技术详情；{attribute}=属性标识，{amount}=最大生命值数值。
   buff:
     missing-attribute: '玩家缺少 Attribute: {attribute}'
@@ -779,10 +774,10 @@ log:
     recovery-failed: '恢复领地扩张失败 {expansion}: {detail}'
     batch-recovered: '已恢复批量领地扩张 {batch}'
     batch-recovery-failed: '恢复批量领地扩张失败 {batch}: {detail}'
-  # TownRuntime 外部资金操作补偿日志；{operation}/{town}=稳定 ID，{detail}=结算详情。
+  # TownRuntime 外部资金操作退款/人工核对日志；{operation}/{town}=稳定 ID，{detail}=结算详情。
   external-operation:
-    compensation-auto: '捐款退款暂时失败，已锁定小镇消费并启动自动补偿: operation={operation}, town={town}, error={detail}'
-    compensation-manual: '资金操作需要人工补偿，已锁定小镇消费: operation={operation}, town={town}, error={detail}'
+    refund-auto: '捐款退款暂时失败，已锁定小镇消费并启动自动退款: operation={operation}, town={town}, error={detail}'
+    manual-review: '资金操作需要人工核对，已锁定小镇消费: operation={operation}, town={town}, error={detail}'
   # 管理员确认操作日志；{detail}=操作启动异常详情。
   admin:
     confirmation-start-failure: '危险操作启动失败: {detail}'
@@ -883,24 +878,23 @@ log:
     settlement:
       player-debit-ambiguous: 'Vault 玩家扣款调用异常，资金结果需要人工复核: {detail}'
       settlement-credit-ambiguous: 'Vault 清算账户入账调用异常，资金结果需要人工复核: {detail}'
-      player-compensation-ambiguous: 'Vault 玩家自动补偿调用异常，资金结果需要人工复核: {detail}'
       player-refund-ambiguous: 'Vault 玩家退款调用异常，资金结果需要人工复核: {detail}'
       settlement-debit-ambiguous: 'Vault 清算账户扣款调用异常，资金结果需要人工复核: {detail}'
       player-credit-ambiguous: 'Vault 玩家返还入账调用异常，资金结果需要人工复核: {detail}'
       settlement-compensation-ambiguous: 'Vault 清算账户自动补偿调用异常，资金结果需要人工复核: {detail}'
       account-adjustment-ambiguous: 'Vault 清算账户调整调用异常，资金结果需要人工复核: {detail}'
       empty-response: 'Vault 调用返回结果为空，资金结果需要人工复核'
-  # 捐款自动补偿调用日志；{operation}=操作 ID，{attempt}/{attempts}=尝试次数，
+  # 捐款自动退款调用日志；{operation}=操作 ID，{attempt}/{attempts}=尝试次数，
   # {external}/{required}=最小货币单位余额，{detail}=技术详情。
   donation:
-    compensation-resolved: '玩家扣款已由自动补偿恢复'
-    compensation-retry-failed: '捐款自动补偿第 {attempt} 次尝试失败: operation={operation}, error={detail}'
-    compensation-finalization-failed: '捐款外部余额已恢复，但第 {attempt} 次 SQLite 收尾失败: operation={operation}, error={detail}'
-    compensation-recovered: '捐款自动补偿已恢复玩家余额，正在复核消费锁: operation={operation}, attempts={attempts}'
-    compensation-exhausted: '捐款自动补偿达到重试上限，消费锁保持不变: operation={operation}, error={detail}'
-    settlement-balance-read-failure: '自动补偿后的清算余额读取失败，消费锁保持不变: operation={operation}, error={detail}'
-    settlement-shortfall: '自动补偿完成但清算仍有短款，消费锁保持不变: operation={operation}, external={external}, required={required}'
-    settlement-reconciliation-failure: '自动补偿后的清算复核失败，消费锁保持不变: operation={operation}, error={detail}'
+    refund-resolved: '玩家扣款已由自动退款恢复'
+    refund-retry-failed: '捐款自动退款第 {attempt} 次尝试失败: operation={operation}, error={detail}'
+    refund-finalization-failed: '捐款退款后外部余额已恢复，但第 {attempt} 次 SQLite 收尾失败: operation={operation}, error={detail}'
+    refund-recovered: '捐款自动退款已恢复玩家余额，正在复核消费锁: operation={operation}, attempts={attempts}'
+    refund-exhausted: '捐款自动退款达到重试上限，消费锁保持不变: operation={operation}, error={detail}'
+    settlement-balance-read-failure: '自动退款后的清算余额读取失败，消费锁保持不变: operation={operation}, error={detail}'
+    settlement-shortfall: '自动退款完成但清算仍有短款，消费锁保持不变: operation={operation}, external={external}, required={required}'
+    settlement-reconciliation-failure: '自动退款后的清算复核失败，消费锁保持不变: operation={operation}, error={detail}'
     # 成员捐款操作写入账本时使用的事件原因快照；无占位符。
     operation-reason: '成员捐款'
   # 周期清算账户对账日志；{external}/{required}=已格式化的金额，{detail}=技术详情。

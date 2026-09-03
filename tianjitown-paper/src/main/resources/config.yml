@@ -83,7 +83,6 @@ buffs:
       maximum-level: 5
       stacking: LEVEL_UP
       amount-per-level: 0.2
-      purchasing-roles: [MAYOR, DEPUTY_MAYOR]
     health:
       effect-kind: ATTRIBUTE
       effect-key: 'minecraft:max_health'
@@ -92,7 +91,6 @@ buffs:
       maximum-level: 5
       stacking: LEVEL_UP
       amount-per-level: 4.0
-      purchasing-roles: [MAYOR, DEPUTY_MAYOR]
 
 territory:
   building-refund:

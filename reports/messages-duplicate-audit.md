@@ -138,7 +138,6 @@
 - `dialog.application.initial-member-online-required` 与 `initial-members-online-required`：分别对应单个成员和两名成员的校验结果。
 - `chat.notification.tax-updated` 与 `chat.runtime.tax-changed`：通知和操作结果使用不同颜色，通知文本还带用于拼接按钮的尾随空格。
 - `station.already-exists` 与 `chat.station.already-exists`：只有“这个/该”差异，可统一措辞，但分别属于玩家放置流程与管理员查询流程。
-- `validation.buff.price-overflow` 与 `validation.economy.expansion-cost-overflow`、`validation.buff.price-range` 与 `validation.economy.expansion-cost-range`：含义接近，但当前术语并不完全一致；应先统一“次级单位/次级货币单位”的术语再决定是否共用。
 
 ## 实施注意事项
 

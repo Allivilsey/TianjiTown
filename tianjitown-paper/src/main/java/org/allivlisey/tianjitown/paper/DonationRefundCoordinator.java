@@ -10,19 +10,19 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiFunction;
 
-final class DonationCompensationCoordinator {
+final class DonationRefundCoordinator {
     private static final int DEFAULT_MAXIMUM_ATTEMPTS = 8;
     private static final long DEFAULT_INITIAL_DELAY_TICKS = 20L;
     private static final long DEFAULT_MAXIMUM_DELAY_TICKS = 20L * 30;
     private static final String INVALID_OPERATION =
-            "validation.donation.compensation-operation";
+            "validation.donation.refund-operation";
     private static final String REFUND_CALL_FAILURE =
-            "diagnostic.donation.compensation-call-failure";
-    private static final String REFUND_RESOLVED = "log.donation.compensation-resolved";
+            "diagnostic.donation.refund-call-failure";
+    private static final String REFUND_RESOLVED = "log.donation.refund-resolved";
 
     private final Scheduler scheduler;
     private final PlayerRefund playerRefund;
-    private final CompensationStore store;
+    private final RefundStore store;
     private final Listener listener;
     private final BiFunction<String, Map<String, ?>, String> messageResolver;
     private final int maximumAttempts;
@@ -30,33 +30,33 @@ final class DonationCompensationCoordinator {
     private final long maximumDelayTicks;
     private final ConcurrentMap<UUID, Recovery> pending = new ConcurrentHashMap<>();
 
-    DonationCompensationCoordinator(Scheduler scheduler, PlayerRefund playerRefund,
-                                    CompensationStore store, Listener listener) {
+    DonationRefundCoordinator(Scheduler scheduler, PlayerRefund playerRefund,
+                               RefundStore store, Listener listener) {
         this(scheduler, playerRefund, store, listener, DEFAULT_MAXIMUM_ATTEMPTS,
                 DEFAULT_INITIAL_DELAY_TICKS, DEFAULT_MAXIMUM_DELAY_TICKS,
-                DonationCompensationCoordinator::fallbackMessage);
+                DonationRefundCoordinator::fallbackMessage);
     }
 
-    DonationCompensationCoordinator(Scheduler scheduler, PlayerRefund playerRefund,
-                                    CompensationStore store, Listener listener,
-                                    BiFunction<String, Map<String, ?>, String> messageResolver) {
+    DonationRefundCoordinator(Scheduler scheduler, PlayerRefund playerRefund,
+                               RefundStore store, Listener listener,
+                               BiFunction<String, Map<String, ?>, String> messageResolver) {
         this(scheduler, playerRefund, store, listener, DEFAULT_MAXIMUM_ATTEMPTS,
                 DEFAULT_INITIAL_DELAY_TICKS, DEFAULT_MAXIMUM_DELAY_TICKS, messageResolver);
     }
 
-    DonationCompensationCoordinator(Scheduler scheduler, PlayerRefund playerRefund,
-                                    CompensationStore store, Listener listener,
-                                    int maximumAttempts, long initialDelayTicks,
-                                    long maximumDelayTicks) {
+    DonationRefundCoordinator(Scheduler scheduler, PlayerRefund playerRefund,
+                               RefundStore store, Listener listener,
+                               int maximumAttempts, long initialDelayTicks,
+                               long maximumDelayTicks) {
         this(scheduler, playerRefund, store, listener, maximumAttempts, initialDelayTicks,
-                maximumDelayTicks, DonationCompensationCoordinator::fallbackMessage);
+                maximumDelayTicks, DonationRefundCoordinator::fallbackMessage);
     }
 
-    DonationCompensationCoordinator(Scheduler scheduler, PlayerRefund playerRefund,
-                                    CompensationStore store, Listener listener,
-                                    int maximumAttempts, long initialDelayTicks,
-                                    long maximumDelayTicks,
-                                    BiFunction<String, Map<String, ?>, String> messageResolver) {
+    DonationRefundCoordinator(Scheduler scheduler, PlayerRefund playerRefund,
+                               RefundStore store, Listener listener,
+                               int maximumAttempts, long initialDelayTicks,
+                               long maximumDelayTicks,
+                               BiFunction<String, Map<String, ?>, String> messageResolver) {
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.playerRefund = Objects.requireNonNull(playerRefund, "playerRefund");
         this.store = Objects.requireNonNull(store, "store");
@@ -66,7 +66,7 @@ final class DonationCompensationCoordinator {
             throw new IllegalArgumentException("maximumAttempts 必须大于 0");
         }
         if (initialDelayTicks <= 0 || maximumDelayTicks < initialDelayTicks) {
-            throw new IllegalArgumentException("自动补偿重试延迟配置无效");
+            throw new IllegalArgumentException("自动退款重试延迟配置无效");
         }
         this.maximumAttempts = maximumAttempts;
         this.initialDelayTicks = initialDelayTicks;
@@ -75,7 +75,7 @@ final class DonationCompensationCoordinator {
 
     void submit(EconomyRepository.EconomyOperation operation) {
         Objects.requireNonNull(operation, "operation");
-        if (!operation.operationType().equals("DONATION") || operation.actorId() == null) {
+        if (!"DONATION".equals(operation.operationType()) || operation.actorId() == null) {
             throw new IllegalArgumentException(resolveMessage(INVALID_OPERATION, Map.of()));
         }
         Recovery recovery = new Recovery(operation);
@@ -186,7 +186,7 @@ final class DonationCompensationCoordinator {
     }
 
     @FunctionalInterface
-    interface CompensationStore {
+    interface RefundStore {
         void resolve(UUID operationId, String detail);
     }
 

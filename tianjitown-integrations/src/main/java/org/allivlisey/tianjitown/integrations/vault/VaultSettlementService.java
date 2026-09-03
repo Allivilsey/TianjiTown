@@ -45,16 +45,14 @@ public final class VaultSettlementService {
             "diagnostic.vault.settlement.settlement-credit-failure";
     private static final String FUNDS_TRANSFERRED =
             "diagnostic.vault.settlement.funds-transferred";
-    private static final String PLAYER_COMPENSATION_AMBIGUOUS =
-            "log.vault.settlement.player-compensation-ambiguous";
-    private static final String REFUND_AMOUNT_POSITIVE =
-            "validation.vault.refund-amount-positive";
     private static final String PLAYER_REFUND_AMBIGUOUS =
             "log.vault.settlement.player-refund-ambiguous";
-    private static final String PLAYER_DEBIT_COMPENSATED =
-            "diagnostic.vault.settlement.player-debit-compensated";
-    private static final String PLAYER_COMPENSATION_FAILURE =
-            "diagnostic.vault.settlement.player-compensation-failure";
+    private static final String REFUND_AMOUNT_POSITIVE =
+            "validation.vault.refund-amount-positive";
+    private static final String PLAYER_DEBIT_REFUNDED =
+            "diagnostic.vault.settlement.player-debit-refunded";
+    private static final String PLAYER_REFUND_FAILURE =
+            "diagnostic.vault.settlement.player-refund-failure";
     private static final String RETURN_AMOUNT_POSITIVE =
             "validation.vault.return-amount-positive";
     private static final String SETTLEMENT_DEBIT_AMBIGUOUS =
@@ -205,17 +203,17 @@ public final class VaultSettlementService {
         if (deposited.transactionSuccess()) {
             return Result.success(resolveMessage(FUNDS_TRANSFERRED, Map.of()));
         }
-        EconomyResponse compensation;
+        EconomyResponse refund;
         try {
-            compensation = economy.depositPlayer(player, amount);
+            refund = economy.depositPlayer(player, amount);
         } catch (RuntimeException | LinkageError exception) {
-            return ambiguousFailure(PLAYER_COMPENSATION_AMBIGUOUS, exception);
+            return ambiguousFailure(PLAYER_REFUND_AMBIGUOUS, exception);
         }
-        if (compensation == null) {
+        if (refund == null) {
             return ambiguousFailure(EMPTY_RESPONSE);
         }
-        boolean compensated = compensation.transactionSuccess();
-        return compensated
+        boolean refunded = refund.transactionSuccess();
+        return refunded
                 ? Result.failure(resolveMessage(SETTLEMENT_CREDIT_FAILURE,
                 Map.of("detail", safeResponseDetail(deposited))), true, false)
                 : Result.playerRefundRequired(resolveMessage(SETTLEMENT_CREDIT_FAILURE,
@@ -243,8 +241,8 @@ public final class VaultSettlementService {
             return ambiguousFailure(EMPTY_RESPONSE);
         }
         return refunded.transactionSuccess()
-                ? Result.success(resolveMessage(PLAYER_DEBIT_COMPENSATED, Map.of()))
-                : Result.failure(resolveMessage(PLAYER_COMPENSATION_FAILURE,
+                ? Result.success(resolveMessage(PLAYER_DEBIT_REFUNDED, Map.of()))
+                : Result.failure(resolveMessage(PLAYER_REFUND_FAILURE,
                 Map.of("detail", safeResponseDetail(refunded))), false, false);
     }
 

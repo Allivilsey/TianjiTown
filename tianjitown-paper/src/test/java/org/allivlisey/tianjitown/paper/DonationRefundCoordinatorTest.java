@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class DonationCompensationCoordinatorTest {
+class DonationRefundCoordinatorTest {
     @TempDir
     Path temporaryDirectory;
 
@@ -29,7 +29,7 @@ class DonationCompensationCoordinatorTest {
         AtomicInteger storageAttempts = new AtomicInteger();
         TestListener listener = new TestListener();
         EconomyRepository.EconomyOperation operation = operation();
-        DonationCompensationCoordinator coordinator = new DonationCompensationCoordinator(
+        DonationRefundCoordinator coordinator = new DonationRefundCoordinator(
                 scheduler, (playerId, amountMinor) -> refundAttempts.incrementAndGet() < 3
                 ? VaultSettlementService.Result.failure("INJECTED_COMPFAIL", false, false)
                 : VaultSettlementService.Result.success("RECOVERED"),
@@ -63,7 +63,7 @@ class DonationCompensationCoordinatorTest {
         AtomicInteger refundAttempts = new AtomicInteger();
         AtomicInteger storageAttempts = new AtomicInteger();
         TestListener listener = new TestListener();
-        DonationCompensationCoordinator coordinator = new DonationCompensationCoordinator(
+        DonationRefundCoordinator coordinator = new DonationRefundCoordinator(
                 scheduler, (playerId, amountMinor) -> {
                     refundAttempts.incrementAndGet();
                     return VaultSettlementService.Result.failure("OUTAGE", false, false);
@@ -86,14 +86,14 @@ class DonationCompensationCoordinatorTest {
     void resolvesInvalidOperationAndRefundExceptionThroughInjectedMessages() {
         TestScheduler scheduler = new TestScheduler();
         TestListener listener = new TestListener();
-        DonationCompensationCoordinator coordinator = new DonationCompensationCoordinator(
+        DonationRefundCoordinator coordinator = new DonationRefundCoordinator(
                 scheduler, (playerId, amountMinor) -> {
                     throw new IllegalStateException("refund&failure");
                 }, (operationId, detail) -> {
                 }, listener, 1, 5, 20, (key, placeholders) -> switch (key) {
-                    case "validation.donation.compensation-operation" -> "自定义操作校验失败";
-                    case "diagnostic.donation.compensation-call-failure" ->
-                            "自定义补偿调用失败: " + placeholders.get("detail");
+                    case "validation.donation.refund-operation" -> "自定义操作校验失败";
+                    case "diagnostic.donation.refund-call-failure" ->
+                            "自定义退款调用失败: " + placeholders.get("detail");
                     default -> key;
                 });
 
@@ -103,30 +103,30 @@ class DonationCompensationCoordinatorTest {
 
         coordinator.submit(operation());
         scheduler.runNextDelayed();
-        assertEquals("自定义补偿调用失败: refund＆failure", listener.lastRetryDetail);
-        assertEquals("自定义补偿调用失败: refund＆failure", listener.lastExhaustedDetail);
+        assertEquals("自定义退款调用失败: refund＆failure", listener.lastRetryDetail);
+        assertEquals("自定义退款调用失败: refund＆failure", listener.lastExhaustedDetail);
     }
 
     @Test
-    void resolvesCompensationReasonWhenStorageResolutionRunsAfterReload() throws Exception {
+    void resolvesRefundReasonWhenStorageResolutionRunsAfterReload() throws Exception {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
         TestScheduler scheduler = new TestScheduler();
         List<String> resolvedDetails = new ArrayList<>();
-        DonationCompensationCoordinator coordinator = new DonationCompensationCoordinator(
+        DonationRefundCoordinator coordinator = new DonationRefundCoordinator(
                 scheduler, (playerId, amountMinor) -> VaultSettlementService.Result.success(
                         "RECOVERED"),
                 (operationId, detail) -> resolvedDetails.add(detail), new TestListener(),
                 1, 5, 20, messages::plainText);
 
         YamlConfiguration configuration = new YamlConfiguration();
-        configuration.set("log.donation.compensation-resolved", "自定义补偿账本原因");
+        configuration.set("log.donation.refund-resolved", "自定义退款账本原因");
         configuration.save(temporaryDirectory.resolve("messages.yml").toFile());
         messages.reload();
 
         coordinator.submit(operation());
         scheduler.runNextDelayed();
 
-        assertEquals(List.of("自定义补偿账本原因"), resolvedDetails);
+        assertEquals(List.of("自定义退款账本原因"), resolvedDetails);
     }
 
     private static EconomyRepository.EconomyOperation operation() {
@@ -142,7 +142,7 @@ class DonationCompensationCoordinatorTest {
     }
 
     private static final class TestScheduler
-            implements DonationCompensationCoordinator.Scheduler {
+            implements DonationRefundCoordinator.Scheduler {
         private final Queue<Runnable> delayed = new ArrayDeque<>();
         private final List<Long> delays = new ArrayList<>();
 
@@ -162,7 +162,7 @@ class DonationCompensationCoordinatorTest {
         }
     }
 
-    private static final class TestListener implements DonationCompensationCoordinator.Listener {
+    private static final class TestListener implements DonationRefundCoordinator.Listener {
         private int refundFailures;
         private int storageFailures;
         private int recoveredAttempts;

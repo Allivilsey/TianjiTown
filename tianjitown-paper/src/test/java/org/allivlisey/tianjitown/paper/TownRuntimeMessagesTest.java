@@ -20,10 +20,10 @@ class TownRuntimeMessagesTest {
             "log.lifecycle.interrupted-provision-reason",
             "log.lifecycle.interrupted-provisions-recovered",
             "log.lifecycle.interrupted-provision-recovery-failure",
-            "log.donation.compensation-retry-failed",
-            "log.donation.compensation-finalization-failed",
-            "log.donation.compensation-recovered",
-            "log.donation.compensation-exhausted",
+            "log.donation.refund-retry-failed",
+            "log.donation.refund-finalization-failed",
+            "log.donation.refund-recovered",
+            "log.donation.refund-exhausted",
             "log.donation.settlement-balance-read-failure",
             "log.donation.settlement-shortfall",
             "log.donation.settlement-reconciliation-failure",
@@ -70,19 +70,19 @@ class TownRuntimeMessagesTest {
                 messages.plainText("log.lifecycle.interrupted-provisions-recovered", placeholders));
         assertEquals("恢复中断建镇流程失败: boom",
                 messages.plainText("log.lifecycle.interrupted-provision-recovery-failure", placeholders));
-        assertEquals("捐款自动补偿第 2 次尝试失败: operation=op-1, error=boom",
-                messages.plainText("log.donation.compensation-retry-failed", placeholders));
-        assertEquals("捐款外部余额已恢复，但第 2 次 SQLite 收尾失败: operation=op-1, error=boom",
-                messages.plainText("log.donation.compensation-finalization-failed", placeholders));
-        assertEquals("捐款自动补偿已恢复玩家余额，正在复核消费锁: operation=op-1, attempts=3",
-                messages.plainText("log.donation.compensation-recovered", placeholders));
-        assertEquals("捐款自动补偿达到重试上限，消费锁保持不变: operation=op-1, error=boom",
-                messages.plainText("log.donation.compensation-exhausted", placeholders));
-        assertEquals("自动补偿后的清算余额读取失败，消费锁保持不变: operation=op-1, error=boom",
+        assertEquals("捐款自动退款第 2 次尝试失败: operation=op-1, error=boom",
+                messages.plainText("log.donation.refund-retry-failed", placeholders));
+        assertEquals("捐款退款后外部余额已恢复，但第 2 次 SQLite 收尾失败: operation=op-1, error=boom",
+                messages.plainText("log.donation.refund-finalization-failed", placeholders));
+        assertEquals("捐款自动退款已恢复玩家余额，正在复核消费锁: operation=op-1, attempts=3",
+                messages.plainText("log.donation.refund-recovered", placeholders));
+        assertEquals("捐款自动退款达到重试上限，消费锁保持不变: operation=op-1, error=boom",
+                messages.plainText("log.donation.refund-exhausted", placeholders));
+        assertEquals("自动退款后的清算余额读取失败，消费锁保持不变: operation=op-1, error=boom",
                 messages.plainText("log.donation.settlement-balance-read-failure", placeholders));
-        assertEquals("自动补偿完成但清算仍有短款，消费锁保持不变: operation=op-1, external=1200, required=1300",
+        assertEquals("自动退款完成但清算仍有短款，消费锁保持不变: operation=op-1, external=1200, required=1300",
                 messages.plainText("log.donation.settlement-shortfall", placeholders));
-        assertEquals("自动补偿后的清算复核失败，消费锁保持不变: operation=op-1, error=boom",
+        assertEquals("自动退款后的清算复核失败，消费锁保持不变: operation=op-1, error=boom",
                 messages.plainText("log.donation.settlement-reconciliation-failure", placeholders));
         assertEquals("Residence 对账失败 town-1: boom",
                 messages.plainText("log.residence.reconciliation-failure", placeholders));
@@ -126,8 +126,8 @@ class TownRuntimeMessagesTest {
 
         YamlConfiguration configuration = new YamlConfiguration();
         configuration.set("log.scheduler.lifecycle-stopped", "自定义生命周期停止消息");
-        configuration.set("log.donation.compensation-retry-failed",
-                "自定义补偿重试: {attempt}/{operation}/{detail}");
+        configuration.set("log.donation.refund-retry-failed",
+                "自定义退款重试: {attempt}/{operation}/{detail}");
         configuration.set("log.residence.automatic-repair-failed",
                 "自定义自动修复: {town}/{inspection}/{repair}");
         configuration.save(temporaryDirectory.resolve("messages.yml").toFile());
@@ -135,8 +135,8 @@ class TownRuntimeMessagesTest {
 
         assertEquals("自定义生命周期停止消息",
                 messages.plainText("log.scheduler.lifecycle-stopped"));
-        assertEquals("自定义补偿重试: 2/op-1/boom",
-                messages.plainText("log.donation.compensation-retry-failed", placeholders));
+        assertEquals("自定义退款重试: 2/op-1/boom",
+                messages.plainText("log.donation.refund-retry-failed", placeholders));
         assertEquals("自定义自动修复: town-1/检查异常/修复失败",
                 messages.plainText("log.residence.automatic-repair-failed", placeholders));
     }

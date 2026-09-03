@@ -383,11 +383,15 @@ public final class EconomyRepository {
                                              UUID actorId, String actorName, String businessKey,
                                              String note) {
         requireWorkerThread();
+        Objects.requireNonNull(operationType, "operationType");
         if (amountMinor == 0) {
             throw new IllegalArgumentException("操作金额不能为 0");
         }
-        if (!operationType.equals("DONATION") && !operationType.equals("ADMIN_ADJUSTMENT")) {
+        if (!"DONATION".equals(operationType) && !"ADMIN_ADJUSTMENT".equals(operationType)) {
             throw new IllegalArgumentException("不支持的经济操作类型");
+        }
+        if ("DONATION".equals(operationType) && actorId == null) {
+            throw new IllegalArgumentException("捐款操作必须带玩家身份");
         }
         return transaction(connection -> {
             Optional<EconomyOperation> existing = findOperation(connection, businessKey);

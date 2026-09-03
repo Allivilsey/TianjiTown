@@ -17,12 +17,12 @@ class TownRuntimeExternalOperationsMessagesTest {
             "chat.lifecycle.storage-write-locked",
             "chat.lifecycle.external-preflight-failed",
             "chat.lifecycle.external-failed",
-            "chat.lifecycle.compensation-auto",
-            "chat.lifecycle.compensation-manual",
+            "chat.lifecycle.refund-auto",
+            "chat.lifecycle.manual-review",
             "log.expansion.batch-recovered",
             "log.expansion.batch-recovery-failed",
-            "log.external-operation.compensation-auto",
-            "log.external-operation.compensation-manual",
+            "log.external-operation.refund-auto",
+            "log.external-operation.manual-review",
             "log.lifecycle.ledger-actor-name-backfill-failure",
             "log.lifecycle.ledger-actor-scan-failure");
 
@@ -48,19 +48,19 @@ class TownRuntimeExternalOperationsMessagesTest {
         assertEquals("资金操作结果需要管理员复核：boom",
                 messages.plainText("chat.lifecycle.external-failed", placeholders));
         assertEquals("；该小镇暂时无法使用公共资金，请联系管理员处理。",
-                messages.plainText("chat.lifecycle.compensation-auto"));
+                messages.plainText("chat.lifecycle.refund-auto"));
         assertEquals("；该小镇暂时无法使用公共资金，请联系管理员处理。",
-                messages.plainText("chat.lifecycle.compensation-manual"));
+                messages.plainText("chat.lifecycle.manual-review"));
         assertEquals("已恢复批量领地扩张 batch-1",
                 messages.plainText("log.expansion.batch-recovered", placeholders));
         assertEquals("恢复批量领地扩张失败 batch-1: boom",
                 messages.plainText("log.expansion.batch-recovery-failed", placeholders));
-        assertEquals("捐款退款暂时失败，已锁定小镇消费并启动自动补偿: "
+        assertEquals("捐款退款暂时失败，已锁定小镇消费并启动自动退款: "
                         + "operation=operation-1, town=town-1, error=boom",
-                messages.plainText("log.external-operation.compensation-auto", placeholders));
-        assertEquals("资金操作需要人工补偿，已锁定小镇消费: "
+                messages.plainText("log.external-operation.refund-auto", placeholders));
+        assertEquals("资金操作需要人工核对，已锁定小镇消费: "
                         + "operation=operation-1, town=town-1, error=boom",
-                messages.plainText("log.external-operation.compensation-manual", placeholders));
+                messages.plainText("log.external-operation.manual-review", placeholders));
         assertEquals("回填账本玩家名失败 player-1: boom",
                 messages.plainText("log.lifecycle.ledger-actor-name-backfill-failure",
                         placeholders));
@@ -81,8 +81,8 @@ class TownRuntimeExternalOperationsMessagesTest {
         YamlConfiguration configuration = new YamlConfiguration();
         configuration.set("chat.lifecycle.external-failed", "自定义外部失败: {detail}");
         configuration.set("log.expansion.batch-recovered", "自定义批量恢复: {batch}");
-        configuration.set("log.external-operation.compensation-manual",
-                "自定义人工补偿: {operation}/{town}/{detail}");
+        configuration.set("log.external-operation.manual-review",
+                "自定义人工核对: {operation}/{town}/{detail}");
         configuration.set("log.lifecycle.ledger-actor-name-backfill-failure",
                 "自定义回填: {playerId}/{detail}");
         configuration.save(temporaryDirectory.resolve("messages.yml").toFile());
@@ -98,8 +98,8 @@ class TownRuntimeExternalOperationsMessagesTest {
                 messages.plainText("chat.lifecycle.external-failed", placeholders));
         assertEquals("自定义批量恢复: batch-1",
                 messages.plainText("log.expansion.batch-recovered", placeholders));
-        assertEquals("自定义人工补偿: operation-1/town-1/boom",
-                messages.plainText("log.external-operation.compensation-manual", placeholders));
+        assertEquals("自定义人工核对: operation-1/town-1/boom",
+                messages.plainText("log.external-operation.manual-review", placeholders));
         assertEquals("自定义回填: player-1/boom",
                 messages.plainText("log.lifecycle.ledger-actor-name-backfill-failure",
                         placeholders));

@@ -63,8 +63,8 @@ final class RuntimeConfigurationValidator {
         ConfigurationValues.list(config, "town.service-stations", messageResolver);
         validateTown(config, loadedWorld, messageResolver);
         GovernanceSettings.load(config, messageResolver);
-        EconomySettings economy = EconomySettings.load(config, messageResolver);
-        BuffSettings.load(config, economy.fallbackScale(), messageResolver,
+        EconomySettings.load(config, messageResolver);
+        BuffSettings.load(config, messageResolver,
                 requiredMessageResolver);
         TownBonusSettings.load(config, messageResolver);
         return databaseSettings(config, messageResolver);

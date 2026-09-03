@@ -126,7 +126,35 @@ final class PluginMessages {
                     "dialog.governance.applications-count", "dialog.pending.applications-count")),
             Map.entry("dialog.common.reject", List.of("dialog.transfer.reject", "dialog.admin.reject")),
             Map.entry("dialog.common.town-entry-title", List.of("dialog.my-join.entry-title",
-                    "dialog.admin.entry-title")));
+                    "dialog.admin.entry-title")),
+            Map.entry("validation.donation.refund-operation", List.of(
+                    "validation.donation.compensation-operation")),
+            Map.entry("diagnostic.donation.refund-call-failure", List.of(
+                    "diagnostic.donation.compensation-call-failure")),
+            Map.entry("log.donation.refund-resolved", List.of(
+                    "log.donation.compensation-resolved")),
+            Map.entry("log.donation.refund-retry-failed", List.of(
+                    "log.donation.compensation-retry-failed")),
+            Map.entry("log.donation.refund-finalization-failed", List.of(
+                    "log.donation.compensation-finalization-failed")),
+            Map.entry("log.donation.refund-recovered", List.of(
+                    "log.donation.compensation-recovered")),
+            Map.entry("log.donation.refund-exhausted", List.of(
+                    "log.donation.compensation-exhausted")),
+            Map.entry("chat.lifecycle.refund-auto", List.of(
+                    "chat.lifecycle.compensation-auto")),
+            Map.entry("chat.lifecycle.manual-review", List.of(
+                    "chat.lifecycle.compensation-manual")),
+            Map.entry("log.external-operation.refund-auto", List.of(
+                    "log.external-operation.compensation-auto")),
+            Map.entry("log.external-operation.manual-review", List.of(
+                    "log.external-operation.compensation-manual")),
+            Map.entry("diagnostic.vault.settlement.player-debit-refunded", List.of(
+                    "diagnostic.vault.settlement.player-debit-compensated")),
+            Map.entry("diagnostic.vault.settlement.player-refund-failure", List.of(
+                    "diagnostic.vault.settlement.player-compensation-failure")),
+            Map.entry("log.vault.settlement.player-refund-ambiguous", List.of(
+                    "log.vault.settlement.player-compensation-ambiguous")));
     private static final Map<String, String> LEGACY_TO_CANONICAL = legacyToCanonical();
     private final File file;
     private volatile YamlConfiguration configuration;
@@ -211,10 +239,10 @@ final class PluginMessages {
                 "log.lifecycle.interrupted-provision-reason",
                 "log.lifecycle.interrupted-provisions-recovered",
                 "log.lifecycle.interrupted-provision-recovery-failure",
-                "log.donation.compensation-retry-failed",
-                "log.donation.compensation-finalization-failed",
-                "log.donation.compensation-recovered",
-                "log.donation.compensation-exhausted",
+                "log.donation.refund-retry-failed",
+                "log.donation.refund-finalization-failed",
+                "log.donation.refund-recovered",
+                "log.donation.refund-exhausted",
                 "log.donation.settlement-balance-read-failure",
                 "log.donation.settlement-shortfall",
                 "log.donation.settlement-reconciliation-failure",

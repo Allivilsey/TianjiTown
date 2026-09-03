@@ -47,6 +47,12 @@ class EconomyRepositorySqliteTest {
             EconomyRepository repository = new EconomyRepository(gate.dataSource(), () -> false);
             repository.initializeAccounts();
 
+            IllegalArgumentException missingDonationActor = assertThrows(
+                    IllegalArgumentException.class,
+                    () -> repository.prepareOperation(townId, "DONATION", 100, null,
+                            "CONSOLE", "donation:missing-actor", "无玩家身份的捐款"));
+            assertEquals("捐款操作必须带玩家身份", missingDonationActor.getMessage());
+
             EconomyRepository.QuickShopTax tax = new EconomyRepository.QuickShopTax(
                     townId, "qs:test:1", 42, "SELLING", mayorId, UUID.randomUUID(),
                     10_000, 500, 500, "world");

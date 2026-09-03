@@ -4,6 +4,10 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +15,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,6 +26,22 @@ class PluginMessagesTest {
     @Test
     void loadsBuiltInMessagesAndValidRangeFormats() {
         assertDoesNotThrow(() -> new PluginMessages(temporaryDirectory.toFile()));
+    }
+
+    @Test
+    void validatesEveryPackagedMessageTemplateAgainstItsRuntimePlaceholders()
+            throws IOException {
+        PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
+        YamlConfiguration defaults = packagedMessages();
+
+        for (String key : defaults.getKeys(true)) {
+            String template = defaults.getString(key);
+            if (template == null || template.isBlank()) {
+                continue;
+            }
+
+            MessageTestSupport.assertConfigured(messages, key);
+        }
     }
 
     @Test
@@ -1085,8 +1106,8 @@ class PluginMessagesTest {
                 "diagnostic.vault.settlement.player-debit-failure",
                 "diagnostic.vault.settlement.settlement-credit-failure",
                 "diagnostic.vault.settlement.funds-transferred",
-                "diagnostic.vault.settlement.player-debit-compensated",
-                "diagnostic.vault.settlement.player-compensation-failure",
+                "diagnostic.vault.settlement.player-debit-refunded",
+                "diagnostic.vault.settlement.player-refund-failure",
                 "diagnostic.vault.settlement.settlement-debit-failure",
                 "diagnostic.vault.settlement.funds-returned",
                 "diagnostic.vault.settlement.player-credit-failure",
@@ -1096,7 +1117,6 @@ class PluginMessagesTest {
                 "diagnostic.vault.settlement.account-check-failure",
                 "log.vault.settlement.player-debit-ambiguous",
                 "log.vault.settlement.settlement-credit-ambiguous",
-                "log.vault.settlement.player-compensation-ambiguous",
                 "log.vault.settlement.player-refund-ambiguous",
                 "log.vault.settlement.settlement-debit-ambiguous",
                 "log.vault.settlement.player-credit-ambiguous",
@@ -1305,112 +1325,65 @@ class PluginMessagesTest {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
         Map<String, Object> placeholders = Map.of(
                 "key", "missing",
-                "maximum", 36,
                 "path", "buffs.catalog.speed.display-name",
                 "value", "INVALID");
 
         assertEquals("未知 Buff: missing",
                 messages.plainText("validation.buff.unknown", placeholders));
-        assertEquals("buffs.catalog 至少需要一个 Buff",
-                messages.plainText("validation.buff.catalog-required", placeholders));
-        assertEquals("buffs.catalog 最多支持 36 个 Buff",
-                messages.plainText("validation.buff.catalog-limit", placeholders));
         assertEquals("重复 Buff key: missing",
                 messages.plainText("validation.buff.duplicate-key", placeholders));
-        assertEquals("buffs.catalog.speed.purchasing-roles 至少需要一个角色",
-                messages.plainText("validation.buff.purchasing-roles-required",
-                        Map.of("path", "buffs.catalog.speed.purchasing-roles")));
         assertEquals("buffs.catalog.speed 必须为配置节",
                 messages.plainText("validation.buff.section-required",
                         Map.of("path", "buffs.catalog.speed")));
         assertEquals("buffs.catalog.speed.display-name 不能为空",
                 messages.plainText("validation.buff.value-required", placeholders));
-        assertEquals("金额超过上限",
-                messages.plainText("validation.buff.price-overflow", placeholders));
-        assertEquals("buffs.catalog.speed.base-price 产生的价格超出次级货币单位范围",
-                messages.plainText("validation.buff.price-range",
-                        Map.of("path", "buffs.catalog.speed.base-price")));
         assertEquals("buffs.catalog.speed.effect-kind 的值不受支持: INVALID",
                 messages.plainText("validation.buff.enum-unsupported",
                         Map.of("path", "buffs.catalog.speed.effect-kind", "value", "INVALID")));
 
         for (String key : List.of(
                 "validation.buff.unknown",
-                "validation.buff.catalog-required",
-                "validation.buff.catalog-limit",
                 "validation.buff.duplicate-key",
-                "validation.buff.purchasing-roles-required",
                 "validation.buff.section-required",
                 "validation.buff.value-required",
-                "validation.buff.price-overflow",
-                "validation.buff.price-range",
                 "validation.buff.enum-unsupported")) {
             String rendered = messages.plainText(key, placeholders);
             assertFalse(rendered.isBlank());
             assertFalse(rendered.contains("缺少消息配置"));
             assertFalse(rendered.contains("{key}"));
-            assertFalse(rendered.contains("{maximum}"));
             assertFalse(rendered.contains("{path}"));
             assertFalse(rendered.contains("{value}"));
         }
     }
 
     @Test
-    void usesBuffSettingsValidationOverrideAfterMessagesReload() throws Exception {
+    void rendersDonationRefundTemplatesWithoutUnresolvedPlaceholders() {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
-        String key = "validation.buff.price-range";
-        Map<String, ?> placeholders = Map.of("path", "buffs.catalog.speed.base-price");
-
-        assertEquals("buffs.catalog.speed.base-price 产生的价格超出次级货币单位范围",
-                messages.plainText(key, placeholders));
-
-        YamlConfiguration configuration = new YamlConfiguration();
-        configuration.set(key, "自定义 Buff 价格校验: {path}");
-        configuration.save(temporaryDirectory.resolve("messages.yml").toFile());
-        messages.reload();
-
-        assertEquals("自定义 Buff 价格校验: buffs.catalog.speed.base-price",
-                messages.plainText(key, placeholders));
-    }
-
-    @Test
-    void rendersDonationCompensationTemplatesWithoutUnresolvedPlaceholders() {
-        PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
-
-        assertEquals("只有带玩家身份的捐款操作可以自动补偿",
-                messages.plainText("validation.donation.compensation-operation"));
-        assertEquals("Vault 自动补偿调用异常: boom",
-                messages.plainText("diagnostic.donation.compensation-call-failure",
-                        Map.of("detail", "boom")));
-        assertEquals("玩家扣款已由自动补偿恢复",
-                messages.plainText("log.donation.compensation-resolved"));
 
         for (String key : List.of(
-                "validation.donation.compensation-operation",
-                "diagnostic.donation.compensation-call-failure",
-                "log.donation.compensation-resolved")) {
-            String rendered = key.contains("call-failure")
-                    ? messages.plainText(key, Map.of("detail", "boom"))
-                    : messages.plainText(key);
-            assertFalse(rendered.isBlank());
-            assertFalse(rendered.contains("缺少消息配置"));
-            assertFalse(rendered.contains("{detail}"));
+                "validation.donation.refund-operation",
+                "diagnostic.donation.refund-call-failure",
+                "log.donation.refund-resolved")) {
+            Map<String, ?> placeholders = key.contains("call-failure")
+                    ? Map.of("detail", "boom") : Map.of();
+            MessageTestSupport.assertConfigured(messages, key, placeholders);
         }
     }
 
     @Test
-    void usesDonationCompensationOverrideAfterMessagesReload() throws Exception {
+    void usesDonationRefundOverrideAfterMessagesReload() throws Exception {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
-        String key = "diagnostic.donation.compensation-call-failure";
-        assertEquals("Vault 自动补偿调用异常: boom",
-                messages.plainText(key, Map.of("detail", "boom")));
+        String key = "diagnostic.donation.refund-call-failure";
+        assertTrue(messages.hasMessage(key), key);
+        assertFalse(messages.plainText(key, Map.of("detail", "boom"))
+                .contains("{detail}"));
 
         YamlConfiguration configuration = new YamlConfiguration();
-        configuration.set(key, "自定义捐款补偿异常: {detail}");
+        configuration.set(key, "自定义捐款退款异常: {detail}");
         configuration.save(temporaryDirectory.resolve("messages.yml").toFile());
         messages.reload();
 
-        assertEquals("自定义捐款补偿异常: boom",
+        assertEquals("自定义捐款退款异常: boom",
                 messages.plainText(key, Map.of("detail", "boom")));
     }
 
@@ -1510,5 +1483,13 @@ class PluginMessagesTest {
         IllegalStateException exception = assertThrows(IllegalStateException.class,
                 () -> new PluginMessages(temporaryDirectory.toFile()));
         assertTrue(exception.getMessage().contains(key));
+    }
+
+    private static YamlConfiguration packagedMessages() throws IOException {
+        try (InputStream stream = PluginMessagesTest.class.getResourceAsStream("/messages.yml")) {
+            assertNotNull(stream, "messages.yml 应进入测试类路径");
+            return YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(stream, StandardCharsets.UTF_8));
+        }
     }
 }

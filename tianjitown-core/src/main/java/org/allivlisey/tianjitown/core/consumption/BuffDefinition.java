@@ -3,12 +3,11 @@ package org.allivlisey.tianjitown.core.consumption;
 import org.allivlisey.tianjitown.core.town.MemberRole;
 
 import java.math.BigDecimal;
-import java.util.Set;
 
 public record BuffDefinition(String key, String displayName, EffectKind effectKind,
                              String effectKey, String effectOperation, BigDecimal basePrice,
                              int maximumLevel, BuffStackingRule stackingRule,
-                             double amountPerLevel, Set<MemberRole> purchasingRoles) {
+                             double amountPerLevel) {
     public BuffDefinition {
         key = requireKey(key);
         if (displayName == null || displayName.isBlank()) {
@@ -32,14 +31,10 @@ public record BuffDefinition(String key, String displayName, EffectKind effectKi
         if (!Double.isFinite(amountPerLevel) || amountPerLevel <= 0) {
             throw new IllegalArgumentException("Buff 每级效果值必须为正的有限数");
         }
-        purchasingRoles = purchasingRoles == null ? Set.of() : Set.copyOf(purchasingRoles);
-        if (purchasingRoles.isEmpty()) {
-            throw new IllegalArgumentException("Buff 至少需要允许一个购买角色");
-        }
     }
 
     public boolean allowsRole(MemberRole role) {
-        return purchasingRoles.contains(role);
+        return role != null && role.isLeader();
     }
 
     private static String requireKey(String value) {
