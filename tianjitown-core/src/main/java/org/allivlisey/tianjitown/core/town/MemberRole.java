@@ -1,4 +1,4 @@
-package cn.tianji.town.core.town;
+package org.allivlisey.tianjitown.core.town;
 
 public enum MemberRole {
     MAYOR,

@@ -1,9 +1,9 @@
-package cn.tianji.town.storage.governance;
+package org.allivlisey.tianjitown.storage.governance;
 
-import cn.tianji.town.core.governance.GovernanceRules;
-import cn.tianji.town.core.governance.VoteStatus;
-import cn.tianji.town.core.governance.VoteType;
-import cn.tianji.town.core.town.MemberRole;
+import org.allivlisey.tianjitown.core.governance.GovernanceRules;
+import org.allivlisey.tianjitown.core.governance.VoteStatus;
+import org.allivlisey.tianjitown.core.governance.VoteType;
+import org.allivlisey.tianjitown.core.town.MemberRole;
 
 import javax.sql.DataSource;
 import java.sql.Connection;

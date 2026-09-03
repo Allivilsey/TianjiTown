@@ -1,10 +1,10 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.ports.LandProtectionService;
-import cn.tianji.town.core.town.MemberRole;
-import cn.tianji.town.integrations.quickshop.QuickShopHistoryProbe;
-import cn.tianji.town.storage.economy.EconomyRepository;
-import cn.tianji.town.storage.bonus.TownBonusRepository;
+import org.allivlisey.tianjitown.core.ports.LandProtectionService;
+import org.allivlisey.tianjitown.core.town.MemberRole;
+import org.allivlisey.tianjitown.integrations.quickshop.QuickShopHistoryProbe;
+import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
+import org.allivlisey.tianjitown.storage.bonus.TownBonusRepository;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;

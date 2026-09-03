@@ -1,6 +1,6 @@
-package cn.tianji.town.integrations.vault;
+package org.allivlisey.tianjitown.integrations.vault;
 
-import cn.tianji.town.core.economy.MoneyAmount;
+import org.allivlisey.tianjitown.core.economy.MoneyAmount;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.OfflinePlayer;

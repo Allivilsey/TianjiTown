@@ -1,7 +1,7 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.integrations.vault.VaultSettlementService;
-import cn.tianji.town.storage.economy.EconomyRepository;
+import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 
 import java.util.Map;
 import java.util.Objects;

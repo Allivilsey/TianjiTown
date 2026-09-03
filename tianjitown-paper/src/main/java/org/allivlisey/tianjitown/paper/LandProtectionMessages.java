@@ -1,6 +1,6 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.ports.LandProtectionService;
+import org.allivlisey.tianjitown.core.ports.LandProtectionService;
 
 import java.util.Objects;
 

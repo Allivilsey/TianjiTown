@@ -1,11 +1,11 @@
-package cn.tianji.town.storage.commerce;
+package org.allivlisey.tianjitown.storage.commerce;
 
-import cn.tianji.town.core.consumption.BuffDefinition;
-import cn.tianji.town.core.consumption.BuffDurationOption;
-import cn.tianji.town.core.consumption.BuffStackingRule;
-import cn.tianji.town.core.town.MemberRole;
-import cn.tianji.town.storage.database.DatabaseConfig;
-import cn.tianji.town.storage.database.DatabaseGate;
+import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
+import org.allivlisey.tianjitown.core.consumption.BuffDurationOption;
+import org.allivlisey.tianjitown.core.consumption.BuffStackingRule;
+import org.allivlisey.tianjitown.core.town.MemberRole;
+import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
+import org.allivlisey.tianjitown.storage.database.DatabaseGate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

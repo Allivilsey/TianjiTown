@@ -1,4 +1,4 @@
-package cn.tianji.town.core.application;
+package org.allivlisey.tianjitown.core.application;
 
 import java.util.EnumMap;
 import java.util.EnumSet;

@@ -1,4 +1,4 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
 /** Declarative parent route and its one bottom-dialog navigation action. */
 record DialogRoute(String action, String target) {

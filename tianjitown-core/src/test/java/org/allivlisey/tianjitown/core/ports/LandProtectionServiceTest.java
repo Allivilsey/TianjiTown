@@ -1,7 +1,7 @@
-package cn.tianji.town.core.ports;
+package org.allivlisey.tianjitown.core.ports;
 
-import cn.tianji.town.core.land.ChunkPosition;
-import cn.tianji.town.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.land.ChunkPosition;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;

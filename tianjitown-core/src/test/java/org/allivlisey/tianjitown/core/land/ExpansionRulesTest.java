@@ -1,6 +1,6 @@
-package cn.tianji.town.core.land;
+package org.allivlisey.tianjitown.core.land;
 
-import cn.tianji.town.core.economy.MoneyAmount;
+import org.allivlisey.tianjitown.core.economy.MoneyAmount;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

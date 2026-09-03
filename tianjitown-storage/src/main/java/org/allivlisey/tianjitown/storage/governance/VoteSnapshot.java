@@ -1,7 +1,7 @@
-package cn.tianji.town.storage.governance;
+package org.allivlisey.tianjitown.storage.governance;
 
-import cn.tianji.town.core.governance.VoteStatus;
-import cn.tianji.town.core.governance.VoteType;
+import org.allivlisey.tianjitown.core.governance.VoteStatus;
+import org.allivlisey.tianjitown.core.governance.VoteType;
 
 import java.time.Instant;
 import java.util.UUID;

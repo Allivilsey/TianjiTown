@@ -1,6 +1,6 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.land.TerritoryCellState;
+import org.allivlisey.tianjitown.core.land.TerritoryCellState;
 import io.papermc.paper.registry.data.dialog.ActionButton;
 import io.papermc.paper.registry.data.dialog.action.DialogAction;
 import io.papermc.paper.registry.data.dialog.type.DialogType;

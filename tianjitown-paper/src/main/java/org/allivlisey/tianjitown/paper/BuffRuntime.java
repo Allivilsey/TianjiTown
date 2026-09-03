@@ -1,8 +1,8 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.consumption.BuffDefinition;
-import cn.tianji.town.core.consumption.BuffDurationOption;
-import cn.tianji.town.storage.commerce.CommerceRepository;
+import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
+import org.allivlisey.tianjitown.core.consumption.BuffDurationOption;
+import org.allivlisey.tianjitown.storage.commerce.CommerceRepository;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;

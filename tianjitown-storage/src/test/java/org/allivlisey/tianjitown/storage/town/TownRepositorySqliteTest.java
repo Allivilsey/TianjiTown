@@ -1,14 +1,14 @@
-package cn.tianji.town.storage.town;
+package org.allivlisey.tianjitown.storage.town;
 
-import cn.tianji.town.core.application.ApplicationStatus;
-import cn.tianji.town.core.application.ApplicationText;
-import cn.tianji.town.core.land.ChunkPosition;
-import cn.tianji.town.core.land.InitialTerritory;
-import cn.tianji.town.core.town.MemberRole;
-import cn.tianji.town.core.town.TownStatus;
-import cn.tianji.town.storage.database.DatabaseConfig;
-import cn.tianji.town.storage.database.DatabaseGate;
-import cn.tianji.town.storage.governance.GovernanceRepository;
+import org.allivlisey.tianjitown.core.application.ApplicationStatus;
+import org.allivlisey.tianjitown.core.application.ApplicationText;
+import org.allivlisey.tianjitown.core.land.ChunkPosition;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.town.MemberRole;
+import org.allivlisey.tianjitown.core.town.TownStatus;
+import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
+import org.allivlisey.tianjitown.storage.database.DatabaseGate;
+import org.allivlisey.tianjitown.storage.governance.GovernanceRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

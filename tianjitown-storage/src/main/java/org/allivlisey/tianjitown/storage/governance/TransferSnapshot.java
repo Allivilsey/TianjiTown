@@ -1,4 +1,4 @@
-package cn.tianji.town.storage.governance;
+package org.allivlisey.tianjitown.storage.governance;
 
 import java.time.Instant;
 import java.util.UUID;

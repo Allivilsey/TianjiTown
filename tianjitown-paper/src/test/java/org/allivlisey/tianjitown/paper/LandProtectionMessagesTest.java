@@ -1,6 +1,6 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.ports.LandProtectionService;
+import org.allivlisey.tianjitown.core.ports.LandProtectionService;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

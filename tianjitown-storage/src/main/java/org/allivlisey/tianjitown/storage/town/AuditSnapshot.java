@@ -1,4 +1,4 @@
-package cn.tianji.town.storage.town;
+package org.allivlisey.tianjitown.storage.town;
 
 import java.time.Instant;
 

@@ -1,4 +1,4 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;

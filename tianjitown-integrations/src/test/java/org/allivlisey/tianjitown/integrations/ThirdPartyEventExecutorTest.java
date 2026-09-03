@@ -1,4 +1,4 @@
-package cn.tianji.town.integrations;
+package org.allivlisey.tianjitown.integrations;
 
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;

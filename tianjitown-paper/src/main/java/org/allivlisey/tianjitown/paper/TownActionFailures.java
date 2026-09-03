@@ -1,11 +1,11 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.application.ApplicationText;
-import cn.tianji.town.storage.town.TownRepository;
-import cn.tianji.town.storage.governance.GovernanceRepository;
-import cn.tianji.town.storage.economy.EconomyRepository;
-import cn.tianji.town.storage.commerce.CommerceRepository;
-import cn.tianji.town.storage.bonus.TownBonusRepository;
+import org.allivlisey.tianjitown.core.application.ApplicationText;
+import org.allivlisey.tianjitown.storage.town.TownRepository;
+import org.allivlisey.tianjitown.storage.governance.GovernanceRepository;
+import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
+import org.allivlisey.tianjitown.storage.commerce.CommerceRepository;
+import org.allivlisey.tianjitown.storage.bonus.TownBonusRepository;
 
 import java.util.Locale;
 import java.util.Map;

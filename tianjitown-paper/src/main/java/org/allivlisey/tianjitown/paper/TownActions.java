@@ -1,20 +1,20 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.application.ApplicationText;
-import cn.tianji.town.core.consumption.BuffDurationOption;
-import cn.tianji.town.core.governance.VoteType;
-import cn.tianji.town.core.land.ExpansionDirection;
-import cn.tianji.town.core.ports.LandProtectionService;
-import cn.tianji.town.core.town.MemberRole;
-import cn.tianji.town.storage.town.ApplicationSnapshot;
-import cn.tianji.town.storage.town.JoinApplicationSnapshot;
-import cn.tianji.town.storage.town.TownRepository;
-import cn.tianji.town.storage.town.TownSnapshot;
-import cn.tianji.town.storage.governance.MemberGovernanceSnapshot;
-import cn.tianji.town.storage.governance.TransferSnapshot;
-import cn.tianji.town.storage.governance.VoteSnapshot;
-import cn.tianji.town.storage.economy.EconomyRepository;
-import cn.tianji.town.storage.commerce.CommerceRepository;
+import org.allivlisey.tianjitown.core.application.ApplicationText;
+import org.allivlisey.tianjitown.core.consumption.BuffDurationOption;
+import org.allivlisey.tianjitown.core.governance.VoteType;
+import org.allivlisey.tianjitown.core.land.ExpansionDirection;
+import org.allivlisey.tianjitown.core.ports.LandProtectionService;
+import org.allivlisey.tianjitown.core.town.MemberRole;
+import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
+import org.allivlisey.tianjitown.storage.town.JoinApplicationSnapshot;
+import org.allivlisey.tianjitown.storage.town.TownRepository;
+import org.allivlisey.tianjitown.storage.town.TownSnapshot;
+import org.allivlisey.tianjitown.storage.governance.MemberGovernanceSnapshot;
+import org.allivlisey.tianjitown.storage.governance.TransferSnapshot;
+import org.allivlisey.tianjitown.storage.governance.VoteSnapshot;
+import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
+import org.allivlisey.tianjitown.storage.commerce.CommerceRepository;
 import org.bukkit.entity.Player;
 
 import java.time.Duration;

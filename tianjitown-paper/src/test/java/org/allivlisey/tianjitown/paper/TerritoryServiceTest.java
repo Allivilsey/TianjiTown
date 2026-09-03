@@ -1,11 +1,11 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.land.ChunkPosition;
-import cn.tianji.town.core.land.ExpansionDirection;
-import cn.tianji.town.core.land.InitialTerritory;
-import cn.tianji.town.storage.database.DatabaseConfig;
-import cn.tianji.town.storage.database.DatabaseGate;
-import cn.tianji.town.storage.economy.EconomyRepository;
+import org.allivlisey.tianjitown.core.land.ChunkPosition;
+import org.allivlisey.tianjitown.core.land.ExpansionDirection;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
+import org.allivlisey.tianjitown.storage.database.DatabaseGate;
+import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.bukkit.configuration.MemoryConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;

@@ -1,13 +1,13 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.land.ChunkPosition;
-import cn.tianji.town.core.land.ExpansionDirection;
-import cn.tianji.town.core.land.ExpansionPricing;
-import cn.tianji.town.core.land.InitialTerritory;
-import cn.tianji.town.core.land.TerritoryCellState;
-import cn.tianji.town.core.land.TerritoryRules;
-import cn.tianji.town.core.land.TerritoryUnit;
-import cn.tianji.town.storage.economy.EconomyRepository;
+import org.allivlisey.tianjitown.core.land.ChunkPosition;
+import org.allivlisey.tianjitown.core.land.ExpansionDirection;
+import org.allivlisey.tianjitown.core.land.ExpansionPricing;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.land.TerritoryCellState;
+import org.allivlisey.tianjitown.core.land.TerritoryRules;
+import org.allivlisey.tianjitown.core.land.TerritoryUnit;
+import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 
 import java.util.ArrayList;
 import java.util.HashMap;

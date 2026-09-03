@@ -1,8 +1,8 @@
-package cn.tianji.town.integrations.worldborder;
+package org.allivlisey.tianjitown.integrations.worldborder;
 
-import cn.tianji.town.core.land.ChunkPosition;
-import cn.tianji.town.core.land.InitialTerritory;
-import cn.tianji.town.core.ports.WorldBoundaryService;
+import org.allivlisey.tianjitown.core.land.ChunkPosition;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.ports.WorldBoundaryService;
 import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.plugin.Plugin;

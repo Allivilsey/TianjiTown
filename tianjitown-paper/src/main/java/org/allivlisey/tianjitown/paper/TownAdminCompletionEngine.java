@@ -1,8 +1,8 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.application.ApplicationStatus;
-import cn.tianji.town.core.application.ApplicationText;
-import cn.tianji.town.core.town.TownStatus;
+import org.allivlisey.tianjitown.core.application.ApplicationStatus;
+import org.allivlisey.tianjitown.core.application.ApplicationText;
+import org.allivlisey.tianjitown.core.town.TownStatus;
 
 import java.util.ArrayList;
 import java.util.Collection;

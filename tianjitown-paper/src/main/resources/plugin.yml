@@ -1,9 +1,9 @@
 name: TianjiTown
 version: '${project.version}'
-main: cn.tianji.town.paper.TianjiTownPlugin
+main: org.allivlisey.tianjitown.paper.TianjiTownPlugin
 api-version: '26.2'
 load: POSTWORLD
-authors: [Tianji]
+authors: [Allivilsey]
 softdepend: [Vault, Residence, QuickShop-Hikari, Jobs, GlobalMarketPlus, XConomy, WorldBorder]
 commands:
   townadmin:

@@ -1,9 +1,9 @@
-package cn.tianji.town.storage.economy;
+package org.allivlisey.tianjitown.storage.economy;
 
-import cn.tianji.town.core.land.ChunkPosition;
-import cn.tianji.town.core.land.InitialTerritory;
-import cn.tianji.town.core.land.TerritoryUnit;
-import cn.tianji.town.core.land.TerritoryRules;
+import org.allivlisey.tianjitown.core.land.ChunkPosition;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.land.TerritoryUnit;
+import org.allivlisey.tianjitown.core.land.TerritoryRules;
 
 import javax.sql.DataSource;
 import java.nio.ByteBuffer;

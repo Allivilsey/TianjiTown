@@ -1,6 +1,6 @@
-package cn.tianji.town.integrations.jobs;
+package org.allivlisey.tianjitown.integrations.jobs;
 
-import cn.tianji.town.integrations.ThirdPartyEventExecutor;
+import org.allivlisey.tianjitown.integrations.ThirdPartyEventExecutor;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;

@@ -1,4 +1,4 @@
-package cn.tianji.town.core.economy;
+package org.allivlisey.tianjitown.core.economy;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

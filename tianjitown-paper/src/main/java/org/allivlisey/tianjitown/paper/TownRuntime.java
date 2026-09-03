@@ -1,22 +1,22 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.ports.LandProtectionService;
-import cn.tianji.town.core.ports.WorldBoundaryService;
-import cn.tianji.town.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
-import cn.tianji.town.integrations.jobs.JobsIncomeTaxAdapter;
-import cn.tianji.town.core.land.ExpansionDirection;
-import cn.tianji.town.core.town.TownStatus;
-import cn.tianji.town.integrations.quickshop.QuickShopTaxAdapter;
-import cn.tianji.town.integrations.vault.VaultSettlementService;
-import cn.tianji.town.storage.database.DatabaseGate;
-import cn.tianji.town.storage.town.ApplicationSnapshot;
-import cn.tianji.town.storage.town.TownRepository;
-import cn.tianji.town.storage.town.TownSnapshot;
-import cn.tianji.town.storage.governance.GovernanceRepository;
-import cn.tianji.town.storage.governance.VoteSnapshot;
-import cn.tianji.town.storage.economy.EconomyRepository;
-import cn.tianji.town.storage.commerce.CommerceRepository;
-import cn.tianji.town.storage.bonus.TownBonusRepository;
+import org.allivlisey.tianjitown.core.ports.LandProtectionService;
+import org.allivlisey.tianjitown.core.ports.WorldBoundaryService;
+import org.allivlisey.tianjitown.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
+import org.allivlisey.tianjitown.integrations.jobs.JobsIncomeTaxAdapter;
+import org.allivlisey.tianjitown.core.land.ExpansionDirection;
+import org.allivlisey.tianjitown.core.town.TownStatus;
+import org.allivlisey.tianjitown.integrations.quickshop.QuickShopTaxAdapter;
+import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.storage.database.DatabaseGate;
+import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
+import org.allivlisey.tianjitown.storage.town.TownRepository;
+import org.allivlisey.tianjitown.storage.town.TownSnapshot;
+import org.allivlisey.tianjitown.storage.governance.GovernanceRepository;
+import org.allivlisey.tianjitown.storage.governance.VoteSnapshot;
+import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
+import org.allivlisey.tianjitown.storage.commerce.CommerceRepository;
+import org.allivlisey.tianjitown.storage.bonus.TownBonusRepository;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.Location;
@@ -735,7 +735,7 @@ final class TownRuntime {
                 List<VoteSnapshot> settled = governance.settleDueVotes();
                 List<TownMembers> changedMemberships = settled.stream()
                         .filter(vote -> vote.passed()
-                                && vote.type() == cn.tianji.town.core.governance.VoteType.KICK_MEMBER)
+                                && vote.type() == org.allivlisey.tianjitown.core.governance.VoteType.KICK_MEMBER)
                         .map(VoteSnapshot::townId).distinct()
                         .map(townId -> repository.findTown(townId)
                                 .map(town -> new TownMembers(town,
@@ -1010,7 +1010,7 @@ final class TownRuntime {
 
     private LandProtectionService.Result setDefaultTeleportPoint(TownSnapshot town,
                                                                   LandProtectionService.Result land) {
-        cn.tianji.town.core.land.ChunkPosition center = town.territory().center();
+        org.allivlisey.tianjitown.core.land.ChunkPosition center = town.territory().center();
         org.bukkit.World world = plugin.getServer().getWorld(center.worldId());
         if (world == null) {
             world = plugin.getServer().getWorld(center.worldName());

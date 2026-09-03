@@ -1,6 +1,6 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.town.MemberRole;
+import org.allivlisey.tianjitown.core.town.MemberRole;
 
 /** Player-facing labels for every stored member role. */
 final class MemberRoleText {

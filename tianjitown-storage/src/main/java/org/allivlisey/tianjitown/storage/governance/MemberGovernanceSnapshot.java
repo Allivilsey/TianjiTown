@@ -1,6 +1,6 @@
-package cn.tianji.town.storage.governance;
+package org.allivlisey.tianjitown.storage.governance;
 
-import cn.tianji.town.core.town.MemberRole;
+import org.allivlisey.tianjitown.core.town.MemberRole;
 
 import java.util.List;
 import java.util.UUID;

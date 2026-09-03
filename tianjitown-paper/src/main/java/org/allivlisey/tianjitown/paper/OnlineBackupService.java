@@ -1,6 +1,6 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.storage.database.DatabaseGate;
+import org.allivlisey.tianjitown.storage.database.DatabaseGate;
 
 import java.io.IOException;
 import java.io.InputStream;

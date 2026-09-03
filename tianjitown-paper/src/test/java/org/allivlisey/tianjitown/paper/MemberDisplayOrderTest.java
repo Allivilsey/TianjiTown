@@ -1,7 +1,7 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.town.MemberRole;
-import cn.tianji.town.storage.town.TownSnapshot;
+import org.allivlisey.tianjitown.core.town.MemberRole;
+import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;

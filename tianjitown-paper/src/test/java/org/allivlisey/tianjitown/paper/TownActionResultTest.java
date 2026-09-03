@@ -1,4 +1,4 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
 import org.junit.jupiter.api.Test;
 

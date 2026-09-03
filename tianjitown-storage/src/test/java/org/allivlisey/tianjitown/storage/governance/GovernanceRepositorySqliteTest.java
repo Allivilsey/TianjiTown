@@ -1,17 +1,17 @@
-package cn.tianji.town.storage.governance;
+package org.allivlisey.tianjitown.storage.governance;
 
-import cn.tianji.town.core.application.ApplicationText;
-import cn.tianji.town.core.governance.VoteStatus;
-import cn.tianji.town.core.governance.VoteType;
-import cn.tianji.town.core.land.ChunkPosition;
-import cn.tianji.town.core.land.InitialTerritory;
-import cn.tianji.town.core.town.MemberRole;
-import cn.tianji.town.storage.database.DatabaseConfig;
-import cn.tianji.town.storage.database.DatabaseGate;
-import cn.tianji.town.storage.town.ApplicationSnapshot;
-import cn.tianji.town.storage.town.JoinApplicationSnapshot;
-import cn.tianji.town.storage.town.TownRepository;
-import cn.tianji.town.storage.town.TownSnapshot;
+import org.allivlisey.tianjitown.core.application.ApplicationText;
+import org.allivlisey.tianjitown.core.governance.VoteStatus;
+import org.allivlisey.tianjitown.core.governance.VoteType;
+import org.allivlisey.tianjitown.core.land.ChunkPosition;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.town.MemberRole;
+import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
+import org.allivlisey.tianjitown.storage.database.DatabaseGate;
+import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
+import org.allivlisey.tianjitown.storage.town.JoinApplicationSnapshot;
+import org.allivlisey.tianjitown.storage.town.TownRepository;
+import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

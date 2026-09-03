@@ -1,9 +1,9 @@
-package cn.tianji.town.storage.bonus;
+package org.allivlisey.tianjitown.storage.bonus;
 
-import cn.tianji.town.core.land.ChunkPosition;
-import cn.tianji.town.core.land.InitialTerritory;
-import cn.tianji.town.core.ports.LandProtectionService;
-import cn.tianji.town.core.town.MemberRole;
+import org.allivlisey.tianjitown.core.land.ChunkPosition;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.ports.LandProtectionService;
+import org.allivlisey.tianjitown.core.town.MemberRole;
 
 import javax.sql.DataSource;
 import java.nio.ByteBuffer;

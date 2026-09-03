@@ -1,6 +1,6 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.land.TerritoryCellState;
+import org.allivlisey.tianjitown.core.land.TerritoryCellState;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

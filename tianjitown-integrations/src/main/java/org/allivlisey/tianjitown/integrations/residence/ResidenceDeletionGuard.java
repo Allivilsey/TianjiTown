@@ -1,4 +1,4 @@
-package cn.tianji.town.integrations.residence;
+package org.allivlisey.tianjitown.integrations.residence;
 
 import com.bekvon.bukkit.residence.event.ResidenceAreaDeleteEvent;
 import com.bekvon.bukkit.residence.event.ResidenceDeleteEvent;

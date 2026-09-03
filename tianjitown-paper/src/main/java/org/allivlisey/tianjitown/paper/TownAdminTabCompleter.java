@@ -1,7 +1,7 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.storage.town.ApplicationSnapshot;
-import cn.tianji.town.storage.town.TownSnapshot;
+import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
+import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;

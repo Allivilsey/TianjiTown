@@ -1,4 +1,4 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
@@ -81,7 +81,7 @@ class PluginDescriptorTest {
         PluginDescriptionFile parsed = new PluginDescriptionFile(new StringReader(descriptor()));
 
         assertEquals("TianjiTown", parsed.getName());
-        assertEquals("cn.tianji.town.paper.TianjiTownPlugin", parsed.getMain());
+        assertEquals("org.allivlisey.tianjitown.paper.TianjiTownPlugin", parsed.getMain());
         assertEquals("/townadmin help", parsed.getCommands().get("townadmin").get("usage"));
         assertEquals(7, parsed.getPermissions().size());
     }

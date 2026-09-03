@@ -1,4 +1,4 @@
-package cn.tianji.town.integrations.residence;
+package org.allivlisey.tianjitown.integrations.residence;
 
 import org.junit.jupiter.api.Test;
 

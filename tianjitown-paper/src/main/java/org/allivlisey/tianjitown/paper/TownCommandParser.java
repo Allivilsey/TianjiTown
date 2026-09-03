@@ -1,6 +1,6 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.application.ApplicationText;
+import org.allivlisey.tianjitown.core.application.ApplicationText;
 
 import java.util.Arrays;
 import java.util.Collection;

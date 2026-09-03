@@ -1,6 +1,6 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.storage.town.TownSnapshot;
+import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 
 import java.util.Comparator;
 import java.util.List;

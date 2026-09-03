@@ -1,4 +1,4 @@
-package cn.tianji.town.storage.database;
+package org.allivlisey.tianjitown.storage.database;
 
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;

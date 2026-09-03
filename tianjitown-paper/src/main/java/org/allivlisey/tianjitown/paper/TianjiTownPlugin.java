@@ -1,16 +1,16 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.ports.WorldBoundaryService;
-import cn.tianji.town.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
-import cn.tianji.town.integrations.jobs.JobsIncomeTaxAdapter;
-import cn.tianji.town.integrations.residence.ResidenceCommandGuard;
-import cn.tianji.town.integrations.residence.ResidenceDeletionGuard;
-import cn.tianji.town.integrations.residence.ResidenceLandProtectionService;
-import cn.tianji.town.integrations.quickshop.QuickShopTaxAdapter;
-import cn.tianji.town.integrations.vault.VaultEconomyProbe;
-import cn.tianji.town.integrations.worldborder.WorldBorderBoundaryService;
-import cn.tianji.town.storage.database.DatabaseConfig;
-import cn.tianji.town.storage.database.DatabaseGate;
+import org.allivlisey.tianjitown.core.ports.WorldBoundaryService;
+import org.allivlisey.tianjitown.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
+import org.allivlisey.tianjitown.integrations.jobs.JobsIncomeTaxAdapter;
+import org.allivlisey.tianjitown.integrations.residence.ResidenceCommandGuard;
+import org.allivlisey.tianjitown.integrations.residence.ResidenceDeletionGuard;
+import org.allivlisey.tianjitown.integrations.residence.ResidenceLandProtectionService;
+import org.allivlisey.tianjitown.integrations.quickshop.QuickShopTaxAdapter;
+import org.allivlisey.tianjitown.integrations.vault.VaultEconomyProbe;
+import org.allivlisey.tianjitown.integrations.worldborder.WorldBorderBoundaryService;
+import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
+import org.allivlisey.tianjitown.storage.database.DatabaseGate;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -548,7 +548,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
             runtime = new TownRuntime(this, candidate,
                     residenceProtection,
                     worldBoundaryService(), activeResidenceNames);
-            cn.tianji.town.integrations.vault.VaultSettlementService.Result settlement =
+            org.allivlisey.tianjitown.integrations.vault.VaultSettlementService.Result settlement =
                     runtime.settlement().ensureAccount();
             if (!settlement.success()) {
                 throw new IllegalStateException(settlement.message());
@@ -605,7 +605,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
             try {
                 runtime.repository().listTowns(true).forEach(town -> {
                     managedResidenceNames.add(town.residenceName());
-                    if (town.status() == cn.tianji.town.core.town.TownStatus.ACTIVE) {
+                    if (town.status() == org.allivlisey.tianjitown.core.town.TownStatus.ACTIVE) {
                         activeResidenceNames.add(town.residenceName());
                     }
                 });

@@ -1,24 +1,24 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.application.ApplicationStatus;
-import cn.tianji.town.core.application.ApplicationText;
-import cn.tianji.town.core.economy.MoneyAmount;
-import cn.tianji.town.core.consumption.BuffDefinition;
-import cn.tianji.town.core.land.InitialTerritory;
-import cn.tianji.town.core.town.MemberRole;
-import cn.tianji.town.core.town.TownStatus;
-import cn.tianji.town.core.governance.VoteType;
-import cn.tianji.town.storage.town.ApplicationSnapshot;
-import cn.tianji.town.storage.town.ApplicationFormDraft;
-import cn.tianji.town.storage.town.InitialMemberConfirmation;
-import cn.tianji.town.storage.town.JoinApplicationSnapshot;
-import cn.tianji.town.storage.town.TownRepository;
-import cn.tianji.town.storage.town.TownSnapshot;
-import cn.tianji.town.storage.governance.MemberGovernanceSnapshot;
-import cn.tianji.town.storage.governance.TransferSnapshot;
-import cn.tianji.town.storage.governance.VoteSnapshot;
-import cn.tianji.town.storage.economy.EconomyRepository;
-import cn.tianji.town.storage.commerce.CommerceRepository;
+import org.allivlisey.tianjitown.core.application.ApplicationStatus;
+import org.allivlisey.tianjitown.core.application.ApplicationText;
+import org.allivlisey.tianjitown.core.economy.MoneyAmount;
+import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.town.MemberRole;
+import org.allivlisey.tianjitown.core.town.TownStatus;
+import org.allivlisey.tianjitown.core.governance.VoteType;
+import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
+import org.allivlisey.tianjitown.storage.town.ApplicationFormDraft;
+import org.allivlisey.tianjitown.storage.town.InitialMemberConfirmation;
+import org.allivlisey.tianjitown.storage.town.JoinApplicationSnapshot;
+import org.allivlisey.tianjitown.storage.town.TownRepository;
+import org.allivlisey.tianjitown.storage.town.TownSnapshot;
+import org.allivlisey.tianjitown.storage.governance.MemberGovernanceSnapshot;
+import org.allivlisey.tianjitown.storage.governance.TransferSnapshot;
+import org.allivlisey.tianjitown.storage.governance.VoteSnapshot;
+import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
+import org.allivlisey.tianjitown.storage.commerce.CommerceRepository;
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.dialog.DialogResponseView;
 import io.papermc.paper.event.player.PlayerInsertLecternBookEvent;
@@ -1296,7 +1296,7 @@ final class TownUiController implements Listener {
                     player.getUniqueId(), ignored -> ConcurrentHashMap.newKeySet());
             Set<TerritoryService.GridSelection> validSelected = new java.util.HashSet<>(selected);
             map.cells().stream()
-                    .filter(cell -> cell.state() != cn.tianji.town.core.land.TerritoryCellState.EXPANDABLE)
+                    .filter(cell -> cell.state() != org.allivlisey.tianjitown.core.land.TerritoryCellState.EXPANDABLE)
                     .map(cell -> new TerritoryService.GridSelection(cell.gridX(), cell.gridZ()))
                     .forEach(validSelected::remove);
             selected.retainAll(validSelected);

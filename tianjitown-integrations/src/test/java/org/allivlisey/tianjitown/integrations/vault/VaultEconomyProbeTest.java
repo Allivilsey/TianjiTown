@@ -1,4 +1,4 @@
-package cn.tianji.town.integrations.vault;
+package org.allivlisey.tianjitown.integrations.vault;
 
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Server;

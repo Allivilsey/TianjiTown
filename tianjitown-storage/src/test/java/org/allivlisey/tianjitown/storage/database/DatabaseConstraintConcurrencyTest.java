@@ -1,10 +1,10 @@
-package cn.tianji.town.storage.database;
+package org.allivlisey.tianjitown.storage.database;
 
-import cn.tianji.town.core.governance.VoteType;
-import cn.tianji.town.core.town.MemberRole;
-import cn.tianji.town.storage.economy.EconomyRepository;
-import cn.tianji.town.storage.governance.GovernanceRepository;
-import cn.tianji.town.storage.town.TownRepository;
+import org.allivlisey.tianjitown.core.governance.VoteType;
+import org.allivlisey.tianjitown.core.town.MemberRole;
+import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
+import org.allivlisey.tianjitown.storage.governance.GovernanceRepository;
+import org.allivlisey.tianjitown.storage.town.TownRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

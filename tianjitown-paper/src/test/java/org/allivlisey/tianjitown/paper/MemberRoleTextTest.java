@@ -1,6 +1,6 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.town.MemberRole;
+import org.allivlisey.tianjitown.core.town.MemberRole;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

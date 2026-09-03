@@ -1,10 +1,10 @@
-package cn.tianji.town.storage.town;
+package org.allivlisey.tianjitown.storage.town;
 
-import cn.tianji.town.core.application.ApplicationText;
-import cn.tianji.town.core.land.InitialTerritory;
-import cn.tianji.town.core.land.TownResidenceName;
-import cn.tianji.town.core.town.MemberRole;
-import cn.tianji.town.core.town.TownStatus;
+import org.allivlisey.tianjitown.core.application.ApplicationText;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.land.TownResidenceName;
+import org.allivlisey.tianjitown.core.town.MemberRole;
+import org.allivlisey.tianjitown.core.town.TownStatus;
 
 import java.time.Instant;
 import java.util.List;

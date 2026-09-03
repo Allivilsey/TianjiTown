@@ -1,8 +1,8 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.consumption.BuffDefinition;
-import cn.tianji.town.core.consumption.BuffStackingRule;
-import cn.tianji.town.core.town.MemberRole;
+import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
+import org.allivlisey.tianjitown.core.consumption.BuffStackingRule;
+import org.allivlisey.tianjitown.core.town.MemberRole;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

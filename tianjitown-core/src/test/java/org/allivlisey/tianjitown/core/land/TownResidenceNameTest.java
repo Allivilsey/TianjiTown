@@ -1,4 +1,4 @@
-package cn.tianji.town.core.land;
+package org.allivlisey.tianjitown.core.land;
 
 import org.junit.jupiter.api.Test;
 

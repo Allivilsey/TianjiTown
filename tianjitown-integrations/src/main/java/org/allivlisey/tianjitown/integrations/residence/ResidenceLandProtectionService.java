@@ -1,8 +1,8 @@
-package cn.tianji.town.integrations.residence;
+package org.allivlisey.tianjitown.integrations.residence;
 
-import cn.tianji.town.core.land.InitialTerritory;
-import cn.tianji.town.core.land.TownResidenceName;
-import cn.tianji.town.core.ports.LandProtectionService;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.land.TownResidenceName;
+import org.allivlisey.tianjitown.core.ports.LandProtectionService;
 import com.bekvon.bukkit.residence.api.ResidenceApi;
 import com.bekvon.bukkit.residence.commands.padd;
 import com.bekvon.bukkit.residence.protection.ClaimedResidence;

@@ -1,8 +1,8 @@
-package cn.tianji.town.storage.town;
+package org.allivlisey.tianjitown.storage.town;
 
-import cn.tianji.town.core.application.ApplicationStatus;
-import cn.tianji.town.core.application.ApplicationText;
-import cn.tianji.town.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.application.ApplicationStatus;
+import org.allivlisey.tianjitown.core.application.ApplicationText;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
 
 import java.time.Instant;
 import java.util.List;

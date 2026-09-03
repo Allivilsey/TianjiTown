@@ -1,6 +1,6 @@
-package cn.tianji.town.core.consumption;
+package org.allivlisey.tianjitown.core.consumption;
 
-import cn.tianji.town.core.town.MemberRole;
+import org.allivlisey.tianjitown.core.town.MemberRole;
 
 import java.math.BigDecimal;
 import java.util.Set;

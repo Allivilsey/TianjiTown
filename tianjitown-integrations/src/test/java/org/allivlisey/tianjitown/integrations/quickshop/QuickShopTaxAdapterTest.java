@@ -1,4 +1,4 @@
-package cn.tianji.town.integrations.quickshop;
+package org.allivlisey.tianjitown.integrations.quickshop;
 
 import org.junit.jupiter.api.Test;
 

@@ -1,8 +1,8 @@
-package cn.tianji.town.storage.bonus;
+package org.allivlisey.tianjitown.storage.bonus;
 
-import cn.tianji.town.storage.database.DatabaseConfig;
-import cn.tianji.town.storage.database.DatabaseGate;
-import cn.tianji.town.core.town.MemberRole;
+import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
+import org.allivlisey.tianjitown.storage.database.DatabaseGate;
+import org.allivlisey.tianjitown.core.town.MemberRole;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

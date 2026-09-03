@@ -1,7 +1,7 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.application.ApplicationStatus;
-import cn.tianji.town.core.town.TownStatus;
+import org.allivlisey.tianjitown.core.application.ApplicationStatus;
+import org.allivlisey.tianjitown.core.town.TownStatus;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

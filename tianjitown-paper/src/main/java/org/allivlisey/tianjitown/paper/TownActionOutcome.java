@@ -1,4 +1,4 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
 record TownActionOutcome<T>(TownActionResult result, T value) {
     static <T> TownActionOutcome<T> success(TownActionResult result, T value) {

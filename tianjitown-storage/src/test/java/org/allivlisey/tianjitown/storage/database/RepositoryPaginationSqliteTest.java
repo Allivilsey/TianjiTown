@@ -1,10 +1,10 @@
-package cn.tianji.town.storage.database;
+package org.allivlisey.tianjitown.storage.database;
 
-import cn.tianji.town.storage.economy.EconomyRepository;
-import cn.tianji.town.storage.town.ApplicationSnapshot;
-import cn.tianji.town.storage.town.AuditSnapshot;
-import cn.tianji.town.storage.town.TownRepository;
-import cn.tianji.town.storage.town.TownSnapshot;
+import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
+import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
+import org.allivlisey.tianjitown.storage.town.AuditSnapshot;
+import org.allivlisey.tianjitown.storage.town.TownRepository;
+import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

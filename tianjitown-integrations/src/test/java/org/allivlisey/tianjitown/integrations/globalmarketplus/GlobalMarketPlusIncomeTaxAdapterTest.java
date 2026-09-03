@@ -1,4 +1,4 @@
-package cn.tianji.town.integrations.globalmarketplus;
+package org.allivlisey.tianjitown.integrations.globalmarketplus;
 
 import org.junit.jupiter.api.Test;
 

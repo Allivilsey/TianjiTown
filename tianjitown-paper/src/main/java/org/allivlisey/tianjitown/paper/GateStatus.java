@@ -1,4 +1,4 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
 import java.util.List;
 
@@ -13,4 +13,3 @@ public record GateStatus(State state, List<String> details) {
         LOCKED
     }
 }
-

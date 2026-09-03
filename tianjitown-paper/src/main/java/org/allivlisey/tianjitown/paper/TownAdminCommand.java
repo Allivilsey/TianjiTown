@@ -1,19 +1,19 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.application.ApplicationText;
-import cn.tianji.town.core.economy.MoneyAmount;
-import cn.tianji.town.core.consumption.BuffDefinition;
-import cn.tianji.town.core.consumption.BuffDurationOption;
-import cn.tianji.town.core.land.ExpansionDirection;
-import cn.tianji.town.core.land.ExpansionPricing;
-import cn.tianji.town.core.land.TerritoryRules;
-import cn.tianji.town.core.governance.VoteType;
-import cn.tianji.town.core.ports.LandProtectionService;
-import cn.tianji.town.core.town.MemberRole;
-import cn.tianji.town.core.town.TownStatus;
-import cn.tianji.town.storage.town.ApplicationSnapshot;
-import cn.tianji.town.storage.town.AuditSnapshot;
-import cn.tianji.town.storage.town.TownSnapshot;
+import org.allivlisey.tianjitown.core.application.ApplicationText;
+import org.allivlisey.tianjitown.core.economy.MoneyAmount;
+import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
+import org.allivlisey.tianjitown.core.consumption.BuffDurationOption;
+import org.allivlisey.tianjitown.core.land.ExpansionDirection;
+import org.allivlisey.tianjitown.core.land.ExpansionPricing;
+import org.allivlisey.tianjitown.core.land.TerritoryRules;
+import org.allivlisey.tianjitown.core.governance.VoteType;
+import org.allivlisey.tianjitown.core.ports.LandProtectionService;
+import org.allivlisey.tianjitown.core.town.MemberRole;
+import org.allivlisey.tianjitown.core.town.TownStatus;
+import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
+import org.allivlisey.tianjitown.storage.town.AuditSnapshot;
+import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -410,7 +410,7 @@ final class TownAdminCommand implements CommandExecutor {
         }, request -> {
             ApplicationSnapshot application = request.application();
             if (action.equals("approve")) {
-                String key = application.status() == cn.tianji.town.core.application.ApplicationStatus.PROVISION_FAILED
+                String key = application.status() == org.allivlisey.tianjitown.core.application.ApplicationStatus.PROVISION_FAILED
                         ? "town:retry:" + application.id() + ":" + application.version()
                         : "town:approve:" + application.id();
                 runtime.provision(sender, application.id(), actorId(sender), sender.getName(),
@@ -793,7 +793,7 @@ final class TownAdminCommand implements CommandExecutor {
             return runtime.finance().ledger(town.id(), 0, 45);
         }, entries -> {
             send(sender, "chat.admin.ledger-title", Map.of("count", entries.size()));
-            for (cn.tianji.town.storage.economy.EconomyRepository.LedgerEntry entry : entries) {
+            for (org.allivlisey.tianjitown.storage.economy.EconomyRepository.LedgerEntry entry : entries) {
                 send(sender, "chat.admin.ledger-record", Map.of("created", entry.createdAt(),
                         "type", entry.entryType(), "amount", runtime.money(entry.amountMinor()),
                         "balance", runtime.money(entry.balanceAfterMinor()),
@@ -829,7 +829,7 @@ final class TownAdminCommand implements CommandExecutor {
                                 candidate.profile().name(), parsed.townName())).findFirst().orElseThrow();
                 var units = runtime.finance().territoryUnits(town.id());
                 var candidate = TerritoryRules.next(units.stream().map(
-                                cn.tianji.town.storage.economy.EconomyRepository
+                                org.allivlisey.tianjitown.storage.economy.EconomyRepository
                                         .TerritoryUnitSnapshot::unit).toList(),
                         ExpansionDirection.parse(parsed.action()));
                 return new AdminExpansion(town, units, candidate);
@@ -1203,9 +1203,9 @@ final class TownAdminCommand implements CommandExecutor {
     }
 
     private record AdminExpansion(TownSnapshot town,
-                                  List<cn.tianji.town.storage.economy.EconomyRepository
+                                  List<org.allivlisey.tianjitown.storage.economy.EconomyRepository
                                           .TerritoryUnitSnapshot> units,
-                                  cn.tianji.town.core.land.TerritoryUnit preview) {
+                                  org.allivlisey.tianjitown.core.land.TerritoryUnit preview) {
     }
 
     private record BuffGrantRequest(UUID townId, String townName,

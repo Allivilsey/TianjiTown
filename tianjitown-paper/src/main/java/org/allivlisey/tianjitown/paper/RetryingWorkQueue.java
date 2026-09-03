@@ -1,4 +1,4 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;

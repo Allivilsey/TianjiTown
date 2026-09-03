@@ -1,6 +1,6 @@
-package cn.tianji.town.integrations.quickshop;
+package org.allivlisey.tianjitown.integrations.quickshop;
 
-import cn.tianji.town.core.economy.MoneyAmount;
+import org.allivlisey.tianjitown.core.economy.MoneyAmount;
 import org.bukkit.plugin.Plugin;
 
 import java.lang.reflect.Constructor;

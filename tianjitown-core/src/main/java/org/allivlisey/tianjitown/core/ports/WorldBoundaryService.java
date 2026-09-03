@@ -1,6 +1,6 @@
-package cn.tianji.town.core.ports;
+package org.allivlisey.tianjitown.core.ports;
 
-import cn.tianji.town.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
 
 public interface WorldBoundaryService {
     Check check(InitialTerritory territory, int bufferChunks);

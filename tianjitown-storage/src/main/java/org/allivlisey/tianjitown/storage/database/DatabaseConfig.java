@@ -1,4 +1,4 @@
-package cn.tianji.town.storage.database;
+package org.allivlisey.tianjitown.storage.database;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -23,4 +23,3 @@ public record DatabaseConfig(
         }
     }
 }
-

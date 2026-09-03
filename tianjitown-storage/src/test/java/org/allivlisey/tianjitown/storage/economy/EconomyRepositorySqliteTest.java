@@ -1,12 +1,12 @@
-package cn.tianji.town.storage.economy;
+package org.allivlisey.tianjitown.storage.economy;
 
-import cn.tianji.town.core.land.ChunkPosition;
-import cn.tianji.town.core.land.ExpansionDirection;
-import cn.tianji.town.core.land.InitialTerritory;
-import cn.tianji.town.core.land.TerritoryRules;
-import cn.tianji.town.core.land.TerritoryUnit;
-import cn.tianji.town.storage.database.DatabaseConfig;
-import cn.tianji.town.storage.database.DatabaseGate;
+import org.allivlisey.tianjitown.core.land.ChunkPosition;
+import org.allivlisey.tianjitown.core.land.ExpansionDirection;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.land.TerritoryRules;
+import org.allivlisey.tianjitown.core.land.TerritoryUnit;
+import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
+import org.allivlisey.tianjitown.storage.database.DatabaseGate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

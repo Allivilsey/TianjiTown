@@ -1,6 +1,6 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.core.economy.MoneyAmount;
+import org.allivlisey.tianjitown.core.economy.MoneyAmount;
 import org.bukkit.configuration.ConfigurationSection;
 
 import java.math.BigDecimal;
@@ -63,7 +63,7 @@ record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, String se
                 "economy.tax.subsidy.weekly-limit", "50000.00", messageResolver);
         BigDecimal twelveHourSubsidyLimit = ConfigurationValues.decimalText(config,
                 "economy.tax.subsidy.twelve-hour-limit", "5000.00", messageResolver);
-        int maximumUnits = cn.tianji.town.core.land.TerritoryRules.MAXIMUM_UNITS;
+        int maximumUnits = org.allivlisey.tianjitown.core.land.TerritoryRules.MAXIMUM_UNITS;
         if (account == null || account.isBlank()) {
             throw new IllegalArgumentException(resolveMessage(messageResolver,
                     SETTLEMENT_ACCOUNT_REQUIRED,

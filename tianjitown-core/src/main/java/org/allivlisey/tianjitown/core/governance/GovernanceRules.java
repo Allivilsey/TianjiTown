@@ -1,4 +1,4 @@
-package cn.tianji.town.core.governance;
+package org.allivlisey.tianjitown.core.governance;
 
 public final class GovernanceRules {
     private GovernanceRules() {

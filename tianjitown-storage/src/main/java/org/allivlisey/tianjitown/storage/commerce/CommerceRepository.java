@@ -1,10 +1,10 @@
-package cn.tianji.town.storage.commerce;
+package org.allivlisey.tianjitown.storage.commerce;
 
-import cn.tianji.town.core.consumption.BuffDefinition;
-import cn.tianji.town.core.consumption.BuffDurationOption;
-import cn.tianji.town.core.consumption.BuffPricing;
-import cn.tianji.town.core.consumption.BuffStackingRule;
-import cn.tianji.town.core.town.MemberRole;
+import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
+import org.allivlisey.tianjitown.core.consumption.BuffDurationOption;
+import org.allivlisey.tianjitown.core.consumption.BuffPricing;
+import org.allivlisey.tianjitown.core.consumption.BuffStackingRule;
+import org.allivlisey.tianjitown.core.town.MemberRole;
 
 import javax.sql.DataSource;
 import java.nio.ByteBuffer;

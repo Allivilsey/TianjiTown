@@ -1,4 +1,4 @@
-package cn.tianji.town.core.consumption;
+package org.allivlisey.tianjitown.core.consumption;
 
 import java.time.Duration;
 import java.util.Locale;

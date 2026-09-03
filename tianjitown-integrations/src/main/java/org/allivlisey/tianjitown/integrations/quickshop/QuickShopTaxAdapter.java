@@ -1,7 +1,7 @@
-package cn.tianji.town.integrations.quickshop;
+package org.allivlisey.tianjitown.integrations.quickshop;
 
-import cn.tianji.town.core.economy.MoneyAmount;
-import cn.tianji.town.integrations.ThirdPartyEventExecutor;
+import org.allivlisey.tianjitown.core.economy.MoneyAmount;
+import org.allivlisey.tianjitown.integrations.ThirdPartyEventExecutor;
 import org.bukkit.Location;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;

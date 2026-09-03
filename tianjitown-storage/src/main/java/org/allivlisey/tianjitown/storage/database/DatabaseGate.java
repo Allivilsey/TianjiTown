@@ -1,4 +1,4 @@
-package cn.tianji.town.storage.database;
+package org.allivlisey.tianjitown.storage.database;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;

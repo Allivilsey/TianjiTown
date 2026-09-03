@@ -1,6 +1,6 @@
-package cn.tianji.town.paper;
+package org.allivlisey.tianjitown.paper;
 
-import cn.tianji.town.storage.town.ApplicationSnapshot;
+import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
 
 import java.util.Map;
 import java.util.Objects;
