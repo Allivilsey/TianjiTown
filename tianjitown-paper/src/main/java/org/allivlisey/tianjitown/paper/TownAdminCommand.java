@@ -599,18 +599,7 @@ final class TownAdminCommand implements CommandExecutor {
         }
         requireMessageLength(args, 4, "chat.admin.usage-vote-create",
                 Map.of("action", action));
-        GovernanceSettings settings;
-        try {
-            settings = GovernanceSettings.load(plugin.getConfig(),
-                    plugin.messages()::plainText);
-        } catch (IllegalArgumentException exception) {
-            send(sender, "chat.admin.governance-invalid", Map.of(
-                    "detail", exception.getMessage()));
-            plugin.getLogger().warning(plugin.messages().plainText(
-                    "log.admin.governance-vote-creation-rejected",
-                    Map.of("detail", safeText(safeMessage(exception)))));
-            return true;
-        }
+        GovernanceSettings settings = GovernanceSettings.fixed();
         runtime.read(sender, () -> {
             List<TownSnapshot> towns = runtime.repository().listTowns(false).stream()
                     .filter(town -> town.status() == TownStatus.ACTIVE).toList();

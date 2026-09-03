@@ -271,14 +271,7 @@ final class TownActions {
 
     void requestMayorTransfer(Player actor, UUID townId, UUID candidateId,
                               Consumer<TownActionOutcome<TransferSnapshot>> completion) {
-        GovernanceSettings settings;
-        try {
-            settings = GovernanceSettings.load(plugin.getConfig(),
-                    plugin.messages()::plainText);
-        } catch (IllegalArgumentException exception) {
-            failNow("MAYOR_TRANSFER_REQUEST", exception, completion);
-            return;
-        }
+        GovernanceSettings settings = GovernanceSettings.fixed();
         write("MAYOR_TRANSFER_REQUEST", actor,
                 () -> runtime.governance().requestMayorTransfer(townId, candidateId,
                         actor.getUniqueId(), settings.transferConfirmation()),
@@ -307,14 +300,7 @@ final class TownActions {
 
     void createVote(Player actor, UUID townId, VoteType type, UUID targetId,
                     Consumer<TownActionOutcome<VoteSnapshot>> completion) {
-        GovernanceSettings settings;
-        try {
-            settings = GovernanceSettings.load(plugin.getConfig(),
-                    plugin.messages()::plainText);
-        } catch (IllegalArgumentException exception) {
-            failNow("VOTE_CREATE", exception, completion);
-            return;
-        }
+        GovernanceSettings settings = GovernanceSettings.fixed();
         write("VOTE_CREATE", actor,
                 () -> runtime.governance().createVote(townId, type, targetId,
                         actor.getUniqueId(), settings.activeMemberWindow(),

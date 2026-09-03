@@ -368,7 +368,7 @@ class PluginMessagesTest {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
         Map<String, ?> placeholders = Map.of(
                 "action", "create-kick", "town", "青石镇", "count", 3,
-                "detail", "governance.voting.duration-hours 必须为正整数");
+                "detail", "boom");
 
         assertEquals("用法: /townadmin vote <create-kick|create-mayor|settle|cancel> <小镇全名|voteId> ...",
                 messages.plainText("chat.admin.usage-vote", placeholders));
@@ -392,9 +392,6 @@ class PluginMessagesTest {
                 messages.plainText("chat.admin.land-rebuild-confirmation-all", placeholders));
         assertEquals("移除并重建小镇“青石镇”的 Residence 投影",
                 messages.plainText("chat.admin.land-rebuild-confirmation-town", placeholders));
-        assertEquals("拒绝创建治理投票: governance.voting.duration-hours 必须为正整数",
-                messages.plainText("log.admin.governance-vote-creation-rejected", placeholders));
-
         for (String key : List.of(
                 "chat.admin.usage-vote",
                 "chat.admin.usage-vote-cancel",
@@ -406,8 +403,7 @@ class PluginMessagesTest {
                 "chat.admin.usage-land",
                 "chat.admin.land-action-unsupported",
                 "chat.admin.land-rebuild-confirmation-all",
-                "chat.admin.land-rebuild-confirmation-town",
-                "log.admin.governance-vote-creation-rejected")) {
+                "chat.admin.land-rebuild-confirmation-town")) {
             String rendered = messages.plainText(key, placeholders);
             assertFalse(rendered.isBlank(), key);
             assertFalse(rendered.contains("缺少消息配置"), key);
@@ -421,7 +417,6 @@ class PluginMessagesTest {
         String usageKey = "chat.admin.usage-vote-create";
         String townConfirmationKey = "chat.admin.land-rebuild-confirmation-town";
         String allConfirmationKey = "chat.admin.land-rebuild-confirmation-all";
-        String logKey = "log.admin.governance-vote-creation-rejected";
 
         assertEquals("用法: /townadmin vote create-mayor <小镇全名> <玩家>",
                 messages.plainText(usageKey, Map.of("action", "create-mayor")));
@@ -429,14 +424,10 @@ class PluginMessagesTest {
                 messages.plainText(townConfirmationKey, Map.of("town", "青石镇")));
         assertEquals("移除并重建全部 2 个小镇的 Residence 投影",
                 messages.plainText(allConfirmationKey, Map.of("count", 2)));
-        assertEquals("拒绝创建治理投票: boom",
-                messages.plainText(logKey, Map.of("detail", "boom")));
-
         YamlConfiguration configuration = new YamlConfiguration();
         configuration.set(usageKey, "自定义投票用法: {action}");
         configuration.set(townConfirmationKey, "自定义单镇领地确认: {town}");
         configuration.set(allConfirmationKey, "自定义批量领地确认: {count}");
-        configuration.set(logKey, "自定义治理投票日志: {detail}");
         configuration.save(temporaryDirectory.resolve("messages.yml").toFile());
         messages.reload();
 
@@ -446,8 +437,6 @@ class PluginMessagesTest {
                 messages.plainText(townConfirmationKey, Map.of("town", "青石镇")));
         assertEquals("自定义批量领地确认: 2",
                 messages.plainText(allConfirmationKey, Map.of("count", 2)));
-        assertEquals("自定义治理投票日志: boom",
-                messages.plainText(logKey, Map.of("detail", "boom")));
     }
 
     @Test

@@ -76,10 +76,6 @@ validation:
     twelve-hour-limit-exceeds-weekly: '&c{path} 不能大于每周限额'
     expansion-cost-overflow: '&c金额超过上限'
     expansion-cost-range: '&c{path} 价格超出次级货币单位范围'
-  # 治理时长配置校验消息；{path}=配置路径。
-  governance:
-    duration-non-negative: '&c{path} 必须为可安全计算的非负整数'
-    duration-positive: '&c{path} 必须为可安全计算的正整数'
   # 建筑返还、信标增强和定时备份配置校验消息；{path}=配置路径，{value}=非法材料值，
   # {minimum}/{maximum}=允许范围；refresh-interval-ticks 的范围单位为 tick，diagnostic-days 为天。
   bonus:
@@ -337,7 +333,6 @@ chat:
     member-town-not-found: '找不到可操作的小镇 “{town}”'
     vote-status: '&a投票状态: {status}，赞成/门槛: {yes}/{required}'
     vote-cancelled: '&a投票已取消: {id}'
-    governance-invalid: '&c治理配置无效: {detail}'
     vote-created: '&a投票已创建: {id}，有效选民={voters}，通过门槛={required}'
     usage-mayor: '用法: /townadmin mayor transfer <小镇全名> <玩家> <原因>'
     mayor-emergency-transfer: '&a镇长已紧急转移。'
@@ -788,8 +783,6 @@ log:
     town-delete-residence-failure: '删除小镇后 Residence 移除失败 {town}/{residence}: {detail}'
     # 成员角色调整写入审计记录的事件快照；无占位符。
     member-role-change-reason: '管理员调整成员角色'
-    # 治理配置无效时拒绝创建投票的日志；{detail}=配置校验详情。
-    governance-vote-creation-rejected: '拒绝创建治理投票: {detail}'
   # 插件边界内的异步与主线程回调；{detail}=异常详情。
   scheduler:
     async-task-failure: '异步任务异常，已在插件边界隔离: {detail}'

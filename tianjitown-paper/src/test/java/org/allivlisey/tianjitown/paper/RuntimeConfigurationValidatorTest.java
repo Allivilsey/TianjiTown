@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -37,7 +38,6 @@ class RuntimeConfigurationValidatorTest {
                 new Setting("database.connection-timeout-ms", "5000"),
                 new Setting("database.busy-timeout-ms", "5000"),
                 new Setting("town.application.reservation-minutes", "60"),
-                new Setting("governance.voting.duration-hours", "72"),
                 new Setting("economy.tax.enabled", "true"),
                 new Setting("buffs.shop-enabled", "true"))) {
             YamlConfiguration config = configuration();
@@ -48,6 +48,18 @@ class RuntimeConfigurationValidatorTest {
                             world -> world.equals("world")));
             assertTrue(exception.getMessage().contains(setting.path()), exception.getMessage());
         }
+    }
+
+    @Test
+    void ignoresLegacyGovernanceDurationConfiguration() {
+        YamlConfiguration config = configuration();
+        config.set("governance.transfer-confirmation-hours", "not-a-duration");
+        config.set("governance.voting.active-member-days", -1);
+        config.set("governance.voting.minimum-membership-days", Long.MAX_VALUE);
+        config.set("governance.voting.duration-hours", 0);
+
+        assertDoesNotThrow(() -> RuntimeConfigurationValidator.validate(config,
+                world -> world.equals("world")));
     }
 
     @Test
