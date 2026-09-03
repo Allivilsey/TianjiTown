@@ -1325,7 +1325,7 @@ class PluginMessagesTest {
                         Map.of("path", "buffs.catalog.speed")));
         assertEquals("buffs.catalog.speed.display-name 不能为空",
                 messages.plainText("validation.buff.value-required", placeholders));
-        assertEquals("金额超过 long 次级单位上限",
+        assertEquals("金额超过上限",
                 messages.plainText("validation.buff.price-overflow", placeholders));
         assertEquals("buffs.catalog.speed.base-price 产生的价格超出次级货币单位范围",
                 messages.plainText("validation.buff.price-range",

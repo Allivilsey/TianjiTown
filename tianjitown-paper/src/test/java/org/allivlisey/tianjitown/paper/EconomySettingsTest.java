@@ -95,7 +95,7 @@ class EconomySettingsTest {
         IllegalArgumentException overflow = reject(
                 configuration("economy.expansion.fixed-cost", "1E100"), messages);
         assertEquals("economy.expansion 价格超出次级货币单位范围", overflow.getMessage());
-        assertEquals("金额超过 long 次级货币单位上限", overflow.getCause().getMessage());
+        assertEquals("金额超过上限", overflow.getCause().getMessage());
 
         String key = "validation.economy.settlement-account-required";
         YamlConfiguration override = new YamlConfiguration();

@@ -129,10 +129,9 @@ territory:
       - CRYING_OBSIDIAN
       - ENCHANTING_TABLE
   beacon:
-    # 镇长或副镇长切换信标效果时记录更高等级；数据库内效果覆盖小镇领地。
+    # 镇长或副镇长切换信标效果时记录更高等级；数据库内效果覆盖所有小镇领地。
     enabled: true
     refresh-interval-ticks: 100
-    allowed-worlds: [world]
 
 operations:
   # 插件每次成功启动后自动执行一次统一诊断；运行期间可使用 /townadmin diagnose 手动执行。

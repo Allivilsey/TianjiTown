@@ -2,7 +2,6 @@ package org.allivlisey.tianjitown.paper;
 
 import org.bukkit.configuration.ConfigurationSection;
 
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -12,8 +11,6 @@ import java.util.function.Predicate;
 
 final class RuntimeConfigurationValidator {
     private static final long MAXIMUM_TIMEOUT_MILLIS = 300_000;
-    private static final String BEACON_WORLD_UNLOADED =
-            "validation.runtime-configuration.beacon-worlds-unloaded";
     private static final String DATABASE_FILE_REQUIRED =
             "validation.runtime-configuration.database-file-required";
     private static final String BLACKLIST_TYPE =
@@ -69,14 +66,7 @@ final class RuntimeConfigurationValidator {
         EconomySettings economy = EconomySettings.load(config, messageResolver);
         BuffSettings.load(config, economy.fallbackScale(), messageResolver,
                 requiredMessageResolver);
-        TownBonusSettings bonuses = TownBonusSettings.load(config, messageResolver);
-        List<String> missingWorlds = bonuses.beacon().allowedWorlds().stream()
-                .filter(world -> !loadedWorld.test(world)).sorted().toList();
-        if (!missingWorlds.isEmpty()) {
-            throw new IllegalArgumentException(resolveMessage(messageResolver,
-                    BEACON_WORLD_UNLOADED,
-                    Map.of("worlds", safeText(String.join(", ", missingWorlds)))));
-        }
+        TownBonusSettings.load(config, messageResolver);
         return databaseSettings(config, messageResolver);
     }
 

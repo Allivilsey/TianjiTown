@@ -10,7 +10,6 @@ import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -33,8 +32,6 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
             "validation.bonus.building-refund-blacklist-material-invalid";
     private static final String BEACON_REFRESH_INTERVAL_RANGE =
             "validation.common.range";
-    private static final String BEACON_WORLDS_REQUIRED =
-            "validation.bonus.beacon-worlds-required";
     private static final String DIAGNOSTIC_DAYS_RANGE =
             "validation.bonus.diagnostic-days-range";
     private static final String BACKUP_RANGE = "validation.bonus.backup-range";
@@ -118,16 +115,8 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
                     Map.of("path", root + ".refresh-interval-ticks", "minimum", 20,
                             "maximum", 1_200));
         }
-        Set<String> worlds = ConfigurationValues.stringList(config, root + ".allowed-worlds",
-                messageResolver).stream()
-                .map(value -> value.toLowerCase(Locale.ROOT)).collect(
-                        java.util.stream.Collectors.toUnmodifiableSet());
-        if (worlds.isEmpty()) {
-            throw invalid(messageResolver, BEACON_WORLDS_REQUIRED,
-                    Map.of("path", root + ".allowed-worlds"));
-        }
         return new BeaconEnhancement(ConfigurationValues.bool(config, root + ".enabled", true,
-                messageResolver), refreshTicks, worlds);
+                messageResolver), refreshTicks);
     }
 
     private static Operations loadOperations(
@@ -253,15 +242,7 @@ record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon
         }
     }
 
-    record BeaconEnhancement(boolean enabled, long refreshIntervalTicks,
-                             Set<String> allowedWorlds) {
-        BeaconEnhancement {
-            allowedWorlds = Set.copyOf(allowedWorlds);
-        }
-
-        boolean allowsWorld(String worldName) {
-            return allowedWorlds.contains(worldName.toLowerCase(Locale.ROOT));
-        }
+    record BeaconEnhancement(boolean enabled, long refreshIntervalTicks) {
     }
 
     record Operations(int quickShopDiagnosticDays, Backup backup) {

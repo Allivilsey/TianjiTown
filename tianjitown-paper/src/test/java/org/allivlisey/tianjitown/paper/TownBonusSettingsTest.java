@@ -28,7 +28,6 @@ class TownBonusSettingsTest {
         assertEquals(3_000, settings.buildingRefund().weeklyLimit());
         assertTrue(settings.buildingRefund().blacklist().contains(Material.REDSTONE_BLOCK));
         assertTrue(settings.buildingRefund().blacklist().contains(Material.CHEST));
-        assertTrue(settings.beacon().allowsWorld("WORLD"));
         assertEquals(100, settings.beacon().refreshIntervalTicks());
         assertEquals(14, settings.operations().backup().retentionCount());
     }
@@ -73,7 +72,6 @@ class TownBonusSettingsTest {
                 "validation.bonus.building-refund-blacklist-required",
                 "validation.bonus.building-refund-blacklist-material-invalid",
                 "validation.bonus.beacon-refresh-interval-range",
-                "validation.bonus.beacon-worlds-required",
                 "validation.bonus.diagnostic-days-range",
                 "validation.bonus.backup-range",
                 "validation.bonus.backup-directory-required");
@@ -112,9 +110,6 @@ class TownBonusSettingsTest {
                 messages.plainText("validation.bonus.beacon-refresh-interval-range",
                         Map.of("path", "territory.beacon.refresh-interval-ticks", "minimum", 20,
                                 "maximum", 1_200)));
-        assertEquals("territory.beacon.allowed-worlds 至少需要一个世界",
-                messages.plainText("validation.bonus.beacon-worlds-required",
-                        Map.of("path", "territory.beacon.allowed-worlds")));
         assertEquals("operations.quickshop-diagnostic-days 必须在 1~180 天之间",
                 messages.plainText("validation.bonus.diagnostic-days-range",
                         Map.of("path", "operations.quickshop-diagnostic-days", "minimum", 1,
@@ -159,11 +154,6 @@ class TownBonusSettingsTest {
         beaconRefresh.set("territory.beacon.refresh-interval-ticks", 19);
         assertFailure(messages, beaconRefresh,
                 "territory.beacon.refresh-interval-ticks 必须在 20~1200 范围内");
-
-        YamlConfiguration beaconWorlds = configuration("STONE", "0.25");
-        beaconWorlds.set("territory.beacon.allowed-worlds", List.of());
-        assertFailure(messages, beaconWorlds,
-                "territory.beacon.allowed-worlds 至少需要一个世界");
 
         YamlConfiguration diagnosticDays = configuration("STONE", "0.25");
         diagnosticDays.set("operations.quickshop-diagnostic-days", 0);
@@ -223,7 +213,6 @@ class TownBonusSettingsTest {
                   beacon:
                     enabled: true
                     refresh-interval-ticks: 100
-                    allowed-worlds: [world]
                   operations:
                     quickshop-diagnostic-days: 7
                     backup:

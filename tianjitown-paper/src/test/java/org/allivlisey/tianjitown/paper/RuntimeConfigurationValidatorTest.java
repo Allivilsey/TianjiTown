@@ -52,13 +52,6 @@ class RuntimeConfigurationValidatorTest {
 
     @Test
     void rejectsReferencesToWorldsThatAreNotLoaded() {
-        YamlConfiguration beacon = configuration();
-        beacon.set("territory.beacon.allowed-worlds", List.of("missing_world"));
-        IllegalArgumentException beaconFailure = assertThrows(IllegalArgumentException.class,
-                () -> RuntimeConfigurationValidator.validate(beacon,
-                        world -> world.equals("world")));
-        assertTrue(beaconFailure.getMessage().contains("missing_world"));
-
         YamlConfiguration blacklist = configuration();
         LinkedHashMap<String, Object> area = new LinkedHashMap<>();
         blacklist.getMapList("town.site.blacklist").getFirst()
@@ -75,9 +68,6 @@ class RuntimeConfigurationValidatorTest {
     void rendersRuntimeConfigurationValidationMessagesWithoutUnresolvedPlaceholders() {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
 
-        assertEquals("territory.beacon.allowed-worlds 包含未加载世界: world_nether, world_the_end",
-                messages.plainText("validation.runtime-configuration.beacon-worlds-unloaded",
-                        Map.of("worlds", "world_nether, world_the_end")));
         assertEquals("database.file 不能为空",
                 messages.plainText("validation.runtime-configuration.database-file-required"));
         assertEquals("town.site.blacklist 必须为区域列表",
@@ -103,9 +93,8 @@ class RuntimeConfigurationValidatorTest {
 
         Map<String, ?> placeholders = Map.of(
                 "path", "town.site.blacklist.min-chunk-x", "minimum", 1, "maximum", 2,
-                "world", "world_nether", "worlds", "world_nether, world_the_end");
+                "world", "world_nether");
         for (String key : List.of(
-                "validation.runtime-configuration.beacon-worlds-unloaded",
                 "validation.runtime-configuration.database-file-required",
                 "validation.runtime-configuration.blacklist-type",
                 "validation.runtime-configuration.blacklist-world-unloaded",
@@ -128,11 +117,6 @@ class RuntimeConfigurationValidatorTest {
         YamlConfiguration database = configuration();
         database.set("database.file", " ");
         assertEquals("database.file 不能为空", databaseFailure(database, messages).getMessage());
-
-        YamlConfiguration beacon = configuration();
-        beacon.set("territory.beacon.allowed-worlds", List.of("missing_world"));
-        assertEquals("territory.beacon.allowed-worlds 包含未加载世界: missing_world",
-                validationFailure(beacon, messages).getMessage());
 
         YamlConfiguration blacklistType = configuration();
         blacklistType.set("town.site.blacklist", List.of("not-an-area"));

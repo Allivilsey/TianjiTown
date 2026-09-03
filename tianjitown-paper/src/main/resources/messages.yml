@@ -49,7 +49,7 @@ validation:
     duplicate-key: '&c重复 Buff key: {key}'
     purchasing-roles-required: '&c{path} 至少需要一个角色'
     section-required: '&c{path} 必须为配置节'
-    price-overflow: '&c金额超过 long 次级单位上限'
+    price-overflow: '&c金额超过上限'
     price-range: '&c{path} 产生的价格超出次级货币单位范围'
     enum-unsupported: '&c{path} 的值不受支持: {value}'
   # 通用配置值校验；{path}=配置路径。
@@ -64,9 +64,8 @@ validation:
     list-type: '&c{path} 必须为列表'
     long-range: '&c{path} 必须为 long 范围内的整数'
   # 运行时配置结构、世界引用和范围校验；{path}=配置路径，{minimum}/{maximum}=允许范围，
-  # {world}=世界名，{worlds}=多个未加载世界名，数据库目录错误中的 {path}=解析后的目录路径。
+  # {world}=世界名，数据库目录错误中的 {path}=解析后的目录路径。
   runtime-configuration:
-    beacon-worlds-unloaded: '&cterritory.beacon.allowed-worlds 包含未加载世界: {worlds}'
     database-file-required: '&cdatabase.file 不能为空'
     database-file-path-invalid: '&cdatabase.file 必须指向数据库文件'
     database-directory-create-failure: '&c无法创建 SQLite 目录: {path}'
@@ -80,7 +79,7 @@ validation:
     money-scale-range: '&c{path} 必须在 {minimum}~{maximum} 之间'
     expansion-cost-positive: '&c{path} 必须大于 0'
     twelve-hour-limit-exceeds-weekly: '&c{path} 不能大于每周限额'
-    expansion-cost-overflow: '&c金额超过 long 次级货币单位上限'
+    expansion-cost-overflow: '&c金额超过上限'
     expansion-cost-range: '&c{path} 价格超出次级货币单位范围'
   # 治理时长配置校验消息；{path}=配置路径。
   governance:
@@ -94,7 +93,6 @@ validation:
     building-refund-reset-zone-invalid: '&c{path} 不是有效时区'
     building-refund-blacklist-required: '&c{path} 至少需要一个方块或分组'
     building-refund-blacklist-material-invalid: '&c建筑返还黑名单材料无效: {value}'
-    beacon-worlds-required: '&c{path} 至少需要一个世界'
     diagnostic-days-range: '&c{path} 必须在 {minimum}~{maximum} 天之间'
     backup-range: '&c定时备份间隔或保留数量超出安全范围'
   # 在线备份目录校验；{path}=配置中的相对路径或解析后的目录路径。

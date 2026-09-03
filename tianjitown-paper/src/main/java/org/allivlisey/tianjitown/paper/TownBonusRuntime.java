@@ -267,7 +267,7 @@ final class TownBonusRuntime implements Listener {
         boolean playerFailure = false;
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             try {
-                collectDesiredEffects(player, config, snapshot, desiredEffects);
+                collectDesiredEffects(player, snapshot, desiredEffects);
             } catch (RuntimeException | LinkageError exception) {
                 playerFailure = true;
                 if (beaconPlayerFailureLogged.compareAndSet(false, true)) {
@@ -284,16 +284,12 @@ final class TownBonusRuntime implements Listener {
     }
 
     private void collectDesiredEffects(Player player,
-                                       TownBonusSettings.BeaconEnhancement config,
                                        TownBonusRepository.BonusIndex snapshot,
                                        Map<PlayerEffectKey, Integer> desiredEffects) {
         if (!player.isOnline()) {
             return;
         }
         World world = player.getWorld();
-        if (!config.allowsWorld(world.getName())) {
-            return;
-        }
         UUID townId = snapshot.territories().get(new TownBonusRepository.ChunkKey(
                 world.getUID(), player.getChunk().getX(), player.getChunk().getZ()));
         String residenceName = townId == null ? null : snapshot.residenceNames().get(townId);

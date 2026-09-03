@@ -10,7 +10,7 @@
 2. 在生产所用 Leaf/Paper 与 Java 组合上验证 Paper API 编译产物；插件不再执行固定版本匹配。
 3. 确认 Vault 已注册可用的 XConomy `Economy` 服务，Residence、Vault、XConomy 和 QuickShop-Hikari 均已启用。
 4. 确认 `database.file` 指向 TianjiTown 专用的空 SQLite 文件，其父目录对服务器进程可写。
-5. 使用 `/wb` 为允许建镇的世界配置 WorldBorder，再按实际地图修改 `town.site.blacklist` 和 `minimum-buffer-chunks`。只有已加载且已配置 WorldBorder 的世界可选址；地图黑名单、边界和领地缓冲会被严格检查。
+5. 使用 `/wb` 为各世界配置 WorldBorder，再按实际地图修改 `town.site.blacklist` 和 `minimum-buffer-chunks`。选址要求目标世界已加载且配置了 WorldBorder；地图黑名单、边界和领地缓冲会被严格检查。
 6. 使用 `scripts/backup_plugins.sh` 备份 Residence、QuickShop H2、XConomy/清算账户，并用 `scripts/backup_sqlite.sh` 备份 TianjiTown SQLite，完成一次隔离恢复演练。
 
 ## 安装或升级

@@ -16,7 +16,7 @@ mvn -B clean verify
 
 ## 安装与 SQLite
 
-1. 安装并启用 Residence、Vault、XConomy、WorldBorder、QuickShop-Hikari（版本不低于 `6.3.0.0`）、Jobs 和 GlobalMarketPlus，确保 Vault 已注册可用的 `Economy` 服务，并使用 `/wb` 为每个允许建镇的世界配置边界。选址会要求初始 5×5 区块领地及其缓冲范围完整位于 WorldBorder 内；依赖未启用或目标世界未配置边界时会安全失败。
+1. 安装并启用 Residence、Vault、XConomy、WorldBorder、QuickShop-Hikari（版本不低于 `6.3.0.0`）、Jobs 和 GlobalMarketPlus，确保 Vault 已注册可用的 `Economy` 服务，并使用 `/wb` 为各世界配置边界。选址会要求初始 5×5 区块领地及其缓冲范围完整位于 WorldBorder 内；依赖未启用或目标世界未配置边界时会安全失败。
 2. 将 JAR 放入 `plugins`，首次启动会自动创建 `plugins/TianjiTown/tianjitown.db`、`config.yml` 和 `messages.yml`，并执行 Flyway 迁移。
 3. 如需更改位置，在 `config.yml` 中设置相对或绝对文件路径：
 
