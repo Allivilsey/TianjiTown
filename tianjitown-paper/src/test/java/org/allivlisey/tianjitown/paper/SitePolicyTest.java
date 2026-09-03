@@ -29,9 +29,7 @@ class SitePolicyTest {
                 "scope", "2 个领地单元",
                 "count", 2,
                 "duration", 15,
-                "detail", "boom",
-                "path", "town.site.blacklist",
-                "key", "min-chunk-x");
+                "detail", "boom");
 
         for (String key : List.of(
                 "chat.site.preview-scope-single",
@@ -40,11 +38,8 @@ class SitePolicyTest {
                 "validation.site.areas-required",
                 "validation.site.world-mismatch",
                 "validation.site.focus-missing",
-                "validation.site.blacklist-bounds-invalid",
-                "validation.site.blacklist-integer-required",
                 "log.site.preview-invalidated",
-                "log.site.preview-cancel-failed",
-                "log.site.blacklist-invalid-area")) {
+                "log.site.preview-cancel-failed")) {
             String rendered = messages.plainText(key, placeholders);
             assertFalse(rendered.isBlank(), key);
             assertFalse(rendered.contains("缺少消息配置"), key);

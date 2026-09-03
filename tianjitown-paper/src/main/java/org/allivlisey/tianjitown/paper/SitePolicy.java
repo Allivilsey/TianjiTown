@@ -12,7 +12,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -25,13 +24,9 @@ import java.util.function.BiFunction;
 final class SitePolicy {
     private static final String PREVIEW_INVALIDATED = "log.site.preview-invalidated";
     private static final String PREVIEW_CANCEL_FAILED = "log.site.preview-cancel-failed";
-    private static final String BLACKLIST_INVALID_AREA = "log.site.blacklist-invalid-area";
     private static final String PREVIEW_AREAS_REQUIRED = "validation.site.areas-required";
     private static final String PREVIEW_WORLD_MISMATCH = "validation.site.world-mismatch";
     private static final String PREVIEW_FOCUS_MISSING = "validation.site.focus-missing";
-    private static final String BLACKLIST_BOUNDS = "validation.site.blacklist-bounds-invalid";
-    private static final String BLACKLIST_INTEGER_TYPE =
-            "validation.site.blacklist-integer-required";
     private static final String PREVIEW_SCOPE_SINGLE = "chat.site.preview-scope-single";
     private static final String PREVIEW_SCOPE_MULTIPLE = "chat.site.preview-scope-multiple";
     private final TianjiTownPlugin plugin;
@@ -107,11 +102,6 @@ final class SitePolicy {
         if (world == null) {
             return Validation.failure(plugin.messages().plainText(
                     "chat.site-validation.world-unloaded"));
-        }
-        if (rectangles("town.site.blacklist", world.getName()).stream()
-                .anyMatch(area -> area.overlaps(territory))) {
-            return Validation.failure(plugin.messages().plainText(
-                    "chat.site-validation.blacklist-collision"));
         }
         int bufferChunks = Math.max(0,
                 plugin.getConfig().getInt("town.site.minimum-buffer-chunks", 1));
@@ -364,49 +354,6 @@ final class SitePolicy {
                 null, true);
     }
 
-    private List<Rectangle> rectangles(String path, String world) {
-        List<Rectangle> result = new ArrayList<>();
-        for (java.util.Map<?, ?> raw : plugin.getConfig().getMapList(path)) {
-            if (!world.equals(String.valueOf(raw.get("world")))) {
-                continue;
-            }
-            try {
-                BiFunction<String, Map<String, ?>, String> messageResolver =
-                        plugin.messages()::plainText;
-                int minimumX = number(raw, "min-chunk-x", messageResolver);
-                int maximumX = number(raw, "max-chunk-x", messageResolver);
-                int minimumZ = number(raw, "min-chunk-z", messageResolver);
-                int maximumZ = number(raw, "max-chunk-z", messageResolver);
-                result.add(rectangle(minimumX, maximumX, minimumZ, maximumZ,
-                        messageResolver));
-            } catch (IllegalArgumentException exception) {
-                plugin.getLogger().warning(plugin.messages().plainText(BLACKLIST_INVALID_AREA,
-                        Map.of("path", safeText(path), "detail", safeMessage(exception))));
-            }
-        }
-        return List.copyOf(result);
-    }
-
-    private static int number(java.util.Map<?, ?> map, String key,
-                              BiFunction<String, Map<String, ?>, String> messageResolver) {
-        Object value = map.get(key);
-        if (!(value instanceof Number number)) {
-            throw new IllegalArgumentException(resolveMessage(messageResolver,
-                    BLACKLIST_INTEGER_TYPE, Map.of("key", safeText(key))));
-        }
-        return number.intValue();
-    }
-
-    private static Rectangle rectangle(int minimumX, int maximumX, int minimumZ, int maximumZ,
-                                       BiFunction<String, Map<String, ?>, String>
-                                               messageResolver) {
-        if (minimumX > maximumX || minimumZ > maximumZ) {
-            throw new IllegalArgumentException(resolveMessage(messageResolver,
-                    BLACKLIST_BOUNDS, Map.of()));
-        }
-        return new Rectangle(minimumX, maximumX, minimumZ, maximumZ);
-    }
-
     private static String safeMessage(Throwable throwable) {
         String message = throwable.getMessage();
         return safeText(message == null || message.isBlank()
@@ -439,18 +386,6 @@ final class SitePolicy {
 
         static Validation failure(String error) {
             return new Validation(false, error, null);
-        }
-    }
-
-    private record Rectangle(int minimumX, int maximumX, int minimumZ, int maximumZ) {
-        boolean contains(InitialTerritory territory) {
-            return minimumX <= territory.minimumChunkX() && maximumX >= territory.maximumChunkX()
-                    && minimumZ <= territory.minimumChunkZ() && maximumZ >= territory.maximumChunkZ();
-        }
-
-        boolean overlaps(InitialTerritory territory) {
-            return minimumX <= territory.maximumChunkX() && maximumX >= territory.minimumChunkX()
-                    && minimumZ <= territory.maximumChunkZ() && maximumZ >= territory.minimumChunkZ();
         }
     }
 

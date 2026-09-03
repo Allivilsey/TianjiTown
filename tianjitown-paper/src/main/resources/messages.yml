@@ -58,17 +58,11 @@ validation:
     string-list-type: '&c{path} 必须为文本列表'
     list-type: '&c{path} 必须为列表'
     long-range: '&c{path} 必须为 long 范围内的整数'
-  # 运行时配置结构、世界引用和范围校验；{path}=配置路径，{minimum}/{maximum}=允许范围，
-  # {world}=世界名，数据库目录错误中的 {path}=解析后的目录路径。
+  # 运行时配置和数据库校验；{path}=配置路径，{minimum}/{maximum}=允许范围。
   runtime-configuration:
     database-file-required: '&cdatabase.file 不能为空'
     database-file-path-invalid: '&cdatabase.file 必须指向数据库文件'
     database-directory-create-failure: '&c无法创建 SQLite 目录: {path}'
-    blacklist-type: '&ctown.site.blacklist 必须为区域列表'
-    blacklist-world-unloaded: '&ctown.site.blacklist 包含未加载世界: {world}'
-    blacklist-bounds: '&ctown.site.blacklist 区域最小坐标不能大于最大坐标'
-    blacklist-text-required: '&c{path} 必须为非空文本'
-    blacklist-integer-range: '&c{path} 必须为 int 范围内的整数'
   # 经济设置校验消息；{path}=配置路径，{minimum}/{maximum}=允许的金额精度边界。
   economy:
     money-scale-range: '&c{path} 必须在 {minimum}~{maximum} 之间'
@@ -93,13 +87,11 @@ validation:
     symlink-escape: '备份目录通过符号链接或联接超出插件数据目录: {path}'
     not-directory: '备份目录指向文件: {path}'
     real-path-verification-failure: '无法验证备份目录真实路径: {path}'
-  # SitePolicy 预览参数和黑名单回退校验；{key}=区域字段。
+  # SitePolicy 预览参数校验。
   site:
     areas-required: '领地预览至少需要一个区域'
     world-mismatch: '领地预览区域必须位于同一世界'
     focus-missing: '领地中心不在预览区域中'
-    blacklist-integer-required: '缺少整数 {key}'
-    blacklist-bounds-invalid: '区域最小值不能大于最大值'
   # TerritoryService 扩张校验消息；批量选择失败、身份校验和批量请求状态不含动态占位符。
   territory:
     batch-selection-required: '请至少选择一个领地单元'
@@ -466,7 +458,7 @@ chat:
     shop-paused: '公共 Buff 商店当前暂停新购买'
     application-failure-refunded: 'Buff 应用失败，已自动取消并退回公共资金: {detail}'
 
-  # 领地碰撞、黑名单和 WorldBorder 校验的详细原因。
+  # 领地碰撞和 WorldBorder 校验的详细原因。
   # 这些文本通常会作为 Dialog 或操作失败详情显示。
   site-validation:
     residence-unavailable: '暂时无法检查附近是否已有领地：{detail}'
@@ -474,7 +466,6 @@ chat:
     residence-name-conflict: '领地名与已存在的领地重复。'
     expansion-collision: '扩张范围与其他领地“{name}”重叠'
     world-unloaded: '目标世界当前未加载'
-    blacklist-collision: '所选范围与出生点、活动区或其他保留区域重叠'
     worldborder-unavailable: '暂时无法确认所选范围是否超出世界边界：{detail}'
     worldborder-unconfigured: '当前世界暂不支持在这里建立小镇'
     worldborder-outside: '所选范围距离世界边界太近，请换一个位置'
@@ -898,11 +889,10 @@ log:
   # 税率修改写入审计日志时使用的事件原因快照；无占位符。
   tax:
     rate-change-reason: '镇长通过公共资金界面修改'
-  # SitePolicy 领地预览和黑名单解析日志；{detail}=异常详情，{path}=配置路径。
+  # SitePolicy 领地预览日志；{detail}=异常详情。
   site:
     preview-invalidated: '领地预览对象已失效，任务已结束: {detail}'
     preview-cancel-failed: '取消领地预览任务失败: {detail}'
-    blacklist-invalid-area: '{path} 存在无效区域: {detail}'
   # 公共 Buff 运行时日志；{player}=玩家 UUID，{detail}=异常详情，{attribute}=属性标识，
   # {actual}=当前 modifier 摘要，{amount}=期望数值，{operation}=属性操作。
   buff:

@@ -27,7 +27,7 @@ database:
   busy-timeout-ms: 5000
 ```
 
-4. 按实际地图修改 `town.site.blacklist`，重启后执行 `/townadmin status`。状态为 `READY` 时才开放服务台。
+4. 启动后执行 `/townadmin status`，确认状态为 `READY` 再开放服务台。
 
 玩家界面统一使用 Paper Dialog；申请、捐款、资料编辑和审核原因等自由文本也直接在 Dialog 内填写。
 

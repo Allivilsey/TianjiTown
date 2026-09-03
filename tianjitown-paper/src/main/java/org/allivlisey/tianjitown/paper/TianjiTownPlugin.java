@@ -161,8 +161,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         }
         RuntimeConfigurationValidator.DatabaseSettings databaseSettings;
         try {
-            databaseSettings = RuntimeConfigurationValidator.validate(getConfig(),
-                    world -> getServer().getWorld(world) != null, messages());
+            databaseSettings = RuntimeConfigurationValidator.validate(getConfig(), messages());
             synchronousChecks.add(messages().plainText(CONFIGURATION_VALIDATION_PASSED));
         } catch (RuntimeException exception) {
             synchronousChecks.add(messages().plainText(CONFIGURATION_VALIDATION_FAILED,

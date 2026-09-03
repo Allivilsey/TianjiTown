@@ -31,13 +31,6 @@ town:
     preview-duration-seconds: 15
     preview-interval-ticks: 20
     preview-vertical-range-blocks: 24
-    # 出生点、活动区和管理区应在此配置；以下示例保护出生区。
-    blacklist:
-      - world: world
-        min-chunk-x: -8
-        max-chunk-x: 8
-        min-chunk-z: -8
-        max-chunk-z: 8
 
 economy:
   # 按 Paper 离线玩家身份（UUID 和实际名称大小写）访问的 Vault 清算账户；需与 QuickShop 原 tax 账户切换方案一致。
@@ -130,4 +123,3 @@ operations:
     interval-hours: 6
     retention-count: 14
     directory: backups
-

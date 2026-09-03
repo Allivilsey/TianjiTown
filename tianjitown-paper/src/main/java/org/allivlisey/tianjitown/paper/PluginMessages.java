@@ -69,8 +69,7 @@ final class PluginMessages {
                     "validation.bonus.building-refund-retention-range",
                     "validation.bonus.beacon-refresh-interval-range")),
             Map.entry("validation.common.integer-type", List.of(
-                    "validation.configuration.integer-type",
-                    "validation.runtime-configuration.blacklist-integer-type")),
+                    "validation.configuration.integer-type")),
             Map.entry("validation.common.non-negative", List.of(
                     "validation.economy.weekly-subsidy-limit-negative",
                     "validation.economy.twelve-hour-subsidy-limit-negative")),

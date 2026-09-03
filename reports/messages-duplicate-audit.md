@@ -57,7 +57,7 @@
 
 注意：`PluginMessages.validateRequiredMessages()` 当前显式校验 3 个 `dialog.tooltip.votes.entry.*` 键；合并时需同步更新该校验和相关测试。
 
-### 3. 通用配置校验（4 组，12 个键）
+### 3. 通用配置校验（4 组，11 个键）
 
 建议放入 `validation.common`，各校验器共同引用：
 
@@ -65,7 +65,7 @@
 | --- | --- | --- |
 | `validation.common.value-required` | `validation.buff.value-required`、`validation.configuration.value-required`、`validation.economy.settlement-account-required`、`validation.bonus.backup-directory-required` | `&c{path} 不能为空` |
 | `validation.common.range` | `validation.runtime-configuration.range`、`validation.bonus.building-refund-weekly-limit-range`、`validation.bonus.building-refund-retention-range`、`validation.bonus.beacon-refresh-interval-range` | `&c{path} 必须在 {minimum}~{maximum} 范围内` |
-| `validation.common.integer-type` | `validation.configuration.integer-type`、`validation.runtime-configuration.blacklist-integer-type` | `&c{path} 必须为整数` |
+| `validation.common.integer-type` | `validation.configuration.integer-type` | `&c{path} 必须为整数` |
 | `validation.common.non-negative` | `validation.economy.weekly-subsidy-limit-negative`、`validation.economy.twelve-hour-subsidy-limit-negative` | `&c{path} 不能小于 0` |
 
 ### 4. 明显的界面/输出重复（4 组）
