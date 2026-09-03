@@ -71,41 +71,40 @@ class RuleEditorDialogRendererTest {
     }
 
     @Test
-    void rendersRuleEditorValidationMessagesThroughTheConfiguredResolver() {
+    void rendersInvalidDeleteRequestMessageThroughTheConfiguredResolver() {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
 
-        IllegalArgumentException pageVersion = assertThrows(IllegalArgumentException.class,
-                () -> RuleEditorDialogRenderer.layout(TOWN_ID, -1, List.of(),
-                        messages::rawText));
         IllegalArgumentException deleteRequest = assertThrows(IllegalArgumentException.class,
                 () -> RuleEditorDialogRenderer.DeleteTarget.decode("invalid",
                         messages::rawText));
 
-        assertEquals("&c规则页面版本不能为负数", pageVersion.getMessage());
         assertEquals("&c规则删除请求无效，请刷新界面", deleteRequest.getMessage());
-        for (String key : List.of(
-                "validation.rule-editor.page-version",
-                "validation.rule-editor.rule-index",
-                "dialog.rules.delete-request-invalid")) {
-            String rendered = messages.rawText(key);
-            assertFalse(rendered.isBlank());
-            assertFalse(rendered.contains("{"));
-            assertFalse(rendered.contains("缺少消息配置"));
-        }
+        String rendered = messages.rawText("dialog.rules.delete-request-invalid");
+        assertFalse(rendered.isBlank());
+        assertFalse(rendered.contains("{"));
+        assertFalse(rendered.contains("缺少消息配置"));
     }
 
     @Test
-    void usesReloadedRuleEditorMessagesForNewValidationFailures() throws Exception {
+    void doesNotValidateInternalPageVersionOrRuleIndex() {
+        RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(TOWN_ID, -1,
+                List.of("规则"));
+        RuleEditorDialogRenderer.DeleteTarget target =
+                new RuleEditorDialogRenderer.DeleteTarget(TOWN_ID, -1, -1, "规则");
+
+        assertEquals(-1, layout.rows().getFirst().deleteTarget().pageVersion());
+        assertEquals(-1, target.pageVersion());
+        assertEquals(-1, target.ruleIndex());
+    }
+
+    @Test
+    void usesReloadedRuleEditorMessagesForInvalidDeleteRequests() throws Exception {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
         YamlConfiguration configuration = new YamlConfiguration();
-        configuration.set("validation.rule-editor.page-version", "&d自定义页面版本错误");
         configuration.set("dialog.rules.delete-request-invalid", "&e自定义删除请求错误");
         configuration.save(temporaryDirectory.resolve("messages.yml").toFile());
         messages.reload();
 
-        assertEquals("&d自定义页面版本错误", assertThrows(IllegalArgumentException.class,
-                () -> RuleEditorDialogRenderer.layout(TOWN_ID, -1, List.of(),
-                        messages::rawText)).getMessage());
         assertEquals("&e自定义删除请求错误", assertThrows(IllegalArgumentException.class,
                 () -> RuleEditorDialogRenderer.DeleteTarget.decode("invalid",
                         messages::rawText)).getMessage());

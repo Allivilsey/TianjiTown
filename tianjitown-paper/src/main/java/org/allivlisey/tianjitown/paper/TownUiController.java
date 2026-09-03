@@ -1813,7 +1813,7 @@ final class TownUiController implements Listener {
                 .orElseThrow(() -> new IllegalArgumentException(
                         plugin.messages().plainText("chat.runtime.town-not-found"))), town -> {
             RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(town.id(),
-                    town.version(), town.profile().rules(), plugin.messages()::rawText);
+                    town.version(), town.profile().rules());
             DialogRoute parent = new DialogRoute("TOWN", town.id().toString());
             openRuleEditorDialog(player, dialogText("rules.edit-title"),
                     dialogComponent("rules.edit-heading", Map.of(
@@ -3740,7 +3740,7 @@ final class TownUiController implements Listener {
 
     private void renderApplicationContentDialog(Player player, ApplicationFormSession form) {
         RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(form.id(),
-                form.version(), form.text().rules(), plugin.messages()::rawText);
+                form.version(), form.text().rules());
         DialogRoute parent = new DialogRoute("APPLICATION_BASICS_FORM", form.id().toString());
         Component guidance = dialogComponent("application.content-heading")
                 .append(Component.newline())
@@ -3791,6 +3791,7 @@ final class TownUiController implements Listener {
             return;
         }
         if (form.version() != deleteTarget.pageVersion()
+                || deleteTarget.ruleIndex() < 0
                 || deleteTarget.ruleIndex() >= form.text().rules().size()
                 || !form.text().rules().get(deleteTarget.ruleIndex())
                 .equals(deleteTarget.expectedRule())) {

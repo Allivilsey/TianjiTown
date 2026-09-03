@@ -29,10 +29,6 @@ validation:
     rule-count: '&c规则数量必须为 {minimum}~{maximum}'
     rule-length: '&c规则 {index} 不能超过 {maximum} 字符'
     rule-format: '&c规则 {index} 含有不允许的格式或字符'
-  # 规则编辑器数据校验消息；无占位符。
-  rule-editor:
-    page-version: '&c规则页面版本不能为负数'
-    rule-index: '&c规则索引不能为负数'
   # Vault 清算服务的输入校验；金额均为最小货币单位，精度范围为 0~8。
   vault:
     account-name-required: '清算账户名不能为空'
