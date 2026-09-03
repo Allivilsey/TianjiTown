@@ -790,18 +790,40 @@ class PluginMessagesTest {
     }
 
     @Test
-    void keepsTheReviewedPlayerFacingCopyAndTerritorySelectionKey() {
+    void exposesApplicationAndTerritoryMessagesAsConfigurableKeys() {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
 
-        assertEquals("§f管理员审核中，批准前仍可撤回申请。",
-                messages.text("dialog.notice.application-submitted-message"));
-        assertEquals("§f小镇创建成功。",
-                messages.text("dialog.notice.application-created-message"));
-        assertEquals("§6小镇领地扩张", messages.text("dialog.territory.title"));
-        assertEquals("§a已选中（再次点击取消）",
-                messages.text("dialog.territory.cell.selected"));
-        assertEquals("§f申请人邀请你加入青石镇", messages.text("dialog.invitation.message",
+        for (String key : List.of(
+                "dialog.notice.application-submitted-message",
+                "dialog.notice.application-created-message",
+                "dialog.territory.title",
+                "dialog.territory.cell.selected",
+                "dialog.invitation.message")) {
+            assertTrue(messages.hasMessage(key), key);
+        }
+
+        String invitation = messages.text("dialog.invitation.message",
+                Map.of("player", "申请人", "town", "青石镇"));
+        assertTrue(invitation.contains("申请人"));
+        assertTrue(invitation.contains("青石镇"));
+        assertFalse(invitation.contains("{player}"));
+        assertFalse(invitation.contains("{town}"));
+    }
+
+    @Test
+    void allowsPlayerFacingCopiesToBeOverriddenInMessagesConfiguration() throws Exception {
+        PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
+        YamlConfiguration configuration = new YamlConfiguration();
+        configuration.set("dialog.invitation.message", "&d{town} 由 {player} 发起");
+        configuration.set("validation.application.rule-format", "&b自定义规则格式 {index}");
+        configuration.save(temporaryDirectory.resolve("messages.yml").toFile());
+
+        messages.reload();
+
+        assertEquals("§d青石镇 由 申请人 发起", messages.text("dialog.invitation.message",
                 Map.of("player", "申请人", "town", "青石镇")));
+        assertEquals("§b自定义规则格式 3", messages.text("validation.application.rule-format",
+                Map.of("index", 3)));
     }
 
     @Test

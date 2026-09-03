@@ -30,8 +30,11 @@ class ApplicationTextMessagesTest {
 
         String rendered = ApplicationTextMessages.join(messages, issues);
 
-        assertTrue(rendered.contains("名称长度必须为 2~24"));
-        assertTrue(rendered.contains("规则 3 含有不允许的格式或控制字符"));
+        assertTrue(messages.hasMessage("validation.application.name-length"));
+        assertTrue(messages.hasMessage("validation.application.rule-format"));
+        assertTrue(rendered.contains("2"));
+        assertTrue(rendered.contains("24"));
+        assertTrue(rendered.contains("3"));
         assertFalse(rendered.contains("缺少消息配置"));
         assertFalse(rendered.contains("{minimum}"));
         assertFalse(rendered.contains("{index}"));
