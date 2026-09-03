@@ -3,6 +3,7 @@ package org.allivlisey.tianjitown.paper;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import net.kyori.adventure.key.Key;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -47,15 +48,21 @@ class RuleEditorDialogRendererTest {
     }
 
     @Test
-    void declaresTheRuleInputBeforeAddAndAnyPageActions() {
+    void declaresButtonRuleRowsBetweenInputAndAddActions() {
         RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(TOWN_ID, 1,
                 List.of("规则一"));
 
-        assertEquals(List.of(RuleEditorDialogRenderer.Section.HEADING_AND_RULES,
+        assertEquals(List.of(RuleEditorDialogRenderer.Section.HEADING,
                 RuleEditorDialogRenderer.Section.RULE_INPUT,
+                RuleEditorDialogRenderer.Section.RULE_BUTTON_ROWS,
                 RuleEditorDialogRenderer.Section.ADD_RULE,
-                RuleEditorDialogRenderer.Section.DELETE_CONTROLS,
                 RuleEditorDialogRenderer.Section.PAGE_ACTIONS), layout.sections());
+    }
+
+    @Test
+    void usesTheVanillaBarrierItemSpriteFromTheBlocksAtlas() {
+        assertEquals(Key.key("minecraft:blocks"), RuleEditorDialogRenderer.BLOCK_ATLAS);
+        assertEquals(Key.key("minecraft:item/barrier"), RuleEditorDialogRenderer.BARRIER_SPRITE);
     }
 
     @Test

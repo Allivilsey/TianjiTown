@@ -35,6 +35,7 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.object.ObjectContents;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
@@ -1836,22 +1837,25 @@ final class TownUiController implements Listener {
                         ruleEditorPreview(heading, layout), 420)), List.of(input),
                 DialogBase.DialogAfterAction.NONE, session -> {
                     List<ActionButton> actions = new ArrayList<>();
-                    // Paper always renders body, inputs, then actions. Put add first in the
-                    // action section so the visible order is rules -> input -> add.
-                    actions.add(ActionButton.create(dialogComponent("rules.add"),
-                            dialogComponent("rules.add-tooltip"), RuleEditorDialogRenderer.ADD_WIDTH,
-                            dialogAction(player, session, addRule)));
+                    // A MultiAction dialog lays these controls out in row order. Keep each rule
+                    // preview and its delete action next to one another rather than leaving the
+                    // delete buttons to be repacked into an unrelated grid.
                     for (RuleEditorDialogRenderer.Row row : layout.rows()) {
+                        actions.add(ActionButton.create(dialogComponent("rules.item", Map.of(
+                                        "index", row.displayIndex(), "rule", safeText(row.rule()))),
+                                null, RuleEditorDialogRenderer.PREVIEW_WIDTH, null));
                         actions.add(ActionButton.create(Component.object(
-                                        net.kyori.adventure.text.object.ObjectContents.sprite(
-                                                net.kyori.adventure.key.Key.key("minecraft:blocks"),
-                                                net.kyori.adventure.key.Key.key("minecraft:block/barrier"))),
+                                        ObjectContents.sprite(RuleEditorDialogRenderer.BLOCK_ATLAS,
+                                                RuleEditorDialogRenderer.BARRIER_SPRITE)),
                                 dialogComponent("rules.delete-tooltip", Map.of("index",
                                         row.displayIndex())),
                                 RuleEditorDialogRenderer.DELETE_WIDTH,
                                 dialogAction(player, session,
                                         response -> deleteRule.accept(row.deleteTarget()))));
                     }
+                    actions.add(ActionButton.create(dialogComponent("rules.add"),
+                            dialogComponent("rules.add-tooltip"), RuleEditorDialogRenderer.ADD_WIDTH,
+                            dialogAction(player, session, addRule)));
                     actions.addAll(trailingActions.apply(session));
                     return DialogType.multiAction(actions)
                             .exitAction(returnButton(player, session, parent))
@@ -1860,17 +1864,11 @@ final class TownUiController implements Listener {
     }
 
     private Component ruleEditorPreview(Component heading, RuleEditorDialogRenderer.Layout layout) {
-        Component preview = heading;
         if (layout.rows().isEmpty()) {
-            return preview.append(Component.newline()).append(Component.newline())
+            return heading.append(Component.newline()).append(Component.newline())
                     .append(dialogComponent("rules.empty"));
         }
-        for (RuleEditorDialogRenderer.Row row : layout.rows()) {
-            preview = preview.append(Component.newline()).append(Component.newline())
-                    .append(dialogComponent("rules.item", Map.of("index", row.displayIndex(),
-                            "rule", safeText(row.rule()))));
-        }
-        return preview;
+        return heading;
     }
 
     private void addTownRule(Player player, UUID townId, long pageVersion,

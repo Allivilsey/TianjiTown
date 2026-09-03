@@ -8,16 +8,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiFunction;
+import net.kyori.adventure.key.Key;
 
-/**
- * Stable layout model for a rule editor dialog. Rules are rendered in the dialog body, before
- * the input section; only their compact delete controls live in the action section.
- */
+/** Stable layout model for a rule editor dialog. */
 final class RuleEditorDialogRenderer {
     static final int COLUMNS = 2;
     static final int PREVIEW_WIDTH = 250;
     static final int DELETE_WIDTH = 28;
     static final int ADD_WIDTH = 130;
+    static final Key BLOCK_ATLAS = Key.key("minecraft:blocks");
+    // Barrier has an item texture in the vanilla blocks atlas; there is no block/barrier sprite.
+    static final Key BARRIER_SPRITE = Key.key("minecraft:item/barrier");
     private static final String DELETE_REQUEST_INVALID = "dialog.rules.delete-request-invalid";
 
     private RuleEditorDialogRenderer() {
@@ -46,16 +47,16 @@ final class RuleEditorDialogRenderer {
 
         /** The fixed client order imposed by Paper's dialog model. */
         List<Section> sections() {
-            return List.of(Section.HEADING_AND_RULES, Section.RULE_INPUT,
-                    Section.ADD_RULE, Section.DELETE_CONTROLS, Section.PAGE_ACTIONS);
+            return List.of(Section.HEADING, Section.RULE_INPUT,
+                    Section.RULE_BUTTON_ROWS, Section.ADD_RULE, Section.PAGE_ACTIONS);
         }
     }
 
     enum Section {
-        HEADING_AND_RULES,
+        HEADING,
         RULE_INPUT,
+        RULE_BUTTON_ROWS,
         ADD_RULE,
-        DELETE_CONTROLS,
         PAGE_ACTIONS
     }
 
