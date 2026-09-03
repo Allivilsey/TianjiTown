@@ -24,6 +24,7 @@ validation:
     name-format: '&c名称含有不允许的格式或控制字符'
     residence-name-length: '&c小镇代码长度必须为 {minimum}~{maximum}'
     residence-name-characters: '&c小镇代码只能包含英文字母，不允许空格、数字或特殊符号'
+    description-required: '&c简介不能为空'
     description-length: '&c简介不能超过 {maximum} 字符'
     description-format: '&c简介含有不允许的格式或字符'
     rule-count: '&c规则数量必须为 {minimum}~{maximum}'
@@ -587,6 +588,9 @@ diagnostic:
     database-gate-locked: '数据库门禁未通过'
     database-config-invalid: 'FAIL SQLite config: {detail}'
     database-config-gate-failed: '数据库配置无效'
+    startup-diagnostic-passed: 'OK 启动统一诊断通过'
+    startup-diagnostic-failed: 'FAIL 启动统一诊断: {detail}'
+    startup-diagnostic-gate-failed: '启动统一诊断未通过，插件初始化已停止'
     config-schema-too-new: 'FAIL config schema={schema} 高于本插件支持的 {supported}，拒绝降级读取'
     config-schema-upgrade-required: 'FAIL config schema={schema} 不能直接安全升级到 {supported}；请先按对应版本升级手册处理'
     runtime-activation-failure: 'FAIL 业务运行时激活异常: {detail}'
@@ -761,7 +765,6 @@ log:
       territory-bonus-index-refresh-failure: '领地加成索引刷新失败，后续周期仍会继续尝试: {detail}'
       beacon-effect-refresh-failure: '信标效果刷新失败，后续周期仍会继续尝试: {detail}'
       refund-counter-cleanup-failure: '返还计数清理失败，后续周期仍会继续尝试: {detail}'
-      startup-diagnostic-failure: '启动诊断失败，后续周期仍会继续尝试: {detail}'
   # TownBonusRuntime 建筑返还、信标、缓存和诊断报告日志；{detail}=异常或结果详情。
   bonus:
     index-refresh-failure: '刷新领地加成缓存失败，将继续使用旧快照: {detail}'
@@ -1658,7 +1661,7 @@ dialog:
         suggestion: '优先使用三个英文字母，例如 SKY'
       description:
         label: '小镇简介'
-        requirement: '最多 500 个字符，不允许格式代码或 MiniMessage 标签'
+        requirement: '必填，最多 500 个字符，不允许格式代码或 MiniMessage 标签'
         suggestion: '简要说明定位、风格和发展目标'
       rules:
         label: '小镇规则'

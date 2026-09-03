@@ -32,6 +32,7 @@ final class ApplicationTextMessages {
             case RESIDENCE_NAME_LENGTH -> "validation.application.residence-name-length";
             case RESIDENCE_NAME_CHARACTERS ->
                     "validation.application.residence-name-characters";
+            case DESCRIPTION_REQUIRED -> "validation.application.description-required";
             case DESCRIPTION_LENGTH -> "validation.application.description-length";
             case DESCRIPTION_FORMAT -> "validation.application.description-format";
             case RULE_COUNT -> "validation.application.rule-count";

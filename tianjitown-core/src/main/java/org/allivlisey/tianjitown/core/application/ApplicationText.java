@@ -36,8 +36,12 @@ public record ApplicationText(String name, String shortName, String residenceNam
         } else if (!RESIDENCE_NAME.matcher(residenceName).matches()) {
             errors.add(issue(ValidationIssue.Code.RESIDENCE_NAME_CHARACTERS));
         }
-        validateSafeText(description, 500, ValidationIssue.Code.DESCRIPTION_LENGTH,
-                ValidationIssue.Code.DESCRIPTION_FORMAT, errors);
+        if (description.isEmpty()) {
+            errors.add(issue(ValidationIssue.Code.DESCRIPTION_REQUIRED));
+        } else {
+            validateSafeText(description, 500, ValidationIssue.Code.DESCRIPTION_LENGTH,
+                    ValidationIssue.Code.DESCRIPTION_FORMAT, errors);
+        }
         if (rules.isEmpty() || rules.size() > 50) {
             errors.add(issue(ValidationIssue.Code.RULE_COUNT, bounds(1, 50)));
         }
@@ -161,6 +165,7 @@ public record ApplicationText(String name, String shortName, String residenceNam
             NAME_FORMAT(Field.NAME),
             RESIDENCE_NAME_LENGTH(Field.RESIDENCE_NAME),
             RESIDENCE_NAME_CHARACTERS(Field.RESIDENCE_NAME),
+            DESCRIPTION_REQUIRED(Field.DESCRIPTION),
             DESCRIPTION_LENGTH(Field.DESCRIPTION),
             DESCRIPTION_FORMAT(Field.DESCRIPTION),
             RULE_COUNT(Field.RULES),

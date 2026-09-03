@@ -50,6 +50,7 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 final class TownBonusRuntime implements Listener {
     private static final String INDEX_REFRESH_FAILURE =
@@ -157,43 +158,96 @@ final class TownBonusRuntime implements Listener {
             plugin.messages().send(sender, "chat.bonus.diagnostic-running");
             return;
         }
-        long externalBalance;
-        try {
-            externalBalance = host.settlement().balanceMinor();
-        } catch (RuntimeException exception) {
-            externalBalance = -1;
-        }
+        long externalBalance = captureExternalBalance();
         plugin.messages().send(sender, "chat.bonus.diagnostic-started");
-        long capturedExternal = externalBalance;
-        Instant since = Instant.now().minus(java.time.Duration.ofDays(days));
-        boolean submitted = plugin.runAsync(() -> {
-            try {
-                TownBonusRepository.DiagnosticSnapshot database = repository.diagnose(since);
-                String schemaVersion = host.database().schemaVersion();
-                EconomyRepository.Reconciliation settlement = capturedExternal < 0 ? null
-                        : host.finance().inspectSettlement(capturedExternal);
-                QuickShopHistoryProbe.Result history = quickShopHistory.inspect(since);
-                plugin.runMain(
-                        () -> finishDiagnostic(sender, days, database, schemaVersion, settlement,
-                                history));
-            } catch (RuntimeException | LinkageError exception) {
-                diagnosticRunning.set(false);
-                DiagnosticResult failed = new DiagnosticResult(false, Instant.now(),
-                        plugin.messages().text("chat.bonus.diagnostic-failed", Map.of(
-                                "detail", safeMessage(exception))), null);
-                lastDiagnostic.set(failed);
-                plugin.runMain(
-                        () -> plugin.messages().send(sender, "chat.bonus.diagnostic-failed",
-                                Map.of("detail", safeMessage(exception))));
-            }
-        });
-        if (!submitted) {
-            diagnosticRunning.set(false);
+        submitDiagnostic(sender, days, externalBalance, null);
+    }
+
+    void diagnoseAtStartup(Consumer<DiagnosticResult> completion) {
+        Objects.requireNonNull(completion, "completion");
+        int days = settings.operations().quickShopDiagnosticDays();
+        if (!diagnosticRunning.compareAndSet(false, true)) {
+            completion.accept(failedDiagnostic(new IllegalStateException(
+                    plugin.messages().plainText("chat.bonus.diagnostic-running"))));
+            return;
+        }
+        submitDiagnostic(plugin.getServer().getConsoleSender(), days,
+                captureExternalBalance(), completion);
+    }
+
+    private long captureExternalBalance() {
+        try {
+            return host.settlement().balanceMinor();
+        } catch (RuntimeException | LinkageError exception) {
+            return -1;
         }
     }
 
-    void diagnoseAtStartup() {
-        diagnose(plugin.getServer().getConsoleSender(), settings.operations().quickShopDiagnosticDays());
+    private void submitDiagnostic(CommandSender sender, int days, long capturedExternal,
+                                  Consumer<DiagnosticResult> completion) {
+        Instant since = Instant.now().minus(java.time.Duration.ofDays(days));
+        boolean submitted = plugin.runAsync(() -> {
+            try {
+                DiagnosticData data = collectDiagnosticData(days, since, capturedExternal);
+                if (!plugin.runMain(() -> completeDiagnostic(sender, data, completion))) {
+                    diagnosticRunning.set(false);
+                }
+            } catch (RuntimeException | LinkageError exception) {
+                DiagnosticResult failed = failedDiagnostic(exception);
+                if (!plugin.runMain(() -> completeFailedDiagnostic(sender, completion, failed))) {
+                    diagnosticRunning.set(false);
+                }
+            }
+        });
+        if (!submitted) {
+            completeFailedDiagnostic(sender, completion, failedDiagnostic(
+                    new IllegalStateException("插件异步执行器不可用")));
+        }
+    }
+
+    private DiagnosticData collectDiagnosticData(int days, Instant since,
+                                                 long capturedExternal) {
+        TownBonusRepository.DiagnosticSnapshot database = repository.diagnose(since);
+        String schemaVersion = host.database().schemaVersion();
+        EconomyRepository.Reconciliation settlement = capturedExternal < 0 ? null
+                : host.finance().inspectSettlement(capturedExternal);
+        QuickShopHistoryProbe.Result history = quickShopHistory.inspect(since);
+        return new DiagnosticData(days, database, schemaVersion, settlement, history);
+    }
+
+    private void completeDiagnostic(CommandSender sender, DiagnosticData data,
+                                    Consumer<DiagnosticResult> completion) {
+        DiagnosticResult result;
+        try {
+            result = finishDiagnostic(sender, data);
+        } catch (RuntimeException | LinkageError exception) {
+            result = failedDiagnostic(exception);
+            completeFailedDiagnostic(sender, completion, result);
+            return;
+        }
+        if (completion != null) {
+            completion.accept(result);
+        }
+    }
+
+    private void completeFailedDiagnostic(CommandSender sender,
+                                          Consumer<DiagnosticResult> completion,
+                                          DiagnosticResult failed) {
+        diagnosticRunning.set(false);
+        lastDiagnostic.set(failed);
+        if (sender != null) {
+            plugin.messages().send(sender, "chat.bonus.diagnostic-failed", Map.of(
+                    "detail", safeText(failed.detail())));
+        }
+        if (completion != null) {
+            completion.accept(failed);
+        }
+    }
+
+    private DiagnosticResult failedDiagnostic(Throwable exception) {
+        return new DiagnosticResult(false, Instant.now(),
+                plugin.messages().text("chat.bonus.diagnostic-failed", Map.of(
+                        "detail", safeMessage(exception))), null);
     }
 
     void refreshBeaconEffects() {
@@ -437,11 +491,12 @@ final class TownBonusRuntime implements Listener {
     }
 
 
-    private void finishDiagnostic(CommandSender sender, int days,
-                                  TownBonusRepository.DiagnosticSnapshot database,
-                                  String schemaVersion,
-                                  EconomyRepository.Reconciliation settlement,
-                                  QuickShopHistoryProbe.Result history) {
+    private DiagnosticResult finishDiagnostic(CommandSender sender, DiagnosticData data) {
+        int days = data.days();
+        TownBonusRepository.DiagnosticSnapshot database = data.database();
+        String schemaVersion = data.schemaVersion();
+        EconomyRepository.Reconciliation settlement = data.settlement();
+        QuickShopHistoryProbe.Result history = data.history();
         List<String> lines = new ArrayList<>();
         boolean healthy = database.quickCheck().equalsIgnoreCase("ok")
                 && database.foreignKeyViolations() == 0;
@@ -505,10 +560,13 @@ final class TownBonusRuntime implements Listener {
         DiagnosticResult result = new DiagnosticResult(healthy, Instant.now(), detail, null);
         lastDiagnostic.set(result);
         diagnosticRunning.set(false);
-        plugin.messages().send(sender, summaryKey);
-        lines.forEach(line -> plugin.messages().send(sender, "chat.bonus.diagnostic-line",
-                Map.of("line", line)));
+        if (sender != null) {
+            plugin.messages().send(sender, summaryKey);
+            lines.forEach(line -> plugin.messages().send(sender, "chat.bonus.diagnostic-line",
+                    Map.of("line", line)));
+        }
         writeDiagnosticReport(lines, result);
+        return result;
     }
 
     private void writeDiagnosticReport(List<String> lines, DiagnosticResult base) {
@@ -559,6 +617,13 @@ final class TownBonusRuntime implements Listener {
     }
 
     private record ManagedEffect(int amplifier, int maximumDuration) {
+    }
+
+    private record DiagnosticData(int days,
+                                  TownBonusRepository.DiagnosticSnapshot database,
+                                  String schemaVersion,
+                                  EconomyRepository.Reconciliation settlement,
+                                  QuickShopHistoryProbe.Result history) {
     }
 
     record DiagnosticResult(boolean healthy, Instant completedAt, String detail, Path report) {

@@ -32,7 +32,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class TianjiTownPlugin extends JavaPlugin {
     private static final int CONFIG_SCHEMA = 10;
-    private static final long STARTUP_DIAGNOSTIC_DELAY_TICKS = 20L * 30;
     private static final String BOOTSTRAP_GATE_DETAIL = "TT-PLUGIN-NOT-STARTED";
     private static final String BOOTSTRAP_MESSAGES_NOT_LOADED = "TT-MESSAGES-NOT-LOADED";
     private static final String STARTUP_CHECKING = "diagnostic.lifecycle.startup-checking";
@@ -64,6 +63,12 @@ public final class TianjiTownPlugin extends JavaPlugin {
             "diagnostic.lifecycle.database-config-invalid";
     private static final String DATABASE_CONFIG_GATE_FAILED =
             "diagnostic.lifecycle.database-config-gate-failed";
+    private static final String STARTUP_DIAGNOSTIC_PASSED =
+            "diagnostic.lifecycle.startup-diagnostic-passed";
+    private static final String STARTUP_DIAGNOSTIC_FAILED =
+            "diagnostic.lifecycle.startup-diagnostic-failed";
+    private static final String STARTUP_DIAGNOSTIC_GATE_FAILED =
+            "diagnostic.lifecycle.startup-diagnostic-gate-failed";
     private static final String CONFIG_SCHEMA_TOO_NEW =
             "diagnostic.lifecycle.config-schema-too-new";
     private static final String CONFIG_SCHEMA_UPGRADE_REQUIRED =
@@ -117,8 +122,6 @@ public final class TianjiTownPlugin extends JavaPlugin {
             "log.scheduler.periodic.beacon-effect-refresh-failure";
     private static final String PERIODIC_REFUND_COUNTER_FAILURE =
             "log.scheduler.periodic.refund-counter-cleanup-failure";
-    private static final String PERIODIC_STARTUP_DIAGNOSTIC_FAILURE =
-            "log.scheduler.periodic.startup-diagnostic-failure";
     private final AtomicReference<GateStatus> gateStatus = new AtomicReference<>(
             new GateStatus(GateStatus.State.CHECKING, List.of(BOOTSTRAP_GATE_DETAIL)));
     private final AtomicLong lifecycleGeneration = new AtomicLong();
@@ -550,6 +553,61 @@ public final class TianjiTownPlugin extends JavaPlugin {
             lock(messages().plainText(RUNTIME_GATE_FAILED), details);
             return;
         }
+        // 在异步启动诊断期间也要由 onDisable 统一回收数据源；此时尚未注册业务组件。
+        databaseGate = candidate;
+        try {
+            runtime.bonuses().diagnoseAtStartup(diagnostic -> completeRuntimeActivation(
+                    candidate, previousDetails, databaseDetail, generation, runtime, actions, ui,
+                    residenceProtection, managedResidenceNames, activeResidenceNames, diagnostic));
+        } catch (RuntimeException | LinkageError exception) {
+            closeDatabaseCandidate(candidate);
+            List<String> details = new ArrayList<>(previousDetails);
+            details.add(messages().plainText(STARTUP_DIAGNOSTIC_FAILED,
+                    Map.of("detail", safeText(safeMessage(exception)))));
+            lock(messages().plainText(STARTUP_DIAGNOSTIC_GATE_FAILED), details);
+        }
+    }
+
+    private void completeRuntimeActivation(DatabaseGate candidate, List<String> previousDetails,
+                                           String databaseDetail, long generation,
+                                           TownRuntime runtime, TownActions actions,
+                                           TownUiController ui,
+                                           ResidenceLandProtectionService residenceProtection,
+                                           Set<String> managedResidenceNames,
+                                           Set<String> activeResidenceNames,
+                                           TownBonusRuntime.DiagnosticResult diagnostic) {
+        try {
+            if (!isCurrentLifecycle(generation)) {
+                closeDatabaseCandidate(candidate);
+                return;
+            }
+            if (!java.util.Objects.requireNonNull(diagnostic, "diagnostic").healthy()) {
+                closeDatabaseCandidate(candidate);
+                List<String> details = new ArrayList<>(previousDetails);
+                details.add(messages().plainText(STARTUP_DIAGNOSTIC_FAILED,
+                        Map.of("detail", safeText(diagnostic.detail()))));
+                lock(messages().plainText(STARTUP_DIAGNOSTIC_GATE_FAILED), details);
+                return;
+            }
+            activateRuntimeComponents(candidate, previousDetails, databaseDetail, generation,
+                    runtime, actions, ui, residenceProtection, managedResidenceNames,
+                    activeResidenceNames);
+        } catch (RuntimeException | LinkageError exception) {
+            cleanupFailedRuntimeActivation(candidate, runtime, exception);
+            List<String> details = new ArrayList<>(previousDetails);
+            details.add(messages().plainText(RUNTIME_ACTIVATION_FAILURE,
+                    Map.of("detail", safeText(safeMessage(exception)))));
+            lock(messages().plainText(RUNTIME_GATE_FAILED), details);
+        }
+    }
+
+    private void activateRuntimeComponents(DatabaseGate candidate, List<String> previousDetails,
+                                           String databaseDetail, long generation,
+                                           TownRuntime runtime, TownActions actions,
+                                           TownUiController ui,
+                                           ResidenceLandProtectionService residenceProtection,
+                                           Set<String> managedResidenceNames,
+                                           Set<String> activeResidenceNames) {
         databaseGate = candidate;
         Plugin quickShop = getServer().getPluginManager().getPlugin("QuickShop-Hikari");
         QuickShopTaxAdapter.Capability quickShopCapability = new QuickShopTaxAdapter(this,
@@ -634,14 +692,9 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 () -> runPeriodic(PERIODIC_REFUND_COUNTER_FAILURE,
                         runtime.bonuses()::cleanupCounters),
                 20L * 60, 20L * 60 * 60);
-        // 启动恢复和首次缓存初始化使用异步任务；延迟一小段时间再执行一次诊断，
-        // 避免把启动中的中间状态报告成异常。运行期间通过管理员命令按需诊断。
-        getServer().getScheduler().runTaskLater(this,
-                () -> runPeriodic(PERIODIC_STARTUP_DIAGNOSTIC_FAILURE,
-                        runtime.bonuses()::diagnoseAtStartup),
-                STARTUP_DIAGNOSTIC_DELAY_TICKS);
         List<String> details = new ArrayList<>(previousDetails);
         details.add("OK " + databaseDetail);
+        details.add(messages().plainText(STARTUP_DIAGNOSTIC_PASSED));
         details.add((quickShopCapability.available() ? "OK " : "WARN ")
                 + quickShopCapability.detail());
         details.add((jobsCapability.available() ? "OK " : "WARN ")
@@ -653,6 +706,45 @@ public final class TianjiTownPlugin extends JavaPlugin {
         details.add(messages().plainText(RUNTIME_FEATURES_READY));
         gateStatus.set(new GateStatus(GateStatus.State.READY, details));
         getLogger().info(plainText(RUNTIME_STARTED));
+    }
+
+    private void cleanupFailedRuntimeActivation(DatabaseGate candidate, TownRuntime runtime,
+                                                 Throwable failure) {
+        HandlerList.unregisterAll(this);
+        getServer().getScheduler().cancelTasks(this);
+        if (runtime != null) {
+            runtime.sitePolicy().clearPreviews();
+            try {
+                runtime.bonuses().clearAll();
+            } catch (RuntimeException | LinkageError cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            try {
+                runtime.buffs().clearAll();
+            } catch (RuntimeException | LinkageError cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+        }
+        townRuntime = null;
+        townActions = null;
+        townUi = null;
+        TownAdminTabCompleter completer = townAdminTabCompleter;
+        if (completer != null) {
+            completer.stop();
+        }
+        try {
+            closeDatabaseCandidate(candidate);
+        } catch (RuntimeException cleanupFailure) {
+            failure.addSuppressed(cleanupFailure);
+        }
+        databaseGate = null;
+    }
+
+    private void closeDatabaseCandidate(DatabaseGate candidate) {
+        if (databaseGate == candidate) {
+            databaseGate = null;
+        }
+        candidate.close();
     }
 
     private boolean isCurrentLifecycle(long generation) {

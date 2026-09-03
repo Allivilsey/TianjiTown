@@ -122,8 +122,7 @@ class PluginMessagesTest {
                 "log.scheduler.periodic.settlement-reconciliation-failure", "清算对账",
                 "log.scheduler.periodic.territory-bonus-index-refresh-failure", "领地加成索引刷新",
                 "log.scheduler.periodic.beacon-effect-refresh-failure", "信标效果刷新",
-                "log.scheduler.periodic.refund-counter-cleanup-failure", "返还计数清理",
-                "log.scheduler.periodic.startup-diagnostic-failure", "启动诊断");
+                "log.scheduler.periodic.refund-counter-cleanup-failure", "返还计数清理");
         periodicLabels.forEach((key, label) -> assertEquals(
                 label + "失败，后续周期仍会继续尝试: periodic boom",
                 messages.plainText(key, Map.of("detail", "periodic boom"))));
@@ -666,6 +665,13 @@ class PluginMessagesTest {
                         Map.of("detail", "invalid path")));
         assertEquals("数据库配置无效",
                 messages.plainText("diagnostic.lifecycle.database-config-gate-failed"));
+        assertEquals("OK 启动统一诊断通过",
+                messages.plainText("diagnostic.lifecycle.startup-diagnostic-passed"));
+        assertEquals("FAIL 启动统一诊断: diagnostic boom",
+                messages.plainText("diagnostic.lifecycle.startup-diagnostic-failed",
+                        Map.of("detail", "diagnostic boom")));
+        assertEquals("启动统一诊断未通过，插件初始化已停止",
+                messages.plainText("diagnostic.lifecycle.startup-diagnostic-gate-failed"));
         assertEquals("FAIL config schema=11 高于本插件支持的 10，拒绝降级读取",
                 messages.plainText("diagnostic.lifecycle.config-schema-too-new",
                         Map.of("schema", 11, "supported", 10)));

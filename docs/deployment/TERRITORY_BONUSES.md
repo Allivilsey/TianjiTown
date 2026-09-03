@@ -8,7 +8,7 @@
 2. 在同一停服时间点备份 TianjiTown SQLite、配置/JAR、Residence、QuickShop H2、XConomy 数据，并记录 Vault 清算账户精确余额。
 3. 在隔离环境恢复生产副本，以 `1.3.0` 确认基线后替换为 `1.4.0`；不得直接在唯一生产副本上首次验证迁移。
 4. 按地图和经济规模配置 `territory.building-refund`、`territory.beacon` 与 `operations`。返还黑名单默认包含红石类别和高获取难度方块。
-5. 启动后确认 `/townadmin status` 显示 config schema `10`、Flyway schema `7.0` 和 `READY`；插件会在启动阶段自动执行一次统一诊断。
+5. 启动后确认 `/townadmin status` 显示 config schema `10`、Flyway schema `7.0` 和 `READY`；插件会在初始化阶段自动执行统一诊断，未通过时不会进入 `READY`。
 6. 执行 `/townadmin diagnose 7`，保存诊断报告；SQLite 另按运维手册停服备份。
 
 ## 领地加成验收

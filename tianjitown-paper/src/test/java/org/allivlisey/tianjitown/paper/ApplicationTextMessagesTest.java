@@ -41,6 +41,16 @@ class ApplicationTextMessagesTest {
     }
 
     @Test
+    void rendersRequiredDescriptionValidationMessage() {
+        PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
+        ApplicationText.ValidationIssue issue = new ApplicationText.ValidationIssue(
+                ApplicationText.ValidationIssue.Code.DESCRIPTION_REQUIRED, Map.of());
+
+        assertTrue(messages.hasMessage("validation.application.description-required"));
+        assertEquals("§c简介不能为空", ApplicationTextMessages.render(messages, issue));
+    }
+
+    @Test
     void usesUserOverrideForTheNextValidationRender() throws Exception {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
         ApplicationText.ValidationIssue issue = new ApplicationText.ValidationIssue(

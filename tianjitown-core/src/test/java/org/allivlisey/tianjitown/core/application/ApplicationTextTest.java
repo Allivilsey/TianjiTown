@@ -40,6 +40,16 @@ class ApplicationTextTest {
     }
 
     @Test
+    void requiresTownDescription() {
+        ApplicationText text = new ApplicationText("天际镇", "TJ", "SKY", "   ",
+                List.of("规则"));
+
+        assertEquals(List.of(new ApplicationText.ValidationIssue(
+                        ApplicationText.ValidationIssue.Code.DESCRIPTION_REQUIRED,
+                        Map.of())), text.validate());
+    }
+
+    @Test
     void describesRuleCountWithNaturalRangeNotation() {
         ApplicationText text = new ApplicationText("天际镇", "TJ", "SKY", "简介", List.of());
         assertEquals(List.of(new ApplicationText.ValidationIssue(
