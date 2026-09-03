@@ -75,7 +75,6 @@ buffs:
   shop-enabled: true
   catalog:
     speed:
-      display-name: '速度'
       effect-kind: ATTRIBUTE
       effect-key: 'minecraft:movement_speed'
       operation: ADD_SCALAR
@@ -86,7 +85,6 @@ buffs:
       amount-per-level: 0.2
       purchasing-roles: [MAYOR, DEPUTY_MAYOR]
     health:
-      display-name: '生命'
       effect-kind: ATTRIBUTE
       effect-key: 'minecraft:max_health'
       operation: ADD_NUMBER

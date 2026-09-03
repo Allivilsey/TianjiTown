@@ -51,6 +51,14 @@ final class PluginMessages {
 
     private void validateRequiredMessages() {
         for (String key : java.util.List.of(
+                "plugin.command.townadmin.description",
+                "plugin.permission.admin.description",
+                "plugin.permission.admin-money.description",
+                "plugin.permission.admin-tax.description",
+                "plugin.permission.admin-ledger.description",
+                "plugin.permission.admin-expand.description",
+                "plugin.permission.admin-buff.description",
+                "plugin.permission.admin-operations.description",
                 "diagnostic.lifecycle.startup-checking",
                 "diagnostic.lifecycle.admin-command-missing",
                 "diagnostic.lifecycle.config-schema-gate-failed",
@@ -99,6 +107,9 @@ final class PluginMessages {
                 "log.residence.automatic-repair-consistent",
                 "log.residence.automatic-repair-completed",
                 "log.residence.automatic-repair-failed",
+                "validation.buff.label-required",
+                "dialog.buff.labels.speed",
+                "dialog.buff.labels.health",
                 "validation.runtime-configuration.database-file-required",
                 "validation.runtime-configuration.database-file-path-invalid",
                 "validation.runtime-configuration.database-directory-create-failure")) {
@@ -140,6 +151,16 @@ final class PluginMessages {
                 "dialog.buff.intensity-format")) {
             validateRangeFormat(key);
         }
+    }
+
+    boolean hasMessage(String key) {
+        String value = configuration.getString(key);
+        return value != null && !value.isBlank();
+    }
+
+    String requiredPlainText(String key) {
+        requireMessage(key);
+        return plainText(key);
     }
 
     private void requireMessage(String key) {

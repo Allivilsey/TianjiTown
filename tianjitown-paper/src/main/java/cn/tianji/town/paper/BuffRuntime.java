@@ -101,7 +101,8 @@ final class BuffRuntime implements Listener {
         try {
             BuffDefinition definition = settings.requireBuff(key);
             host.writeAction(player, () -> repository.purchaseBuff(player.getUniqueId(),
-                            player.getName(), definition, duration, host.settlement().scale(),
+                            player.getName(), definition, settings.label(key), duration,
+                            host.settlement().scale(),
                             "buff-purchase:" + UUID.randomUUID(), Instant.now()),
                     purchase -> verifyBuffPurchase(player, purchase, success, failure),
                     failure);
@@ -120,7 +121,8 @@ final class BuffRuntime implements Listener {
         try {
             BuffDefinition definition = settings.requireBuff(key);
             host.writeAction(player, () -> repository.purchaseBuff(player.getUniqueId(),
-                            player.getName(), definition, weeks, level, host.settlement().scale(),
+                            player.getName(), definition, settings.label(key), weeks, level,
+                            host.settlement().scale(),
                             "buff-purchase:" + UUID.randomUUID(), Instant.now()),
                     purchase -> verifyBuffPurchase(player, purchase, success, failure), failure);
         } catch (RuntimeException exception) {

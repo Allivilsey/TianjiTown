@@ -14,12 +14,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs,
-                    BiFunction<String, Map<String, ?>, String> messageResolver) {
+                    BiFunction<String, Map<String, ?>, String> messageResolver,
+                    Predicate<String> messagePresent) {
     private static final int MAXIMUM_BUFF_COUNT = 36;
     private static final String UNKNOWN_BUFF = "validation.buff.unknown";
+    private static final String LABEL_REQUIRED = "validation.buff.label-required";
+    private static final String LABEL_PREFIX = "dialog.buff.labels.";
     private static final String CATALOG_REQUIRED = "validation.buff.catalog-required";
     private static final String CATALOG_LIMIT = "validation.buff.catalog-limit";
     private static final String DUPLICATE_KEY = "validation.buff.duplicate-key";
@@ -34,10 +39,16 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs,
     BuffSettings {
         buffs = Map.copyOf(buffs);
         messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
+        messagePresent = Objects.requireNonNull(messagePresent, "messagePresent");
     }
 
     BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs) {
-        this(buffShopEnabled, buffs, BuffSettings::fallbackMessage);
+        this(buffShopEnabled, buffs, BuffSettings::fallbackMessage, key -> true);
+    }
+
+    BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs,
+                 BiFunction<String, Map<String, ?>, String> messageResolver) {
+        this(buffShopEnabled, buffs, messageResolver, key -> true);
     }
 
     BuffDefinition requireBuff(String key) {
@@ -64,10 +75,43 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs,
 
     static BuffSettings load(ConfigurationSection config, int moneyScale,
                              BiFunction<String, Map<String, ?>, String> messageResolver) {
+        return load(config, moneyScale, messageResolver, key -> {
+            try {
+                String value = messageResolver.apply(key, Map.of());
+                if (value != null && !value.isBlank()) {
+                    return value;
+                }
+            } catch (RuntimeException | LinkageError ignored) {
+                // Keep the resolver-only overload usable for tests and bootstrap fallbacks.
+            }
+            return key;
+        });
+    }
+
+    static BuffSettings load(ConfigurationSection config, int moneyScale,
+                             PluginMessages messages) {
+        Objects.requireNonNull(messages, "messages");
+        return load(config, moneyScale, messages::plainText, messages::requiredPlainText,
+                messages::hasMessage);
+    }
+
+    static BuffSettings load(ConfigurationSection config, int moneyScale,
+                             BiFunction<String, Map<String, ?>, String> messageResolver,
+                             Function<String, String> requiredMessageResolver) {
+        return load(config, moneyScale, messageResolver, requiredMessageResolver, key -> true);
+    }
+
+    private static BuffSettings load(ConfigurationSection config, int moneyScale,
+                                     BiFunction<String, Map<String, ?>, String> messageResolver,
+                                     Function<String, String> requiredMessageResolver,
+                                     Predicate<String> messagePresent) {
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(messageResolver, "messageResolver");
+        Objects.requireNonNull(requiredMessageResolver, "requiredMessageResolver");
+        Objects.requireNonNull(messagePresent, "messagePresent");
         Map<String, BuffDefinition> buffs = loadBuffs(
-                config.getConfigurationSection("buffs.catalog"), moneyScale, messageResolver);
+                config.getConfigurationSection("buffs.catalog"), moneyScale, messageResolver,
+                requiredMessageResolver);
         if (buffs.isEmpty()) {
             throw new IllegalArgumentException(resolveMessage(messageResolver, CATALOG_REQUIRED,
                     Map.of()));
@@ -77,13 +121,16 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs,
                     Map.of("maximum", MAXIMUM_BUFF_COUNT)));
         }
         return new BuffSettings(ConfigurationValues.bool(config,
-                "buffs.shop-enabled", true, messageResolver), buffs, messageResolver);
+                "buffs.shop-enabled", true, messageResolver), buffs, messageResolver,
+                messagePresent);
     }
 
     private static Map<String, BuffDefinition> loadBuffs(ConfigurationSection catalog,
                                                          int moneyScale,
                                                          BiFunction<String, Map<String, ?>, String>
-                                                                 messageResolver) {
+                                                                 messageResolver,
+                                                         Function<String, String>
+                                                                 requiredMessageResolver) {
         if (catalog == null) {
             return Map.of();
         }
@@ -91,7 +138,7 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs,
         for (String key : catalog.getKeys(false)) {
             ConfigurationSection section = requireSection(catalog, key, messageResolver);
             BuffDefinition definition = new BuffDefinition(key,
-                    text(section, "display-name", messageResolver),
+                    requiredLabel(key, messageResolver, requiredMessageResolver),
                     enumValue(BuffDefinition.EffectKind.class,
                             text(section, "effect-kind", messageResolver),
                             section.getCurrentPath() + ".effect-kind", messageResolver),
@@ -110,6 +157,21 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs,
             }
         }
         return result;
+    }
+
+    private static String requiredLabel(String buffKey,
+                                        BiFunction<String, Map<String, ?>, String> messageResolver,
+                                        Function<String, String> requiredMessageResolver) {
+        try {
+            String value = requiredMessageResolver.apply(labelMessageKey(buffKey));
+            if (value != null && !value.isBlank()) {
+                return value.strip();
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // Convert resolver-specific failures into the normal configuration diagnostic below.
+        }
+        throw new IllegalArgumentException(resolveMessage(messageResolver, LABEL_REQUIRED,
+                Map.of("key", safeText(buffKey))));
     }
 
     private static Set<MemberRole> roles(ConfigurationSection section, String path,
@@ -197,6 +259,26 @@ record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> buffs,
         } catch (RuntimeException | LinkageError exception) {
             return key;
         }
+    }
+
+    String label(String key) {
+        BuffDefinition definition = requireBuff(key);
+        String messageKey = labelMessageKey(definition.key());
+        try {
+            if (messagePresent.test(messageKey)) {
+                String value = messageResolver.apply(messageKey, Map.of());
+                if (value != null && !value.isBlank()) {
+                    return value.strip();
+                }
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // Keep the last validated label available if a later reload is malformed.
+        }
+        return definition.displayName();
+    }
+
+    static String labelMessageKey(String buffKey) {
+        return LABEL_PREFIX + buffKey;
     }
 
     static String fallbackMessage(String key, Map<String, ?> placeholders) {

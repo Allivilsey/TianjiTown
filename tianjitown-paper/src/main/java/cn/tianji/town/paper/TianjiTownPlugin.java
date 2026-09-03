@@ -149,6 +149,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
                 Thread.ofPlatform().daemon(true).name("TianjiTown-Async-", 0).factory());
         org.bukkit.command.PluginCommand adminCommand = java.util.Objects.requireNonNull(
                 getCommand("townadmin"), messages().plainText(ADMIN_COMMAND_MISSING));
+        applyDescriptorMessages(adminCommand);
         TownAdminTabCompleter completer = new TownAdminTabCompleter(this);
         townAdminTabCompleter = completer;
         adminCommand.setExecutor(new TownAdminCommand(this));
@@ -162,7 +163,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         RuntimeConfigurationValidator.DatabaseSettings databaseSettings;
         try {
             databaseSettings = RuntimeConfigurationValidator.validate(getConfig(),
-                    world -> getServer().getWorld(world) != null, messages()::plainText);
+                    world -> getServer().getWorld(world) != null, messages());
             synchronousChecks.add(messages().plainText(CONFIGURATION_VALIDATION_PASSED));
         } catch (RuntimeException exception) {
             synchronousChecks.add(messages().plainText(CONFIGURATION_VALIDATION_FAILED,
@@ -270,6 +271,15 @@ public final class TianjiTownPlugin extends JavaPlugin {
 
     void reloadMessages() {
         messages().reload();
+        org.bukkit.command.PluginCommand adminCommand = getCommand("townadmin");
+        if (adminCommand != null) {
+            applyDescriptorMessages(adminCommand);
+        }
+    }
+
+    private void applyDescriptorMessages(org.bukkit.command.PluginCommand adminCommand) {
+        PluginDescriptorMessages.apply(messages(), adminCommand,
+                getServer().getPluginManager()::getPermission);
     }
 
     private String plainText(String key) {

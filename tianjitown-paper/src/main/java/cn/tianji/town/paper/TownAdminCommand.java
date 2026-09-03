@@ -893,10 +893,13 @@ final class TownAdminCommand implements CommandExecutor {
             }, request -> requestConfirmation(sender,
                     plugin.messages().text("chat.admin.buff-purchase-confirmation", Map.of(
                             "town", safeText(request.townName()),
-                            "buff", safeText(request.definition().displayName()))),
+                            "buff", safeText(runtime.buffs().settings().label(
+                                    request.definition().key())))),
                     () -> runtime.write(sender, () -> runtime.buffs().repository()
                                     .purchaseBuffForTown(request.townId(), actorId(sender),
                                             sender.getName(), request.definition(),
+                                            runtime.buffs().settings().label(
+                                                    request.definition().key()),
                                             runtime.settlement().scale(),
                                             BuffDurationOption.ONE_HOUR,
                             "admin-buff-purchase:" + UUID.randomUUID(),

@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 final class RuntimeConfigurationValidator {
@@ -34,21 +35,40 @@ final class RuntimeConfigurationValidator {
 
     static DatabaseSettings validate(ConfigurationSection config,
                                      Predicate<String> loadedWorld) {
-        return validate(config, loadedWorld, RuntimeConfigurationValidator::fallbackMessage);
+        return validate(config, loadedWorld, RuntimeConfigurationValidator::fallbackMessage,
+                key -> key);
     }
 
     static DatabaseSettings validate(ConfigurationSection config,
                                      Predicate<String> loadedWorld,
                                      BiFunction<String, Map<String, ?>, String> messageResolver) {
+        return validate(config, loadedWorld, messageResolver,
+                key -> messageResolver.apply(key, Map.of()));
+    }
+
+    static DatabaseSettings validate(ConfigurationSection config,
+                                     Predicate<String> loadedWorld,
+                                     PluginMessages messages) {
+        Objects.requireNonNull(messages, "messages");
+        return validate(config, loadedWorld, messages::plainText, messages::requiredPlainText);
+    }
+
+    private static DatabaseSettings validate(
+            ConfigurationSection config,
+            Predicate<String> loadedWorld,
+            BiFunction<String, Map<String, ?>, String> messageResolver,
+            Function<String, String> requiredMessageResolver) {
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(loadedWorld, "loadedWorld");
         Objects.requireNonNull(messageResolver, "messageResolver");
+        Objects.requireNonNull(requiredMessageResolver, "requiredMessageResolver");
         ConfigurationValues.bool(config, "town.maintenance-mode", false, messageResolver);
         ConfigurationValues.list(config, "town.service-stations", messageResolver);
         validateTown(config, loadedWorld, messageResolver);
         GovernanceSettings.load(config, messageResolver);
         EconomySettings economy = EconomySettings.load(config, messageResolver);
-        BuffSettings.load(config, economy.fallbackScale(), messageResolver);
+        BuffSettings.load(config, economy.fallbackScale(), messageResolver,
+                requiredMessageResolver);
         TownBonusSettings bonuses = TownBonusSettings.load(config, messageResolver);
         List<String> missingWorlds = bonuses.beacon().allowedWorlds().stream()
                 .filter(world -> !loadedWorld.test(world)).sorted().toList();

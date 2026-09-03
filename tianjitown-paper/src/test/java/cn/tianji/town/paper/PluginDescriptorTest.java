@@ -1,16 +1,22 @@
 package cn.tianji.town.paper;
 
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.permissions.Permission;
+import org.bukkit.plugin.PluginDescriptionFile;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -55,14 +61,63 @@ class PluginDescriptorTest {
     }
 
     @Test
-    void buffPermissionDescriptionMatchesNonRefundablePolicy() throws IOException {
+    void keepsOnlyBootstrapSafeDescriptorMetadata() throws IOException {
         String descriptor = descriptor();
-        String buffPermission = descriptor.substring(
-                descriptor.lastIndexOf("\n  tianjitown.admin.buff:"),
-                descriptor.lastIndexOf("\n  tianjitown.admin.operations:"));
 
-        assertTrue(buffPermission.contains("description: 查询和代购公共 Buff"));
-        assertFalse(buffPermission.contains("退款取消"));
+        assertFalse(descriptor.lines().map(String::strip)
+                .anyMatch(line -> line.startsWith("description:")));
+        assertTrue(descriptor.contains("usage: /townadmin help"));
+        assertFalse(descriptor.contains("/townadmin reload"));
+        for (String localizedText : List.of("天际服小镇治理与统一经济系统", "TianjiTown 管理命令",
+                "TianjiTown 全部管理权限", "查询、调整和对账小镇公共资金", "强制调整小镇统一收入税率",
+                "查询小镇完整公共账本", "查询和代办小镇领地扩张", "查询和代购公共 Buff",
+                "执行统一诊断与在线备份")) {
+            assertFalse(descriptor.contains(localizedText), localizedText);
+        }
+    }
+
+    @Test
+    void remainsLoadableWithOptionalLocalizedDescriptionsOmitted() throws Exception {
+        PluginDescriptionFile parsed = new PluginDescriptionFile(new StringReader(descriptor()));
+
+        assertEquals("TianjiTown", parsed.getName());
+        assertEquals("cn.tianji.town.paper.TianjiTownPlugin", parsed.getMain());
+        assertEquals("/townadmin help", parsed.getCommands().get("townadmin").get("usage"));
+        assertEquals(7, parsed.getPermissions().size());
+    }
+
+    @Test
+    void appliesConfigurableDescriptorDescriptionsAndUsesOverridesAfterReload(@TempDir Path dataFolder)
+            throws Exception {
+        PluginMessages messages = new PluginMessages(dataFolder.toFile());
+        TestCommand command = new TestCommand();
+        Map<String, Permission> permissions = new HashMap<>();
+        for (String permission : List.of("tianjitown.admin", "tianjitown.admin.money",
+                "tianjitown.admin.tax", "tianjitown.admin.ledger", "tianjitown.admin.expand",
+                "tianjitown.admin.buff", "tianjitown.admin.operations")) {
+            permissions.put(permission, new Permission(permission));
+        }
+
+        PluginDescriptorMessages.apply(messages, command, permissions::get);
+
+        assertEquals("TianjiTown 管理命令", command.getDescription());
+        assertEquals("TianjiTown 全部管理权限",
+                permissions.get("tianjitown.admin").getDescription());
+        assertEquals("查询和代购公共 Buff",
+                permissions.get("tianjitown.admin.buff").getDescription());
+
+        YamlConfiguration overrides = new YamlConfiguration();
+        overrides.set("plugin.command.townadmin.description", "自定义管理命令");
+        overrides.set("plugin.permission.admin.description", "自定义全部权限");
+        overrides.set("plugin.permission.admin-buff.description", "自定义 Buff 权限");
+        overrides.save(dataFolder.resolve("messages.yml").toFile());
+        messages.reload();
+        PluginDescriptorMessages.apply(messages, command, permissions::get);
+
+        assertEquals("自定义管理命令", command.getDescription());
+        assertEquals("自定义全部权限", permissions.get("tianjitown.admin").getDescription());
+        assertEquals("自定义 Buff 权限",
+                permissions.get("tianjitown.admin.buff").getDescription());
     }
 
     @Test
@@ -125,6 +180,17 @@ class PluginDescriptorTest {
         try (InputStream stream = PluginDescriptorTest.class.getResourceAsStream("/plugin.yml")) {
             assertNotNull(stream, "plugin.yml 应进入测试类路径");
             return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private static final class TestCommand extends Command {
+        private TestCommand() {
+            super("townadmin");
+        }
+
+        @Override
+        public boolean execute(CommandSender sender, String commandLabel, String[] args) {
+            return true;
         }
     }
 }

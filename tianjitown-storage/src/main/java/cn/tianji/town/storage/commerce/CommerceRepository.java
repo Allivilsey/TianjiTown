@@ -46,8 +46,19 @@ public final class CommerceRepository {
                                      String businessKey, Instant now) {
         requireWorkerThread();
         return transaction(connection -> purchaseBuff(connection,
-                requirePlayer(connection, playerId), playerId, actorName, definition, moneyScale,
-                duration, businessKey, now, false, "成员通过公共 Buff 商店购买"));
+                requirePlayer(connection, playerId), playerId, actorName, definition,
+                definition.displayName(), moneyScale, duration, businessKey, now, false,
+                "成员通过公共 Buff 商店购买"));
+    }
+
+    public BuffPurchase purchaseBuff(UUID playerId, String actorName, BuffDefinition definition,
+                                     String buffLabel, BuffDurationOption duration, int moneyScale,
+                                     String businessKey, Instant now) {
+        requireWorkerThread();
+        return transaction(connection -> purchaseBuff(connection,
+                requirePlayer(connection, playerId), playerId, actorName, definition, buffLabel,
+                moneyScale, duration, businessKey, now, false,
+                "成员通过公共 Buff 商店购买"));
     }
 
     public SelectedBuffQuote quoteBuff(UUID playerId, BuffDefinition definition, int weeks,
@@ -63,8 +74,17 @@ public final class CommerceRepository {
                                      String businessKey, Instant now) {
         requireWorkerThread();
         return transaction(connection -> purchaseSelectedBuff(connection,
-                requirePlayer(connection, playerId), playerId, actorName, definition, weeks, level,
-                moneyScale, businessKey, now));
+                requirePlayer(connection, playerId), playerId, actorName, definition,
+                definition.displayName(), weeks, level, moneyScale, businessKey, now));
+    }
+
+    public BuffPurchase purchaseBuff(UUID playerId, String actorName, BuffDefinition definition,
+                                     String buffLabel, int weeks, int level, int moneyScale,
+                                     String businessKey, Instant now) {
+        requireWorkerThread();
+        return transaction(connection -> purchaseSelectedBuff(connection,
+                requirePlayer(connection, playerId), playerId, actorName, definition, buffLabel,
+                weeks, level, moneyScale, businessKey, now));
     }
 
     public BuffPurchase purchaseBuffForTown(UUID townId, UUID actorId, String actorName,
@@ -74,8 +94,19 @@ public final class CommerceRepository {
         requireWorkerThread();
         requireReason(reason);
         return transaction(connection -> purchaseBuff(connection,
-                requireTownContext(connection, townId), actorId, actorName, definition, moneyScale,
-                duration, businessKey, now, true, reason));
+                requireTownContext(connection, townId), actorId, actorName, definition,
+                definition.displayName(), moneyScale, duration, businessKey, now, true, reason));
+    }
+
+    public BuffPurchase purchaseBuffForTown(UUID townId, UUID actorId, String actorName,
+                                            BuffDefinition definition, String buffLabel,
+                                            int moneyScale, BuffDurationOption duration,
+                                            String businessKey, Instant now, String reason) {
+        requireWorkerThread();
+        requireReason(reason);
+        return transaction(connection -> purchaseBuff(connection,
+                requireTownContext(connection, townId), actorId, actorName, definition, buffLabel,
+                moneyScale, duration, businessKey, now, true, reason));
     }
 
     public List<ActiveBuff> activeBuffsForPlayer(UUID playerId, Instant now) {
@@ -200,7 +231,7 @@ public final class CommerceRepository {
 
     private BuffPurchase purchaseBuff(Connection connection, PlayerContext context,
                                       UUID actorId, String actorName,
-                                      BuffDefinition definition, int moneyScale,
+                                      BuffDefinition definition, String buffLabel, int moneyScale,
                                       BuffDurationOption duration, String businessKey,
                                       Instant now, boolean bypassRole,
                                       String reason) throws SQLException {
@@ -223,7 +254,7 @@ public final class CommerceRepository {
         }
         long balance = postLedger(connection, context.townId(), "BUFF_PURCHASE",
                 -quote.priceMinor(), actorId, actorName, businessKey,
-                "购买 Buff " + definition.displayName() + " 等级 " + quote.nextLevel(), false);
+                "购买 Buff " + buffLabel + " 等级 " + quote.nextLevel(), false);
         UUID buffId = UUID.randomUUID();
         try (PreparedStatement statement = connection.prepareStatement("""
                 INSERT INTO active_buffs
@@ -258,7 +289,8 @@ public final class CommerceRepository {
 
     private BuffPurchase purchaseSelectedBuff(Connection connection, PlayerContext context,
                                                 UUID actorId, String actorName,
-                                                BuffDefinition definition, int weeks, int level,
+                                                BuffDefinition definition, String buffLabel,
+                                                int weeks, int level,
                                                 int moneyScale, String businessKey, Instant now)
             throws SQLException {
         Optional<ActiveBuff> existing = findBuffByBusinessKey(connection, businessKey);
@@ -279,7 +311,7 @@ public final class CommerceRepository {
         }
         long balance = postLedger(connection, context.townId(), "BUFF_PURCHASE",
                 -quote.priceMinor(), actorId, actorName, businessKey,
-                "购买 Buff " + definition.displayName() + " 强度 " + level + "，" + weeks
+                "购买 Buff " + buffLabel + " 强度 " + level + "，" + weeks
                         + " 周", false);
         UUID buffId = UUID.randomUUID();
         try (PreparedStatement statement = connection.prepareStatement("""

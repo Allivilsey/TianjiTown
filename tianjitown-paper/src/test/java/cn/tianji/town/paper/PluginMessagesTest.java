@@ -793,7 +793,7 @@ class PluginMessagesTest {
     void keepsTheReviewedPlayerFacingCopyAndTerritorySelectionKey() {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
 
-        assertEquals("§f少女审核中...",
+        assertEquals("§f管理员审核中，批准前仍可撤回申请。",
                 messages.text("dialog.notice.application-submitted-message"));
         assertEquals("§f小镇创建成功。",
                 messages.text("dialog.notice.application-created-message"));

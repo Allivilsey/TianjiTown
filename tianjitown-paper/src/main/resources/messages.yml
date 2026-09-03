@@ -1,5 +1,26 @@
 # TianjiTown 玩家消息和 Dialog 文本。
 # 所有文本均支持 & 颜色码；{name} 形式的内容是运行时占位符。
+plugin:
+  # plugin.yml 加载早于消息文件；命令和权限描述在消息加载后应用，并支持重载。
+  command:
+    townadmin:
+      description: 'TianjiTown 管理命令'
+  permission:
+    admin:
+      description: 'TianjiTown 全部管理权限'
+    admin-money:
+      description: '查询、调整和对账小镇公共资金'
+    admin-tax:
+      description: '强制调整小镇统一收入税率'
+    admin-ledger:
+      description: '查询小镇完整公共账本'
+    admin-expand:
+      description: '查询和代办小镇领地扩张'
+    admin-buff:
+      description: '查询和代购公共 Buff'
+    admin-operations:
+      description: '执行统一诊断与在线备份'
+
 system:
   # 玩家入口处于维护状态时显示。
   maintenance: '&c小镇系统正在维护，请稍后再试。'
@@ -43,6 +64,7 @@ validation:
   # Buff 配置校验；{key}=Buff key，{path}=配置路径，{value}=非法值，{maximum}=目录上限。
   buff:
     unknown: '&c未知 Buff: {key}'
+    label-required: '&cBuff {key} 缺少显示标签，请在 messages.yml 添加 dialog.buff.labels.{key}'
     catalog-required: '&cbuffs.catalog 至少需要一个 Buff'
     catalog-limit: '&cbuffs.catalog 最多支持 {maximum} 个 Buff'
     duplicate-key: '&c重复 Buff key: {key}'
@@ -227,10 +249,15 @@ chat:
     preview-scope-single: '5×5 区块'
     preview-scope-multiple: '{count} 个领地单元'
     preview-started: '&e已显示 {scope} 的完整三维边界，粒子将持续约 {duration} 秒。'
+    # 领地预览、传送点设置和 Residence 传送流程的运行时详情。
+    no-active-territory: '小镇没有已生效的领地单元'
+    teleport-point-mayor-required: '只有镇长可以设置领地传送点'
+    invalid-grid-target: '领地网格坐标无效'
 
   # 玩家申请操作的资源状态详情。
   application:
     not-found: '申请不存在'
+    invalid-form-step: '未知申请表单步骤'
 
   # 登录、申请、投票、税率和成员关系变化产生的主动通知。
   # 占位符：{town}=小镇名，{count}=数量，{rate}=税率，{reason}=原因，{applicant}=申请人，{member}=成员名。
@@ -463,6 +490,9 @@ chat:
   # 占位符：{amount}/{balance}/{gross}/{tax}/{net}=金额，{rate}=税率，{town}=小镇名。
   runtime:
     storage-locked: '&c小镇资金服务暂时不可用，请稍后再试。'
+    town-required: '你不属于任何小镇'
+    town-not-found: '小镇不存在'
+    town-unavailable: '小镇不存在或已停止运行'
     provision-duplicate: '&e该申请正在处理中，请勿重复操作。'
     fee-failed: '&c申请人无法支付建镇申请费 {amount}: {detail}'
     provision-already-complete: '&a该申请已完成建镇，无需重复批准。'
@@ -753,6 +783,8 @@ log:
   station:
     invalid-record: '忽略无效的小镇服务台登记: {detail}'
     invalid-record-missing-integer: '忽略无效的小镇服务台登记: 缺少整数 {key}'
+    record-id-empty: '服务台 ID 为空'
+    record-world-name-empty: '服务台世界名为空'
   # 建镇审批和领地投影过程日志；{application}=申请 UUID，{time}=事件时间，
   # {detail}=技术详情，{success}=流程是否完成。
   provision:
@@ -762,6 +794,10 @@ log:
     refund-failure: '建镇申请数据库写入失败且申请费自动返还失败: {detail}'
     projection-exception: '建镇领地投影异常 application={application}: {detail}'
     ui-callback: '建镇 UI 回调 application={application} at={time} success={success}'
+    # 管理员通过玩家界面审批写入审计原因；无占位符。
+    admin-approval-reason: '管理员通过玩家界面批准申请'
+    # 审批页面关闭后回调完成；{application}=申请 UUID，{time}=完成时间。
+    ui-callback-after-close: '建镇 UI 回调已在页面关闭后完成 application={application} at={time}'
     # 失败申请恢复日志和审计快照；{application}=申请 UUID，{detail}=领地或技术详情，
     # {reason}/{inspection}=事件发生时的文本快照。
     recovery-external-residence: '失败申请发现同名外部 Residence，保留外部领地并继续回滚申请数据 application={application}'
@@ -770,6 +806,9 @@ log:
     recovery-cancel-refund-reason: '管理员取消创建失败申请并退款'
     recovery-force-cleanup-reason: '管理员强制清理创建失败申请'
     recovery-reason-with-inspection: '{reason}；外部检查={inspection}'
+  # 建镇申请草稿清理日志；{player}=玩家 UUID，{detail}=异常详情。
+  application:
+    draft-cleanup-failure: '清理已提交申请草稿失败 {player}: {detail}'
   # 领地扩张外部投影与恢复日志；{batch}/{expansion}=稳定操作 ID，{cleanup}/{detail}=技术详情。
   expansion:
     batch-rollback-failed: '批量扩张外部区域回滚失败 batch={batch}: {cleanup}'
@@ -798,6 +837,7 @@ log:
     async-task-failure: '异步任务异常，已在插件边界隔离: {detail}'
     main-thread-callback-failure: '主线程回调异常，已在插件边界隔离: {detail}'
     main-thread-callback-submit-failure: '主线程回调提交失败: {detail}'
+    dialog-closed: '玩家界面已经关闭'
     lifecycle-stopped: '插件生命周期已停止'
     quick-shop-tax-refresh-failure: '刷新 QuickShop 税率内存映射失败: {detail}'
     # 周期任务失败日志；{detail}=异常详情，同一任务的持续失败只记录首次。
@@ -948,6 +988,9 @@ dialog:
     select-again: '&e重新选择'
     reopen: '&e重新打开'
     continue-processing: '&a继续'
+    # 玩家名称回退；{playerId}=玩家 UUID 去掉连字符后的末 8 位。
+    unknown: '未知'
+    unknown-player: '未知玩家（{playerId}）'
 
   # 主入口和主菜单文本；{town}=小镇名称，{balance}=已格式化公共资金，{taxRate}=已格式化税率，
   # {count}=当前数量，{maximum}=配置上限，{message}=已过滤颜色代码的管理员意见。
@@ -987,6 +1030,8 @@ dialog:
     applications-count: '&b入镇申请 · {count}'
     visitors: '&e访客管理'
 
+  # 治理投票菜单文本；{count}=选民/投票数量，{target}=已过滤玩家名，{time}=截止时间，
+  # {pending}/{type}=已解析的投票状态与类型，{page}=从 1 开始的页码。
   votes:
     type-kick: '&f投票移除成员'
     type-replace-mayor: '&f强制更换镇长'
@@ -1014,6 +1059,8 @@ dialog:
     already-voted: '&7你已经投票'
     ineligible: '&7你不在冻结选民快照中'
     pending: '&b待投票'
+    entry-title: '{type} · {target}'
+    pending-entry-title: '{pending} · {type} · {target}'
     previous: '&e上一页'
     next: '&e下一页'
     back-governance: '&7返回成员管理'
@@ -1032,6 +1079,8 @@ dialog:
     list-title: '&6小镇治理投票 · 第 {page} 页'
     detail-title: '&6治理投票详情'
 
+  # 成员浏览菜单文本；{page}=从 1 开始的页码，{town}=已过滤小镇名，{name}=已过滤玩家名，
+  # {role}=已解析成员角色。
   town-members:
     title: '小镇成员 · 第 {page} 页'
     heading: '&6{town} 的成员 · 第 {page} 页'
@@ -1039,6 +1088,25 @@ dialog:
     empty: '&7暂无成员'
     previous: '&e上一页'
     next: '&e下一页'
+
+  # 成员详情菜单；{name}=已过滤颜色代码的玩家名，{id}=玩家 UUID。
+  member-detail:
+    title: '成员管理 · {name}'
+    uuid: '&7UUID: {id}'
+    promote-deputy: '&a任命为副镇长'
+    demote-member: '&e降为普通镇员'
+    kick: '&c移除成员'
+    transfer: '&e发起镇长转让'
+
+  # 镇长转让确认菜单；{town}=已过滤颜色代码的小镇名，{time}=转让截止时间。
+  transfer:
+    title: '镇长转让确认'
+    summary-title: '&6接任镇长邀请'
+    town: '&7小镇: {town}'
+    expires: '&7有效期至: {time}'
+    consequence: '&c接受后原镇长降为普通成员'
+    accept: '&a接受并接任'
+    reject: '&c拒绝'
 
   member-role:
     mayor: '&6镇长'
@@ -1063,8 +1131,140 @@ dialog:
     list-title: '&6小镇访客 · 第 {page} 页'
     invite-title: '&6邀请访客 · 第 {page} 页'
 
+  # 待办中心菜单文本；{count}=待处理事项数量。
+  pending:
+    title: '&6待办中心'
+    count-title: '&6待办中心 · {count}'
+    empty-title: '&7当前没有待办'
+    decisions-only: '&7只显示需要你作出决定的事项'
+    applications-count: '&b入镇申请 · {count}'
+    transfer: '&e镇长转让邀请'
+
+  # 个人中心菜单文本；{player}/{town}=已过滤颜色代码的玩家名/小镇名。
+  personal:
+    title: '&6个人与帮助'
+    player: '&6{player}'
+    no-town: '&7当前没有小镇身份'
+    town: '&7所在小镇: &f{town}'
+    handbook-hint: '&7手册丢失后可以在这里重新领取'
+    handbook: '&6领取小镇手册'
+    disband: '&4解散小镇'
+    leave: '&c退出小镇'
+
+  # 公共资金菜单文本；{town}=已过滤颜色代码的小镇名，{balance}/{amount}=已格式化金额，
+  # {rate}=已格式化税率，{count}/{maximum}=领地单元数量，{refresh}=补贴刷新时间，{reason}=锁定原因。
+  finance:
+    title: '&6公共资产'
+    summary-title: '&6公共资产'
+    town: '&7小镇: {town}'
+    balance: '&7公共余额: &f{balance}'
+    tax-rate: '&7统一收入税率: &f{rate}'
+    territory-units: '&7领地单元: &f{count}/{maximum}'
+    subsidy-twelve-hour: '&7QuickShop 补贴剩余（12 小时）: &f{amount} &8· 刷新 {refresh}'
+    subsidy-week: '&7QuickShop 补贴剩余（本周）: &f{amount} &8· 刷新 {refresh}'
+    locked: '&c资金已因清算差异锁定: {reason}'
+    donation: '&a自定义金额捐款'
+    tax: '&e税率设置'
+    ledger: '&6小镇账本'
+    buff: '&d公共 Buff'
+    expansion: '&b领地扩张'
+
   town:
+    # 小镇详情菜单；{town}=已过滤颜色代码的小镇名，{description}=简介。
+    title: '&6小镇详情'
+    summary-title: '&6{town}'
     residence-name: '&7小镇领地名: {name}'
+    description: '&7简介: {description}'
+    rule-count: '&7规则数: {count}'
+    rules: '&e阅读小镇规则'
+    members: '&e成员列表'
+    edit-description: '&e修改简介'
+    edit-rules: '&e修改规则'
+    territory: '&e小镇领地'
+    set-teleport: '&e设置领地传送点'
+
+  # 领地传送点和领地预览的 Dialog 提示。
+  site:
+    teleport-point-outside-title: '&6无法设置传送点'
+    teleport-point-outside-message: '&f请站在本镇有效 Residence 内重试。'
+    teleport-point-unsafe-title: '&6传送点不安全'
+    teleport-point-space-occupied: '&f脚部或头部空间被方块占用。'
+    teleport-point-floor-unsafe: '&f脚下没有可安全站立的实体方块。'
+    teleport-point-dangerous-block: '&f该位置包含危险方块。'
+    teleport-point-set-title: '&6传送点已设置'
+    teleport-point-failed-title: '&6设置失败'
+    territory-teleport-unavailable-title: '&6领地传送不可用'
+    territory-teleport-unavailable-message: '&f只有正常运行的小镇可以使用领地传送。'
+    territory-teleport-failed-title: '&6领地传送失败'
+    territory-teleport-failed-message: '&fResidence 未接受本次传送请求。'
+    territory-teleport-timeout-title: '&6领地传送未完成'
+    territory-teleport-timeout-message: '&fResidence 未在等待时间内完成传送；冷却、费用和安全点规则仍由 Residence 管理。'
+
+  # 浏览和提交入镇申请的玩家菜单；{town}=已过滤颜色代码的小镇名，{code}=小镇代码，
+  # {description}=已过滤颜色代码的简介，{rules}=已过滤颜色代码并合并的规则，{page}=从 1 开始的页码。
+  join:
+    list-title: '&6申请加入小镇 · 第 {page} 页'
+    town-name: '&6{town}'
+    town-title: '&6申请加入 · {town}'
+    town-code: '&7小镇代码: {code}'
+    town-description: '&7简介: {description}'
+    town-rules: '&7规则: {rules}'
+    apply: '&a提交入镇申请'
+    empty-title: '&7暂无开放的小镇'
+    empty-hint: '&7稍后再来查看'
+    previous: '&e上一页'
+    next: '&e下一页'
+
+  # 玩家自己的入镇申请列表；{town}=已过滤颜色代码的小镇名，{count}=申请数量。
+  my-join:
+    list-title: '&6我的入镇申请 · {count}'
+    entry-title: '&e{town}'
+
+  # 镇长待处理入镇申请列表；{applicant}=已过滤颜色代码的申请人，{count}=申请数量，
+  # {page}=从 1 开始的页码。
+  town-join:
+    entry-title: '&e{applicant}'
+    list-empty: '&7暂无待处理入镇申请'
+    list-empty-hint: '&7新的申请会出现在待办中心'
+    previous: '&e上一页'
+    next: '&e下一页'
+    list-title: '&6入镇申请 · {count} · 第 {page} 页'
+
+  # 管理员建镇申请列表与审核详情；{town}/{applicant}=已过滤颜色代码的名称，
+  # {count}=申请数量，{page}=从 1 开始的页码，{status}=消息解析后的申请状态，
+  # {time}=时间或“尚未提交”，{residence}/{description}/{rules}=申请资料，
+  # {world}/{x}/{z}=选址世界与区块坐标，{error}=已过滤颜色代码的创建错误。
+  admin:
+    list-title: '&6申请审核 · {count} · 第 {page} 页'
+    entry-title: '&e{town}'
+    list-empty: '&7暂无待审核申请'
+    list-empty-hint: '&7收到新申请时会播放提醒音效'
+    previous: '&e上一页'
+    next: '&e下一页'
+    summary-title: '&6申请详情'
+    applicant: '&7申请人: {applicant}'
+    status-line: '&7申请状态: {status}'
+    submitted-at: '&7提交时间: {time}'
+    updated-at: '&7更新时间: {time}'
+    not-submitted: '尚未提交'
+    name: '&7名称: {name}'
+    residence-name: '&7小镇领地名: {residence}'
+    description: '&7简介: {description}'
+    rules: '&7规则: {rules}'
+    territory: '&7选址: {world} {x},{z}'
+    creation-error: '&c创建错误: {error}'
+    approve: '&a批准'
+    reject: '&c拒绝'
+    request-changes: '&e要求补件'
+    retry-approve: '&a重试批准'
+    unlock-for-changes: '&e解除锁定并要求修改'
+    unlock-for-changes-hint: '&7回滚临时小镇并保留托管申请费'
+    cancel-and-refund: '&6取消申请并退款'
+    cancel-and-refund-hint: '&7安全回滚后退还申请费'
+    force-cleanup: '&c强制清理失败申请'
+    force-cleanup-hint: '&c会执行完整事务回滚并退款'
+    preview-site: '&b预览选址'
+    detail-title: '&6审核 · {town}'
 
   # Dialog 操作按钮的悬浮提示。动态内容使用 {placeholder} 替换。
   tooltip:
@@ -1242,6 +1442,8 @@ dialog:
     disband-town-consequence: '&7将删除小镇领地并释放名称，此操作不可撤销'
     admin-approve-title: '&6确认批准申请'
     admin-approve-consequence: '&7将创建小镇及其初始领地'
+    failed-recovery-title: '&6确认处理创建失败申请'
+    failed-recovery-consequence: '&7将验证外部投影、事务回滚临时数据，并按所选方式处理托管申请费。'
 
   # 操作结果、权限和数据状态提示页。
   notice:
@@ -1291,7 +1493,7 @@ dialog:
     site-missing-title: '&6尚未选择领地'
     site-missing-message: '&f请先站在合适的位置，将脚下区域选为小镇领地中心。'
     application-submitted-title: '&6申请已提交'
-    application-submitted-message: '&f少女审核中...'
+    application-submitted-message: '&f管理员审核中，批准前仍可撤回申请。'
     application-created-title: '&6小镇创建成功'
     application-created-message: '&f小镇创建成功。'
     application-cancelled-title: '&6申请已撤回'
@@ -1345,9 +1547,29 @@ dialog:
     invitation-rejected-title: '&6已拒绝邀请'
     invitation-rejected-message: '&f你已拒绝成为该小镇的初始成员。'
     operation-failed-title: '&6操作未完成'
+    # 通用动作失败且后端未提供详情时的回退文案；无占位符。
+    operation-failed-feature-disabled: '这项功能目前暂停使用。'
+    operation-failed-storage-unavailable: '小镇数据暂时不可用，请稍后再试。'
+    operation-failed-insufficient-balance: '余额不足，无法完成这项操作。'
+    operation-failed-forbidden: '你没有执行这项操作的权限。'
+    operation-failed-not-found: '目标已经不存在，请刷新界面。'
+    operation-failed-default: '暂时无法完成这项操作，请刷新后重试。'
 
-  # 管理员建镇流程结果详情和恢复建议；{detail}=外部依赖或校验详情，{cleanup}=回滚详情。
+  # 管理员建镇流程结果详情和恢复建议；{detail}=外部依赖或校验详情，{cleanup}=回滚详情，{recovery}=恢复建议。
   provision:
+    progress-title: '&6正在创建小镇'
+    progress-message: "&f系统正在执行费用托管、领地投影和数据库提交。\n&7此页面只读，你可以返回审核列表稍后查看。"
+    timeout-title: '&6创建仍在处理中'
+    timeout-message: '&f服务器暂未返回最终结果。流程使用同一幂等键，可安全返回审核列表刷新；请勿重复扣费。'
+    back-to-list: '&7返回审核列表'
+    application-failed-title: '&6小镇创建未完成'
+    recovery-title: '&6正在安全恢复申请'
+    recovery-message: '&f系统正在验证 Residence 投影并回滚临时数据。'
+    recovery-unlocked-message: '&f临时数据已回滚，申请已转为需要修改，托管申请费会在再次批准时复用。'
+    recovery-cancelled-message: '&f临时数据已回滚，申请已取消，申请费已退款。'
+    recovery-completed-title: '&6失败申请已处理'
+    recovery-failed-title: '&6恢复操作未完成'
+    failure-with-recovery: "{detail}\n\n&7可执行操作：{recovery}"
     success-detail: '&f小镇创建完成。'
     busy-recovery-action: '&7返回审核列表后刷新状态'
     timeout-detail: '&f服务器在限定时间内没有返回最终结果。'
@@ -1398,6 +1620,12 @@ dialog:
 
   # 税率设置及保存结果。
   tax:
+    menu-title: '&6小镇税率'
+    summary-title: '&6税率设置'
+    current-rate: '&7当前税率: &f{rate}'
+    scope: '&7同步作用于 QuickShop、Jobs 与全球市场收入'
+    editable-hint: '&e请选择新的税率后保存'
+    readonly-hint: '&8只有镇长可以调整税率'
     title: '&6设置收入税率'
     rate-label: '&6统一收入税率'
     rate-format: '&f%s: %s%%'
@@ -1408,6 +1636,42 @@ dialog:
     unchanged-message: '&f当前税率已经是 {rate}。'
     saved-title: '&6税率已保存'
     saved-message: '&f统一收入税率已更新为 {rate}。'
+
+  # 公共资金账本菜单文本；{town}=已过滤颜色代码的小镇名，{page}=从 1 开始的页码，
+  # {balance}/{amount}=已格式化金额，{type}=流水类型显示名，{actor}=已过滤操作人，
+  # {time}=记录时间，{note}=账本备注，{playerId}=玩家 UUID 后缀。
+  ledger:
+    title: '&6{town} · 小镇账本'
+    page-title: '&6小镇账本 · 第 {page} 页'
+    page: '&7第 {page} 页'
+    balance: '&7当前公共余额: &f{balance}'
+    empty: '&7本页没有资金流水'
+    empty-hint: '&8返回上一页或公共资产'
+    income-amount: '&a+{amount}'
+    expense-amount: '&c-{amount}'
+    entry-title: '{amount} &f{type}'
+    entry-balance: '&7变动后余额: &f{balance}'
+    entry-actor: '&7操作人: &f{actor}'
+    entry-time: '&7时间: &f{time}'
+    entry-note: '&8{note}'
+    previous: '&e上一页'
+    next: '&e下一页'
+    unknown-player: '未知玩家（{playerId}）'
+    type:
+      quickshop-tax: 'QuickShop 税收'
+      jobs-tax: 'Jobs 税收'
+      global-market-plus-tax: '全球市场税收'
+      server-tax-subsidy: '服务器税收补贴'
+      application-fee: '建镇初始资金'
+      donation: '成员捐款'
+      expansion: '领地扩张'
+      expansion-refund: '扩张退款'
+      admin-adjustment: '管理员调整'
+      buff-purchase: 'Buff 购买'
+      buff-refund: 'Buff 退款'
+      resource-purchase: '资源采购'
+      resource-refund: '资源退款'
+      unknown: '{type}'
 
   # 5×5 领地地图和格子悬浮提示。
   territory:
@@ -1445,6 +1709,16 @@ dialog:
 
   # 公共 Buff 购买流程。
   buff:
+    # Buff 显示标签；键名必须与 config.yml 的 buffs.catalog key 一一对应。
+    # Buff key 沿用小写字母/数字开头、可含下划线或连字符的稳定标识约定。
+    # 新增自定义 Buff 时，在此处添加相同 key；代码会在启动配置校验时检查。
+    labels:
+      speed: '速度'
+      health: '生命'
+    shop-title: '&6公共 Buff 商店'
+    shop-summary-title: '&d小镇公共 Buff'
+    shop-enabled-hint: '&7使用公共资金购买，效果作用于全体成员且不限制世界'
+    shop-paused-hint: '&e商店已暂停新购买，现有效果仍持续到期'
     title: '&6购买公共 Buff'
     effect: '&7效果: {effect}'
     inactive: '&7当前未生效'
@@ -1494,6 +1768,9 @@ dialog:
     refresh-message: '&f规则已被其他操作修改，请刷新后再试。'
     invalid-title: '&6规则未修改'
     invalid-empty: '&f规则内容不能为空。'
+    minimum-one: '&f小镇至少保留一条规则'
+    delete-missing: '&f要删除的规则已经不存在，请刷新界面'
+    delete-conflict: '&f规则已被其他操作修改，请刷新界面'
     item: '&f{index}. {rule}'
     empty: '&7暂未设置规则'
 
@@ -1524,6 +1801,32 @@ dialog:
     basics-guidance: '&7填写小镇名称、代码和简介；代码由 1～12 个英文字母组成，并作为小镇领地名。'
     description-label: '&6小镇简介'
     rules-label: '&6小镇规则'
+    # 申请字段的标签、校验要求和填写建议；无占位符，由 ApplicationField 按需读取。
+    field:
+      name:
+        label: '小镇名称'
+        requirement: '2–24 个文字、数字、空格、下划线、连字符或间隔点'
+        suggestion: '使用易于辨认的完整中文名称'
+      residence-name:
+        label: '小镇代码'
+        requirement: '必须为 1–12 个英文字母，不允许空格、数字和特殊符号'
+        suggestion: '优先使用三个英文字母，例如 SKY'
+      description:
+        label: '小镇简介'
+        requirement: '最多 500 个字符，不允许格式代码或 MiniMessage 标签'
+        suggestion: '简要说明定位、风格和发展目标'
+      rules:
+        label: '小镇规则'
+        requirement: '至少 1 条、最多 50 条；多条规则使用竖线 | 分隔'
+        suggestion: '每条规则保持简短清晰'
+      initial-member-one:
+        label: '初始成员一'
+        requirement: '必须填写一名在线且无镇籍的其他玩家'
+        suggestion: '先与玩家沟通，保存后系统会发送确认按钮'
+      initial-member-two:
+        label: '初始成员二'
+        requirement: '必须填写另一名在线且无镇籍的其他玩家'
+        suggestion: '两名成员都确认后才可提交申请'
     content-heading: '&6第 2 / 3 步 · 小镇规则'
     content-guidance: '&7请添加 1～50 条需要小镇成员遵守的规则。'
     member-one-placeholder: '&e<小镇初始成员一>'
@@ -1533,6 +1836,10 @@ dialog:
     save-hint: '&8保存后系统会邀请两名成员确认'
     save-draft: '&e保存草稿并退出'
     save-draft-tooltip: '&7保存当前步骤和已填写内容，稍后可继续'
+    complete: '&a完成资料并发送邀请'
+    incomplete-members-hint: '&7允许成员尚未选择完整'
+    discard-draft: '&c放弃草稿'
+    discard-draft-hint: '&c删除已持久化的未提交内容'
     status:
       draft: '&f草稿'
       site-selected: '&f已选址'
@@ -1547,10 +1854,48 @@ dialog:
     members-title: '&6第 3 / 3 步 · 选择初始成员'
     select-member-one-title: '&6选择小镇初始成员一'
     select-member-two-title: '&6选择小镇初始成员二'
+    # 初始成员校验与保存冲突；{player}/{town}=已过滤的玩家名/小镇名。
+    initial-member-required: '&f必须填写初始成员'
+    initial-member-online-required: '&f初始成员必须在线并使用准确玩家名'
+    initial-member-applicant-forbidden: '&f初始成员不能是申请人本人'
+    initial-members-distinct-required: '&f两名初始成员不能相同'
+    initial-members-online-required: '&f两名初始成员必须在线并使用准确玩家名'
+    initial-members-applicant-forbidden: '&f初始成员不能包含申请人'
+    initial-members-distinct-validation: '&f必须填写两名不同的初始成员'
+    initial-members-unavailable-title: '&6初始成员无法使用'
+    initial-member-conflict: '&f{player} 已属于小镇“{town}”'
+    initial-members-precheck-failed-title: '&6初始成员预检失败'
+    initial-member-conflict-retry: '&f{player} 已属于小镇“{town}”，请更换后再保存。'
+    unknown-player: '未知玩家'
+    unknown-town: '未知小镇'
     profile-title: '&6编辑小镇简介'
     profile-name: '&6{name}'
     profile-guidance: '&7名称和小镇代码需要管理员代办；此处只编辑简介和规则。'
     profile-description-guidance: '&7这里只修改简介；规则请在上一页单独编辑。'
+    # 建镇申请详情摘要；动态值均为已过滤颜色代码的玩家/申请文本，{status} 为消息键
+    # 解析后的申请状态或初始成员状态，{index} 为从 1 开始的规则序号。
+    summary-title: '&6申请摘要'
+    applicant: '&7申请人: {applicant}'
+    status-line: '&7申请状态: {status}'
+    name: '&7名称: {name}'
+    residence-name: '&7小镇领地名: {residence}'
+    description: '&7简介: {description}'
+    initial-member: '&7初始成员: {player} &8[{status}]'
+    initial-member-status:
+      pending: '待确认'
+      confirmed: '已确认'
+      rejected: '已拒绝'
+    rule: '&7规则 {index}: {rule}'
+    territory-center: '&7中心区块: {x}, {z}'
+    review-message: '&c管理员意见: {message}'
+    last-error: '&c自动创建错误: {error}'
+    edit: '&e编辑申请资料'
+    remind: '&e提醒初始成员'
+    select-site: '&e选择小镇领地'
+    preview-site: '&b预览已选领地'
+    submit: '&a提交申请'
+    waiting-members: '&7等待初始成员确认'
+    cancel: '&c撤回小镇申请'
 
   # 公共资金捐款表单。
   donation:
