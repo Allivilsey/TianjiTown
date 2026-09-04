@@ -46,6 +46,9 @@ class RuleEditorDialogRendererTest {
     void addAndDeleteControlsStayCompact() {
         assertTrue(RuleEditorDialogRenderer.ADD_WIDTH < RuleEditorDialogRenderer.PREVIEW_WIDTH);
         assertEquals(RuleEditorDialogRenderer.DELETE_SIZE, 20);
+        assertTrue(RuleEditorDialogRenderer.INLINE_RULE_WIDTH
+                > RuleEditorDialogRenderer.PREVIEW_WIDTH);
+        assertEquals(150, RuleEditorDialogRenderer.APPLICATION_ACTION_WIDTH);
     }
 
     @Test

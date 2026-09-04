@@ -19,6 +19,10 @@ final class RuleEditorDialogRenderer {
     /** The client action-button height. Keeping this square prevents a rule row from reflowing. */
     static final int DELETE_SIZE = 20;
     static final int ADD_WIDTH = 130;
+    /** Keep the application form's primary actions visually aligned in its single-column flow. */
+    static final int APPLICATION_ACTION_WIDTH = 150;
+    /** Full-width rule actions used by the application editor's inline delete list. */
+    static final int INLINE_RULE_WIDTH = 400;
     /** Barrier is an item sprite; it is not present in the blocks atlas. */
     static final Key ITEM_ATLAS = Key.key("minecraft:items");
     static final Key BARRIER_SPRITE = Key.key("minecraft:item/barrier");

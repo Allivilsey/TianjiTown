@@ -1813,13 +1813,19 @@ final class TownUiController implements Listener {
             RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(town.id(),
                     town.version(), town.profile().rules());
             DialogRoute parent = new DialogRoute("TOWN", town.id().toString());
+            Component heading = dialogComponent("rules.edit-heading", Map.of(
+                    "town", safeText(town.profile().name())));
             openRuleEditorAddDialog(player, dialogText("rules.edit-title"),
-                    dialogComponent("rules.edit-heading", Map.of(
-                            "town", safeText(town.profile().name()))),
-                    layout, parent,
-                    new DialogRoute("EDIT_TOWN_RULE_DELETIONS", town.id().toString()),
+                    ruleEditorPreview(heading, layout), parent,
+                    RuleEditorDialogRenderer.ADD_WIDTH,
+                    RuleEditorDialogRenderer.COLUMNS,
+                    session -> List.of(),
+                    session -> List.of(),
                     response -> addTownRule(player, town.id(), town.version(), response),
-                    session -> List.of());
+                    session -> List.of(), session -> List.of(
+                            deletePageAction(player, session,
+                                    new DialogRoute("EDIT_TOWN_RULE_DELETIONS",
+                                            town.id().toString()))));
         });
     }
 
@@ -1837,28 +1843,31 @@ final class TownUiController implements Listener {
         });
     }
 
-    private void openRuleEditorAddDialog(Player player, String title, Component heading,
-                                         RuleEditorDialogRenderer.Layout layout, DialogRoute parent,
-                                         DialogRoute deletePage,
+    private void openRuleEditorAddDialog(Player player, String title, Component content,
+                                         DialogRoute parent,
+                                         int addWidth,
+                                         int columns,
+                                         Function<UUID, List<ActionButton>> afterAddActions,
+                                         Function<UUID, List<ActionButton>> ruleActions,
                                          Consumer<DialogResponseView> addRule,
-                                         Function<UUID, List<ActionButton>> trailingActions) {
+                                         Function<UUID, List<ActionButton>> trailingActions,
+                                         Function<UUID, List<ActionButton>> postActions) {
         DialogInput input = DialogInput.text("rule_text", 400,
                 dialogComponent("rules.input-label"), false, "", 300, null);
         openDialogPage(player, title, List.of(DialogBody.plainMessage(
-                        ruleEditorPreview(heading, layout), 420)), List.of(input),
+                        content, 420)), List.of(input),
                 DialogBase.DialogAfterAction.NONE, session -> {
                     List<ActionButton> actions = new ArrayList<>();
                     actions.add(ActionButton.create(dialogComponent("rules.add"),
-                            dialogComponent("rules.add-tooltip"), RuleEditorDialogRenderer.ADD_WIDTH,
+                            dialogComponent("rules.add-tooltip"), addWidth,
                             dialogAction(player, session, addRule)));
+                    actions.addAll(afterAddActions.apply(session));
+                    actions.addAll(ruleActions.apply(session));
                     actions.addAll(trailingActions.apply(session));
-                    actions.add(ActionButton.create(dialogComponent("rules.delete-page"),
-                            dialogComponent("rules.delete-page-tooltip"),
-                            RuleEditorDialogRenderer.ADD_WIDTH,
-                            dialogAction(player, session, deletePage.action(), deletePage.target())));
+                    actions.addAll(postActions.apply(session));
                     return DialogType.multiAction(actions)
                             .exitAction(returnButton(player, session, parent))
-                            .columns(RuleEditorDialogRenderer.COLUMNS).build();
+                            .columns(columns).build();
                 }, parent);
     }
 
@@ -1870,25 +1879,56 @@ final class TownUiController implements Listener {
                 .append(dialogComponent("rules.delete-page-guidance"));
         openDialogPage(player, title, List.of(DialogBody.plainMessage(deleteHeading, 420)), List.of(),
                 DialogBase.DialogAfterAction.NONE, session -> {
-                    List<ActionButton> actions = new ArrayList<>();
-                    // The two columns are emitted as complete pairs, so even a wrapped rule label
-                    // remains coupled to its own square barrier button.
-                    for (RuleEditorDialogRenderer.Row row : layout.rows()) {
-                        actions.add(ActionButton.create(dialogComponent("rules.item", Map.of(
-                                        "index", row.displayIndex(), "rule", safeText(row.rule()))),
-                                dialogComponent("rules.preview-tooltip"),
-                                RuleEditorDialogRenderer.PREVIEW_WIDTH, null));
-                        actions.add(ActionButton.create(RuleEditorDialogRenderer.deleteIcon(),
-                                dialogComponent("rules.delete-tooltip", Map.of("index",
-                                        row.displayIndex())),
-                                RuleEditorDialogRenderer.DELETE_SIZE,
-                                dialogAction(player, session,
-                                        response -> deleteRule.accept(row.deleteTarget()))));
-                    }
-                    return DialogType.multiAction(actions)
+                    return DialogType.multiAction(ruleDeletionActions(player, session, layout,
+                                    deleteRule))
                             .exitAction(returnButton(player, session, parent))
                             .columns(RuleEditorDialogRenderer.COLUMNS).build();
                 }, parent);
+    }
+
+    private List<ActionButton> ruleDeletionActions(Player player, UUID session,
+                                                    RuleEditorDialogRenderer.Layout layout,
+                                                    Consumer<RuleEditorDialogRenderer.DeleteTarget> deleteRule) {
+        List<ActionButton> actions = new ArrayList<>();
+        // The two columns are emitted as complete pairs, so even a wrapped rule label
+        // remains coupled to its own square barrier button.
+        for (RuleEditorDialogRenderer.Row row : layout.rows()) {
+            actions.add(ActionButton.create(dialogComponent("rules.item", Map.of(
+                            "index", row.displayIndex(), "rule", safeText(row.rule()))),
+                    dialogComponent("rules.preview-tooltip"),
+                    RuleEditorDialogRenderer.PREVIEW_WIDTH, null));
+            actions.add(ActionButton.create(RuleEditorDialogRenderer.deleteIcon(),
+                    dialogComponent("rules.delete-tooltip", Map.of("index", row.displayIndex())),
+                    RuleEditorDialogRenderer.DELETE_SIZE,
+                    dialogAction(player, session,
+                            response -> deleteRule.accept(row.deleteTarget()))));
+        }
+        return actions;
+    }
+
+    /**
+     * A rule in the application form is its own delete control. This keeps the list readable
+     * while making the destructive action discoverable from the hover text.
+     */
+    private List<ActionButton> inlineRuleDeletionActions(Player player, UUID session,
+                                                          RuleEditorDialogRenderer.Layout layout,
+                                                          Consumer<RuleEditorDialogRenderer.DeleteTarget> deleteRule) {
+        List<ActionButton> actions = new ArrayList<>();
+        for (RuleEditorDialogRenderer.Row row : layout.rows()) {
+            actions.add(ActionButton.create(dialogComponent("rules.item", Map.of(
+                            "index", row.displayIndex(), "rule", safeText(row.rule()))),
+                    dialogComponent("rules.delete-tooltip", Map.of("index", row.displayIndex())),
+                    RuleEditorDialogRenderer.INLINE_RULE_WIDTH,
+                    dialogAction(player, session,
+                            response -> deleteRule.accept(row.deleteTarget()))));
+        }
+        return actions;
+    }
+
+    private ActionButton deletePageAction(Player player, UUID session, DialogRoute deletePage) {
+        return ActionButton.create(dialogComponent("rules.delete-page"),
+                dialogComponent("rules.delete-page-tooltip"), RuleEditorDialogRenderer.ADD_WIDTH,
+                dialogAction(player, session, deletePage.action(), deletePage.target()));
     }
 
     private Component ruleEditorPreview(Component heading, RuleEditorDialogRenderer.Layout layout) {
@@ -2626,12 +2666,8 @@ final class TownUiController implements Listener {
                         UUID.fromString(target), 1);
                 case "APPLICATION_CONTENT_FORM" -> renderApplicationFormStage(player,
                         UUID.fromString(target), 2);
-                case "APPLICATION_CONTENT_RULE_DELETIONS" -> renderApplicationRuleDeletionDialog(
-                        player, UUID.fromString(target));
                 case "APPLICATION_MEMBERS_FORM" -> renderApplicationFormStage(player,
                         UUID.fromString(target), 3);
-                case "APPLICATION_MEMBERS_PREVIOUS" -> membersPrevious(player,
-                        UUID.fromString(target));
                 case "SELECT_INITIAL_MEMBER" -> {
                     String[] parts = target.split(":");
                     openInitialMemberOptions(player, UUID.fromString(parts[0]),
@@ -3786,36 +3822,22 @@ final class TownUiController implements Listener {
         Component guidance = dialogComponent("application.content-heading")
                 .append(Component.newline())
                 .append(dialogComponent("application.content-guidance"));
-        openRuleEditorAddDialog(player, dialogText("application.title"), guidance, layout, parent,
-                new DialogRoute("APPLICATION_CONTENT_RULE_DELETIONS", form.id().toString()),
+        openRuleEditorAddDialog(player, dialogText("application.title"), guidance, parent,
+                RuleEditorDialogRenderer.APPLICATION_ACTION_WIDTH,
+                1,
+                session -> List.of(ActionButton.create(dialogComponent("common.next-step"), null, 150,
+                        dialogAction(player, session,
+                                response -> applyApplicationContent(player, form.id())))),
+                session -> inlineRuleDeletionActions(player, session, layout,
+                        deleteTarget -> deleteApplicationRule(player, deleteTarget)),
                 response -> addApplicationRule(player, form.id(), response),
                 session -> List.of(
-                        ActionButton.create(dialogComponent("common.previous-step"), null, 150,
-                                dialogAction(player, session,
-                                        response -> saveContentAndGoBack(player, form.id()))),
-                        ActionButton.create(dialogComponent("common.next-step"), null, 150,
-                                dialogAction(player, session,
-                                        response -> applyApplicationContent(player, form.id()))),
                         ActionButton.create(dialogComponent("application.save-draft"),
                                 dialogComponent("application.save-draft-tooltip"), 170,
                                 dialogAction(player, session,
                                         response -> saveApplicationStage(player, form.id(), 2,
-                                                response)))));
-    }
-
-    private void renderApplicationRuleDeletionDialog(Player player, UUID formId) {
-        ApplicationFormSession form = requireApplicationForm(player, formId);
-        if (form == null) {
-            return;
-        }
-        RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(form.id(),
-                form.version(), form.text().rules());
-        Component heading = dialogComponent("application.content-heading")
-                .append(Component.newline())
-                .append(dialogComponent("application.content-guidance"));
-        openRuleEditorDeletionDialog(player, dialogText("application.title"), heading, layout,
-                new DialogRoute("APPLICATION_CONTENT_FORM", form.id().toString()),
-                deleteTarget -> deleteApplicationRule(player, deleteTarget));
+                                                response)))),
+                session -> List.of());
     }
 
     private void addApplicationRule(Player player, UUID formId, DialogResponseView response) {
@@ -3858,7 +3880,7 @@ final class TownUiController implements Listener {
         if (form.text().rules().size() <= 1) {
             openNotice(player, dialogText("rules.invalid-title"),
                     dialogText("rules.minimum-one"), dialogText("common.back"),
-                    "APPLICATION_CONTENT_RULE_DELETIONS", form.id().toString());
+                    "APPLICATION_CONTENT_FORM", form.id().toString());
             return;
         }
         List<String> rules = new ArrayList<>(form.text().rules());
@@ -3912,15 +3934,6 @@ final class TownUiController implements Listener {
         persistApplicationForm(player, updated, step, true);
     }
 
-    private void saveContentAndGoBack(Player player, UUID formId) {
-        ApplicationFormSession form = requireApplicationForm(player, formId);
-        if (form == null) {
-            return;
-        }
-        persistApplicationForm(player, form, 2,
-                saved -> renderApplicationBasicsDialog(player, form));
-    }
-
     private static ApplicationFormSession applicationBasicsCandidate(
             ApplicationFormSession form, DialogResponseView response) {
         String townCode = responseText(response, "residence_name");
@@ -3953,9 +3966,6 @@ final class TownUiController implements Listener {
                 List.of(dialogText("common.application-member-select")),
                 "SELECT_INITIAL_MEMBER",
                 form.id() + ":1"),
-                InitialMemberDialogLayout.Action.PREVIOUS, button(Material.ARROW,
-                dialogText("common.previous-step"), List.of(),
-                "APPLICATION_MEMBERS_PREVIOUS", form.id().toString()),
                 InitialMemberDialogLayout.Action.COMPLETE, button(Material.WRITABLE_BOOK,
                 dialogText("application.complete"),
                 List.of(dialogText("common.application-member-save")),
@@ -3976,6 +3986,7 @@ final class TownUiController implements Listener {
                                 layout.actions().stream()
                                         .map(action -> dialogButton(player, items.get(action), session))
                                         .toList())
+                        .exitAction(returnButton(player, session, parent))
                         .columns(InitialMemberDialogLayout.COLUMNS)
                         .build(), parent);
     }
@@ -4035,15 +4046,6 @@ final class TownUiController implements Listener {
         applicationForms.put(player.getUniqueId(), updated);
         persistApplicationForm(player, updated, 3,
                 saved -> renderApplicationMembersDialog(player, updated));
-    }
-
-    private void membersPrevious(Player player, UUID formId) {
-        ApplicationFormSession form = requireApplicationForm(player, formId);
-        if (form == null) {
-            return;
-        }
-        persistApplicationForm(player, form, 3,
-                saved -> renderApplicationContentDialog(player, form));
     }
 
     private void renderTownProfileDialog(Player player, ApplicationFormSession form) {

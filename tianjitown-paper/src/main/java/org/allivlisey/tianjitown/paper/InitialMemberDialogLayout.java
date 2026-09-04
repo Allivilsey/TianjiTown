@@ -11,14 +11,13 @@ final class InitialMemberDialogLayout {
 
     static Layout layout() {
         return new Layout(
-                List.of(Action.FIRST_MEMBER, Action.SECOND_MEMBER, Action.PREVIOUS, Action.COMPLETE),
+                List.of(Action.FIRST_MEMBER, Action.SECOND_MEMBER, Action.COMPLETE),
                 List.of(Action.SAVE_DRAFT, Action.DISCARD_DRAFT));
     }
 
     enum Action {
         FIRST_MEMBER,
         SECOND_MEMBER,
-        PREVIOUS,
         COMPLETE,
         SAVE_DRAFT,
         DISCARD_DRAFT

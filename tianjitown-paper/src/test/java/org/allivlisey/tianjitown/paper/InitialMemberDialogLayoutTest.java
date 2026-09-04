@@ -15,7 +15,6 @@ class InitialMemberDialogLayoutTest {
         assertEquals(List.of(
                 InitialMemberDialogLayout.Action.FIRST_MEMBER,
                 InitialMemberDialogLayout.Action.SECOND_MEMBER,
-                InitialMemberDialogLayout.Action.PREVIOUS,
                 InitialMemberDialogLayout.Action.COMPLETE), layout.primaryActions());
         assertEquals(List.of(
                 InitialMemberDialogLayout.Action.SAVE_DRAFT,
@@ -23,7 +22,6 @@ class InitialMemberDialogLayoutTest {
         assertEquals(List.of(
                 InitialMemberDialogLayout.Action.FIRST_MEMBER,
                 InitialMemberDialogLayout.Action.SECOND_MEMBER,
-                InitialMemberDialogLayout.Action.PREVIOUS,
                 InitialMemberDialogLayout.Action.COMPLETE,
                 InitialMemberDialogLayout.Action.SAVE_DRAFT,
                 InitialMemberDialogLayout.Action.DISCARD_DRAFT), layout.actions());
