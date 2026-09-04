@@ -3,10 +3,6 @@ package org.allivlisey.tianjitown.paper;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import net.kyori.adventure.key.Key;
-import net.kyori.adventure.text.ObjectComponent;
-import net.kyori.adventure.text.object.SpriteObjectContents;
-
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
@@ -23,14 +19,13 @@ class RuleEditorDialogRendererTest {
     Path temporaryDirectory;
 
     @Test
-    void everyRuleHasOneAdjacentDeleteActionInATwoColumnRow() {
+    void everyRuleHasAnInlineDeleteActionInTheSharedSingleColumnLayout() {
         for (List<String> rules : List.of(
                 List.of("不得破坏公共设施", "请尊重其他居民"),
                 List.of("不得破坏公共设施", "请尊重其他居民", "长规则".repeat(80)))) {
             RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(TOWN_ID, 42,
                     rules);
 
-            assertEquals(2, layout.columns());
             assertEquals(rules.size(), layout.rows().size());
             for (int index = 0; index < layout.rows().size(); index++) {
                 RuleEditorDialogRenderer.Row row = layout.rows().get(index);
@@ -43,38 +38,21 @@ class RuleEditorDialogRendererTest {
     }
 
     @Test
-    void addAndDeleteControlsStayCompact() {
-        assertTrue(RuleEditorDialogRenderer.ADD_WIDTH < RuleEditorDialogRenderer.PREVIEW_WIDTH);
-        assertEquals(RuleEditorDialogRenderer.DELETE_SIZE, 20);
-        assertTrue(RuleEditorDialogRenderer.INLINE_RULE_WIDTH
-                > RuleEditorDialogRenderer.PREVIEW_WIDTH);
-        assertEquals(150, RuleEditorDialogRenderer.APPLICATION_ACTION_WIDTH);
+    void sharedEditorControlsUseTheExpectedWidths() {
+        assertEquals(400, RuleEditorDialogRenderer.INLINE_RULE_WIDTH);
+        assertEquals(150, RuleEditorDialogRenderer.SINGLE_COLUMN_ACTION_WIDTH);
     }
 
     @Test
-    void separatesTheAddAndDeletePageLayouts() {
+    void usesTheSameInlineRuleLayoutForBothEditors() {
         RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(TOWN_ID, 1,
                 List.of("规则一"));
 
         assertEquals(List.of(RuleEditorDialogRenderer.Section.HEADING,
-                RuleEditorDialogRenderer.Section.RULE_PREVIEW,
                 RuleEditorDialogRenderer.Section.RULE_INPUT,
                 RuleEditorDialogRenderer.Section.ADD_RULE,
-                RuleEditorDialogRenderer.Section.DELETE_PAGE,
-                RuleEditorDialogRenderer.Section.PAGE_ACTIONS), layout.addSections());
-        assertEquals(List.of(RuleEditorDialogRenderer.Section.HEADING,
-                RuleEditorDialogRenderer.Section.DELETE_RULE_ROWS,
-                RuleEditorDialogRenderer.Section.PAGE_ACTIONS), layout.deleteSections());
-    }
-
-    @Test
-    void usesTheVanillaBarrierItemSpriteFromTheItemsAtlas() {
-        assertEquals(Key.key("minecraft:items"), RuleEditorDialogRenderer.ITEM_ATLAS);
-        assertEquals(Key.key("minecraft:item/barrier"), RuleEditorDialogRenderer.BARRIER_SPRITE);
-        SpriteObjectContents icon = (SpriteObjectContents) ((ObjectComponent)
-                RuleEditorDialogRenderer.deleteIcon()).contents();
-        assertEquals(Key.key("minecraft:items"), icon.atlas());
-        assertEquals(Key.key("minecraft:item/barrier"), icon.sprite());
+                RuleEditorDialogRenderer.Section.INLINE_RULE_ROWS,
+                RuleEditorDialogRenderer.Section.PAGE_ACTIONS), layout.editorSections());
     }
 
     @Test

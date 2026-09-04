@@ -32,7 +32,7 @@ class TownDetailsMenuModelTest {
 
         assertEquals(List.of(
                 messages.rawText("dialog.common.residence-name", Map.of(
-                        "name", town.residenceName())),
+                        "residence", town.residenceName())),
                 messages.rawText("dialog.common.town-description", Map.of(
                         "description", description))), model.summaryLore());
         assertEquals(2, model.summaryLore().size());

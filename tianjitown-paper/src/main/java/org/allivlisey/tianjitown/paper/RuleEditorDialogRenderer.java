@@ -8,32 +8,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiFunction;
-import net.kyori.adventure.key.Key;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.object.ObjectContents;
-
 /** Stable layout model for a rule editor dialog. */
 final class RuleEditorDialogRenderer {
-    static final int COLUMNS = 2;
-    static final int PREVIEW_WIDTH = 250;
-    /** The client action-button height. Keeping this square prevents a rule row from reflowing. */
-    static final int DELETE_SIZE = 20;
-    static final int ADD_WIDTH = 130;
-    /** Keep the application form's primary actions visually aligned in its single-column flow. */
-    static final int APPLICATION_ACTION_WIDTH = 150;
-    /** Full-width rule actions used by the application editor's inline delete list. */
+    /** Keep primary actions visually aligned in the shared single-column editor flow. */
+    static final int SINGLE_COLUMN_ACTION_WIDTH = 150;
+    /** Full-width rule actions used by the shared inline-delete list. */
     static final int INLINE_RULE_WIDTH = 400;
-    /** Barrier is an item sprite; it is not present in the blocks atlas. */
-    static final Key ITEM_ATLAS = Key.key("minecraft:items");
-    static final Key BARRIER_SPRITE = Key.key("minecraft:item/barrier");
     private static final String DELETE_REQUEST_INVALID = "dialog.rules.delete-request-invalid";
 
     private RuleEditorDialogRenderer() {
-    }
-
-    /** The exact object component sent as the icon-only delete button label. */
-    static Component deleteIcon() {
-        return Component.object(ObjectContents.sprite(ITEM_ATLAS, BARRIER_SPRITE));
     }
 
     static Layout layout(UUID pageId, long pageVersion, List<String> rules) {
@@ -53,29 +36,18 @@ final class RuleEditorDialogRenderer {
             rows = List.copyOf(rows);
         }
 
-        int columns() {
-            return COLUMNS;
-        }
-
-        /** The fixed client order imposed by Paper's dialog model on the add page. */
-        List<Section> addSections() {
-            return List.of(Section.HEADING, Section.RULE_PREVIEW, Section.RULE_INPUT,
-                    Section.ADD_RULE, Section.DELETE_PAGE, Section.PAGE_ACTIONS);
-        }
-
-        /** The removal page has no input or unrelated actions. */
-        List<Section> deleteSections() {
-            return List.of(Section.HEADING, Section.DELETE_RULE_ROWS, Section.PAGE_ACTIONS);
+        /** Both town and application editors use this same single-column action order. */
+        List<Section> editorSections() {
+            return List.of(Section.HEADING, Section.RULE_INPUT, Section.ADD_RULE,
+                    Section.INLINE_RULE_ROWS, Section.PAGE_ACTIONS);
         }
     }
 
     enum Section {
         HEADING,
-        RULE_PREVIEW,
         RULE_INPUT,
         ADD_RULE,
-        DELETE_PAGE,
-        DELETE_RULE_ROWS,
+        INLINE_RULE_ROWS,
         PAGE_ACTIONS
     }
 

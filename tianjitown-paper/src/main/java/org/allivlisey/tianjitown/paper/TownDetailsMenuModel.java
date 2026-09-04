@@ -22,7 +22,7 @@ record TownDetailsMenuModel(List<String> summaryLore, RulesEntry rulesEntry) {
 
         return new TownDetailsMenuModel(List.of(
                 messages.rawText(RESIDENCE_NAME_KEY, Map.of(
-                        "name", safeText(town.residenceName()))),
+                        "residence", safeText(town.residenceName()))),
                 messages.rawText(DESCRIPTION_KEY, Map.of(
                         "description", safeText(town.profile().description())))),
                 new RulesEntry(10, "town.rules", "tooltip.town.rules", "TOWN_RULES",
