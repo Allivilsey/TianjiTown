@@ -566,6 +566,7 @@ chat:
 diagnostic:
   messages:
     required-message-missing: '缺少必需的消息配置: {key}'
+    placeholder-contract-mismatch: '消息占位符契约不匹配: {key}'
     required-vote-missing: '缺少必需的投票消息配置: {key}'
     range-format-missing: '缺少范围输入格式配置: {key}'
     range-format-unsupported: '{key} 只支持 %s 占位符，不支持浮点格式'

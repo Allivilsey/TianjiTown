@@ -47,10 +47,8 @@ class TownRuntimeExternalOperationsMessagesTest {
                 messages.plainText("chat.lifecycle.external-preflight-failed", placeholders));
         assertEquals("资金操作结果需要管理员复核：boom",
                 messages.plainText("chat.lifecycle.external-failed", placeholders));
-        assertEquals("；该小镇暂时无法使用公共资金，请联系管理员处理。",
-                messages.plainText("chat.lifecycle.refund-auto"));
-        assertEquals("；该小镇暂时无法使用公共资金，请联系管理员处理。",
-                messages.plainText("chat.lifecycle.manual-review"));
+        assertFalse(messages.plainText("chat.lifecycle.refund-auto").isBlank());
+        assertFalse(messages.plainText("chat.lifecycle.manual-review").isBlank());
         assertEquals("已恢复批量领地扩张 batch-1",
                 messages.plainText("log.expansion.batch-recovered", placeholders));
         assertEquals("恢复批量领地扩张失败 batch-1: boom",

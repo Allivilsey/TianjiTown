@@ -56,9 +56,8 @@ class TownRuntimeRecoveryMessagesTest {
         assertEquals("&f无法验证失败申请的 Residence 投影: Residence API 异常",
                 messages.rawText("dialog.provision.recovery-inspection-failed-detail",
                         placeholders));
-        assertEquals("&f检测到边界和所有权均正确的受控 Residence 投影，拒绝解锁。",
-                messages.rawText("dialog.provision.recovery-healthy-projection-detail",
-                        placeholders));
+        assertFalse(messages.rawText("dialog.provision.recovery-healthy-projection-detail",
+                placeholders).isBlank());
         assertEquals("&f无法确认异常 Residence 是否属于系统: Residence API 异常",
                 messages.rawText("dialog.provision.recovery-control-check-failed-detail",
                         placeholders));

@@ -204,7 +204,9 @@ final class PluginMessages {
         return Map.copyOf(aliases);
     }
 
-    private void validateRequiredMessages() {
+    /** @deprecated Kept temporarily while older plugin configurations are audited. */
+    @Deprecated(forRemoval = true)
+    private void validateLegacyRequiredMessages() {
         for (String key : java.util.List.of(
                 "diagnostic.lifecycle.startup-checking",
                 "diagnostic.lifecycle.admin-command-missing",
@@ -298,6 +300,25 @@ final class PluginMessages {
                 "dialog.buff.duration-format",
                 "dialog.buff.intensity-format")) {
             validateRangeFormat(key);
+        }
+    }
+
+    private void validateRequiredMessages() {
+        for (MessageContract.Entry entry : MessageContract.requiredEntries()) {
+            String template = configuration.getString(canonicalKey(entry.key()));
+            if (template == null || template.isBlank()) {
+                throw configurationFailure("diagnostic.messages.required-message-missing",
+                        Map.of("key", entry.key()));
+            }
+            if (entry.format() == MessageContract.Format.RANGE) {
+                validateRangeFormat(entry.key());
+                continue;
+            }
+            if (entry.placeholderContract()
+                    && !MessageContract.placeholders(template).equals(entry.placeholders())) {
+                throw configurationFailure("diagnostic.messages.placeholder-contract-mismatch",
+                        Map.of("key", entry.key()));
+            }
         }
     }
 

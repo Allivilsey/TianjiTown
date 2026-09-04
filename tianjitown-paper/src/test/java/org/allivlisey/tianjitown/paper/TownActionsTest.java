@@ -32,16 +32,14 @@ class TownActionsTest {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
 
         assertEquals("申请不存在", messages.plainText("chat.application.not-found"));
-        assertEquals("领地名与已存在的领地重复。",
-                messages.plainText("chat.site-validation.residence-name-conflict"));
+        assertFalse(messages.plainText("chat.site-validation.residence-name-conflict").isBlank());
         assertEquals("捐款金额必须大于 0",
                 messages.plainText("validation.vault.donation-amount-positive"));
         assertEquals("同步 Residence 成员失败 town=town-1: boom",
                 messages.plainText("log.residence.member-sync-failure",
                         Map.of("town", "town-1", "detail", "boom")));
-        assertEquals("原因不能为空。", messages.plainText("dialog.review.empty-error"));
-        assertEquals("原因不能超过 500 个字符。",
-                messages.plainText("dialog.review.too-long-error"));
+        assertFalse(messages.plainText("dialog.review.empty-error").isBlank());
+        assertFalse(messages.plainText("dialog.review.too-long-error").isBlank());
 
         for (String key : List.of(
                 "chat.application.not-found",

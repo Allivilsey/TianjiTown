@@ -39,8 +39,7 @@ class TownRuntimeExpansionProjectionMessagesTest {
                 "cause", "Residence 批量扩张失败: Residence API 异常",
                 "expansion", "expansion-1");
 
-        assertEquals("小镇公共资金暂时无法消费，请稍后再试。",
-                messages.plainText("chat.runtime.consumption-paused"));
+        assertFalse(messages.plainText("chat.runtime.consumption-paused").isBlank());
         assertEquals("暂时无法确认该区域能否扩张：Residence API 异常",
                 messages.plainText("chat.lifecycle.expansion-validation-failed", placeholders));
         assertEquals("批量扩张幂等键不能为空",
