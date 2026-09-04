@@ -4,6 +4,7 @@ import org.allivlisey.tianjitown.core.governance.GovernanceRules;
 import org.allivlisey.tianjitown.core.governance.VoteStatus;
 import org.allivlisey.tianjitown.core.governance.VoteType;
 import org.allivlisey.tianjitown.core.town.MemberRole;
+import org.allivlisey.tianjitown.storage.town.TownPlayerChange;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -153,9 +154,10 @@ public final class GovernanceRepository {
         });
     }
 
-    public void removeMemberByMayor(UUID townId, UUID targetId, UUID mayorId, String mayorName) {
+    public TownPlayerChange removeMemberByMayor(UUID townId, UUID targetId, UUID mayorId,
+                                                String mayorName) {
         requireWorkerThread();
-        transaction(connection -> {
+        return transaction(connection -> {
             MemberRole actorRole = memberRole(connection, townId, mayorId);
             if (!actorRole.isLeader()) {
                 throw new ConflictException("只有本镇镇长或副镇长可以移除成员");
@@ -172,7 +174,7 @@ public final class GovernanceRepository {
             cancelSubjectVotes(connection, townId, targetId, "目标成员已被管理组移除");
             audit(connection, mayorId, mayorName, "MEMBER_MAYOR_REMOVE", townId,
                     "镇长或副镇长通过治理界面移除成员", targetId.toString());
-            return null;
+            return new TownPlayerChange(townId, targetId, townName(connection, townId));
         });
     }
 
@@ -854,6 +856,19 @@ public final class GovernanceRepository {
                     throw new ConflictException("小镇不存在或已归档");
                 }
                 return readUuid(result, "mayor_uuid");
+            }
+        }
+    }
+
+    private static String townName(Connection connection, UUID townId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT name FROM towns WHERE town_id = ?")) {
+            statement.setBytes(1, uuid(townId));
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) {
+                    throw new ConflictException("小镇不存在");
+                }
+                return result.getString("name");
             }
         }
     }

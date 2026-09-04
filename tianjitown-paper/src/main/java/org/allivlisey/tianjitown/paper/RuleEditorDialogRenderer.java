@@ -9,19 +9,27 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import net.kyori.adventure.key.Key;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.object.ObjectContents;
 
 /** Stable layout model for a rule editor dialog. */
 final class RuleEditorDialogRenderer {
     static final int COLUMNS = 2;
     static final int PREVIEW_WIDTH = 250;
-    static final int DELETE_WIDTH = 28;
+    /** The client action-button height. Keeping this square prevents a rule row from reflowing. */
+    static final int DELETE_SIZE = 20;
     static final int ADD_WIDTH = 130;
-    static final Key BLOCK_ATLAS = Key.key("minecraft:blocks");
-    // Barrier has an item texture in the vanilla blocks atlas; there is no block/barrier sprite.
+    /** Barrier is an item sprite; it is not present in the blocks atlas. */
+    static final Key ITEM_ATLAS = Key.key("minecraft:items");
     static final Key BARRIER_SPRITE = Key.key("minecraft:item/barrier");
     private static final String DELETE_REQUEST_INVALID = "dialog.rules.delete-request-invalid";
 
     private RuleEditorDialogRenderer() {
+    }
+
+    /** The exact object component sent as the icon-only delete button label. */
+    static Component deleteIcon() {
+        return Component.object(ObjectContents.sprite(ITEM_ATLAS, BARRIER_SPRITE));
     }
 
     static Layout layout(UUID pageId, long pageVersion, List<String> rules) {
@@ -45,18 +53,25 @@ final class RuleEditorDialogRenderer {
             return COLUMNS;
         }
 
-        /** The fixed client order imposed by Paper's dialog model. */
-        List<Section> sections() {
-            return List.of(Section.HEADING, Section.RULE_INPUT,
-                    Section.RULE_BUTTON_ROWS, Section.ADD_RULE, Section.PAGE_ACTIONS);
+        /** The fixed client order imposed by Paper's dialog model on the add page. */
+        List<Section> addSections() {
+            return List.of(Section.HEADING, Section.RULE_PREVIEW, Section.RULE_INPUT,
+                    Section.ADD_RULE, Section.DELETE_PAGE, Section.PAGE_ACTIONS);
+        }
+
+        /** The removal page has no input or unrelated actions. */
+        List<Section> deleteSections() {
+            return List.of(Section.HEADING, Section.DELETE_RULE_ROWS, Section.PAGE_ACTIONS);
         }
     }
 
     enum Section {
         HEADING,
+        RULE_PREVIEW,
         RULE_INPUT,
-        RULE_BUTTON_ROWS,
         ADD_RULE,
+        DELETE_PAGE,
+        DELETE_RULE_ROWS,
         PAGE_ACTIONS
     }
 

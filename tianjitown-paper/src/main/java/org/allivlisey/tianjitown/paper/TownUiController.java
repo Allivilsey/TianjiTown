@@ -5,6 +5,7 @@ import org.allivlisey.tianjitown.core.application.ApplicationText;
 import org.allivlisey.tianjitown.core.economy.MoneyAmount;
 import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
 import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.land.ExpansionPricing;
 import org.allivlisey.tianjitown.core.town.MemberRole;
 import org.allivlisey.tianjitown.core.town.TownStatus;
 import org.allivlisey.tianjitown.core.governance.VoteType;
@@ -13,6 +14,7 @@ import org.allivlisey.tianjitown.storage.town.ApplicationFormDraft;
 import org.allivlisey.tianjitown.storage.town.InitialMemberConfirmation;
 import org.allivlisey.tianjitown.storage.town.JoinApplicationSnapshot;
 import org.allivlisey.tianjitown.storage.town.TownRepository;
+import org.allivlisey.tianjitown.storage.town.TownPlayerChange;
 import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.allivlisey.tianjitown.storage.governance.MemberGovernanceSnapshot;
 import org.allivlisey.tianjitown.storage.governance.TransferSnapshot;
@@ -35,7 +37,6 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import net.kyori.adventure.text.object.ObjectContents;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
@@ -891,10 +892,12 @@ final class TownUiController implements Listener {
                                 : dialogText("governance.applications"),
                         List.of(dialogText("tooltip.governance.applications")),
                         "JOIN_APPLICATIONS", town.id().toString())));
-                items.add(new MenuItem(16, button(Material.NAME_TAG, dialogText("governance.visitors"),
-                        List.of(dialogText("tooltip.governance.visitors"),
-                                dialogText("tooltip.governance.visitor-permission")),
-                        "VISITOR_CENTER", town.id().toString())));
+            }
+            VisitorManagementMenuModel visitorMenu = VisitorManagementMenuModel.create(
+                    plugin.messages(), governance, town.id());
+            if (visitorMenu.visible()) {
+                items.add(new MenuItem(16, button(Material.NAME_TAG, visitorMenu.label(),
+                        visitorMenu.lore(), visitorMenu.action(), visitorMenu.target())));
             }
             openMenu(player, 27, dialogText("governance.title"),
                     new DialogRoute("MAIN", null), items);
@@ -1151,8 +1154,13 @@ final class TownUiController implements Listener {
                                 : dialogText("tooltip.finance.buff-paused")),
                 "BUFF_SHOP", null)));
         if (account.role().equals("MAYOR") && runtime.consumptionEnabled()) {
+            long expansionPriceMinor = ExpansionPricing.price(
+                    runtime.economySettings().expansionCost(), runtime.settlement().scale())
+                    .minorUnits();
             items.add(new MenuItem(16, button(Material.FILLED_MAP, dialogText("finance.expansion"),
-                    List.of(dialogText("tooltip.finance.expansion")), "EXPANSION_MENU", null)));
+                    List.of(dialogText("tooltip.finance.expansion", Map.of("price",
+                            safeText(runtime.money(expansionPriceMinor))))),
+                    "EXPANSION_MENU", null)));
         }
         openMenu(player, 27, dialogText("common.finance-title"),
                 new DialogRoute("MAIN", null), items);
@@ -1440,9 +1448,8 @@ final class TownUiController implements Listener {
             List<MenuItem> items = new ArrayList<>();
             items.add(new MenuItem(4, button(Material.NETHER_STAR,
                     dialogText("buff.shop-summary-title"),
-                    List.of(runtime.buffs().buffShopEnabled()
-                            ? dialogText("buff.shop-enabled-hint")
-                            : dialogText("buff.shop-paused-hint")), null, null)));
+                    List.of(BuffDialogRenderer.shopHint(plugin.messages(),
+                            runtime.buffs().buffShopEnabled())), null, null)));
             int slot = 9;
             for (BuffDefinition definition : runtime.buffs().settings().buffs().values()) {
                 CommerceRepository.SelectedBuffQuote quote = view.quotes().get(definition.key());
@@ -1452,7 +1459,8 @@ final class TownUiController implements Listener {
                                 : Material.GLASS_BOTTLE,
                         (purchasable ? "§d" : "§7")
                                 + runtime.buffs().settings().label(definition.key())
-                                + (current == null ? "" : " · " + roman(current.level())),
+                                + (current == null ? "" : " · "
+                                + BuffDialogRenderer.roman(current.level())),
                         List.of(),
                         purchasable ? "BUFF_DURATIONS" : null, definition.key())));
             }
@@ -1470,17 +1478,13 @@ final class TownUiController implements Listener {
             return quote;
         }, quote -> {
             BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey);
+            BuffDialogRenderer.ActiveState current = quote.current() == null ? null
+                    : new BuffDialogRenderer.ActiveState(quote.current().level(),
+                            quote.current().expiresAt().toString());
             ItemStack summary = button(Material.POTION, "§d"
                             + runtime.buffs().settings().label(definition.key()),
-                    List.of(dialogText("buff.effect", Map.of(
-                                    "effect", buffEffectDescription(definition))),
-                            quote.current() == null
-                                    ? dialogText("buff.inactive")
-                                    : dialogText("buff.active", Map.of(
-                                            "level", roman(quote.current().level()),
-                                            "expires", quote.current().expiresAt())),
-                            dialogText("buff.intensity-hint"),
-                            dialogText("buff.price-hint")), null, null);
+                    BuffDialogRenderer.parameterSummaryLore(plugin.messages(),
+                            buffEffectDescription(definition), current), null, null);
             DialogInput duration = DialogInput.numberRange("buff_weeks", 420,
                     dialogComponent("buff.duration-label"),
                     dialogFormat("buff.duration-format"),
@@ -1526,7 +1530,7 @@ final class TownUiController implements Listener {
         }, quote -> openConfirmation(player, dialogText("buff.confirm-title"), "BUY_BUFF",
                 buffKey + ":" + weeks + ":" + level,
                 dialogText("buff.confirm-consequence", Map.of(
-                        "level", roman(level), "weeks", weeks,
+                        "level", BuffDialogRenderer.roman(level), "weeks", weeks,
                         "price", runtime.money(quote.priceMinor()))),
                 "BUFF_DURATIONS", buffKey));
     }
@@ -1542,7 +1546,7 @@ final class TownUiController implements Listener {
                     openNotice(player, dialogText("buff.success-title"),
                             dialogText("buff.success-message", Map.of(
                                     "name", runtime.buffs().settings().label(definition.key()),
-                                    "level", roman(purchase.buff().level()),
+                                    "level", BuffDialogRenderer.roman(purchase.buff().level()),
                                     "expires", purchase.buff().expiresAt(),
                                     "balance", runtime.money(purchase.balanceAfterMinor()))),
                             dialogText("common.back"), "FINANCE", "0");
@@ -1560,17 +1564,6 @@ final class TownUiController implements Listener {
                 "effect", definition.effectKey(),
                 "amount", (definition.amountPerLevel() >= 0 ? "+" : "")
                         + definition.amountPerLevel()));
-    }
-
-    private static String roman(int level) {
-        return switch (level) {
-            case 1 -> "I";
-            case 2 -> "II";
-            case 3 -> "III";
-            case 4 -> "IV";
-            case 5 -> "V";
-            default -> String.valueOf(level);
-        };
     }
 
     private String ledgerLabel(String type) {
@@ -1704,9 +1697,8 @@ final class TownUiController implements Listener {
                                 : Material.GRAY_CONCRETE,
                         confirmed ? dialogText("application.submit")
                                 : dialogText("application.waiting-members"),
-                        confirmed ? List.of(dialogText("tooltip.application.submit-ready"),
-                                        dialogText("tooltip.application.submit-fee"))
-                                : List.of(dialogText("tooltip.application.submit-waiting")),
+                        ApplicationSubmissionDialogRenderer.submitTooltipKeys(confirmed).stream()
+                                .map(this::dialogText).toList(),
                         confirmed ? "CONFIRM_SUBMIT" : null,
                         confirmed ? application.id().toString() : null)));
             }
@@ -1738,18 +1730,16 @@ final class TownUiController implements Listener {
                 runtime.governance().dashboard(player.getUniqueId()).orElse(null)), view -> {
             TownSnapshot town = view.town();
             MemberGovernanceSnapshot governance = view.governance();
+            TownDetailsMenuModel townDetails = TownDetailsMenuModel.create(
+                    plugin.messages(), town);
             List<MenuItem> items = new ArrayList<>();
             items.add(new MenuItem(4, button(Material.BELL, dialogText("common.town-name", Map.of(
                             "town", safeText(town.profile().name()))),
-                    List.of(dialogText("common.residence-name", Map.of(
-                                    "name", safeText(town.residenceName()))),
-                            dialogText("common.town-description", Map.of(
-                                    "description", safeText(town.profile().description()))),
-                            dialogText("town.rule-count", Map.of(
-                                    "count", town.profile().rules().size()))), null, null)));
-            items.add(new MenuItem(10, button(Material.WRITTEN_BOOK, dialogText("town.rules"),
-                    List.of(dialogText("tooltip.town.rules")), "TOWN_RULES",
-                    town.id().toString())));
+                    townDetails.summaryLore(), null, null)));
+            TownDetailsMenuModel.RulesEntry rulesEntry = townDetails.rulesEntry();
+            items.add(new MenuItem(rulesEntry.slot(), button(Material.WRITTEN_BOOK,
+                    dialogText(rulesEntry.labelKey()), List.of(dialogText(rulesEntry.tooltipKey())),
+                    rulesEntry.action(), rulesEntry.target())));
             items.add(new MenuItem(12, button(Material.PLAYER_HEAD, dialogText("town.members"),
                     List.of(dialogText("tooltip.town.members")), "TOWN_MEMBER_OVERVIEW",
                     town.id() + ":0")));
@@ -1764,11 +1754,7 @@ final class TownUiController implements Listener {
             }
             if (town.territory() != null) {
                 items.add(new MenuItem(16, button(Material.MAP, dialogText("town.territory"),
-                        List.of(dialogText("tooltip.town.territory"),
-                                dialogText("tooltip.town.territory-center", Map.of(
-                                        "x", town.territory().center().x(),
-                                        "z", town.territory().center().z())),
-                                dialogText("tooltip.town.territory-preview")),
+                        townTerritoryLore(plugin.messages(), town.territory()),
                         "PREVIEW_TOWN",
                         town.id().toString())));
             }
@@ -1783,30 +1769,41 @@ final class TownUiController implements Listener {
         });
     }
 
+    static List<String> townTerritoryLore(PluginMessages messages, InitialTerritory territory) {
+        Objects.requireNonNull(messages, "messages");
+        Objects.requireNonNull(territory, "territory");
+        return List.of(
+                messages.rawText("dialog.tooltip.town.territory-center", Map.of(
+                        "x", territory.center().x(), "z", territory.center().z())),
+                messages.rawText("dialog.tooltip.town.territory-preview"));
+    }
+
     private void openTownRules(Player player, UUID townId) {
         runtime.read(player, () -> runtime.repository().findTown(townId)
                 .orElseThrow(() -> new IllegalArgumentException(
-                        plugin.messages().plainText("chat.runtime.town-not-found"))), town -> {
-            Component content = dialogComponent("rules.current-heading", Map.of(
-                    "town", safeText(town.profile().name())));
-            if (town.profile().rules().isEmpty()) {
-                content = content.append(Component.newline()).append(Component.newline())
-                        .append(dialogComponent("rules.empty"));
-            } else {
-                for (int index = 0; index < town.profile().rules().size(); index++) {
-                    content = content.append(Component.newline()).append(Component.newline())
-                            .append(dialogComponent("rules.item", Map.of(
-                                    "index", index + 1,
-                                    "rule", safeText(town.profile().rules().get(index)))));
-                }
-            }
-            openDialogPage(player, dialogText("common.rules-title"), List.of(
-                            DialogBody.plainMessage(content, 420)),
-                    List.of(), DialogBase.DialogAfterAction.NONE,
-                    session -> DialogType.notice(returnButton(player, session,
-                            new DialogRoute("TOWN", town.id().toString()))),
-                    new DialogRoute("TOWN", town.id().toString()));
-        });
+                        plugin.messages().plainText("chat.runtime.town-not-found"))), town ->
+                openReadOnlyTownRules(player, town,
+                        new DialogRoute("TOWN", town.id().toString())));
+    }
+
+    private void openJoinTownRules(Player player, UUID townId) {
+        runtime.read(player, () -> runtime.repository().findTown(townId)
+                .filter(town -> town.status() == TownStatus.ACTIVE)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        plugin.messages().plainText("chat.runtime.town-unavailable"))), town ->
+                openReadOnlyTownRules(player, town,
+                        new DialogRoute("JOIN_TOWN", town.id().toString())));
+    }
+
+    private void openReadOnlyTownRules(Player player, TownSnapshot town, DialogRoute returnRoute) {
+        ReadOnlyRulesDialogRenderer.Layout layout = ReadOnlyRulesDialogRenderer.layout(
+                town.profile().name(), town.profile().rules(), returnRoute);
+        openDialogPage(player, dialogText("common.rules-title"), List.of(
+                        DialogBody.plainMessage(ReadOnlyRulesDialogRenderer.content(
+                                plugin.messages(), layout), ReadOnlyRulesDialogRenderer.CONTENT_WIDTH)),
+                List.of(), DialogBase.DialogAfterAction.NONE,
+                session -> DialogType.notice(returnButton(player, session, layout.returnRoute())),
+                layout.returnRoute());
     }
 
     private void openTownRuleEditor(Player player, UUID townId) {
@@ -1816,47 +1813,78 @@ final class TownUiController implements Listener {
             RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(town.id(),
                     town.version(), town.profile().rules());
             DialogRoute parent = new DialogRoute("TOWN", town.id().toString());
-            openRuleEditorDialog(player, dialogText("rules.edit-title"),
+            openRuleEditorAddDialog(player, dialogText("rules.edit-title"),
                     dialogComponent("rules.edit-heading", Map.of(
                             "town", safeText(town.profile().name()))),
                     layout, parent,
+                    new DialogRoute("EDIT_TOWN_RULE_DELETIONS", town.id().toString()),
                     response -> addTownRule(player, town.id(), town.version(), response),
-                    deleteTarget -> deleteTownRule(player, deleteTarget.encode()),
                     session -> List.of());
         });
     }
 
-    private void openRuleEditorDialog(Player player, String title, Component heading,
-                                      RuleEditorDialogRenderer.Layout layout, DialogRoute parent,
-                                      Consumer<DialogResponseView> addRule,
-                                      Consumer<RuleEditorDialogRenderer.DeleteTarget> deleteRule,
-                                      Function<UUID, List<ActionButton>> trailingActions) {
+    private void openTownRuleDeletionDialog(Player player, UUID townId) {
+        runtime.read(player, () -> runtime.repository().findTown(townId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        plugin.messages().plainText("chat.runtime.town-not-found"))), town -> {
+            RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(town.id(),
+                    town.version(), town.profile().rules());
+            openRuleEditorDeletionDialog(player, dialogText("rules.edit-title"),
+                    dialogComponent("rules.edit-heading", Map.of(
+                            "town", safeText(town.profile().name()))),
+                    layout, new DialogRoute("EDIT_TOWN_RULES", town.id().toString()),
+                    deleteTarget -> deleteTownRule(player, deleteTarget.encode()));
+        });
+    }
+
+    private void openRuleEditorAddDialog(Player player, String title, Component heading,
+                                         RuleEditorDialogRenderer.Layout layout, DialogRoute parent,
+                                         DialogRoute deletePage,
+                                         Consumer<DialogResponseView> addRule,
+                                         Function<UUID, List<ActionButton>> trailingActions) {
         DialogInput input = DialogInput.text("rule_text", 400,
                 dialogComponent("rules.input-label"), false, "", 300, null);
         openDialogPage(player, title, List.of(DialogBody.plainMessage(
                         ruleEditorPreview(heading, layout), 420)), List.of(input),
                 DialogBase.DialogAfterAction.NONE, session -> {
                     List<ActionButton> actions = new ArrayList<>();
-                    // A MultiAction dialog lays these controls out in row order. Keep each rule
-                    // preview and its delete action next to one another rather than leaving the
-                    // delete buttons to be repacked into an unrelated grid.
-                    for (RuleEditorDialogRenderer.Row row : layout.rows()) {
-                        actions.add(ActionButton.create(dialogComponent("rules.item", Map.of(
-                                        "index", row.displayIndex(), "rule", safeText(row.rule()))),
-                                null, RuleEditorDialogRenderer.PREVIEW_WIDTH, null));
-                        actions.add(ActionButton.create(Component.object(
-                                        ObjectContents.sprite(RuleEditorDialogRenderer.BLOCK_ATLAS,
-                                                RuleEditorDialogRenderer.BARRIER_SPRITE)),
-                                dialogComponent("rules.delete-tooltip", Map.of("index",
-                                        row.displayIndex())),
-                                RuleEditorDialogRenderer.DELETE_WIDTH,
-                                dialogAction(player, session,
-                                        response -> deleteRule.accept(row.deleteTarget()))));
-                    }
                     actions.add(ActionButton.create(dialogComponent("rules.add"),
                             dialogComponent("rules.add-tooltip"), RuleEditorDialogRenderer.ADD_WIDTH,
                             dialogAction(player, session, addRule)));
                     actions.addAll(trailingActions.apply(session));
+                    actions.add(ActionButton.create(dialogComponent("rules.delete-page"),
+                            dialogComponent("rules.delete-page-tooltip"),
+                            RuleEditorDialogRenderer.ADD_WIDTH,
+                            dialogAction(player, session, deletePage.action(), deletePage.target())));
+                    return DialogType.multiAction(actions)
+                            .exitAction(returnButton(player, session, parent))
+                            .columns(RuleEditorDialogRenderer.COLUMNS).build();
+                }, parent);
+    }
+
+    private void openRuleEditorDeletionDialog(Player player, String title, Component heading,
+                                               RuleEditorDialogRenderer.Layout layout,
+                                               DialogRoute parent,
+                                               Consumer<RuleEditorDialogRenderer.DeleteTarget> deleteRule) {
+        Component deleteHeading = heading.append(Component.newline()).append(Component.newline())
+                .append(dialogComponent("rules.delete-page-guidance"));
+        openDialogPage(player, title, List.of(DialogBody.plainMessage(deleteHeading, 420)), List.of(),
+                DialogBase.DialogAfterAction.NONE, session -> {
+                    List<ActionButton> actions = new ArrayList<>();
+                    // The two columns are emitted as complete pairs, so even a wrapped rule label
+                    // remains coupled to its own square barrier button.
+                    for (RuleEditorDialogRenderer.Row row : layout.rows()) {
+                        actions.add(ActionButton.create(dialogComponent("rules.item", Map.of(
+                                        "index", row.displayIndex(), "rule", safeText(row.rule()))),
+                                dialogComponent("rules.preview-tooltip"),
+                                RuleEditorDialogRenderer.PREVIEW_WIDTH, null));
+                        actions.add(ActionButton.create(RuleEditorDialogRenderer.deleteIcon(),
+                                dialogComponent("rules.delete-tooltip", Map.of("index",
+                                        row.displayIndex())),
+                                RuleEditorDialogRenderer.DELETE_SIZE,
+                                dialogAction(player, session,
+                                        response -> deleteRule.accept(row.deleteTarget()))));
+                    }
                     return DialogType.multiAction(actions)
                             .exitAction(returnButton(player, session, parent))
                             .columns(RuleEditorDialogRenderer.COLUMNS).build();
@@ -1864,11 +1892,17 @@ final class TownUiController implements Listener {
     }
 
     private Component ruleEditorPreview(Component heading, RuleEditorDialogRenderer.Layout layout) {
+        Component preview = heading;
         if (layout.rows().isEmpty()) {
-            return heading.append(Component.newline()).append(Component.newline())
+            return preview.append(Component.newline()).append(Component.newline())
                     .append(dialogComponent("rules.empty"));
         }
-        return heading;
+        for (RuleEditorDialogRenderer.Row row : layout.rows()) {
+            preview = preview.append(Component.newline()).append(Component.newline())
+                    .append(dialogComponent("rules.item", Map.of("index", row.displayIndex(),
+                            "rule", safeText(row.rule()))));
+        }
+        return preview;
     }
 
     private void addTownRule(Player player, UUID townId, long pageVersion,
@@ -2320,23 +2354,23 @@ final class TownUiController implements Listener {
                 .filter(town -> town.status() == TownStatus.ACTIVE)
                 .orElseThrow(() -> new IllegalArgumentException(
                         plugin.messages().plainText("chat.runtime.town-unavailable"))), town -> {
+            JoinTownMenuModel joinTown = JoinTownMenuModel.create(plugin.messages(), town);
+            JoinTownMenuModel.Entry rulesEntry = joinTown.rulesEntry();
+            JoinTownMenuModel.Entry applyEntry = joinTown.applyEntry();
             List<MenuItem> items = List.of(
                     new MenuItem(4, button(Material.BELL,
                             dialogText("common.town-name", Map.of(
                                     "town", safeText(town.profile().name()))),
-                            List.of(dialogText("common.town-code", Map.of(
-                                            "code", safeText(town.profile().residenceName()))),
-                                    dialogText("common.town-description", Map.of(
-                                            "description", safeText(town.profile().description()))),
-                                    dialogText("common.rules", Map.of("rules", town.profile().rules()
-                                            .stream().map(TownUiController::safeText)
-                                            .collect(java.util.stream.Collectors.joining(" | "))))),
+                            joinTown.summaryLore(),
                             null, null)),
-                    new MenuItem(13, button(Material.LIME_CONCRETE,
-                            dialogText("join.apply"),
-                            List.of(dialogText("tooltip.join.submit-expiry"),
-                                    dialogText("common.join-application-limit")),
-                            "CONFIRM_APPLY_JOIN", town.id().toString())));
+                    new MenuItem(rulesEntry.slot(), button(Material.WRITTEN_BOOK,
+                            dialogText(rulesEntry.labelKey()), rulesEntry.loreKeys().stream()
+                                    .map(this::dialogText).toList(), rulesEntry.action(),
+                            rulesEntry.target())),
+                    new MenuItem(applyEntry.slot(), button(Material.LIME_CONCRETE,
+                            dialogText(applyEntry.labelKey()), applyEntry.loreKeys().stream()
+                                    .map(this::dialogText).toList(), applyEntry.action(),
+                            applyEntry.target())));
             openMenu(player, 27, dialogText("join.town-title", Map.of(
                             "town", safeText(town.profile().name()))),
                     new DialogRoute("JOIN_TOWNS", null), items);
@@ -2592,6 +2626,8 @@ final class TownUiController implements Listener {
                         UUID.fromString(target), 1);
                 case "APPLICATION_CONTENT_FORM" -> renderApplicationFormStage(player,
                         UUID.fromString(target), 2);
+                case "APPLICATION_CONTENT_RULE_DELETIONS" -> renderApplicationRuleDeletionDialog(
+                        player, UUID.fromString(target));
                 case "APPLICATION_MEMBERS_FORM" -> renderApplicationFormStage(player,
                         UUID.fromString(target), 3);
                 case "APPLICATION_MEMBERS_PREVIOUS" -> membersPrevious(player,
@@ -2619,7 +2655,8 @@ final class TownUiController implements Listener {
                 case "PREVIEW_SITE" -> previewApplication(player, UUID.fromString(target));
                 case "CONFIRM_SUBMIT" -> openConfirmation(player,
                         dialogText("confirmation.submit-application-title"), "SUBMIT", target,
-                        dialogText("confirmation.submit-application-consequence"),
+                        ApplicationSubmissionDialogRenderer.confirmationConsequence(
+                                plugin.messages(), runtime.money(runtime.applicationFeeMinor())),
                         "APPLICATION", target);
                 case "SUBMIT" -> submit(player, UUID.fromString(target));
                 case "CONFIRM_CANCEL" -> openConfirmation(player,
@@ -2629,6 +2666,7 @@ final class TownUiController implements Listener {
                 case "CANCEL" -> cancel(player, UUID.fromString(target));
                 case "TOWN" -> openTown(player, UUID.fromString(target));
                 case "TOWN_RULES" -> openTownRules(player, UUID.fromString(target));
+                case "JOIN_TOWN_RULES" -> openJoinTownRules(player, UUID.fromString(target));
                 case "TOWN_MEMBER_OVERVIEW" -> {
                     String[] parts = target.split(":");
                     openTownMemberOverview(player, UUID.fromString(parts[0]),
@@ -2791,6 +2829,8 @@ final class TownUiController implements Listener {
                         UUID.fromString(target));
                 case "EDIT_TOWN_RULES" -> openTownRuleEditor(player,
                         UUID.fromString(target));
+                case "EDIT_TOWN_RULE_DELETIONS" -> openTownRuleDeletionDialog(player,
+                        UUID.fromString(target));
                 case "DELETE_TOWN_RULE" -> deleteTownRule(player, target);
                 case "CONFIRM_LEAVE" -> openConfirmation(player,
                         dialogText("confirmation.leave-town-title"), "LEAVE", target,
@@ -2852,14 +2892,15 @@ final class TownUiController implements Listener {
         UUID playerId = UUID.fromString(parts[1]);
         int page = Integer.parseInt(parts[2]);
         actions.kickMember(mayor, townId, playerId, outcome ->
-                handleOutcome(mayor, outcome, changedTown -> {
-            Player removed = Bukkit.getPlayer(playerId);
-            if (removed != null) {
-                plugin.messages().send(removed, "chat.notification.member-removed");
+                handleOutcome(mayor, outcome, change -> {
+            Player removed = Bukkit.getPlayer(change.playerId());
+            if (removed != null && removed.isOnline()) {
+                plugin.messages().send(removed, "chat.notification.member-removed",
+                        townNotificationPlaceholders(change));
             }
             openNotice(mayor, dialogText("notice.member-removed-title"),
                     dialogText("notice.member-removed-message"),
-                    dialogText("common.back"), "MEMBERS", changedTown + ":" + page);
+                    dialogText("common.back"), "MEMBERS", change.townId() + ":" + page);
         }));
     }
 
@@ -2868,16 +2909,17 @@ final class TownUiController implements Listener {
         UUID townId = UUID.fromString(parts[0]);
         UUID playerId = UUID.fromString(parts[1]);
         actions.addVisitor(manager, townId, playerId, outcome ->
-                handleOutcome(manager, outcome, visitor -> {
-            Player invited = Bukkit.getPlayer(playerId);
-            if (invited != null) {
-                plugin.messages().send(invited, "chat.notification.visitor-added");
+                handleOutcome(manager, outcome, change -> {
+            Player invited = Bukkit.getPlayer(change.playerId());
+            if (invited != null && invited.isOnline()) {
+                plugin.messages().send(invited, "chat.notification.visitor-added",
+                        townNotificationPlaceholders(change));
                 playSound(invited, Sound.BLOCK_NOTE_BLOCK_PLING);
             }
             openNotice(manager, dialogText("notice.visitor-added-title"),
                     dialogText("notice.visitor-added-message", Map.of(
-                            "player", displayName(playerId))),
-                    dialogText("common.back"), "VISITOR_LIST", townId + ":0");
+                            "player", displayName(change.playerId()))),
+                    dialogText("common.back"), "VISITOR_LIST", change.townId() + ":0");
         }));
     }
 
@@ -2887,15 +2929,16 @@ final class TownUiController implements Listener {
         UUID playerId = UUID.fromString(parts[1]);
         int page = Integer.parseInt(parts[2]);
         actions.removeVisitor(manager, townId, playerId, outcome ->
-                handleOutcome(manager, outcome, removed -> {
-            Player visitor = Bukkit.getPlayer(playerId);
-            if (visitor != null) {
-                plugin.messages().send(visitor, "chat.notification.visitor-removed");
+                handleOutcome(manager, outcome, change -> {
+            Player visitor = Bukkit.getPlayer(change.playerId());
+            if (visitor != null && visitor.isOnline()) {
+                plugin.messages().send(visitor, "chat.notification.visitor-removed",
+                        townNotificationPlaceholders(change));
             }
             openNotice(manager, dialogText("notice.visitor-removed-title"),
                     dialogText("notice.visitor-removed-message", Map.of(
-                            "player", displayName(playerId))),
-                    dialogText("common.back"), "VISITOR_LIST", townId + ":" + page);
+                            "player", displayName(change.playerId()))),
+                    dialogText("common.back"), "VISITOR_LIST", change.townId() + ":" + page);
         }));
     }
 
@@ -3743,9 +3786,10 @@ final class TownUiController implements Listener {
         Component guidance = dialogComponent("application.content-heading")
                 .append(Component.newline())
                 .append(dialogComponent("application.content-guidance"));
-        openRuleEditorDialog(player, dialogText("application.title"), guidance, layout, parent,
+        openRuleEditorAddDialog(player, dialogText("application.title"), guidance, layout, parent,
+                new DialogRoute("APPLICATION_CONTENT_RULE_DELETIONS", form.id().toString()),
                 response -> addApplicationRule(player, form.id(), response),
-                deleteTarget -> deleteApplicationRule(player, deleteTarget), session -> List.of(
+                session -> List.of(
                         ActionButton.create(dialogComponent("common.previous-step"), null, 150,
                                 dialogAction(player, session,
                                         response -> saveContentAndGoBack(player, form.id()))),
@@ -3757,6 +3801,21 @@ final class TownUiController implements Listener {
                                 dialogAction(player, session,
                                         response -> saveApplicationStage(player, form.id(), 2,
                                                 response)))));
+    }
+
+    private void renderApplicationRuleDeletionDialog(Player player, UUID formId) {
+        ApplicationFormSession form = requireApplicationForm(player, formId);
+        if (form == null) {
+            return;
+        }
+        RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(form.id(),
+                form.version(), form.text().rules());
+        Component heading = dialogComponent("application.content-heading")
+                .append(Component.newline())
+                .append(dialogComponent("application.content-guidance"));
+        openRuleEditorDeletionDialog(player, dialogText("application.title"), heading, layout,
+                new DialogRoute("APPLICATION_CONTENT_FORM", form.id().toString()),
+                deleteTarget -> deleteApplicationRule(player, deleteTarget));
     }
 
     private void addApplicationRule(Player player, UUID formId, DialogResponseView response) {
@@ -3794,6 +3853,12 @@ final class TownUiController implements Listener {
                 || !form.text().rules().get(deleteTarget.ruleIndex())
                 .equals(deleteTarget.expectedRule())) {
             openApplicationRuleEditorRefreshNotice(player, form.id());
+            return;
+        }
+        if (form.text().rules().size() <= 1) {
+            openNotice(player, dialogText("rules.invalid-title"),
+                    dialogText("rules.minimum-one"), dialogText("common.back"),
+                    "APPLICATION_CONTENT_RULE_DELETIONS", form.id().toString());
             return;
         }
         List<String> rules = new ArrayList<>(form.text().rules());
@@ -4459,6 +4524,11 @@ final class TownUiController implements Listener {
 
     private String memberRoleText(MemberRole role) {
         return dialogText(MemberRoleText.messageKey(role));
+    }
+
+    static Map<String, String> townNotificationPlaceholders(TownPlayerChange change) {
+        Objects.requireNonNull(change, "change");
+        return Map.of("town", safeText(change.townName()));
     }
 
     private static boolean hasNext(List<?> values, int page, int pageSize) {

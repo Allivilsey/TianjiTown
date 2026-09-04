@@ -4,6 +4,6 @@
 4. 移除小镇详情中的规则数显示，改为显示小镇简介。
 5. 经济数值后似乎遗漏了经济插件配置的经济单位？也有可能是叫货币名称。
 6. 移除购买公共buff提示“intensity-hint: '&7强度使用罗马数字：I / II / III / IV / V'”。
-7. 访客管理按钮显示缺乏消息配置“dialog.tooltip.goverment.visitor-permission”
+7. 访客管理按钮显示缺乏消息配置“dialog.tooltip.governance.visitor-permission”
 8. “member-removed: '&c你已被移出当前小镇'/visitor-added: '&a你已被加入一个小镇的访客名单'/visitor-removed: '&e你已被移出一个小镇的访客名单'”为这三条消息添加小镇名称。
 9. 申请加入界面的规则显示没有与其他的只读规则显示设计同步。

@@ -433,11 +433,11 @@ final class TownRuntime {
                     EconomyRepository.Reconciliation reconciliation =
                             finance.reconcileSettlement(externalBalance);
                     if (!reconciliation.healthy()) {
-                        plugin.getLogger().severe(plugin.messages().plainText(
+                        plugin.runMain(() -> plugin.getLogger().severe(plugin.messages().plainText(
                                 DONATION_SETTLEMENT_SHORTFALL, Map.of(
                                         "operation", operation.operationId(),
-                                        "external", reconciliation.externalBalanceMinor(),
-                                        "required", reconciliation.requiredMinor())));
+                                        "external", money(reconciliation.externalBalanceMinor()),
+                                        "required", money(reconciliation.requiredMinor())))));
                     }
                 } catch (RuntimeException exception) {
                     plugin.getLogger().severe(plugin.messages().plainText(
@@ -467,6 +467,14 @@ final class TownRuntime {
 
     VaultSettlementService settlement() {
         return settlement;
+    }
+
+    /**
+     * Returns the default application fee in the settlement provider's minor units. The approval
+     * flow and the submission confirmation use this same conversion.
+     */
+    long applicationFeeMinor() {
+        return APPLICATION_FEE.movePointRight(settlement.scale()).longValueExact();
     }
 
     BuffRuntime buffs() {
@@ -797,8 +805,7 @@ final class TownRuntime {
                         .orElseThrow(ApplicationNotFoundException::new);
                 long feeMinor = application.applicationFeeMinor() > 0
                         ? application.applicationFeeMinor()
-                        : APPLICATION_FEE.movePointRight(settlement.scale())
-                        .longValueExact();
+                        : applicationFeeMinor();
                 Runnable start = () -> {
                     try {
                         chargeAndBeginProvision(sender, application, reviewerId, reviewerName,
@@ -1530,9 +1537,10 @@ final class TownRuntime {
             try {
                 EconomyRepository.Reconciliation result = finance.reconcileSettlement(external);
                 if (!result.healthy()) {
-                    plugin.getLogger().severe(plugin.messages().plainText(SETTLEMENT_SHORTFALL,
-                            Map.of("external", money(result.externalBalanceMinor()),
-                                    "required", money(result.requiredMinor()))));
+                    plugin.runMain(() -> plugin.getLogger().severe(plugin.messages().plainText(
+                            SETTLEMENT_SHORTFALL, Map.of(
+                                    "external", money(result.externalBalanceMinor()),
+                                    "required", money(result.requiredMinor())))));
                 }
             } catch (RuntimeException exception) {
                 plugin.getLogger().severe(plugin.messages().plainText(
@@ -1756,7 +1764,7 @@ final class TownRuntime {
     }
 
     String money(long minorUnits) {
-        return java.math.BigDecimal.valueOf(minorUnits, settlement.scale()).toPlainString();
+        return settlement.formatMinor(minorUnits);
     }
 
     static String percent(int basisPoints) {

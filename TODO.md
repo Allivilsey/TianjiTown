@@ -4,62 +4,64 @@
 
 ## 1. 修复建镇申请第 2 步的规则编辑器
 
-- [ ] 重构 `TownUiController.openRuleEditorDialog(...)` 的布局。当前规则预览被实现为 `MultiAction` 动作按钮，而 Paper Dialog 固定先渲染正文、再渲染 `inputs`、最后渲染动作，因此 `rule_text` 必然出现在规则行之前。将“新增规则”和“删除规则”拆为两个职责清晰的 Dialog：新增页按“说明 → 编号规则预览 → 输入框 → 添加规则 → 上一步/下一步/保存草稿”排列；删除页只显示“规则预览 + 对应删除按钮”，从而不再依赖无法实现的输入与动作交错顺序。
-- [ ] 将删除按钮宽度调整为与客户端默认按钮高度一致的方形尺寸，不再使用当前 `DELETE_WIDTH = 28` 的横向按钮；每条规则与自己的删除按钮保持同一行，长规则不能把按钮挤到下一行或关联到其他规则。
-- [ ] 重新核对目标客户端实际加载的 Sprite atlas/key，并以客户端能稳定显示的屏障图标作为删除按钮正文；若服务端资源包覆盖了原版 atlas，则提供插件自有命名空间的屏障 Sprite，避免继续显示缺失材质。tooltip 保留“删除第 N 条规则”，按钮正文不显示冗余文字。
-- [ ] 保留现有 `pageVersion + ruleIndex + expectedRule` 的过期页面校验，以及 1～50 条规则、单条长度和草稿持久化约束；布局调整不能引入误删或重复添加。
-- [ ] 更新 `RuleEditorDialogRendererTest`：断言新增页的逻辑顺序、删除按钮方形宽度、每条规则对应唯一删除目标，以及最终序列化组件中的 atlas/sprite key；在客户端分别用 0、1、多条和 50 条规则人工验收位置、图标、添加与删除刷新行为。
+- [x] 重构 `TownUiController.openRuleEditorDialog(...)` 的布局。当前规则预览被实现为 `MultiAction` 动作按钮，而 Paper Dialog 固定先渲染正文、再渲染 `inputs`、最后渲染动作，因此 `rule_text` 必然出现在规则行之前。将“新增规则”和“删除规则”拆为两个职责清晰的 Dialog：新增页按“说明 → 编号规则预览 → 输入框 → 添加规则 → 上一步/下一步/保存草稿”排列；删除页只显示“规则预览 + 对应删除按钮”，从而不再依赖无法实现的输入与动作交错顺序。
+- [x] 将删除按钮宽度调整为与客户端默认按钮高度一致的方形尺寸，不再使用当前 `DELETE_WIDTH = 28` 的横向按钮；每条规则与自己的删除按钮保持同一行，长规则不能把按钮挤到下一行或关联到其他规则。
+- [x] 重新核对目标客户端实际加载的 Sprite atlas/key，并以客户端能稳定显示的屏障图标作为删除按钮正文；若服务端资源包覆盖了原版 atlas，则提供插件自有命名空间的屏障 Sprite，避免继续显示缺失材质。tooltip 保留“删除第 N 条规则”，按钮正文不显示冗余文字。
+- [x] 保留现有 `pageVersion + ruleIndex + expectedRule` 的过期页面校验，以及 1～50 条规则、单条长度和草稿持久化约束；布局调整不能引入误删或重复添加。
+- [x] 更新 `RuleEditorDialogRendererTest`：断言新增页的逻辑顺序、删除按钮方形宽度、每条规则对应唯一删除目标，以及最终序列化组件中的 atlas/sprite key。
+- [ ] 在客户端分别用 0、1、多条和 50 条规则人工验收位置、图标、添加与删除刷新行为。
 
 ## 2. 将 2000 申请费说明移到提交确认页
 
-- [ ] 从申请摘要页“提交申请”按钮的 tooltip 中移除 `dialog.tooltip.application.submit-fee`，只保留“进入确认页面”。
-- [ ] 将 `dialog.confirmation.submit-application-consequence` 改为同时说明“提交后等待管理员审核”和“批准时从申请人余额扣除 {amount}”；由 `TownUiController` 传入格式化后的申请费。
-- [ ] 不在 `messages.yml` 中继续硬编码 `2000`。从 `TownRuntime.APPLICATION_FEE`（或抽出的统一申请费设置）生成 `{amount}`，确保实际扣款、文档和界面金额不会漂移；金额同时采用第 5 条的统一货币格式。
-- [ ] 增加消息与界面测试：摘要页不再出现申请费，确认页恰好出现一次，显示金额与实际批准扣款一致。
+- [x] 从申请摘要页“提交申请”按钮的 tooltip 中移除 `dialog.tooltip.application.submit-fee`，只保留“进入确认页面”。
+- [x] 将 `dialog.confirmation.submit-application-consequence` 改为同时说明“提交后等待管理员审核”和“批准时从申请人余额扣除 {amount}”；由 `TownUiController` 传入格式化后的申请费。
+- [x] 不在 `messages.yml` 中继续硬编码 `2000`。从 `TownRuntime.APPLICATION_FEE`（或抽出的统一申请费设置）生成 `{amount}`，确保实际扣款、文档和界面金额不会漂移；金额同时采用第 5 条的统一货币格式。
+- [x] 增加消息与界面测试：摘要页不再出现申请费，确认页恰好出现一次，显示金额与实际批准扣款一致。
 
 ## 3. 移除小镇领地按钮的冗余提示
 
-- [ ] 从小镇详情的领地按钮 lore 中删除 `dialog.tooltip.town.territory`，只保留初始中心坐标和“点击传送至小镇领地”。
-- [ ] 删除 `messages.yml` 中 `tooltip.town.territory: '&7包含初始领地与已扩张区域'`，并检查没有其他代码继续解析该键。
-- [ ] 用消息键覆盖测试和客户端检查确认按钮不显示旧提示，坐标与传送行为不受影响。
+- [x] 从小镇详情的领地按钮 lore 中删除 `dialog.tooltip.town.territory`，只保留初始中心坐标和“点击传送至小镇领地”。
+- [x] 删除 `messages.yml` 中 `tooltip.town.territory: '&7包含初始领地与已扩张区域'`，并检查没有其他代码继续解析该键。
+- [x] 用消息键覆盖测试确认按钮不显示旧提示，坐标与传送行为不受影响。
+- [ ] 在目标 Paper 服务端与实际客户端人工确认领地按钮的最终显示。
 
 ## 4. 小镇详情用简介替代规则数
 
-- [ ] 从 `TownUiController.openTown(...)` 的小镇信息卡中移除 `dialog.town.rule-count` 及 `rules().size()` 占位符，只保留领地名和已有的 `dialog.common.town-description` 简介行。
-- [ ] 删除不再使用的 `dialog.town.rule-count` 消息键；空简介若业务校验允许存在，则统一显示已有空值占位，而不是重新回退为规则数。
-- [ ] 增加界面模型测试，断言信息卡显示完整小镇简介且不出现“规则数”；“阅读小镇规则”入口保持不变。
+- [x] 从 `TownUiController.openTown(...)` 的小镇信息卡中移除 `dialog.town.rule-count` 及 `rules().size()` 占位符，只保留领地名和已有的 `dialog.common.town-description` 简介行。
+- [x] 删除不再使用的 `dialog.town.rule-count` 消息键；空简介若业务校验允许存在，则统一显示已有空值占位，而不是重新回退为规则数。
+- [x] 增加界面模型测试，断言信息卡显示完整小镇简介且不出现“规则数”；“阅读小镇规则”入口保持不变。
 
 ## 5. 为所有玩家可见的经济数值补充经济插件货币格式
 
-- [ ] 将 `TownRuntime.money(long)` 从 `BigDecimal.toPlainString()` 改为统一的 Vault 金额格式入口。优先使用当前 `Economy` 提供器的 `format(double)`，因为它应包含该经济插件配置的货币符号/名称；返回空值或调用失败时，回退为现有精度数字加 `currencyNameSingular()/currencyNamePlural()`，避免只显示裸数字。
-- [ ] 在 `VaultSettlementService` 中封装安全的金额格式化和回退逻辑，并明确线程约束；不得在异步数据库线程直接调用不保证线程安全的经济提供器。提供器不可用时仍应显示确定的数字，而不是让页面打开失败。
-- [ ] 所有余额、申请费、捐款、账本、税收补贴、扩张价格、Buff 价格、退款及管理员资金命令继续只调用这个统一入口；同时把 tooltip 中硬编码的 `2000`、`3000` 改为动态金额占位符。
-- [ ] 使用模拟 Vault 提供器测试：自定义前缀/后缀格式、单复数货币名称、0/1/小数/负数、空名称和提供器异常；客户端抽查所有资金页面，确认没有重复单位或仍为裸数字的金额。
+- [x] 将 `TownRuntime.money(long)` 从 `BigDecimal.toPlainString()` 改为统一的 Vault 金额格式入口。优先使用当前 `Economy` 提供器的 `format(double)`，因为它应包含该经济插件配置的货币符号/名称；返回空值或调用失败时，回退为现有精度数字加 `currencyNameSingular()/currencyNamePlural()`，避免只显示裸数字。
+- [x] 在 `VaultSettlementService` 中封装安全的金额格式化和回退逻辑，并明确线程约束；不得在异步数据库线程直接调用不保证线程安全的经济提供器。提供器不可用时仍应显示确定的数字，而不是让页面打开失败。
+- [x] 所有余额、申请费、捐款、账本、税收补贴、扩张价格、Buff 价格、退款及管理员资金命令继续只调用这个统一入口；同时把 tooltip 中硬编码的 `2000`、`3000` 改为动态金额占位符。
+- [ ] 使用模拟 Vault 提供器测试：自定义前缀/后缀格式、单复数货币名称、0/1/小数/负数、空名称和提供器异常；客户端抽查所有资金页面，确认没有重复单位或仍为裸数字的金额。（自动化模拟已覆盖；仍待实际客户端抽查。）
 
 ## 6. 移除公共 Buff 的罗马数字强度提示
 
-- [ ] 从购买公共 Buff 参数页删除 `dialogText("buff.intensity-hint")`，只保留当前状态与下一步价格提示。
-- [ ] 删除 `messages.yml` 中 `dialog.buff.intensity-hint`；实际强度值仍按当前 `roman(level)` 显示，不改变滑块范围和购买计算。
-- [ ] 更新 Buff 页面消息测试，并在启用/暂停商店、已有/没有生效 Buff 的场景中确认旧提示均不再出现。
+- [x] 从购买公共 Buff 参数页删除 `dialogText("buff.intensity-hint")`，只保留当前状态与下一步价格提示。
+- [x] 删除 `messages.yml` 中 `dialog.buff.intensity-hint`；实际强度值仍按当前 `roman(level)` 显示，不改变滑块范围和购买计算。
+- [x] 更新 Buff 页面消息测试，并在启用/暂停商店、已有/没有生效 Buff 的场景中确认旧提示均不再出现。
 
 ## 7. 补齐访客管理按钮的权限提示消息
 
-- [ ] 在 `messages.yml` 的 `dialog.tooltip.governance` 下新增 `visitor-permission`，建议文案为 `&7仅镇长和副镇长可管理访客`，与 `TownUiController` 当前读取的 `tooltip.governance.visitor-permission` 完全一致。
-- [ ] 全局排查拼写 `goverment`；统一使用现有正确命名 `governance`，不要为错误拼写再建立第二套兼容键，以免配置继续分叉。
-- [ ] 将该键加入消息完整性测试，断言访客管理入口不再显示“缺少消息配置”，并分别以镇长、副镇长和普通成员身份验证按钮可见性与提示语义一致。
+- [x] 在 `messages.yml` 的 `dialog.tooltip.governance` 下新增 `visitor-permission`，建议文案为 `&7仅镇长和副镇长可管理访客`，与 `TownUiController` 当前读取的 `tooltip.governance.visitor-permission` 完全一致。
+- [x] 全局排查拼写 `goverment`；统一使用现有正确命名 `governance`，不要为错误拼写再建立第二套兼容键，以免配置继续分叉。
+- [x] 将该键加入消息完整性测试，断言访客管理入口不再显示“缺少消息配置”，并分别以镇长、副镇长和普通成员身份验证按钮可见性与提示语义一致。
 
 ## 8. 成员移除与访客变更通知增加小镇名称
 
-- [ ] 将三条消息改为带 `{town}` 占位符：`chat.notification.member-removed`、`chat.notification.visitor-added`、`chat.notification.visitor-removed`；建议分别显示“你已被移出小镇 {town}”“你已被加入小镇 {town} 的访客名单”“你已被移出小镇 {town} 的访客名单”。
-- [ ] 让 `kickMember`、`addVisitor`、`removeVisitor` 的异步操作结果同时携带操作所属的小镇名称，再在主线程通知在线目标玩家；不要为了拼接通知而在主线程新增同步数据库查询。传入消息前继续使用现有安全文本过滤。
-- [ ] 覆盖小镇改名后的名称、目标玩家在线/离线、操作失败和并发变更场景；只有成功操作才发送通知，失败消息不能误带其他小镇名称。
-- [ ] 增加消息占位符测试和三个操作回调测试，保证最终文本不残留 `{town}`，也不再使用含糊的“当前小镇/一个小镇”。
+- [x] 将三条消息改为带 `{town}` 占位符：`chat.notification.member-removed`、`chat.notification.visitor-added`、`chat.notification.visitor-removed`；建议分别显示“你已被移出小镇 {town}”“你已被加入小镇 {town} 的访客名单”“你已被移出小镇 {town} 的访客名单”。
+- [x] 让 `kickMember`、`addVisitor`、`removeVisitor` 的异步操作结果同时携带操作所属的小镇名称，再在主线程通知在线目标玩家；不要为了拼接通知而在主线程新增同步数据库查询。传入消息前继续使用现有安全文本过滤。
+- [x] 覆盖小镇改名后的名称、目标玩家在线/离线、操作失败和并发变更场景；只有成功操作才发送通知，失败消息不能误带其他小镇名称。
+- [x] 增加消息占位符测试和三个操作回调测试，保证最终文本不残留 `{town}`，也不再使用含糊的“当前小镇/一个小镇”。
 
 ## 9. 统一申请加入界面的只读规则展示
 
-- [ ] 抽取共享的只读规则 Dialog 渲染入口，复用 `openTownRules(...)` 当前的“小镇标题 + 编号规则列表 + 空规则提示”设计，并允许调用方传入返回路由。
-- [ ] `openJoinTown(...)` 的信息卡只保留小镇代码与简介，移除把全部规则用 ` | ` 拼成一行 lore 的做法；新增“阅读小镇规则”按钮，打开共享只读规则页，返回时仍回到当前小镇的加入页面。
-- [ ] 加入申请按钮和 48 小时有效期、最多 3 个并行申请的逻辑保持不变；本条只统一展示，不新增“必须阅读后才能申请”的状态限制。
+- [x] 抽取共享的只读规则 Dialog 渲染入口，复用 `openTownRules(...)` 当前的“小镇标题 + 编号规则列表 + 空规则提示”设计，并允许调用方传入返回路由。
+- [x] `openJoinTown(...)` 的信息卡只保留小镇代码与简介，移除把全部规则用 ` | ` 拼成一行 lore 的做法；新增“阅读小镇规则”按钮，打开共享只读规则页，返回时仍回到当前小镇的加入页面。
+- [x] 加入申请按钮和 48 小时有效期、最多 3 个并行申请的逻辑保持不变；本条只统一展示，不新增“必须阅读后才能申请”的状态限制。
 - [ ] 增加共享渲染测试，比较小镇详情与申请加入入口在 0、1、多条及长规则下的编号、换行和空状态；客户端确认两个入口视觉一致、长规则可读且返回路径正确。
 
 ## 10. 让构建测试遵循 `messages.yml` 的可配置设计

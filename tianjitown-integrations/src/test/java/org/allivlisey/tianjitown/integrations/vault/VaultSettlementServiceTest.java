@@ -22,9 +22,80 @@ import static net.milkbowl.vault.economy.EconomyResponse.ResponseType.SUCCESS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VaultSettlementServiceTest {
+    @Test
+    void formatsMinorUnitsWithTheEconomyProvidersCurrencyFormat() {
+        OfflinePlayer account = offlinePlayer(UUID.randomUUID(), "Tax");
+        Economy economy = proxy(Economy.class, (ignored, method, arguments) -> switch (
+                method.getName()) {
+            case "isEnabled", "hasAccount" -> true;
+            case "fractionalDigits" -> 2;
+            case "format" -> "¤" + arguments[0] + " tokens";
+            default -> defaultValue(method.getReturnType());
+        });
+        VaultSettlementService settlement = settlement(economy, account);
+
+        assertEquals("¤12.34 tokens", settlement.formatMinor(1_234));
+        assertEquals("¤0.0 tokens", settlement.formatMinor(0));
+    }
+
+    @Test
+    void fallsBackToPreciseNumbersAndCurrencyNamesWhenFormattingIsUnavailable() {
+        OfflinePlayer account = offlinePlayer(UUID.randomUUID(), "Tax");
+        AtomicReference<String> mode = new AtomicReference<>("null");
+        Economy economy = proxy(Economy.class, (ignored, method, arguments) -> switch (
+                method.getName()) {
+            case "isEnabled" -> !mode.get().equals("disabled");
+            case "hasAccount" -> true;
+            case "fractionalDigits" -> 2;
+            case "format" -> {
+                if (mode.get().equals("failure")) {
+                    throw new IllegalStateException("format failed");
+                }
+                yield null;
+            }
+            case "currencyNameSingular" -> "credit";
+            case "currencyNamePlural" -> mode.get().equals("empty") ? "" : "credits";
+            default -> defaultValue(method.getReturnType());
+        });
+        VaultSettlementService settlement = settlement(economy, account);
+
+        assertEquals("0.00 credits", settlement.formatMinor(0));
+        assertEquals("1.00 credit", settlement.formatMinor(100));
+        assertEquals("1.50 credits", settlement.formatMinor(150));
+        assertEquals("-1.00 credit", settlement.formatMinor(-100));
+        mode.set("failure");
+        assertEquals("2.00 credits", settlement.formatMinor(200));
+        mode.set("empty");
+        assertEquals("2.00", settlement.formatMinor(200));
+        mode.set("disabled");
+        assertEquals("2.00", settlement.formatMinor(200));
+    }
+
+    @Test
+    void refusesToCallEconomyFormattingOffThePrimaryThread() {
+        OfflinePlayer account = offlinePlayer(UUID.randomUUID(), "Tax");
+        AtomicBoolean formatted = new AtomicBoolean();
+        Economy economy = proxy(Economy.class, (ignored, method, arguments) -> switch (
+                method.getName()) {
+            case "isEnabled", "hasAccount" -> true;
+            case "fractionalDigits" -> 2;
+            case "format" -> {
+                formatted.set(true);
+                yield "unexpected";
+            }
+            default -> defaultValue(method.getReturnType());
+        });
+        VaultSettlementService settlement = new VaultSettlementService(server(economy, account,
+                false), "tax", 2);
+
+        assertThrows(IllegalStateException.class, () -> settlement.formatMinor(100));
+        assertFalse(formatted.get());
+    }
+
     @Test
     void exposesRecoverablePlayerDebitAndRestoresItAfterProviderRecovery() {
         AtomicReference<String> mode = new AtomicReference<>("compfail");
@@ -258,6 +329,11 @@ class VaultSettlementServiceTest {
     }
 
     private static Server server(Economy economy, OfflinePlayer settlementAccount) {
+        return server(economy, settlementAccount, true);
+    }
+
+    private static Server server(Economy economy, OfflinePlayer settlementAccount,
+                                 boolean primaryThread) {
         Plugin provider = proxy(Plugin.class,
                 (ignored, method, arguments) -> defaultValue(method.getReturnType()));
         RegisteredServiceProvider<Economy> registration = new RegisteredServiceProvider<>(
@@ -269,7 +345,7 @@ class VaultSettlementServiceTest {
                 method.getName()) {
             case "getServicesManager" -> services;
             case "getOfflinePlayer" -> settlementAccount;
-            case "isPrimaryThread" -> true;
+            case "isPrimaryThread" -> primaryThread;
             default -> defaultValue(method.getReturnType());
         });
         return server;

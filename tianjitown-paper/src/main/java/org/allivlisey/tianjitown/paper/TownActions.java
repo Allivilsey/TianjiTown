@@ -9,6 +9,7 @@ import org.allivlisey.tianjitown.core.town.MemberRole;
 import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
 import org.allivlisey.tianjitown.storage.town.JoinApplicationSnapshot;
 import org.allivlisey.tianjitown.storage.town.TownRepository;
+import org.allivlisey.tianjitown.storage.town.TownPlayerChange;
 import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.allivlisey.tianjitown.storage.governance.MemberGovernanceSnapshot;
 import org.allivlisey.tianjitown.storage.governance.TransferSnapshot;
@@ -234,38 +235,40 @@ final class TownActions {
     }
 
     void kickMember(Player actor, UUID townId, UUID targetId,
-                    Consumer<TownActionOutcome<UUID>> completion) {
+                    Consumer<TownActionOutcome<TownPlayerChange>> completion) {
         write("MEMBER_KICK", actor, () -> {
-            runtime.governance().removeMemberByMayor(townId, targetId, actor.getUniqueId(),
-                    actor.getName());
-            return townId;
-        }, changedTown -> {
-            Player removed = plugin.getServer().getPlayer(targetId);
+            return runtime.governance().removeMemberByMayor(townId, targetId,
+                    actor.getUniqueId(), actor.getName());
+        }, change -> {
+            Player removed = plugin.getServer().getPlayer(change.playerId());
             if (removed != null) {
                 runtime.buffs().refreshPlayer(removed);
             }
-            syncResidence(actor, changedTown);
-            return Map.of("town_id", changedTown, "target_id", targetId);
+            syncResidence(actor, change.townId());
+            return Map.of("town_id", change.townId(), "target_id", change.playerId(),
+                    "town_name", change.townName());
         }, completion);
     }
 
     void addVisitor(Player actor, UUID townId, UUID targetId,
-                    Consumer<TownActionOutcome<TownSnapshot.Visitor>> completion) {
+                    Consumer<TownActionOutcome<TownPlayerChange>> completion) {
         write("VISITOR_ADD", actor,
-                () -> runtime.repository().addVisitor(townId, targetId,
+                () -> runtime.repository().addVisitorWithTownName(townId, targetId,
                         actor.getUniqueId(), actor.getName()), visitor -> {
-                    syncResidence(actor, townId);
-                    return Map.of("town_id", townId, "target_id", targetId);
+                    syncResidence(actor, visitor.townId());
+                    return Map.of("town_id", visitor.townId(), "target_id", visitor.playerId(),
+                            "town_name", visitor.townName());
                 }, completion);
     }
 
     void removeVisitor(Player actor, UUID townId, UUID targetId,
-                       Consumer<TownActionOutcome<UUID>> completion) {
+                       Consumer<TownActionOutcome<TownPlayerChange>> completion) {
         write("VISITOR_REMOVE", actor,
-                () -> runtime.repository().removeVisitor(townId, targetId,
+                () -> runtime.repository().removeVisitorWithTownName(townId, targetId,
                         actor.getUniqueId(), actor.getName()), removed -> {
-                    syncResidence(actor, townId);
-                    return Map.of("town_id", townId, "target_id", removed);
+                    syncResidence(actor, removed.townId());
+                    return Map.of("town_id", removed.townId(), "target_id", removed.playerId(),
+                            "town_name", removed.townName());
                 }, completion);
     }
 

@@ -599,7 +599,7 @@ class TownRepositorySqliteTest {
     }
 
     @Test
-    void managesVisitorsWithoutChangingTownMembership() {
+    void managesVisitorsWithoutChangingTownMembership() throws Exception {
         DatabaseConfig config = new DatabaseConfig(
                 "jdbc:sqlite:" + temporaryDirectory.resolve("visitors.db"),
                 Duration.ofSeconds(5), Duration.ofSeconds(5));
@@ -612,6 +612,8 @@ class TownRepositorySqliteTest {
                     "访客接待镇", "接待镇", "VISITORS");
             CreatedTown neighboring = createTown(repository, 51,
                     "访客来源镇", "来源镇", "VISOURCE");
+            String renamedTown = "改名后的访客接待镇";
+            renameTown(gate, host.town().id(), renamedTown);
             List<UUID> hostMembers = repository.listMemberIds(host.town().id());
             UUID deputy = hostMembers.stream()
                     .filter(playerId -> !playerId.equals(host.mayorId()))
@@ -623,9 +625,11 @@ class TownRepositorySqliteTest {
             governance.changeRoleByMayor(host.town().id(), deputy, MemberRole.DEPUTY_MAYOR,
                     host.mayorId(), "Mayor");
 
-            TownSnapshot.Visitor visitor = repository.addVisitor(host.town().id(),
+            TownPlayerChange added = repository.addVisitorWithTownName(host.town().id(),
                     neighboring.mayorId(), deputy, "Deputy");
-            assertEquals(neighboring.mayorId(), visitor.playerId());
+            assertEquals(host.town().id(), added.townId());
+            assertEquals(neighboring.mayorId(), added.playerId());
+            assertEquals(renamedTown, added.townName());
             assertEquals(List.of(neighboring.mayorId()),
                     repository.listVisitorIds(host.town().id()));
             assertFalse(repository.listMemberIds(host.town().id())
@@ -642,7 +646,11 @@ class TownRepositorySqliteTest {
                     () -> repository.removeVisitor(host.town().id(), neighboring.mayorId(),
                             regularMember, "Member"));
 
-            repository.removeVisitor(host.town().id(), neighboring.mayorId(), deputy, "Deputy");
+            TownPlayerChange removed = repository.removeVisitorWithTownName(
+                    host.town().id(), neighboring.mayorId(), deputy, "Deputy");
+            assertEquals(host.town().id(), removed.townId());
+            assertEquals(neighboring.mayorId(), removed.playerId());
+            assertEquals(renamedTown, removed.townName());
             assertTrue(repository.listVisitorIds(host.town().id()).isEmpty());
             assertFalse(repository.listLandAccessIds(host.town().id())
                     .contains(neighboring.mayorId()));
@@ -728,6 +736,18 @@ class TownRepositorySqliteTest {
         try (var connection = gate.dataSource().getConnection();
              var statement = connection.createStatement()) {
             statement.execute(sql);
+        }
+    }
+
+    private static void renameTown(DatabaseGate gate, UUID townId, String name) throws Exception {
+        try (var connection = gate.dataSource().getConnection();
+             var statement = connection.prepareStatement(
+                     "UPDATE towns SET name = ? WHERE town_id = ?")) {
+            statement.setString(1, name);
+            statement.setBytes(2, java.nio.ByteBuffer.allocate(16)
+                    .putLong(townId.getMostSignificantBits())
+                    .putLong(townId.getLeastSignificantBits()).array());
+            assertEquals(1, statement.executeUpdate());
         }
     }
 

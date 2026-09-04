@@ -213,9 +213,9 @@ chat:
     application-needs-changes-default-reason: '请查看申请详情'
     application-rejected-default-reason: '未提供原因'
     application-provision-failed: '&c你的小镇已通过审核，但自动创建暂时失败；管理员会处理 '
-    member-removed: '&c你已被移出当前小镇'
-    visitor-added: '&a你已被加入一个小镇的访客名单'
-    visitor-removed: '&e你已被移出一个小镇的访客名单'
+    member-removed: '&c你已被移出小镇 {town}'
+    visitor-added: '&a你已被加入小镇 {town} 的访客名单'
+    visitor-removed: '&e你已被移出小镇 {town} 的访客名单'
     transfer-request: '&6你收到了一项镇长转让请求 '
     transfer-accepted: '&e镇长转让已被接受'
     transfer-rejected: '&e候选成员拒绝了镇长转让'
@@ -1089,10 +1089,9 @@ dialog:
     expansion: '&b领地扩张'
 
   town:
-    # 小镇详情菜单；{town}=已过滤颜色代码的小镇名，{description}=简介
+    # 小镇详情菜单文本
     title: '&6小镇详情'
     residence-name: '&7小镇领地名: {name}'
-    rule-count: '&7规则数: {count}'
     rules: '&e阅读小镇规则'
     members: '&e成员列表'
     edit-description: '&e修改简介'
@@ -1118,7 +1117,7 @@ dialog:
     territory-teleport-timeout-message: '&fResidence 未在等待时间内完成传送；冷却、费用和安全点规则仍由 Residence 管理'
 
   # 浏览和提交入镇申请的玩家菜单；{town}=已过滤颜色代码的小镇名，{code}=小镇代码，
-  # {description}=已过滤颜色代码的简介，{rules}=已过滤颜色代码并合并的规则，{page}=从 1 开始的页码
+  # {description}=已过滤颜色代码的简介，{page}=从 1 开始的页码
   join:
     list-title: '&6申请加入小镇 · 第 {page} 页'
     town-title: '&6申请加入 · {town}'
@@ -1184,6 +1183,7 @@ dialog:
       votes: '&7查看、参与或终止治理投票'
       applications: '&7审核玩家的入镇申请'
       visitors: '&7查看访客名单或邀请新访客'
+      visitor-permission: '&7仅镇长和副镇长可管理访客'
     visitor:
       list: '&7查看访客列表'
       invite: '&7从在线玩家中选择访客'
@@ -1209,7 +1209,7 @@ dialog:
       ledger-subsidy: '&7查看税收与服务器补贴的合计收入'
       buff-active: '&7查看效果、等级、时长和购买价格'
       buff-paused: '&7商店已暂停，可查看仍在生效的 Buff'
-      expansion: '&7在 5×5 地图上扩张领地，每块区域花费 3000 公共资金'
+      expansion: '&7在 5×5 地图上扩张领地，每块区域花费 {price} 公共资金'
     application:
       edit: '&7点击修改申请资料'
       remind: '&7重新发送确认邀请'
@@ -1217,7 +1217,6 @@ dialog:
       select-site: '&7在你当前所在的位置建立小镇领地'
       preview-site: '&7传送至小镇领地'
       submit-ready: '&7进入确认页面'
-      submit-fee: '&7批准时将从申请人余额扣除 2000'
       submit-waiting: '&c两名初始成员均确认后才可提交'
       cancel-draft: '&7撤回后需等待一段时间才能再次申请'
       cancel-submitted: '&7撤回后需要等待一段时间才能再次申请'
@@ -1227,7 +1226,6 @@ dialog:
       edit: '&7在表单中编辑小镇资料'
       edit-description: '&7点击修改小镇简介'
       edit-rules: '&7点击编辑小镇规则'
-      territory: '&7包含初始领地与已扩张区域'
       territory-center: '&7初始中心: {x}, {z}'
       territory-preview: '&a点击传送至小镇领地'
       set-teleport: '&7必须站在本镇领地内的安全位置'
@@ -1266,7 +1264,7 @@ dialog:
   confirmation:
     check-details: '&7请确认信息无误'
     submit-application-title: '&6确认提交申请'
-    submit-application-consequence: '&7提交后需等待管理员审核'
+    submit-application-consequence: '&7提交后需等待管理员审核；批准时将从申请人余额扣除 {amount}'
     cancel-application-title: '&6确认撤回申请'
     cancel-application-consequence: '&7撤回后将不再保留选址，且需等待一段时间才能再次申请'
     add-visitor-title: '&6确认邀请访客'
@@ -1577,7 +1575,6 @@ dialog:
     effect: '&7效果: {effect}'
     inactive: '&7当前未生效'
     active: '&a当前强度 {level}，到期 {expires}'
-    intensity-hint: '&7强度使用罗马数字：I / II / III / IV / V'
     price-hint: '&7下一步会显示最终价格'
     duration-label: '&6持续时间'
     duration-format: '&f%s: %s 周'
@@ -1612,6 +1609,9 @@ dialog:
     input-label: '&6新规则（可留空）'
     add: '&a添加规则'
     add-tooltip: '&7添加后会显示在规则列表中'
+    delete-page: '&c删除已有规则'
+    delete-page-tooltip: '&7打开规则删除页面'
+    delete-page-guidance: '&7选择要删除的规则'
     delete: '&c删除第 {index} 条'
     delete-tooltip: '&c删除第 {index} 条规则'
     delete-request-invalid: '&c规则删除请求无效，请刷新界面'

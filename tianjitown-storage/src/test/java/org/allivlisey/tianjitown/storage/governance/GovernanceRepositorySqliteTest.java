@@ -11,6 +11,7 @@ import org.allivlisey.tianjitown.storage.database.DatabaseGate;
 import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
 import org.allivlisey.tianjitown.storage.town.JoinApplicationSnapshot;
 import org.allivlisey.tianjitown.storage.town.TownRepository;
+import org.allivlisey.tianjitown.storage.town.TownPlayerChange;
 import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -45,6 +46,8 @@ class GovernanceRepositorySqliteTest {
             TownRepository townRepository = new TownRepository(gate.dataSource(), () -> false);
             GovernanceRepository governance = new GovernanceRepository(gate.dataSource(), () -> false);
             CreatedTown created = createTown(townRepository);
+            String renamedTown = "改名后的治理测试镇";
+            renameTown(gate, created.town().id(), renamedTown);
             UUID officerId = UUID.randomUUID();
             UUID targetId = UUID.randomUUID();
             UUID candidateId = UUID.randomUUID();
@@ -70,8 +73,10 @@ class GovernanceRepositorySqliteTest {
             assertThrows(GovernanceRepository.ConflictException.class,
                     () -> governance.changeRoleByMayor(created.town().id(), fourthDeputy,
                             MemberRole.DEPUTY_MAYOR, created.mayorId(), "Mayor"));
-            governance.removeMemberByMayor(created.town().id(), fourthDeputy, officerId,
-                    "Deputy");
+            TownPlayerChange removedMember = governance.removeMemberByMayor(
+                    created.town().id(), fourthDeputy, officerId, "Deputy");
+            assertEquals(renamedTown, removedMember.townName());
+            assertEquals(fourthDeputy, removedMember.playerId());
             assertFalse(townRepository.listMemberIds(created.town().id()).contains(fourthDeputy));
             UUID applicantId = UUID.randomUUID();
             JoinApplicationSnapshot join = townRepository.applyToTown(created.town().id(), applicantId,
@@ -500,6 +505,16 @@ class GovernanceRepositorySqliteTest {
         try (Connection connection = gate.dataSource().getConnection();
              var statement = connection.createStatement()) {
             statement.execute(sql);
+        }
+    }
+
+    private static void renameTown(DatabaseGate gate, UUID townId, String name) throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "UPDATE towns SET name = ? WHERE town_id = ?")) {
+            statement.setString(1, name);
+            statement.setBytes(2, uuid(townId));
+            assertEquals(1, statement.executeUpdate());
         }
     }
 

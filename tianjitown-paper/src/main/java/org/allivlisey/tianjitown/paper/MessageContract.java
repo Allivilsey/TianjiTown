@@ -128,7 +128,8 @@ final class MessageContract {
                 "dialog.votes.cancel-only", "dialog.votes.cancel-irreversible",
                 "dialog.votes.status-line", "dialog.votes.empty", "dialog.votes.empty-hint",
                 "dialog.votes.list-title", "dialog.votes.detail-title",
-                "dialog.votes.entry.approve-count", "dialog.votes.entry.oppose-count"));
+                "dialog.votes.entry.approve-count", "dialog.votes.entry.oppose-count",
+                "dialog.tooltip.governance.visitor-permission"));
 
         // These entries are used directly by rendering boundaries and therefore have a
         // strict placeholder contract as well as a required-key contract.
@@ -141,6 +142,12 @@ final class MessageContract {
         text(entries, "dialog.provision.busy-recovery-action");
         text(entries, "dialog.provision.timeout-detail");
         text(entries, "dialog.provision.timeout-recovery-action");
+        text(entries, "dialog.confirmation.submit-application-consequence", "amount");
+        text(entries, "dialog.tooltip.town.territory-center", "x", "z");
+        text(entries, "chat.notification.member-removed", "town");
+        text(entries, "chat.notification.visitor-added", "town");
+        text(entries, "chat.notification.visitor-removed", "town");
+        required(entries, List.of("dialog.tooltip.town.territory-preview"));
         range(entries, "dialog.tax.rate-format");
         range(entries, "dialog.buff.duration-format");
         range(entries, "dialog.buff.intensity-format");

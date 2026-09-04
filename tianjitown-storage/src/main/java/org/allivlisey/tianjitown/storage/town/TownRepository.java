@@ -1011,44 +1011,77 @@ public final class TownRepository {
     public TownSnapshot.Visitor addVisitor(UUID townId, UUID playerId, UUID actorId,
                                            String actorName) {
         requireWorkerThread();
+        return transaction(connection -> addVisitor(connection, townId, playerId, actorId,
+                actorName));
+    }
+
+    /**
+     * Adds a visitor and returns the town name read in the same transaction as the mutation.
+     */
+    public TownPlayerChange addVisitorWithTownName(UUID townId, UUID playerId, UUID actorId,
+                                                    String actorName) {
+        requireWorkerThread();
         return transaction(connection -> {
-            requireManager(connection, townId, actorId);
-            if (memberExists(connection, townId, playerId)) {
-                throw new ConflictException("本镇成员不能加入访客名单");
-            }
-            if (visitorExists(connection, townId, playerId)) {
-                throw new ConflictException("目标玩家已经在访客名单中");
-            }
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    INSERT INTO town_visitors (town_id, player_uuid, invited_by)
-                    VALUES (?, ?, ?)
-                    """)) {
-                statement.setBytes(1, uuid(townId));
-                statement.setBytes(2, uuid(playerId));
-                statement.setBytes(3, uuid(actorId));
-                statement.executeUpdate();
-            }
-            audit(connection, null, actorId, actorName, "VISITOR_ADD", "TOWN",
-                    townId.toString(), "镇长或副镇长邀请访客", playerId.toString());
-            return requireVisitor(connection, townId, playerId);
+            TownSnapshot.Visitor visitor = addVisitor(connection, townId, playerId, actorId,
+                    actorName);
+            return new TownPlayerChange(townId, visitor.playerId(), townName(connection, townId));
         });
+    }
+
+    private TownSnapshot.Visitor addVisitor(Connection connection, UUID townId, UUID playerId,
+                                            UUID actorId, String actorName) throws SQLException {
+        requireManager(connection, townId, actorId);
+        if (memberExists(connection, townId, playerId)) {
+            throw new ConflictException("本镇成员不能加入访客名单");
+        }
+        if (visitorExists(connection, townId, playerId)) {
+            throw new ConflictException("目标玩家已经在访客名单中");
+        }
+        try (PreparedStatement statement = connection.prepareStatement("""
+                INSERT INTO town_visitors (town_id, player_uuid, invited_by)
+                VALUES (?, ?, ?)
+                """)) {
+            statement.setBytes(1, uuid(townId));
+            statement.setBytes(2, uuid(playerId));
+            statement.setBytes(3, uuid(actorId));
+            statement.executeUpdate();
+        }
+        audit(connection, null, actorId, actorName, "VISITOR_ADD", "TOWN",
+                townId.toString(), "镇长或副镇长邀请访客", playerId.toString());
+        return requireVisitor(connection, townId, playerId);
     }
 
     public UUID removeVisitor(UUID townId, UUID playerId, UUID actorId, String actorName) {
         requireWorkerThread();
+        return transaction(connection -> removeVisitor(connection, townId, playerId, actorId,
+                actorName));
+    }
+
+    /**
+     * Removes a visitor and returns the town name read in the same transaction as the mutation.
+     */
+    public TownPlayerChange removeVisitorWithTownName(UUID townId, UUID playerId, UUID actorId,
+                                                       String actorName) {
+        requireWorkerThread();
         return transaction(connection -> {
-            requireManager(connection, townId, actorId);
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    DELETE FROM town_visitors WHERE town_id = ? AND player_uuid = ?
-                    """)) {
-                statement.setBytes(1, uuid(townId));
-                statement.setBytes(2, uuid(playerId));
-                requireUpdated(statement, "目标玩家不在访客名单中");
-            }
-            audit(connection, null, actorId, actorName, "VISITOR_REMOVE", "TOWN",
-                    townId.toString(), "镇长或副镇长移出访客", playerId.toString());
-            return playerId;
+            UUID removed = removeVisitor(connection, townId, playerId, actorId, actorName);
+            return new TownPlayerChange(townId, removed, townName(connection, townId));
         });
+    }
+
+    private UUID removeVisitor(Connection connection, UUID townId, UUID playerId, UUID actorId,
+                               String actorName) throws SQLException {
+        requireManager(connection, townId, actorId);
+        try (PreparedStatement statement = connection.prepareStatement("""
+                DELETE FROM town_visitors WHERE town_id = ? AND player_uuid = ?
+                """)) {
+            statement.setBytes(1, uuid(townId));
+            statement.setBytes(2, uuid(playerId));
+            requireUpdated(statement, "目标玩家不在访客名单中");
+        }
+        audit(connection, null, actorId, actorName, "VISITOR_REMOVE", "TOWN",
+                townId.toString(), "镇长或副镇长移出访客", playerId.toString());
+        return playerId;
     }
 
     public Map<UUID, List<UUID>> listMemberIdsByTown() {
@@ -2386,6 +2419,19 @@ public final class TownRepository {
     private TownSnapshot requireTown(Connection connection, UUID townId) throws SQLException {
         return findTown(connection, townId)
                 .orElseThrow(() -> new NotFoundException("找不到小镇 " + townId));
+    }
+
+    private static String townName(Connection connection, UUID townId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT name FROM towns WHERE town_id = ?")) {
+            statement.setBytes(1, uuid(townId));
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) {
+                    throw new NotFoundException("找不到小镇 " + townId);
+                }
+                return result.getString("name");
+            }
+        }
     }
 
     private Optional<UUID> memberTownId(Connection connection, UUID playerId) throws SQLException {

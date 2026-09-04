@@ -335,6 +335,31 @@ public final class VaultSettlementService {
         return scale;
     }
 
+    /**
+     * Formats an amount stored in minor units for player-facing text.
+     *
+     * <p>Vault providers are Bukkit services and are not required to be thread-safe. Call this
+     * method only from the Paper primary thread; database work must return to that thread before
+     * it formats a value. A broken or unavailable provider never prevents a page from opening:
+     * the precise numeric representation is used as a final fallback.</p>
+     */
+    public String formatMinor(long minorUnits) {
+        requireMainThread();
+        String numeric = numericAmount(minorUnits);
+        Economy economy = null;
+        try {
+            economy = economy();
+            String formatted = economy.format(decimal(minorUnits));
+            if (formatted != null && !formatted.isBlank()) {
+                return formatted;
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // Formatting is cosmetic. Preserve a deterministic value when an Economy provider
+            // returns null or throws instead of making the caller's UI/command fail.
+        }
+        return numericWithCurrencyName(numeric, minorUnits, economy);
+    }
+
     public String accountName() {
         return accountName;
     }
@@ -387,6 +412,25 @@ public final class VaultSettlementService {
 
     private double decimal(long minorUnits) {
         return BigDecimal.valueOf(minorUnits, scale).doubleValue();
+    }
+
+    private String numericAmount(long minorUnits) {
+        return BigDecimal.valueOf(minorUnits, scale).toPlainString();
+    }
+
+    private String numericWithCurrencyName(String numeric, long minorUnits, Economy economy) {
+        if (economy == null) {
+            return numeric;
+        }
+        try {
+            boolean singular = BigDecimal.valueOf(minorUnits, scale).abs()
+                    .compareTo(BigDecimal.ONE) == 0;
+            String currency = singular ? economy.currencyNameSingular()
+                    : economy.currencyNamePlural();
+            return currency == null || currency.isBlank() ? numeric : numeric + " " + currency;
+        } catch (RuntimeException | LinkageError ignored) {
+            return numeric;
+        }
     }
 
     private void requireMainThread() {

@@ -4,6 +4,8 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import net.kyori.adventure.key.Key;
+import net.kyori.adventure.text.ObjectComponent;
+import net.kyori.adventure.text.object.SpriteObjectContents;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -42,27 +44,34 @@ class RuleEditorDialogRendererTest {
 
     @Test
     void addAndDeleteControlsStayCompact() {
-        assertTrue(RuleEditorDialogRenderer.ADD_WIDTH < RuleEditorDialogRenderer.PREVIEW_WIDTH
-                + RuleEditorDialogRenderer.DELETE_WIDTH);
-        assertEquals(RuleEditorDialogRenderer.DELETE_WIDTH, 28);
+        assertTrue(RuleEditorDialogRenderer.ADD_WIDTH < RuleEditorDialogRenderer.PREVIEW_WIDTH);
+        assertEquals(RuleEditorDialogRenderer.DELETE_SIZE, 20);
     }
 
     @Test
-    void declaresButtonRuleRowsBetweenInputAndAddActions() {
+    void separatesTheAddAndDeletePageLayouts() {
         RuleEditorDialogRenderer.Layout layout = RuleEditorDialogRenderer.layout(TOWN_ID, 1,
                 List.of("规则一"));
 
         assertEquals(List.of(RuleEditorDialogRenderer.Section.HEADING,
+                RuleEditorDialogRenderer.Section.RULE_PREVIEW,
                 RuleEditorDialogRenderer.Section.RULE_INPUT,
-                RuleEditorDialogRenderer.Section.RULE_BUTTON_ROWS,
                 RuleEditorDialogRenderer.Section.ADD_RULE,
-                RuleEditorDialogRenderer.Section.PAGE_ACTIONS), layout.sections());
+                RuleEditorDialogRenderer.Section.DELETE_PAGE,
+                RuleEditorDialogRenderer.Section.PAGE_ACTIONS), layout.addSections());
+        assertEquals(List.of(RuleEditorDialogRenderer.Section.HEADING,
+                RuleEditorDialogRenderer.Section.DELETE_RULE_ROWS,
+                RuleEditorDialogRenderer.Section.PAGE_ACTIONS), layout.deleteSections());
     }
 
     @Test
-    void usesTheVanillaBarrierItemSpriteFromTheBlocksAtlas() {
-        assertEquals(Key.key("minecraft:blocks"), RuleEditorDialogRenderer.BLOCK_ATLAS);
+    void usesTheVanillaBarrierItemSpriteFromTheItemsAtlas() {
+        assertEquals(Key.key("minecraft:items"), RuleEditorDialogRenderer.ITEM_ATLAS);
         assertEquals(Key.key("minecraft:item/barrier"), RuleEditorDialogRenderer.BARRIER_SPRITE);
+        SpriteObjectContents icon = (SpriteObjectContents) ((ObjectComponent)
+                RuleEditorDialogRenderer.deleteIcon()).contents();
+        assertEquals(Key.key("minecraft:items"), icon.atlas());
+        assertEquals(Key.key("minecraft:item/barrier"), icon.sprite());
     }
 
     @Test
