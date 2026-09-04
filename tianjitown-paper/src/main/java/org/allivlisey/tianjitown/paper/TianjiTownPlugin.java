@@ -636,7 +636,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         if (completer != null) {
             completer.start(runtime);
         }
-        getServer().getPluginManager().registerEvents(ui, this);
+        ui.listeners().forEach(listener -> getServer().getPluginManager().registerEvents(listener, this));
         getServer().getPluginManager().registerEvents(runtime.buffs(), this);
         getServer().getPluginManager().registerEvents(runtime.bonuses(), this);
         getServer().getPluginManager().registerEvents(
