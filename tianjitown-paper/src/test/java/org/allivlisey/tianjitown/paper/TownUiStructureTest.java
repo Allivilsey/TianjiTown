@@ -17,6 +17,12 @@ class TownUiStructureTest {
             "TownFinanceUi", "TownTerritoryUi", "TownMembershipUi", "TownGovernanceUi",
             "TownJoinApplicationUi", "TownAdminApplicationUi", "TownApplicationUi",
             "TownApplicationFormUi");
+    private static final List<String> IMPLEMENTATIONS = List.of("TownHomeDialogs",
+            "TownBuffShopDialogs", "TownFinanceDialogs", "TownMembershipDialogs",
+            "TownGovernanceDialogs", "TownJoinApplicationDialogs", "TownAdminApplicationDialogs",
+            "TownApplicationDialogs", "TownApplicationFormDialogs", "TownApplicationDrafts",
+            "TownInitialMemberDialogs", "TownUiPresentation", "TownAdminApplicationCommands",
+            "TownAdminGovernanceCommands", "TownAdminEconomyCommands", "TownAdminLandCommands");
 
     @Test
     void controllerRemainsTheSmallCompositionRoot() throws IOException {
@@ -52,6 +58,34 @@ class TownUiStructureTest {
         }
         assertTrue(source("ServiceStationController").lines().count() <= 700,
                 "ServiceStationController must stay below the 700-line review threshold");
+    }
+
+    @Test
+    void extractedImplementationsAndCompatibilityEntrypointsStayWithinTheReviewThreshold()
+            throws IOException {
+        for (String implementation : IMPLEMENTATIONS) {
+            assertTrue(source(implementation).lines().count() <= 700,
+                    implementation + " must stay below the 700-line review threshold");
+        }
+        assertTrue(source("TownUiLegacyFacade").lines().count() <= 700);
+        assertTrue(source("TownAdminCommand").lines().count() <= 700);
+    }
+
+    @Test
+    void featureImplementationsUseTheFacadeInsteadOfDependingOnEachOther() throws IOException {
+        for (String implementation : IMPLEMENTATIONS) {
+            if (implementation.equals("TownUiPresentation")) {
+                continue;
+            }
+            for (String other : IMPLEMENTATIONS) {
+                if (!implementation.equals(other) && !other.equals("TownUiPresentation")) {
+                    assertFalse(source(implementation).contains(other),
+                            implementation + " must not depend on " + other);
+                }
+            }
+        }
+        assertFalse(source("TownUiPresentation").contains("TownUiLegacyFacade"));
+        assertFalse(source("TownUiPresentation").contains("TownRuntime"));
     }
 
     private static String source(String name) throws IOException {
