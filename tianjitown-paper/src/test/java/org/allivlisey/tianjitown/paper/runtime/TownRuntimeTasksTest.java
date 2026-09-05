@@ -53,7 +53,7 @@ class TownRuntimeTasksTest {
 
     @Test
     void diagnosticStorageFailureLocksWritesAndKeepsTheOriginalFailure() {
-        var original = new org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository
+        var original = new org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository
                 .StorageUnavailableException("offline", null);
         AtomicReference<RuntimeException> failure = new AtomicReference<>();
         tasks.readAction(sender, () -> { throw original; },

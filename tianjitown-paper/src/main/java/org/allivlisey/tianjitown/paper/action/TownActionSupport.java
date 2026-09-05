@@ -1,4 +1,5 @@
-package org.allivlisey.tianjitown.paper.runtime;
+package org.allivlisey.tianjitown.paper.action;
+import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.message.ApplicationTextMessages;
 import org.allivlisey.tianjitown.paper.message.LandProtectionMessages;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;

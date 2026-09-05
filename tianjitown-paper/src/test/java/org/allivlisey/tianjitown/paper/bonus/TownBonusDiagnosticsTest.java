@@ -8,7 +8,7 @@ import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.config.TownBonusSettings;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
-import org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository;
+import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
 import org.allivlisey.tianjitown.storage.database.DatabaseGate;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.bukkit.Server;

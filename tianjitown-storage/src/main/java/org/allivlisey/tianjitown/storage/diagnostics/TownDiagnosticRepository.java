@@ -1,4 +1,4 @@
-package org.allivlisey.tianjitown.storage.bonus;
+package org.allivlisey.tianjitown.storage.diagnostics;
 
 import org.allivlisey.tianjitown.core.land.ChunkPosition;
 import org.allivlisey.tianjitown.core.land.InitialTerritory;

@@ -1,5 +1,5 @@
 package org.allivlisey.tianjitown.paper.runtime;
-import org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository;
+import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
 import org.allivlisey.tianjitown.paper.land.TerritoryPreviewService;
 
 import java.math.BigDecimal;

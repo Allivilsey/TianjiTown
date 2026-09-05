@@ -1,8 +1,8 @@
 package org.allivlisey.tianjitown.paper.ui.application;
 import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.message.ApplicationTextMessages;
-import org.allivlisey.tianjitown.paper.runtime.TownActionOutcome;
-import org.allivlisey.tianjitown.paper.runtime.TownActions;
+import org.allivlisey.tianjitown.paper.action.TownActionOutcome;
+import org.allivlisey.tianjitown.paper.action.TownActions;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.ui.TownUiLegacyFacade;

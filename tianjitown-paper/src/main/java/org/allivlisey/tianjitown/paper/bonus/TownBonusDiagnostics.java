@@ -7,7 +7,7 @@ import org.allivlisey.tianjitown.paper.bonus.TownBonusRuntime.DiagnosticResult;
 import org.allivlisey.tianjitown.paper.config.TownBonusSettings;
 import org.allivlisey.tianjitown.paper.message.LandProtectionMessages;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
-import org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository;
+import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.bukkit.command.CommandSender;
 

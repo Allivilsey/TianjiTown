@@ -1,5 +1,5 @@
 package org.allivlisey.tianjitown.paper.bonus;
-import org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository;
+import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
 
 import org.allivlisey.tianjitown.integrations.quickshop.QuickShopHistoryProbe;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;

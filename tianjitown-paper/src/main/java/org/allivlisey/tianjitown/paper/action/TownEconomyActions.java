@@ -1,4 +1,5 @@
-package org.allivlisey.tianjitown.paper.runtime;
+package org.allivlisey.tianjitown.paper.action;
+import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
@@ -8,8 +9,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 
-import org.allivlisey.tianjitown.paper.runtime.TownActionSupport.*;
-import static org.allivlisey.tianjitown.paper.runtime.TownActionSupport.*;
+import org.allivlisey.tianjitown.paper.action.TownActionSupport.*;
+import static org.allivlisey.tianjitown.paper.action.TownActionSupport.*;
 
 final class TownEconomyActions {
     private final TownActionSupport support;

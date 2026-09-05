@@ -6,7 +6,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.storage.bonus.TownBonusRepository;
-import org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository;
+import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
 import org.allivlisey.tianjitown.storage.commerce.CommerceRepository;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.allivlisey.tianjitown.storage.governance.GovernanceRepository;

@@ -1,4 +1,4 @@
-package org.allivlisey.tianjitown.paper.runtime;
+package org.allivlisey.tianjitown.paper.action;
 
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.junit.jupiter.api.Test;
@@ -16,7 +16,7 @@ class TownActionFailuresTest {
 
     @Test
     void diagnosticStorageFailureUsesTheStorageReason() {
-        var failure = new org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository
+        var failure = new org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository
                 .StorageUnavailableException("offline", null);
         assertEquals("STORAGE_UNAVAILABLE", TownActionFailures.from("DIAGNOSE", failure).reason());
     }

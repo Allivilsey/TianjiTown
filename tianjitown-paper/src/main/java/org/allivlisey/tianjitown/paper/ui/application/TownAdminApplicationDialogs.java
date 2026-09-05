@@ -2,7 +2,7 @@ package org.allivlisey.tianjitown.paper.ui.application;
 import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.land.ProvisionResult;
 import org.allivlisey.tianjitown.paper.land.TerritoryPreviewService;
-import org.allivlisey.tianjitown.paper.runtime.TownActions;
+import org.allivlisey.tianjitown.paper.action.TownActions;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.ui.DialogRoute;

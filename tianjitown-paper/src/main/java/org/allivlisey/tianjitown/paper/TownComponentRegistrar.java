@@ -1,7 +1,7 @@
 package org.allivlisey.tianjitown.paper;
 import org.allivlisey.tianjitown.paper.command.TownAdminTabCompleter;
 import org.allivlisey.tianjitown.paper.runtime.GateStatus;
-import org.allivlisey.tianjitown.paper.runtime.TownActions;
+import org.allivlisey.tianjitown.paper.action.TownActions;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.ui.TownUiController;
 

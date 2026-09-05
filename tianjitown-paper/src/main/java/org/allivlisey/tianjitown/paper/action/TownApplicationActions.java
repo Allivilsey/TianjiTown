@@ -1,4 +1,5 @@
-package org.allivlisey.tianjitown.paper.runtime;
+package org.allivlisey.tianjitown.paper.action;
+import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.land.SitePolicy;
 import org.allivlisey.tianjitown.paper.message.LandProtectionMessages;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
@@ -15,8 +16,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 
-import org.allivlisey.tianjitown.paper.runtime.TownActionSupport.*;
-import static org.allivlisey.tianjitown.paper.runtime.TownActionSupport.*;
+import org.allivlisey.tianjitown.paper.action.TownActionSupport.*;
+import static org.allivlisey.tianjitown.paper.action.TownActionSupport.*;
 
 final class TownApplicationActions {
     private final TownActionSupport support;

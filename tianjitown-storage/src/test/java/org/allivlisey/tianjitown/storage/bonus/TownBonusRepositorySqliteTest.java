@@ -1,5 +1,7 @@
 package org.allivlisey.tianjitown.storage.bonus;
 
+import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
+
 import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
 import org.allivlisey.tianjitown.storage.database.DatabaseGate;
 import org.allivlisey.tianjitown.core.town.MemberRole;

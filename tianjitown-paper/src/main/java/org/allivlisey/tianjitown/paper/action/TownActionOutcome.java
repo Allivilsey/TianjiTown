@@ -1,4 +1,4 @@
-package org.allivlisey.tianjitown.paper.runtime;
+package org.allivlisey.tianjitown.paper.action;
 
 public record TownActionOutcome<T>(TownActionResult result, T value) {
     public static <T> TownActionOutcome<T> success(TownActionResult result, T value) {

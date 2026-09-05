@@ -1,7 +1,7 @@
 package org.allivlisey.tianjitown.paper;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 import org.allivlisey.tianjitown.paper.runtime.GateStatus;
-import org.allivlisey.tianjitown.paper.runtime.TownActions;
+import org.allivlisey.tianjitown.paper.action.TownActions;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.ui.TownUiController;
 

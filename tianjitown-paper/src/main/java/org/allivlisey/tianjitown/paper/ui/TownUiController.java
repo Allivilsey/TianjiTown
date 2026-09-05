@@ -1,6 +1,6 @@
 package org.allivlisey.tianjitown.paper.ui;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
-import org.allivlisey.tianjitown.paper.runtime.TownActions;
+import org.allivlisey.tianjitown.paper.action.TownActions;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.station.ServiceStationController;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;

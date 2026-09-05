@@ -1,4 +1,5 @@
-package org.allivlisey.tianjitown.paper.runtime;
+package org.allivlisey.tianjitown.paper.action;
+import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 
 import org.allivlisey.tianjitown.storage.town.TownRepository;
@@ -10,8 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import org.allivlisey.tianjitown.paper.runtime.TownActionSupport.*;
-import static org.allivlisey.tianjitown.paper.runtime.TownActionSupport.*;
+import org.allivlisey.tianjitown.paper.action.TownActionSupport.*;
+import static org.allivlisey.tianjitown.paper.action.TownActionSupport.*;
 
 final class TownQueryActions {
     private final TownActionSupport support;

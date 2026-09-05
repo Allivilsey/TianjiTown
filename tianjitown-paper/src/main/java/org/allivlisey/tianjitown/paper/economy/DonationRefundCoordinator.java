@@ -1,5 +1,5 @@
 package org.allivlisey.tianjitown.paper.economy;
-import org.allivlisey.tianjitown.paper.runtime.TownActionFailures;
+import org.allivlisey.tianjitown.paper.action.TownActionFailures;
 
 import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;

@@ -1,4 +1,4 @@
-package org.allivlisey.tianjitown.paper.runtime;
+package org.allivlisey.tianjitown.paper.action;
 import org.allivlisey.tianjitown.paper.message.ApplicationTextMessages;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 
@@ -8,7 +8,7 @@ import org.allivlisey.tianjitown.storage.governance.GovernanceRepository;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.allivlisey.tianjitown.storage.commerce.CommerceRepository;
 import org.allivlisey.tianjitown.storage.bonus.TownBonusRepository;
-import org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository;
+import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
 
 import java.util.Locale;
 import java.util.Map;
