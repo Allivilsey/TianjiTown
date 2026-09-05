@@ -96,8 +96,8 @@ public final class TownApplicationDialogs {
                         "REMIND_INITIAL_MEMBERS", application.id().toString())));
             }
             items.add(new MenuItem(12, presentation.button(Material.COMPASS,
-                    presentation.dialogText("application.select-site"),
-                    List.of(presentation.dialogText("tooltip.application.select-site")), "SELECT_SITE",
+                    presentation.dialogText(application.territory() == null ? "application.select-site" : "application.reselect-site"),
+                    List.of(presentation.dialogText(application.territory() == null ? "tooltip.application.select-site" : "application.reselect-site")), "SELECT_SITE",
                     application.id().toString())));
             if (application.territory() != null) {
                 items.add(new MenuItem(14, presentation.button(Material.ENDER_EYE,

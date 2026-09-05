@@ -97,9 +97,7 @@ public final class TownApplicationDrafts {
         persistApplicationForm(player, form, step, ignored -> {
             if (exitAfterSave) {
                 facade.applicationFormUi().removeSession(player.getUniqueId(), form);
-                presentation.openNotice(player, presentation.dialogText("common.draft-saved-title"),
-                        presentation.dialogText("notice.form-draft-saved-message"),
-                        presentation.dialogText("common.back"), "MAIN", null);
+                facade.closeUi(player);
             } else {
                 facade.renderApplicationFormStage(player, form.id(), step);
             }
@@ -173,7 +171,8 @@ public final class TownApplicationDrafts {
             return;
         }
         try {
-            form.text().requireValid();
+            if (form.purpose() == FormPurpose.TOWN_PROFILE) form.text().requireValidExistingProfile();
+            else form.text().requireValid();
         } catch (ApplicationText.ValidationException exception) {
             presentation.openNotice(player, presentation.dialogText("notice.draft-incomplete-title"),
                     ApplicationTextMessages.join(plugin.messages(), exception.issues()),

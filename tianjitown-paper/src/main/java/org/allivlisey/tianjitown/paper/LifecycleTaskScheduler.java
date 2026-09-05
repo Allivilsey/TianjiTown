@@ -161,6 +161,9 @@ final class LifecycleTaskScheduler {
     }
 
     void registerPeriodic(TownRuntime runtime) {
+        registerPeriodicTask(() -> {
+            if (plugin.townUi() != null) plugin.townUi().deliverPlayerChanges();
+        }, 20L, 20L);
         registerPeriodicTask(
                 () -> runPeriodic(PERIODIC_SQLITE_RECOVERY_FAILURE, runtime::checkRecovery),
                 20L * 30, 20L * 30);

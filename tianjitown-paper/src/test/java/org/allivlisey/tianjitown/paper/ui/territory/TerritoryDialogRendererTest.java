@@ -16,18 +16,13 @@ class TerritoryDialogRendererTest {
     @Test
     void keepsTheTwentyFiveMapCellsCompactAcrossSelectionStates() {
         TerritoryService.TerritoryMap map = map();
-        TerritoryDialogRenderer.Layout noSelection = TerritoryDialogRenderer.layout(map, Set.of(),
-                List.of());
+        TerritoryDialogRenderer.Layout noSelection = TerritoryDialogRenderer.layout(map, Set.of());
         TerritoryDialogRenderer.Layout oneSelection = TerritoryDialogRenderer.layout(map,
-                Set.of(new TerritoryService.GridSelection(1, 0)), List.of(
-                        TerritoryDialogRenderer.FooterKind.CONFIRM,
-                        TerritoryDialogRenderer.FooterKind.CLEAR));
+                Set.of(new TerritoryService.GridSelection(1, 0)));
         TerritoryDialogRenderer.Layout manySelections = TerritoryDialogRenderer.layout(map,
                 Set.of(new TerritoryService.GridSelection(-1, 0),
                         new TerritoryService.GridSelection(1, 0),
-                        new TerritoryService.GridSelection(0, 1)), List.of(
-                        TerritoryDialogRenderer.FooterKind.CONFIRM,
-                        TerritoryDialogRenderer.FooterKind.CLEAR));
+                        new TerritoryService.GridSelection(0, 1)));
 
         assertMapLayout(noSelection, map);
         assertMapLayout(oneSelection, map);
@@ -38,9 +33,7 @@ class TerritoryDialogRendererTest {
                 TerritoryDialogRenderer.MapButton::selected).count());
         assertEquals(3, manySelections.mapButtons().stream().filter(
                 TerritoryDialogRenderer.MapButton::selected).count());
-        assertEquals(2, oneSelection.footerButtons().size());
-        assertTrue(oneSelection.footerButtons().stream().allMatch(button ->
-                button.width() > oneSelection.cellSize()));
+
     }
 
     private static void assertMapLayout(TerritoryDialogRenderer.Layout layout,

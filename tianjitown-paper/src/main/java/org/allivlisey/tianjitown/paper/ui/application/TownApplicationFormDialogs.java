@@ -83,7 +83,7 @@ public final class TownApplicationFormDialogs {
                         text.name(), 24, null),
                 DialogInput.text("residence_name", 400,
                         presentation.dialogComponent("application.code-label"), true,
-                        text.residenceName(), 12, null),
+                        text.residenceName(), 9, null),
                 DialogInput.text("description", 400,
                         presentation.dialogComponent("application.description-label"), true,
                         text.description(), 500, descriptionLines));
@@ -94,11 +94,11 @@ public final class TownApplicationFormDialogs {
                         DialogBody.plainMessage(guidance, 400)),
                 inputs, DialogBase.DialogAfterAction.NONE, session -> DialogType.multiAction(List.of(
                                 ActionButton.create(presentation.dialogComponent("common.next-step"),
-                                        null, 170, presentation.dialogAction(player, session,
+                                        null, RuleEditorDialogRenderer.SINGLE_COLUMN_ACTION_WIDTH, presentation.dialogAction(player, session,
                                                 response -> applyApplicationBasics(
                                                         player, form.id(), response))),
                                 ActionButton.create(presentation.dialogComponent("application.save-draft"),
-                                        presentation.dialogComponent("application.save-draft-tooltip"), 170,
+                                        presentation.dialogComponent("application.save-draft-tooltip"), RuleEditorDialogRenderer.SINGLE_COLUMN_ACTION_WIDTH,
                                         presentation.dialogAction(player, session, response ->
                                                 saveApplicationStage(player, form.id(), 1, response)))))
                         .exitAction(presentation.returnButton(player, session,
@@ -152,7 +152,7 @@ public final class TownApplicationFormDialogs {
         facade.openRuleEditorAddDialog(player, presentation.dialogText("application.title"), guidance, parent,
                 RuleEditorDialogRenderer.SINGLE_COLUMN_ACTION_WIDTH,
                 1,
-                session -> List.of(ActionButton.create(presentation.dialogComponent("common.next-step"), null, 150,
+                session -> List.of(ActionButton.create(presentation.dialogComponent("common.next-step"), null, RuleEditorDialogRenderer.SINGLE_COLUMN_ACTION_WIDTH,
                         presentation.dialogAction(player, session,
                                 response -> applyApplicationContent(player, form.id())))),
                 session -> facade.inlineRuleDeletionActions(player, session, layout,
@@ -160,7 +160,7 @@ public final class TownApplicationFormDialogs {
                 response -> addApplicationRule(player, form.id(), response),
                 session -> List.of(
                         ActionButton.create(presentation.dialogComponent("application.save-draft"),
-                                presentation.dialogComponent("application.save-draft-tooltip"), 170,
+                                presentation.dialogComponent("application.save-draft-tooltip"), RuleEditorDialogRenderer.SINGLE_COLUMN_ACTION_WIDTH,
                                 presentation.dialogAction(player, session,
                                         response -> saveApplicationStage(player, form.id(), 2,
                                                 response)))),

@@ -270,6 +270,7 @@ public final class TownJoinApplicationDialogs {
     }
 
     private void notifyJoinDecision(JoinApplicationSnapshot application, boolean approved) {
+        if (approved) return; // Successful membership changes use the durable inbox.
         Player applicant = Bukkit.getPlayer(application.applicantId());
         if (applicant == null) {
             return;

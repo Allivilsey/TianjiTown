@@ -96,7 +96,7 @@ public final class TownBuffShopDialogs {
             BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey);
             BuffDialogRenderer.ActiveState current = quote.current() == null ? null
                     : new BuffDialogRenderer.ActiveState(quote.current().level(),
-                            quote.current().expiresAt().toString());
+                            org.allivlisey.tianjitown.core.time.TownTime.display(quote.current().expiresAt()));
             ItemStack summary = presentation.button(Material.POTION, "§d"
                             + runtime.buffs().settings().label(definition.key()),
                     BuffDialogRenderer.parameterSummaryLore(plugin.messages(),

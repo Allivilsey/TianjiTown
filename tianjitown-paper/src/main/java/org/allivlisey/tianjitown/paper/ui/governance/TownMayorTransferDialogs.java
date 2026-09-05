@@ -58,7 +58,7 @@ public final class TownMayorTransferDialogs {
                             transfer.id() + ":true")),
                     new MenuItem(15, presentation.button(Material.RED_CONCRETE,
                             presentation.dialogText("common.reject"),
-                            List.of(presentation.dialogText("tooltip.transfer.reject-close")),
+                            List.of(),
                             "CONFIRM_TRANSFER_DECISION",
                             transfer.id() + ":false")));
             presentation.openMenu(player, 27, presentation.dialogText("transfer.title"),
@@ -87,7 +87,7 @@ public final class TownMayorTransferDialogs {
         actions.decideMayorTransfer(candidate, transferId, accept, outcome ->
                 facade.handleOutcome(candidate, outcome, transfer -> {
             Player oldMayor = Bukkit.getPlayer(transfer.requestedBy());
-            if (oldMayor != null) {
+            if (oldMayor != null && !accept) {
                 plugin.messages().send(oldMayor, accept
                         ? "chat.notification.transfer-accepted"
                         : "chat.notification.transfer-rejected");

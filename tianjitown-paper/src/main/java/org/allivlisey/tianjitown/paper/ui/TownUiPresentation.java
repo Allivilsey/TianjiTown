@@ -31,7 +31,7 @@ import java.util.function.Function;
 /** Renders shared dialog controls and binds callbacks to the active player session. */
 public final class TownUiPresentation {
     public static String safeText(Object value) {
-        return String.valueOf(value).replace('&', '＆').replace('§', '�');
+        return org.allivlisey.tianjitown.core.time.TownTime.display(value).replace('&', '＆').replace('§', '�');
     }
 
     private final TianjiTownPlugin plugin;
@@ -45,6 +45,13 @@ public final class TownUiPresentation {
     public void openConfirmation(Player player, String title, String confirmedAction,
                                   String target, String consequence, String returnAction,
                                   String returnTarget) {
+        openConfirmation(player, title, confirmedAction, target, consequence, returnAction,
+                returnTarget, "common.confirm", null);
+    }
+
+    public void openConfirmation(Player player, String title, String confirmedAction,
+                                 String target, String consequence, String returnAction,
+                                 String returnTarget, String confirmKey, String tooltipKey) {
         boolean irreversible = confirmedAction.equals("DISBAND")
                 || confirmedAction.equals("CANCEL_VOTE");
         String body = consequence + "\n" + (irreversible
@@ -55,8 +62,8 @@ public final class TownUiPresentation {
                 List.of(DialogBody.plainMessage(legacyComponent(body), 420)), List.of(),
                 DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                         DialogType.multiAction(List.of(
-                                ActionButton.create(dialogComponent("common.confirm"),
-                                        legacyComponent(consequence), 170,
+                                ActionButton.create(dialogComponent(confirmKey),
+                                        tooltipKey == null ? legacyComponent(consequence) : dialogComponent(tooltipKey), 170,
                                         dialogAction(player, session, confirmedAction, target)),
                                 ActionButton.create(dialogComponent("common.cancel"),
                                         null, 170,

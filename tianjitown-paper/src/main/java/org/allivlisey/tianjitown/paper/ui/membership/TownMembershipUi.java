@@ -104,8 +104,9 @@ public final class TownMembershipUi {
         RoleTarget role = RoleTarget.parse(target);
         presentation.openConfirmation(player, presentation.dialogText("confirmation.change-role-title"),
                 "SET_ROLE", role.encode(), presentation.dialogText("confirmation.change-role-consequence",
-                        java.util.Map.of("role", facade.memberRoleText(role.role()))),
-                "MEMBER_DETAIL", role.member().encode());
+                        java.util.Map.of("role", facade.memberRoleText(role.role()), "player", facade.displayName(role.member().memberId()))),
+                "MEMBER_DETAIL", role.member().encode(), "confirmation.change-role-confirm",
+                "confirmation.change-role-confirm-tooltip");
     }
 
     private void setRole(Player player, String target) {
@@ -149,7 +150,9 @@ public final class TownMembershipUi {
                 "TRANSFER_DECISION", decision.encode(), presentation.dialogText(decision.accept()
                         ? "confirmation.accept-transfer-consequence"
                         : "confirmation.reject-transfer-consequence"),
-                "TRANSFER_REQUEST", decision.transferId().toString());
+                "TRANSFER_REQUEST", decision.transferId().toString(),
+                decision.accept() ? "confirmation.accept-mayor-confirm" : "common.confirm",
+                decision.accept() ? "confirmation.accept-mayor-confirm-tooltip" : null);
     }
 
     private void decideTransfer(Player player, String target) {

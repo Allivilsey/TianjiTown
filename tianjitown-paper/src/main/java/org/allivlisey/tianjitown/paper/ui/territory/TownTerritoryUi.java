@@ -64,6 +64,7 @@ public final class TownTerritoryUi {
     public void route(Player player, String action, String target) {
         try {
             switch (action) {
+                case "EXPANSION_ACTIONS" -> openSelectionActions(player);
                 case "EXPANSION_MENU" -> openExpansionMenu(player);
                 case "TOGGLE_EXPANSION" -> toggleExpansionSelection(player, target);
                 case "CLEAR_EXPANSION_SELECTION" -> clearExpansionSelection(player);
@@ -109,33 +110,36 @@ public final class TownTerritoryUi {
             presentation.openDialogPage(player, presentation.dialogText("territory.title"),
                     List.of(DialogBody.plainMessage(summary, 360)), List.of(),
                     DialogBase.DialogAfterAction.NONE, session -> {
-                        ActionButton back = presentation.returnButton(player, session,
-                                new DialogRoute("FINANCE", "0"));
-                        List<TerritoryDialogRenderer.FooterAction> footer = new ArrayList<>();
-                        if (!selected.isEmpty()) {
-                            Component confirmLabel = presentation.dialogComponent("territory.batch-confirm");
-                            footer.add(new TerritoryDialogRenderer.FooterAction(
-                                    TerritoryDialogRenderer.FooterKind.CONFIRM,
-                                    confirmLabel,
-                                    confirmLabel.append(Component.newline()).append(
-                                            presentation.dialogComponent(
-                                                    "territory.batch-confirm-consequence", Map.of(
-                                                            "price", facade.runtime().money(total),
-                                                            "count", selected.size()))),
-                                    presentation.dialogAction(player, session,
-                                            "CONFIRM_EXPANSION_BATCH", null)));
-                            footer.add(new TerritoryDialogRenderer.FooterAction(
-                                    TerritoryDialogRenderer.FooterKind.CLEAR,
-                                    presentation.dialogComponent("territory.batch-clear"),
-                                    presentation.dialogComponent("territory.batch-clear"),
-                                    presentation.dialogAction(player, session,
-                                            "CLEAR_EXPANSION_SELECTION", null)));
-                        }
+                        ActionButton back = ActionButton.create(presentation.dialogComponent("territory.selection-actions"),
+                                presentation.dialogComponent("territory.selection-actions"), 170,
+                                presentation.dialogAction(player, session, "EXPANSION_ACTIONS", null));
                         return TerritoryDialogRenderer.render(map, price,
                                 facade.plugin().messages(), selected,
                                 cell -> presentation.dialogAction(player, session, "TOGGLE_EXPANSION",
-                                        cell.gridX() + "," + cell.gridZ()), back, footer);
+                                        cell.gridX() + "," + cell.gridZ()), back);
                     }, new DialogRoute("FINANCE", "0"));
+        });
+    }
+
+    private void openSelectionActions(Player player) {
+        Set<TerritoryService.GridSelection> selected = expansionSelections.getOrDefault(player.getUniqueId(), Set.of());
+        facade.runtime().loadTerritoryMap(player, map -> {
+            List<TownUiPresentation.MenuItem> items = new ArrayList<>();
+            long total = map.priceMinor() <= 0 ? 0 : Math.multiplyExact(map.priceMinor(), selected.size());
+            items.add(new TownUiPresentation.MenuItem(0, presentation.button(Material.PAPER,
+                    presentation.dialogText("territory.batch-summary", Map.of("count", selected.size(),
+                            "price", facade.runtime().money(total), "units", map.currentUnits() + selected.size(),
+                            "maximum", map.maximumUnits())), List.of(), null, null)));
+            if (!selected.isEmpty()) {
+                items.add(new TownUiPresentation.MenuItem(1, presentation.button(Material.LIME_CONCRETE,
+                        presentation.dialogText("territory.batch-confirm"), List.of(), "CONFIRM_EXPANSION_BATCH", null)));
+                items.add(new TownUiPresentation.MenuItem(2, presentation.button(Material.BARRIER,
+                        presentation.dialogText("territory.batch-clear"), List.of(), "CLEAR_EXPANSION_SELECTION", null)));
+            }
+            items.add(new TownUiPresentation.MenuItem(3, presentation.button(Material.MAP,
+                    presentation.dialogText("territory.continue-selection"), List.of(), "EXPANSION_MENU", null)));
+            presentation.openMenu(player, 27, presentation.dialogText("territory.selection-actions"),
+                    new DialogRoute("FINANCE", "0"), items);
         });
     }
 

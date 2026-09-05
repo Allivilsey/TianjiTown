@@ -315,7 +315,9 @@ public final class PluginMessages {
                 continue;
             }
             if (entry.placeholderContract()
-                    && !MessageContract.placeholders(template).equals(entry.placeholders())) {
+                    && !MessageContract.placeholders(template).equals(entry.placeholders())
+                    && !(entry.key().equals("dialog.confirmation.change-role-consequence")
+                         && MessageContract.placeholders(template).equals(java.util.Set.of("role")))) {
                 throw configurationFailure("diagnostic.messages.placeholder-contract-mismatch",
                         Map.of("key", entry.key()));
             }
@@ -419,7 +421,7 @@ public final class PluginMessages {
         }
         for (Map.Entry<String, ?> entry : placeholders.entrySet()) {
             message = message.replace("{" + entry.getKey() + "}",
-                    String.valueOf(entry.getValue()));
+                    org.allivlisey.tianjitown.core.time.TownTime.display(entry.getValue()));
         }
         return message;
     }

@@ -35,7 +35,7 @@ final class TownBonusDiagnostics {
     private static final String DIAGNOSTIC_REPORT_WRITE_FAILURE =
             "log.bonus.diagnostic-report-write-failure";
     private static final DateTimeFormatter REPORT_STAMP = DateTimeFormatter
-            .ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
+            .ofPattern("yyyyMMdd-HHmmss").withZone(org.allivlisey.tianjitown.core.time.TownTime.ZONE);
     private final TianjiTownPlugin plugin;
     private final TownRuntime host;
     private final TownDiagnosticRepository repository;
@@ -171,7 +171,7 @@ final class TownBonusDiagnostics {
         boolean healthy = database.quickCheck().equalsIgnoreCase("ok")
                 && database.foreignKeyViolations() == 0;
         lines.add("TianjiTown " + plugin.getPluginMeta().getVersion()
-                + " unified diagnostic @ " + Instant.now());
+                + " unified diagnostic @ " + org.allivlisey.tianjitown.core.time.TownTime.display(Instant.now()));
         lines.add("SQLite quick_check=" + database.quickCheck()
                 + ", foreign_key_violations=" + database.foreignKeyViolations()
                 + ", schema=" + schemaVersion);
@@ -275,7 +275,7 @@ final class TownBonusDiagnostics {
     }
 
     private static String safeText(Object value) {
-        return String.valueOf(value).replace('&', '＆').replace('§', '�');
+        return org.allivlisey.tianjitown.core.time.TownTime.display(value).replace('&', '＆').replace('§', '�');
     }
 
     private static String safeMessage(Throwable throwable) {

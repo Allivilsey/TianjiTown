@@ -131,6 +131,13 @@ public final class MessageContract {
                 "dialog.votes.entry.approve-count", "dialog.votes.entry.oppose-count",
                 "dialog.tooltip.governance.visitor-permission"));
 
+        for (String prefix : List.of("submit-application", "accept-mayor", "change-role")) {
+            text(entries, "dialog.confirmation." + prefix + "-confirm");
+            text(entries, "dialog.confirmation." + prefix + "-confirm-tooltip");
+        }
+        // Existing customized role messages may omit the new optional player placeholder.
+        text(entries, "dialog.confirmation.change-role-consequence", "player", "role");
+        text(entries, "dialog.application.reselect-site");
         // These entries are used directly by rendering boundaries and therefore have a
         // strict placeholder contract as well as a required-key contract.
         text(entries, "system.missing-message", "key");
@@ -144,6 +151,7 @@ public final class MessageContract {
         text(entries, "dialog.provision.timeout-recovery-action");
         text(entries, "dialog.confirmation.submit-application-consequence", "amount");
         text(entries, "dialog.tooltip.town.territory-center", "x", "z");
+        text(entries, "chat.notification.identity-changed", "town", "oldRole", "newRole");
         text(entries, "chat.notification.member-removed", "town");
         text(entries, "chat.notification.visitor-added", "town");
         text(entries, "chat.notification.visitor-removed", "town");

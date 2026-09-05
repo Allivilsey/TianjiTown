@@ -44,7 +44,8 @@ public final class TownApplicationUi {
                 "SUBMIT", applicationId.toString(),
                 ApplicationSubmissionDialogRenderer.confirmationConsequence(facade.plugin().messages(),
                         facade.runtime().money(facade.runtime().applicationFeeMinor())),
-                "APPLICATION", applicationId.toString());
+                "APPLICATION", applicationId.toString(), "confirmation.submit-application-confirm",
+                "confirmation.submit-application-confirm-tooltip");
     }
 
     private void confirmCancel(Player player, UUID applicationId) {

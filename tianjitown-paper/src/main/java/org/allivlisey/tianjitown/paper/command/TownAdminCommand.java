@@ -361,7 +361,7 @@ public final class TownAdminCommand {
     }
 
     public static String safeText(Object value) {
-        return String.valueOf(value).replace('&', '＆').replace('§', '�');
+        return org.allivlisey.tianjitown.core.time.TownTime.display(value).replace('&', '＆').replace('§', '�');
     }
 
     private boolean maintenanceMode() {

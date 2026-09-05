@@ -30,7 +30,7 @@ class DatabaseGateTest {
         try (DatabaseGate gate = new DatabaseGate(config)) {
             DatabaseGate.HealthResult health = gate.verifyAndMigrate();
             assertTrue(health.healthy(), health.detail());
-            assertTrue(health.detail().contains("schema=1.1"), health.detail());
+            assertTrue(health.detail().contains("schema=1.3"), health.detail());
             assertTrue(gate.ping());
             try (Connection connection = gate.dataSource().getConnection();
                  Statement statement = connection.createStatement()) {

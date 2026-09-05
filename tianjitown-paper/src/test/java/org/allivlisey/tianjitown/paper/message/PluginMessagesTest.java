@@ -23,6 +23,30 @@ class PluginMessagesTest {
     Path temporaryDirectory;
 
     @Test
+    void rendersShanghaiTimesAndExplicitMultilineComponents() {
+        PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
+        assertTrue(messages.plainText("dialog.admin.submitted-at", Map.of("time",
+                java.time.Instant.parse("2026-09-05T12:16:55.617Z"))).contains("2026-09-05 20:16:55"));
+        assertEquals(3, messages.plainText("application.draft-saved").lines().count());
+        assertEquals(2, messages.plainText("dialog.notice.application-cancelled-message").lines().count());
+        assertEquals(2, messages.plainText("dialog.confirmation.submit-application-consequence", Map.of("amount", "1,234,567.89")).lines().count());
+        assertEquals(3, messages.plainText("dialog.buff.confirm-consequence", Map.of("level", "II", "weeks", 2, "price", "1,234,567.89")).lines().count());
+    }
+
+    @Test
+    void independentConfirmationTooltipsFallbackAndPreserveCustomValues() throws Exception {
+        YamlConfiguration config = new YamlConfiguration();
+        config.set("dialog.confirmation.submit-application-confirm-tooltip", "提交专用");
+        config.set("dialog.confirmation.change-role-consequence", "旧自定义 {role}");
+        config.save(temporaryDirectory.resolve("messages.yml").toFile());
+        PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
+        assertEquals("提交专用", messages.plainText("dialog.confirmation.submit-application-confirm-tooltip"));
+        assertEquals("确认成为镇长", messages.plainText("dialog.confirmation.accept-mayor-confirm-tooltip"));
+        assertEquals("确认角色变更", messages.plainText("dialog.confirmation.change-role-confirm-tooltip"));
+        assertEquals("旧自定义 成员", messages.plainText("dialog.confirmation.change-role-consequence", Map.of("role", "成员", "player", "Alex")));
+    }
+
+    @Test
     void packagedMessagesAreNonEmptyAndSatisfyTheMessageContract() throws IOException {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
         YamlConfiguration defaults = packagedMessages();

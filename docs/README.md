@@ -4,6 +4,7 @@
 
 - [`setup/PREFLIGHT.md`](setup/PREFLIGHT.md)：安装门禁与预发验证；
 - [`architecture/RUNTIME_AND_STORAGE.md`](architecture/RUNTIME_AND_STORAGE.md)：运行时与存储组件职责、事务边界和验证方式；
+- [`deployment/FEEDBACK_UPGRADE.md`](deployment/FEEDBACK_UPGRADE.md)：本轮补贴迁移、身份通知、旧消息与旧小镇代码兼容；
 - [`deployment/TOWN_LIFECYCLE.md`](deployment/TOWN_LIFECYCLE.md)：建镇、成员与 Residence 投影；
 - [`deployment/GOVERNANCE.md`](deployment/GOVERNANCE.md)：成员管理、镇长转让与投票；
 - [`deployment/ECONOMY_AND_EXPANSION.md`](deployment/ECONOMY_AND_EXPANSION.md)：税收、公共资金与领地扩张；

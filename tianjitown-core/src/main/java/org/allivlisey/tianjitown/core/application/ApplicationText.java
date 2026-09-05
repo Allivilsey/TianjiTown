@@ -19,7 +19,7 @@ public record ApplicationText(String name, String shortName, String residenceNam
     public ApplicationText {
         name = normalize(Objects.requireNonNull(name, "name"));
         shortName = normalize(Objects.requireNonNull(shortName, "shortName"));
-        residenceName = normalize(Objects.requireNonNull(residenceName, "residenceName"));
+        residenceName = Normalizer.normalize(Objects.requireNonNull(residenceName, "residenceName"), Normalizer.Form.NFC);
         description = normalizeMultiline(Objects.requireNonNull(description, "description"));
         rules = Objects.requireNonNull(rules, "rules").stream()
                 .map(ApplicationText::normalizeMultiline)
@@ -30,9 +30,9 @@ public record ApplicationText(String name, String shortName, String residenceNam
     public List<ValidationIssue> validate() {
         List<ValidationIssue> errors = new ArrayList<>();
         validateName(name, 2, 24, errors);
-        if (residenceName.isEmpty() || residenceName.length() > 12) {
+        if (residenceName.length() < 3 || residenceName.length() > 9) {
             errors.add(issue(ValidationIssue.Code.RESIDENCE_NAME_LENGTH,
-                    bounds(1, 12)));
+                    bounds(3, 9)));
         } else if (!RESIDENCE_NAME.matcher(residenceName).matches()) {
             errors.add(issue(ValidationIssue.Code.RESIDENCE_NAME_CHARACTERS));
         }
@@ -50,6 +50,12 @@ public record ApplicationText(String name, String shortName, String residenceNam
                     ValidationIssue.Code.RULE_FORMAT, errors, index + 1);
         }
         return List.copyOf(errors);
+    }
+
+    public void requireValidExistingProfile() {
+        List<ValidationIssue> issues = validate().stream()
+                .filter(issue -> issue.field() != ValidationIssue.Field.RESIDENCE_NAME).toList();
+        if (!issues.isEmpty()) throw new ValidationException(issues);
     }
 
     public String normalizedName() {

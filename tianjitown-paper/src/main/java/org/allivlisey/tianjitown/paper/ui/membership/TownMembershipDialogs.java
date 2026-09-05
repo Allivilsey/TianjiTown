@@ -332,11 +332,6 @@ public final class TownMembershipDialogs {
     public void kickMember(Player mayor, UUID townId, UUID playerId, int page) {
         actions.kickMember(mayor, townId, playerId, outcome ->
                 facade.handleOutcome(mayor, outcome, change -> {
-            Player removed = Bukkit.getPlayer(change.playerId());
-            if (removed != null && removed.isOnline()) {
-                plugin.messages().send(removed, "chat.notification.member-removed",
-                        TownMembershipUi.townNotificationPlaceholders(change));
-            }
             presentation.openNotice(mayor, presentation.dialogText("notice.member-removed-title"),
                     presentation.dialogText("notice.member-removed-message"),
                     presentation.dialogText("common.back"), "MEMBERS", change.townId() + ":" + page);
@@ -346,12 +341,6 @@ public final class TownMembershipDialogs {
     public void addVisitor(Player manager, UUID townId, UUID playerId) {
         actions.addVisitor(manager, townId, playerId, outcome ->
                 facade.handleOutcome(manager, outcome, change -> {
-            Player invited = Bukkit.getPlayer(change.playerId());
-            if (invited != null && invited.isOnline()) {
-                plugin.messages().send(invited, "chat.notification.visitor-added",
-                        TownMembershipUi.townNotificationPlaceholders(change));
-                presentation.playSound(invited, Sound.BLOCK_NOTE_BLOCK_PLING);
-            }
             presentation.openNotice(manager, presentation.dialogText("notice.visitor-added-title"),
                     presentation.dialogText("notice.visitor-added-message", Map.of(
                             "player", facade.displayName(change.playerId()))),
@@ -362,11 +351,6 @@ public final class TownMembershipDialogs {
     public void removeVisitor(Player manager, UUID townId, UUID playerId, int page) {
         actions.removeVisitor(manager, townId, playerId, outcome ->
                 facade.handleOutcome(manager, outcome, change -> {
-            Player visitor = Bukkit.getPlayer(change.playerId());
-            if (visitor != null && visitor.isOnline()) {
-                plugin.messages().send(visitor, "chat.notification.visitor-removed",
-                        TownMembershipUi.townNotificationPlaceholders(change));
-            }
             presentation.openNotice(manager, presentation.dialogText("notice.visitor-removed-title"),
                     presentation.dialogText("notice.visitor-removed-message", Map.of(
                             "player", facade.displayName(change.playerId()))),

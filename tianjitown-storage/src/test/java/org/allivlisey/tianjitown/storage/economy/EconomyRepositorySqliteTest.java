@@ -440,6 +440,141 @@ class EconomyRepositorySqliteTest {
         }
     }
 
+    @Test
+    void legacyTownCodesStillLoadAndAllowProfileManagement() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("legacy-codes.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url, Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID town = UUID.randomUUID(), mayor = UUID.randomUUID();
+            insertTown(gate, town, mayor, UUID.randomUUID());
+            var repository = new org.allivlisey.tianjitown.storage.town.TownRepository(gate.dataSource(), () -> false);
+            for (String code : List.of("a", "ab", "abcdefghij", "abcdefghijkl")) {
+                execute(gate, "UPDATE territory_units SET residence_name = '" + code + "'");
+                var loaded = repository.findTown(town).orElseThrow();
+                assertEquals(code, loaded.profile().residenceName());
+                var old = loaded.profile();
+                var updated = new org.allivlisey.tianjitown.core.application.ApplicationText(old.name(), old.shortName(), code,
+                        "修改后的简介", old.rules());
+                assertEquals("修改后的简介", repository.updateTownProfile(town, updated, loaded.version(),
+                        mayor, "Mayor", "旧代码兼容验证").profile().description());
+            }
+        }
+    }
+
+    @Test
+    void playerChangeInboxIsTransactionalPersistentAndIgnoresNoOpRoleWrites() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("notifications.db");
+        UUID town = UUID.randomUUID(), mayor = UUID.randomUUID(), target = UUID.randomUUID();
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url, Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            insertTown(gate, town, mayor, UUID.randomUUID());
+            insertMember(gate, town, target, "MEMBER");
+            var repository = new org.allivlisey.tianjitown.storage.town.TownRepository(gate.dataSource(), () -> false);
+            var joined = repository.pendingPlayerChanges(target);
+            assertEquals(1, joined.size()); assertEquals("NONE", joined.getFirst().oldRole());
+            repository.acknowledgePlayerChanges(target, joined.stream().map(n -> n.id()).toList());
+            try (Connection connection = gate.dataSource().getConnection(); Statement statement = connection.createStatement()) {
+                statement.execute("BEGIN IMMEDIATE");
+                statement.execute("UPDATE town_members SET role = 'DEPUTY_MAYOR' WHERE role = 'MEMBER'");
+                statement.execute("ROLLBACK");
+            }
+            assertTrue(repository.pendingPlayerChanges(target).isEmpty());
+            execute(gate, "UPDATE town_members SET role = 'DEPUTY_MAYOR' WHERE role = 'MEMBER'");
+            execute(gate, "UPDATE town_members SET role = 'DEPUTY_MAYOR' WHERE role = 'DEPUTY_MAYOR'");
+            var changed = repository.pendingPlayerChanges(target);
+            assertEquals(1, changed.size()); assertEquals("MEMBER", changed.getFirst().oldRole());
+            assertEquals("DEPUTY_MAYOR", changed.getFirst().newRole()); assertEquals("测试镇", changed.getFirst().townName());
+            assertEquals(1, repository.pendingPlayerChanges(mayor).size()); // only the mayor's own join
+            UUID visitor = UUID.randomUUID();
+            try (Connection connection = gate.dataSource().getConnection();
+                 PreparedStatement statement = connection.prepareStatement("INSERT INTO town_visitors(town_id,player_uuid,invited_by) VALUES (?,?,?)")) {
+                statement.setBytes(1, uuid(town)); statement.setBytes(2, uuid(visitor)); statement.setBytes(3, uuid(mayor));
+                statement.executeUpdate();
+            }
+            var invited = repository.pendingPlayerChanges(visitor);
+            assertEquals("VISITOR", invited.getFirst().newRole());
+            repository.acknowledgePlayerChanges(visitor, invited.stream().map(n -> n.id()).toList());
+            insertMember(gate, town, visitor, "MEMBER");
+            var promoted = repository.pendingPlayerChanges(visitor);
+            assertEquals(1, promoted.size()); assertEquals("VISITOR", promoted.getFirst().oldRole());
+            assertEquals("MEMBER", promoted.getFirst().newRole());
+        }
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url, Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            var repository = new org.allivlisey.tianjitown.storage.town.TownRepository(gate.dataSource(), () -> false);
+            var pending = repository.pendingPlayerChanges(target);
+            assertEquals(1, pending.size());
+            repository.acknowledgePlayerChanges(mayor, List.of(pending.getFirst().id()));
+            assertEquals(1, repository.pendingPlayerChanges(target).size());
+            repository.acknowledgePlayerChanges(target, List.of(pending.getFirst().id()));
+            repository.acknowledgePlayerChanges(target, List.of(pending.getFirst().id()));
+            assertTrue(repository.pendingPlayerChanges(target).isEmpty());
+        }
+    }
+
+    @Test
+    void subsidyBoundariesIgnoreHostZoneAndRetryKeepsOriginalPeriod() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("boundaries.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url, Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID town = UUID.randomUUID();
+            insertTown(gate, town, UUID.randomUUID(), UUID.randomUUID());
+            EconomyRepository repository = new EconomyRepository(gate.dataSource(), () -> false);
+            String[][] cases = {
+                {"2026-09-06T19:59:59Z", "2026-09-06T20:00:00Z", "2026-09-06T20:00:00Z"},
+                {"2026-09-06T20:00:00Z", "2026-09-07T08:00:00Z", "2026-09-13T20:00:00Z"},
+                {"2026-09-07T07:59:59Z", "2026-09-07T08:00:00Z", "2026-09-13T20:00:00Z"},
+                {"2026-09-07T08:00:00Z", "2026-09-07T20:00:00Z", "2026-09-13T20:00:00Z"},
+                {"2026-09-07T19:59:59Z", "2026-09-07T20:00:00Z", "2026-09-13T20:00:00Z"},
+                {"2026-09-07T20:00:00Z", "2026-09-08T08:00:00Z", "2026-09-13T20:00:00Z"},
+                {"2026-12-31T20:00:00Z", "2027-01-01T08:00:00Z", "2027-01-03T20:00:00Z"}
+            };
+            for (String[] boundary : cases) {
+                var quota = repository.quickShopSubsidyQuota(town, 1000, 300, Instant.parse(boundary[0]), ZoneId.of("UTC"));
+                assertEquals(Instant.parse(boundary[1]), quota.twelveHourRefreshAt(), boundary[0]);
+                assertEquals(Instant.parse(boundary[2]), quota.weeklyRefreshAt(), boundary[0]);
+            }
+            var original = repository.reserveQuickShopSubsidy(town, "retry-period", 100, 1000, 300,
+                    Instant.parse(cases[0][0]), ZoneId.of("UTC"));
+            var retry = repository.reserveQuickShopSubsidy(town, "retry-period", 100, 1000, 300,
+                    Instant.parse(cases[1][0]), ZoneId.of("UTC"));
+            assertEquals(original, retry);
+        }
+    }
+
+    @Test
+    void migratesLegacyQuotaByCreationTimeWithoutRepayingOrChangingAmounts() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("upgrade.db");
+        UUID town = UUID.randomUUID();
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url, Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            org.flywaydb.core.Flyway.configure().dataSource(gate.dataSource())
+                    .locations("classpath:db/migration").target("1.1").load().migrate();
+            insertTown(gate, town, UUID.randomUUID(), UUID.randomUUID());
+            try (Connection connection = gate.dataSource().getConnection();
+                 PreparedStatement statement = connection.prepareStatement("INSERT INTO quickshop_subsidy_reservations (reservation_id,town_id,business_key,requested_minor,granted_minor,period_12h_start,week_start,status,created_at) VALUES (?,?,?,?,?,0,0,?,?)")) {
+                int index = 0;
+                for (String status : List.of("APPLIED", "RESERVED", "CANCELLED")) {
+                    statement.setBytes(1, uuid(UUID.randomUUID())); statement.setBytes(2, uuid(town));
+                    statement.setString(3, "legacy-" + index++); statement.setLong(4, 100); statement.setLong(5, 100);
+                    statement.setString(6, status);
+                    statement.setLong(7, Instant.parse("2026-09-06T19:59:59Z").toEpochMilli());
+                    statement.executeUpdate();
+                }
+            }
+            assertTrue(gate.verifyAndMigrate().healthy());
+            EconomyRepository repository = new EconomyRepository(gate.dataSource(), () -> false);
+            var quota = repository.quickShopSubsidyQuota(town, 1000, 300,
+                    Instant.parse("2026-09-06T19:59:59Z"), ZoneId.of("UTC"));
+            assertEquals(800, quota.weeklyRemainingMinor()); assertEquals(100, quota.twelveHourRemainingMinor());
+            var paid = repository.reserveQuickShopSubsidy(town, "legacy-0", 100, 1000, 300,
+                    Instant.parse("2026-09-07T00:00:00Z"), ZoneId.of("UTC"));
+            assertEquals("APPLIED", paid.status()); assertEquals(100, paid.grantedMinor());
+            assertTrue(gate.verifyAndMigrate().healthy());
+            assertEquals(paid, repository.reserveQuickShopSubsidy(town, "legacy-0", 100, 1000, 300,
+                    Instant.parse("2026-09-08T00:00:00Z"), ZoneId.of("UTC")));
+        }
+    }
+
     private static void insertTown(DatabaseGate gate, UUID townId, UUID mayorId, UUID worldId)
             throws Exception {
         insertTown(gate, townId, mayorId, worldId,

@@ -301,7 +301,7 @@ class TownRepositorySqliteTest {
             repository.cancel(cancelled.id(), cancelledApplicant, "玩家撤回测试");
             assertThrows(TownRepository.ConflictException.class,
                     () -> repository.createDraft(cancelledApplicant,
-                            applicationText("撤回后", "撤后", "CANCELNEXT"),
+                            applicationText("撤回后", "撤后", "CANEXT"),
                             List.of(UUID.randomUUID(), UUID.randomUUID()), cooldown));
 
             UUID rejectedApplicant = UUID.randomUUID();
@@ -319,7 +319,7 @@ class TownRepositorySqliteTest {
             repository.reject(rejected.id(), UUID.randomUUID(), "Admin", "管理员拒绝测试");
             assertThrows(TownRepository.ConflictException.class,
                     () -> repository.createDraft(rejectedApplicant,
-                            applicationText("拒绝后", "拒后", "REJECTNEXT"),
+                            applicationText("拒绝后", "拒后", "REJNEXT"),
                             List.of(UUID.randomUUID(), UUID.randomUUID()), cooldown));
         }
     }
@@ -458,7 +458,7 @@ class TownRepositorySqliteTest {
             assertFalse(repository.listMemberIds(joinTown.town().id()).contains(joiningPlayer));
             dropTrigger(gate, "fail_join_approval");
 
-            CreatedTown disbandTown = createTown(repository, 21, "事务解散", "事务散", "ROLLDISBAND");
+            CreatedTown disbandTown = createTown(repository, 21, "事务解散", "事务散", "ROLLDIS");
             repository.listMemberIds(disbandTown.town().id()).stream()
                     .filter(playerId -> !playerId.equals(disbandTown.mayorId()))
                     .forEach(playerId -> repository.removeMember(disbandTown.town().id(), playerId,
@@ -585,7 +585,7 @@ class TownRepositorySqliteTest {
             assertTrue(gate.verifyAndMigrate().healthy());
             TownRepository repository = new TownRepository(gate.dataSource(), () -> false);
             CreatedTown existing = createTown(repository, 40,
-                    "缓冲基准镇", "基准镇", "BUFFERBASE");
+                    "缓冲基准镇", "基准镇", "BUFBASE");
             ApplicationSnapshot draft = createDraft(repository,
                     applicationText("缓冲候选镇", "候选镇", "BUFCAND"));
             ChunkPosition origin = existing.town().territory().center();

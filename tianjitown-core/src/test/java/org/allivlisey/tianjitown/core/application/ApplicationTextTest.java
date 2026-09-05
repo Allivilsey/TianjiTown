@@ -12,6 +12,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ApplicationTextTest {
     @Test
+    void enforcesNewCodeBoundsWithoutPreventingLegacyProfileEdits() {
+        for (String code : List.of("abc", "Abcdefghi")) {
+            assertTrue(new ApplicationText("天际镇", "TJ", code, "简介", List.of("规则")).validate().isEmpty());
+        }
+        for (String code : List.of("", "a", "ab", "abcdefghij", "ab1", "a b", " abc", "abc ", "中文镇", "ab_")) {
+            ApplicationText text = new ApplicationText("天际镇", "TJ", code, "简介", List.of("规则"));
+            assertThrows(ApplicationText.ValidationException.class, text::requireValid, code);
+        }
+        for (String code : List.of("a", "ab", "abcdefghijkl")) {
+            ApplicationText text = new ApplicationText("天际镇", "TJ", code, "简介", List.of("规则"));
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(text::requireValidExistingProfile);
+        }
+    }
+
+    @Test
     void normalizesNamesForUniqueKeys() {
         ApplicationText text = new ApplicationText("  天 际 镇  ", " TJ ", "SKY", "简介",
                 List.of("规则"));

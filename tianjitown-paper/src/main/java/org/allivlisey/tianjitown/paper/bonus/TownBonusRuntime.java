@@ -128,7 +128,7 @@ public final class TownBonusRuntime implements Listener {
     }
 
     private static String safeText(Object value) {
-        return String.valueOf(value).replace('&', '＆').replace('§', '�');
+        return org.allivlisey.tianjitown.core.time.TownTime.display(value).replace('&', '＆').replace('§', '�');
     }
 
     private static String safeMessage(Throwable throwable) {

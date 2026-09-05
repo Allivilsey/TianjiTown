@@ -158,8 +158,8 @@ final class EconomyTaxStore {
             try (PreparedStatement statement = connection.prepareStatement("""
                     INSERT INTO quickshop_subsidy_reservations
                         (reservation_id, town_id, business_key, requested_minor, granted_minor,
-                         period_12h_start, week_start, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED')
+                         period_12h_start, week_start, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED', ?)
                     """)) {
                 statement.setBytes(1, EconomyPersistence.uuid(reservationId));
                 statement.setBytes(2, EconomyPersistence.uuid(townId));
@@ -168,6 +168,7 @@ final class EconomyTaxStore {
                 statement.setLong(5, granted);
                 statement.setLong(6, periods.twelveHourStart().toEpochMilli());
                 statement.setLong(7, periods.weekStart().toEpochMilli());
+                statement.setLong(8, now.toEpochMilli());
                 statement.executeUpdate();
             }
             return requireSubsidyReservation(connection, businessKey);
@@ -359,7 +360,7 @@ final class EconomyTaxStore {
                                                                  QuickShopTax tax) {
         try {
             Instant now = Instant.now();
-            ZoneId zoneId = ZoneId.systemDefault();
+            ZoneId zoneId = org.allivlisey.tianjitown.core.time.TownTime.ZONE;
             Periods periods = periods(now, zoneId);
             long weeklyUsed = subsidyUsed(connection, tax.townId(), "week_start",
                     periods.weekStart().toEpochMilli());
@@ -375,8 +376,8 @@ final class EconomyTaxStore {
             try (PreparedStatement statement = connection.prepareStatement("""
                     INSERT INTO quickshop_subsidy_reservations
                         (reservation_id, town_id, business_key, requested_minor, granted_minor,
-                         period_12h_start, week_start, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED')
+                         period_12h_start, week_start, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED', ?)
                     """)) {
                 statement.setBytes(1, EconomyPersistence.uuid(reservationId));
                 statement.setBytes(2, EconomyPersistence.uuid(tax.townId()));
@@ -385,6 +386,7 @@ final class EconomyTaxStore {
                 statement.setLong(5, granted);
                 statement.setLong(6, periods.twelveHourStart().toEpochMilli());
                 statement.setLong(7, periods.weekStart().toEpochMilli());
+                statement.setLong(8, now.toEpochMilli());
                 statement.executeUpdate();
             }
             return requireSubsidyReservation(connection, tax.businessKey());
@@ -404,11 +406,11 @@ final class EconomyTaxStore {
     }
 
     private static Periods periods(Instant now, ZoneId zoneId) {
-        ZonedDateTime local = now.atZone(zoneId);
+        ZonedDateTime local = now.atZone(org.allivlisey.tianjitown.core.time.TownTime.ZONE).minusHours(4);
         ZonedDateTime twelveHourStart = local.withMinute(0).withSecond(0).withNano(0)
-                .withHour(local.getHour() < 12 ? 0 : 12);
+                .withHour(local.getHour() < 12 ? 0 : 12).plusHours(4);
         ZonedDateTime weekStart = local.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-                .withHour(0).withMinute(0).withSecond(0).withNano(0);
+                .withHour(0).withMinute(0).withSecond(0).withNano(0).plusHours(4);
         return new Periods(twelveHourStart.toInstant(), weekStart.toInstant(),
                 weekStart.plusWeeks(1).toInstant(), twelveHourStart.plusHours(12).toInstant());
     }

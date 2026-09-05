@@ -20,7 +20,7 @@ final class TownProfileStore {
     public TownSnapshot updateTownProfile(UUID townId, ApplicationText profile, long expectedVersion,
                                           UUID actorId, String actorName, String reason) {
         database.requireWorkerThread();
-        profile.requireValid();
+        profile.requireValidExistingProfile();
         return database.transaction(connection -> {
             TownPersistence.requireManager(connection, townId, actorId);
             TownSnapshot current = TownPersistence.requireTown(connection, townId);

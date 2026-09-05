@@ -65,6 +65,40 @@ public final class TownRepository {
         return applicationStore.selectSite(applicationId, applicantId, territory, expiresAt, bufferChunks);
     }
 
+    public record PlayerChangeNotification(long id, UUID playerId, String townName,
+                                           String oldRole, String newRole) {}
+
+    public List<PlayerChangeNotification> pendingPlayerChanges(UUID playerId) {
+        database.requireWorkerThread();
+        return database.query(connection -> {
+            List<PlayerChangeNotification> result = new java.util.ArrayList<>();
+            try (var statement = connection.prepareStatement("SELECT * FROM player_change_notifications WHERE player_uuid = ? ORDER BY notification_id LIMIT 100")) {
+                statement.setBytes(1, uuid(playerId));
+                try (var rows = statement.executeQuery()) {
+                    while (rows.next()) result.add(new PlayerChangeNotification(rows.getLong("notification_id"),
+                            readUuid(rows, "player_uuid"), rows.getString("town_name"),
+                            rows.getString("old_role"), rows.getString("new_role")));
+                }
+            }
+            return List.copyOf(result);
+        });
+    }
+
+    public void acknowledgePlayerChanges(UUID playerId, List<Long> ids) {
+        database.requireWorkerThread();
+        database.transaction(connection -> {
+            try (var statement = connection.prepareStatement("DELETE FROM player_change_notifications WHERE player_uuid = ? AND notification_id = ?")) {
+                for (long id : ids) {
+                    statement.setBytes(1, uuid(playerId));
+                    statement.setLong(2, id);
+                    statement.addBatch();
+                }
+                statement.executeBatch();
+            }
+            return null;
+        });
+    }
+
     public ApplicationSnapshot submit(UUID applicationId, UUID applicantId) {
         return applicationStore.submit(applicationId, applicantId);
     }

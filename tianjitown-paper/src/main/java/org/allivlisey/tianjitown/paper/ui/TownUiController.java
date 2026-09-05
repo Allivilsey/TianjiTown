@@ -38,6 +38,7 @@ import org.allivlisey.tianjitown.paper.ui.finance.TownFinanceDialogs;
 import org.allivlisey.tianjitown.paper.ui.buff.TownBuffShopDialogs;
 
 public final class TownUiController implements Listener {
+    private final PlayerChangeDelivery playerChanges;
     private final TianjiTownPlugin plugin;
     private final TownUiLegacyFacade facade;
     private final ServiceStationController serviceStations;
@@ -47,6 +48,7 @@ public final class TownUiController implements Listener {
 
     public TownUiController(TianjiTownPlugin plugin, TownRuntime runtime, TownActions actions) {
         this.plugin = plugin;
+        playerChanges = new PlayerChangeDelivery(plugin, runtime.repository());
         facade = new TownUiLegacyFacade(plugin, runtime, actions);
         RuleEditorControls ruleControls = new RuleEditorControls(facade.presentation());
         facade.bindDialogs(new TownHomeDialogs(facade),
@@ -84,7 +86,7 @@ public final class TownUiController implements Listener {
                 .registerAll(buffShop::route, "BUFF_SHOP", "BUFF_DURATIONS", "BUY_BUFF")
                 .registerAll(financeUi::route, "FINANCE", "TAX_MENU", "LEDGER", "DONATION_INPUT")
                 .registerAll(territoryUi::route, "EXPANSION_MENU", "TOGGLE_EXPANSION",
-                        "CLEAR_EXPANSION_SELECTION", "CONFIRM_EXPANSION_BATCH", "PREVIEW_EXPANSION",
+                        "EXPANSION_ACTIONS", "CLEAR_EXPANSION_SELECTION", "CONFIRM_EXPANSION_BATCH", "PREVIEW_EXPANSION",
                         "EXPAND", "PREVIEW_TOWN", "SET_TOWN_TELEPORT")
                 .registerAll(membershipUi::route, "TOWN_MEMBER_OVERVIEW", "VISITOR_CENTER",
                         "VISITOR_LIST", "VISITOR_INVITE", "CONFIRM_ADD_VISITOR", "ADD_VISITOR",
@@ -112,6 +114,13 @@ public final class TownUiController implements Listener {
                         "CHOOSE_INITIAL_MEMBER", "SAVE_APPLICATION_DRAFT", "SAVE_FORM_DRAFT",
                         "DISCARD_FORM_DRAFT")
                 .build());
+    }
+
+    public void deliverPlayerChanges() { playerChanges.poll(); }
+
+    @EventHandler
+    public void deliverPlayerChanges(org.bukkit.event.player.PlayerJoinEvent event) {
+        playerChanges.deliver(event.getPlayer().getUniqueId());
     }
 
     public List<Listener> listeners() {

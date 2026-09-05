@@ -122,7 +122,7 @@ final class TownTaxRuntime {
                                 tax.taxMinor(), economySettings.weeklySubsidyLimitMinor(
                                         settlement.scale()),
                                 economySettings.twelveHourSubsidyLimitMinor(settlement.scale()),
-                                Instant.now(), ZoneId.systemDefault());
+                                Instant.now(), org.allivlisey.tianjitown.core.time.TownTime.ZONE);
                 plugin.runMain(() -> applyQuickShopSubsidy(tax, reservation));
             } catch (RuntimeException exception) {
                 handleQuickShopTaxFailure(tax, exception);
@@ -165,7 +165,7 @@ final class TownTaxRuntime {
         return finance.quickShopSubsidyQuota(townId,
                 economySettings.weeklySubsidyLimitMinor(settlement.scale()),
                 economySettings.twelveHourSubsidyLimitMinor(settlement.scale()),
-                Instant.now(), ZoneId.systemDefault());
+                Instant.now(), org.allivlisey.tianjitown.core.time.TownTime.ZONE);
     }
 
     private void handleQuickShopTaxFailure(QuickShopTaxAdapter.SuccessfulTax tax,
