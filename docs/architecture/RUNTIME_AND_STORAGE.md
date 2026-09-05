@@ -1,6 +1,6 @@
 # 运行时与持久化职责
 
-`TownRuntime`、`TownRepository` 和 `EconomyRepository` 保留现有公开方法、返回类型和异常类型，调用方通过这些入口访问业务。具体流程由包内组件实现，组件接收实际依赖，不持有入口类实例。
+`TownRuntime`、`TownRepository`、`EconomyRepository` 和 `CommerceRepository` 保留现有公开方法、返回类型和异常类型，调用方通过这些入口访问业务。具体流程由包内组件实现，组件接收实际依赖，不持有入口类实例。
 
 ## Paper 运行时
 
@@ -44,6 +44,19 @@
 | `EconomyDatabase` | 连接生命周期、线程检查、事务与异常转换 |
 
 事务入口继续使用 SQLite `BEGIN IMMEDIATE`。共享查询和账本方法接收当前 `Connection`，不另开连接或嵌套事务，因此余额、领地、申请状态与审计的原子性保持不变。批量扩张仍在一个事务内预留所有单元并扣除一次总价。
+
+## Buff 消费存储
+
+| 组件 | 职责 |
+| --- | --- |
+| `CommerceRepository` | 组装组件、公开入口、保留报价/购买结果和异常类型 |
+| `BuffPurchaseStore` | 报价、角色检查、固定时长/自选周数购买及管理员代购 |
+| `BuffLifecycleStore` | 玩家/小镇生效 Buff 查询、到期清理、退款与上一层快照恢复 |
+| `CommercePersistence` | 使用调用方连接查询 Buff、校验小镇/账户、写入账本与审计 |
+| `CommerceSqlValues` | JDBC 值转换、更新行数检查 |
+| `CommerceDatabase` | 连接生命周期、主线程拦截、事务回滚及异常转换 |
+
+购买和退款继续使用同一个 `BEGIN IMMEDIATE` 事务更新账户、账本、Buff 状态和审计。业务键幂等、退款恢复上一层未到期快照、报价时清理到期记录的行为保持不变。
 
 ## 验证
 

@@ -7,7 +7,10 @@ import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
 import org.allivlisey.tianjitown.storage.database.DatabaseGate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.function.Executable;
 
+import javax.sql.DataSource;
+import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
@@ -17,15 +20,113 @@ import java.sql.ResultSet;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Set;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommerceRepositorySqliteTest {
     @TempDir
     Path temporaryDirectory;
+
+    @Test
+    void rejectsEveryPublicOperationBeforeAccessingDataSourceOnMainThread() {
+        DataSource dataSource = (DataSource) Proxy.newProxyInstance(
+                DataSource.class.getClassLoader(), new Class<?>[]{DataSource.class},
+                (proxy, method, arguments) -> {
+                    throw new AssertionError("主线程不应访问数据源: " + method.getName());
+                });
+        CommerceRepository repository = new CommerceRepository(dataSource, () -> true);
+        UUID playerId = UUID.randomUUID();
+        UUID townId = UUID.randomUUID();
+        Instant now = Instant.now();
+        BuffDefinition buff = new BuffDefinition("speed", "迅捷",
+                BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                BigDecimal.ONE, 2, BuffStackingRule.LEVEL_UP, 1);
+        List<Executable> operations = List.of(
+                () -> repository.quoteBuff(playerId, buff, BuffDurationOption.ONE_HOUR, 2, now),
+                () -> repository.quoteBuff(playerId, buff, 1, 1, 2, now),
+                () -> repository.purchaseBuff(playerId, "Mayor", buff,
+                        BuffDurationOption.ONE_HOUR, 2, "purchase", now),
+                () -> repository.purchaseBuff(playerId, "Mayor", buff, "迅捷",
+                        BuffDurationOption.ONE_HOUR, 2, "purchase", now),
+                () -> repository.purchaseBuff(playerId, "Mayor", buff,
+                        1, 1, 2, "purchase", now),
+                () -> repository.purchaseBuff(playerId, "Mayor", buff, "迅捷",
+                        1, 1, 2, "purchase", now),
+                () -> repository.purchaseBuffForTown(townId, playerId, "Admin", buff,
+                        2, BuffDurationOption.ONE_HOUR, "purchase", now, "管理员购买"),
+                () -> repository.purchaseBuffForTown(townId, playerId, "Admin", buff, "迅捷",
+                        2, BuffDurationOption.ONE_HOUR, "purchase", now, "管理员购买"),
+                () -> repository.activeBuffsForPlayer(playerId, now),
+                () -> repository.activeBuffsForTown(townId, now),
+                () -> repository.expireBuffs(now),
+                () -> repository.expireBuffsForPlayer(playerId, now),
+                () -> repository.refundActiveBuff(UUID.randomUUID(), playerId, "Admin", "退款"));
+        assertAll(operations.stream().map(operation -> () -> {
+            IllegalStateException exception = assertThrows(IllegalStateException.class, operation);
+            assertEquals("禁止在 Paper 主线程执行数据库 I/O", exception.getMessage());
+        }));
+    }
+
+    @Test
+    void rollsBackSelectedReplacementAndRestorationWhenAuditFails() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("selected-rollback.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID townId = UUID.randomUUID();
+            UUID mayorId = UUID.randomUUID();
+            UUID memberId = UUID.randomUUID();
+            insertTown(gate, townId, mayorId, memberId);
+            CommerceRepository repository = new CommerceRepository(gate.dataSource(), () -> false);
+            BuffDefinition buff = new BuffDefinition("health", "生命",
+                    BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:max_health", "ADD_NUMBER",
+                    BigDecimal.ONE, 5, BuffStackingRule.LEVEL_UP, 4);
+            Instant now = Instant.now();
+            CommerceRepository.BuffPurchase first = repository.purchaseBuff(mayorId, "Mayor",
+                    buff, "公共生命", 1, 1, 2, "selected:first", now);
+
+            installAuditFailure(gate, "fail_selected_purchase", "BUFF_PURCHASE");
+            assertThrows(CommerceRepository.ConflictException.class,
+                    () -> repository.purchaseBuff(mayorId, "Mayor", buff, "公共生命",
+                            1, 2, 2, "selected:second", now));
+            assertEquals(first.balanceAfterMinor(), accountBalance(gate, townId));
+            assertEquals(first.buff().buffId(),
+                    repository.activeBuffsForTown(townId, now).getFirst().buffId());
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM active_buffs "
+                    + "WHERE business_key = 'selected:second'"));
+            assertEquals(1, ledgerCount(gate, townId, "BUFF_PURCHASE"));
+            execute(gate, "DROP TRIGGER fail_selected_purchase");
+
+            CommerceRepository.BuffPurchase second = repository.purchaseBuff(mayorId, "Mayor",
+                    buff, "公共生命", 1, 2, 2, "selected:second", now);
+            assertEquals(second, repository.purchaseBuff(mayorId, "Mayor", buff,
+                    "公共生命", 1, 2, 2, "selected:second", now));
+            assertEquals(2, ledgerCount(gate, townId, "BUFF_PURCHASE"));
+            assertTrue(scalarText(gate, "SELECT note FROM ledger_entries "
+                    + "WHERE business_key = 'selected:second'").contains("公共生命"));
+
+            installAuditFailure(gate, "fail_selected_refund", "BUFF_REFUND");
+            assertThrows(CommerceRepository.ConflictException.class,
+                    () -> repository.refundActiveBuff(second.buff().buffId(), null, null, "效果失败"));
+            assertEquals(second.balanceAfterMinor(), accountBalance(gate, townId));
+            assertEquals("SUPERSEDED", scalarText(gate, "SELECT status FROM active_buffs "
+                    + "WHERE business_key = 'selected:first'"));
+            assertEquals(second.buff().buffId(),
+                    repository.activeBuffsForTown(townId, now).getFirst().buffId());
+            assertEquals(0, ledgerCount(gate, townId, "BUFF_REFUND"));
+            execute(gate, "DROP TRIGGER fail_selected_refund");
+
+            assertEquals(first.balanceAfterMinor(), repository.refundActiveBuff(
+                    second.buff().buffId(), null, null, "效果失败").balanceAfterMinor());
+            assertEquals(first.buff().buffId(),
+                    repository.activeBuffsForTown(townId, now).getFirst().buffId());
+        }
+    }
 
     @Test
     void purchasesSelectedWeeklyDurationAndRomanIntensity() throws Exception {
