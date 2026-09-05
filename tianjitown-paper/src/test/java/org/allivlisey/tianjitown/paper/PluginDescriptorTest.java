@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper;
+import org.allivlisey.tianjitown.paper.message.PluginMessages;
 
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.configuration.file.YamlConfiguration;

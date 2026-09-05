@@ -1,4 +1,15 @@
 package org.allivlisey.tianjitown.paper;
+import org.allivlisey.tianjitown.paper.bonus.TownBonusRuntime;
+import org.allivlisey.tianjitown.paper.command.TownAdminCommand;
+import org.allivlisey.tianjitown.paper.command.TownAdminTabCompleter;
+import org.allivlisey.tianjitown.paper.config.ConfigurationValues;
+import org.allivlisey.tianjitown.paper.config.RuntimeConfigurationValidator;
+import org.allivlisey.tianjitown.paper.message.PluginMessages;
+import org.allivlisey.tianjitown.paper.runtime.GateStatus;
+import org.allivlisey.tianjitown.paper.runtime.TownActions;
+import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
+import org.allivlisey.tianjitown.paper.task.AsyncTaskTracker;
+import org.allivlisey.tianjitown.paper.ui.TownUiController;
 
 import org.allivlisey.tianjitown.core.ports.WorldBoundaryService;
 import org.allivlisey.tianjitown.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
@@ -248,19 +259,19 @@ public final class TianjiTownPlugin extends JavaPlugin {
         return gateStatus.get();
     }
 
-    TownRuntime townRuntime() {
+    public TownRuntime townRuntime() {
         return townRuntime;
     }
 
-    TownUiController townUi() {
+    public TownUiController townUi() {
         return townUi;
     }
 
-    TownActions townActions() {
+    public TownActions townActions() {
         return townActions;
     }
 
-    PluginMessages messages() {
+    public PluginMessages messages() {
         PluginMessages current = messages;
         if (current == null) {
             throw new IllegalStateException(BOOTSTRAP_MESSAGES_NOT_LOADED);
@@ -268,7 +279,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         return current;
     }
 
-    void reloadMessages() {
+    public void reloadMessages() {
         messages().reload();
     }
 
@@ -284,7 +295,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
         return current.plainText(key, placeholders);
     }
 
-    boolean runAsync(Runnable task) {
+    public boolean runAsync(Runnable task) {
         java.util.Objects.requireNonNull(task, "task");
         ExecutorService executor = asyncExecutor;
         long generation = lifecycleGeneration.get();
@@ -320,11 +331,11 @@ public final class TianjiTownPlugin extends JavaPlugin {
         }
     }
 
-    boolean runMain(Runnable task) {
+    public boolean runMain(Runnable task) {
         return scheduleMain(task, 0L);
     }
 
-    boolean runMainLater(Runnable task, long delayTicks) {
+    public boolean runMainLater(Runnable task, long delayTicks) {
         if (delayTicks < 0) {
             throw new IllegalArgumentException(plainText(NEGATIVE_DELAY));
         }
