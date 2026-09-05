@@ -18,6 +18,8 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -41,6 +43,23 @@ public final class BuffRuntime implements Listener {
     private final BuffSettings settings;
     private final BuffPlayerEffects effects;
     private final BuffExpirationScheduler expirations;
+    private final Set<Player> awaitingSync = new HashSet<>();
+    private boolean huskSyncHook;
+
+    public void registerHuskSyncHook() {
+        huskSyncHook = HuskSyncBuffHook.register(plugin, this, this::onSyncComplete);
+    }
+
+    void onSyncComplete(Player player) {
+        plugin.runMain(() -> {
+            if (!player.isOnline()) {
+                return;
+            }
+            awaitingSync.remove(player);
+            effects.forgetPlayer(player);
+            refreshPlayer(player, true, false);
+        });
+    }
 
     public BuffRuntime(TianjiTownPlugin plugin, TownRuntime host,
                        CommerceRepository repository, BuffSettings settings) {
@@ -116,7 +135,7 @@ public final class BuffRuntime implements Listener {
 
     private void refreshPlayer(Player player, boolean expireRecords,
                                 boolean normalizeRespawnHealth) {
-        if (!player.isOnline()) {
+        if (!player.isOnline() || awaitingSync.contains(player)) {
             return;
         }
         UUID playerId = player.getUniqueId();
@@ -171,6 +190,7 @@ public final class BuffRuntime implements Listener {
     }
 
     public void clearAll() {
+        awaitingSync.clear();
         expirations.clearAll();
         effects.clearAll();
     }
@@ -178,6 +198,10 @@ public final class BuffRuntime implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
+        if (huskSyncHook) {
+            awaitingSync.add(player);
+            return;
+        }
         // 登录时先收尾停服期间已到期的记录，再校验并恢复玩家效果。
         plugin.runMain(() -> refreshPlayer(player, true, false));
     }
@@ -196,7 +220,8 @@ public final class BuffRuntime implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         UUID playerId = event.getPlayer().getUniqueId();
-        effects.clearPlayer(event.getPlayer());
+        awaitingSync.remove(event.getPlayer());
+        effects.forgetPlayer(event.getPlayer());
         expirations.playerQuit(playerId);
     }
 

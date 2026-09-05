@@ -26,6 +26,7 @@ final class BuffExpirationScheduler {
     private final Map<UUID, Long> refreshGenerations = new HashMap<>();
     private final Map<UUID, BukkitTask> expirationTasks = new HashMap<>();
     private final Map<UUID, Instant> expirationDeadlines = new HashMap<>();
+    private long generationSequence;
 
     BuffExpirationScheduler(TianjiTownPlugin plugin, BiConsumer<UUID, Long> onExpiration) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -38,10 +39,9 @@ final class BuffExpirationScheduler {
     }
 
     void playerQuit(UUID playerId) {
-        if (!expirationTasks.containsKey(playerId)) {
-            expirationDeadlines.remove(playerId);
-            refreshGenerations.remove(playerId);
-        }
+        cancelExpirationTask(playerId);
+        expirationDeadlines.remove(playerId);
+        refreshGenerations.remove(playerId);
     }
 
     void forgetRefresh(UUID playerId, long generation) {
@@ -61,8 +61,7 @@ final class BuffExpirationScheduler {
     long nextRefreshGeneration(UUID playerId) {
         Instant previousDeadline = expirationDeadlines.get(playerId);
         cancelExpirationTask(playerId);
-        long current = refreshGenerations.getOrDefault(playerId, 0L);
-        long next = current == Long.MAX_VALUE ? 1L : current + 1L;
+        long next = ++generationSequence;
         refreshGenerations.put(playerId, next);
         if (previousDeadline != null) {
             scheduleExpirationTask(playerId, next, previousDeadline);

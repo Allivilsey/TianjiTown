@@ -91,16 +91,17 @@ class BuffExpirationSchedulerTest {
     }
 
     @Test
-    void quittingPreservesPendingCleanupButForgetsPlayersWithoutTasks() {
+    void quittingCancelsTasksAndOldGenerationCannotMatchRejoin() {
         long generation = expirations.nextRefreshGeneration(playerId);
         expirations.ensureExpirationAt(playerId, generation, Instant.now().plusSeconds(60));
         expirations.playerQuit(playerId);
-        assertTrue(expirations.isCurrentRefresh(playerId, generation));
-        verify(scheduled.getFirst().task(), never()).cancel();
-        scheduled.getFirst().callback().run();
-        assertEquals(List.of(generation), expiredGenerations);
-        expirations.playerQuit(playerId);
         assertFalse(expirations.isCurrentRefresh(playerId, generation));
+        verify(scheduled.getFirst().task()).cancel();
+        long rejoined = expirations.nextRefreshGeneration(playerId);
+        assertNotEquals(generation, rejoined);
+        scheduled.getFirst().callback().run();
+        assertTrue(expiredGenerations.isEmpty());
+        assertEquals(1, scheduled.size(), "quit must forget the previous deadline");
     }
 
     @Test

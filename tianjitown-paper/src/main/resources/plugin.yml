@@ -8,7 +8,7 @@ libraries:
   - 'com.zaxxer:HikariCP:${hikari.version}'
   - 'org.flywaydb:flyway-core:${flyway.version}'
   - 'org.xerial:sqlite-jdbc:${sqlite.version}'
-softdepend: [Vault, Residence, QuickShop-Hikari, Jobs, GlobalMarketPlus, XConomy, WorldBorder]
+softdepend: [Vault, Residence, QuickShop-Hikari, Jobs, GlobalMarketPlus, XConomy, WorldBorder, HuskSync]
 commands:
   townadmin:
     description: TianjiTown 管理命令

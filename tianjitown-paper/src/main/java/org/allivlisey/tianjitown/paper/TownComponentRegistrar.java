@@ -67,6 +67,7 @@ final class TownComponentRegistrar {
         }
         ui.listeners().forEach(listener -> plugin.getServer().getPluginManager().registerEvents(listener, plugin));
         plugin.getServer().getPluginManager().registerEvents(runtime.buffs(), plugin);
+        runtime.buffs().registerHuskSyncHook();
         plugin.getServer().getPluginManager().registerEvents(runtime.bonuses(), plugin);
         plugin.getServer().getPluginManager().registerEvents(
                 new ResidenceCommandGuard(plugin, managedResidenceNames::contains,

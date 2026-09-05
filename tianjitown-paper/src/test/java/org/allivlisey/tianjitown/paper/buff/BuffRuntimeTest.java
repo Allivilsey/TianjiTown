@@ -7,12 +7,11 @@ import org.allivlisey.tianjitown.paper.config.BuffSettings;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.storage.commerce.CommerceRepository;
-import org.bukkit.Bukkit;
 import org.bukkit.Server;
-import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
@@ -146,29 +145,69 @@ class BuffRuntimeTest {
     }
 
     @Test
-    void quitClearsEffectsButExpirationStillRetriesDatabaseCleanupForOfflinePlayer() {
-        try (var constructed = mockConstruction(BuffPlayerEffects.class);
-             var bukkit = mockStatic(Bukkit.class)) {
-            ConsoleCommandSender console = mock(ConsoleCommandSender.class);
-            bukkit.when(Bukkit::getConsoleSender).thenReturn(console);
+    void quitPreservesEffectsAndInvalidatesPendingWorkEvenAfterRejoin() {
+        try (var constructed = mockConstruction(BuffPlayerEffects.class)) {
             BuffRuntime runtime = new BuffRuntime(plugin, host, repository, settings);
+            BuffPlayerEffects effects = constructed.constructed().getFirst();
             runtime.refreshPlayer(player);
             reads.getFirst().success().accept(List.of(activeBuff()));
+            runtime.refreshPlayer(player);
+            Action stale = reads.getLast();
             PlayerQuitEvent event = mock(PlayerQuitEvent.class);
             when(event.getPlayer()).thenReturn(player);
-            when(player.isOnline()).thenReturn(false);
             runtime.onQuit(event);
-            verify(constructed.constructed().getFirst()).clearPlayer(player);
+            verify(effects).forgetPlayer(player);
+            clearInvocations(effects);
+            runtime.refreshPlayer(player);
+            stale.success().accept(List.of(activeBuff()));
+            scheduled.forEach(Runnable::run);
+            verifyNoInteractions(effects);
+            assertTrue(writes.isEmpty());
+        }
+    }
 
-            scheduled.getFirst().run();
-            writes.getFirst().failure().accept(new IllegalStateException("database unavailable"));
-            assertEquals(2, scheduled.size());
-            scheduled.getLast().run();
-            Action retry = writes.getLast();
-            retry.success().accept(retry.operation().get());
+    @Test
+    void huskSyncJoinWaitsForCompletionThenExpiresAndReconciles() {
+        try (var constructed = mockConstruction(BuffPlayerEffects.class);
+             var hook = mockStatic(HuskSyncBuffHook.class)) {
+            hook.when(() -> HuskSyncBuffHook.register(eq(plugin), any(), any())).thenReturn(true);
+            BuffRuntime runtime = new BuffRuntime(plugin, host, repository, settings);
+            runtime.registerHuskSyncHook();
+            PlayerJoinEvent event = mock(PlayerJoinEvent.class);
+            when(event.getPlayer()).thenReturn(player);
+            runtime.onJoin(event);
+            runtime.refreshPlayer(player);
+            assertTrue(reads.isEmpty());
+            assertTrue(writes.isEmpty());
+            runtime.onSyncComplete(player);
+            assertTrue(writes.isEmpty(), "sync event must hand off to the main thread");
+            main.getLast().run();
+            assertEquals(1, writes.size());
+            writes.getFirst().operation().get();
             verify(repository).expireBuffsForPlayer(eq(playerId), any());
-            assertEquals(1, reads.size(), "offline cleanup must not request player effects");
-            assertEquals(2, scheduled.size());
+            verify(repository).activeBuffsForPlayer(eq(playerId), any());
+            writes.getFirst().success().accept(List.of());
+            var effects = constructed.constructed().getFirst();
+            var order = inOrder(effects);
+            order.verify(effects).forgetPlayer(player);
+            order.verify(effects).applyBuffs(player, List.of(), false);
+        }
+    }
+
+    @Test
+    void ordinaryJoinStillReconcilesAndLateSyncForOfflinePlayerIsIgnored() {
+        try (var constructed = mockConstruction(BuffPlayerEffects.class)) {
+            BuffRuntime runtime = new BuffRuntime(plugin, host, repository, settings);
+            PlayerJoinEvent event = mock(PlayerJoinEvent.class);
+            when(event.getPlayer()).thenReturn(player);
+            runtime.onJoin(event);
+            main.getLast().run();
+            assertEquals(1, writes.size());
+            when(player.isOnline()).thenReturn(false);
+            runtime.onSyncComplete(player);
+            main.getLast().run();
+            assertEquals(1, writes.size());
+            verifyNoInteractions(constructed.constructed().getFirst());
         }
     }
 

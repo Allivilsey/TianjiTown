@@ -56,8 +56,8 @@ final class BuffPlayerEffects {
         appliedEffects.clear();
     }
 
-    void clearPlayer(Player player) {
-        tryClearManagedEffects(player);
+    void forgetPlayer(Player player) {
+        // Keep transferable effects and their PDC markers; only release local bookkeeping.
         appliedEffects.remove(player.getUniqueId());
     }
 
@@ -214,6 +214,19 @@ final class BuffPlayerEffects {
                         modifierKey(definition.key())));
             }
         }
+        // Include carried modifiers for catalog entries that have since been removed or changed.
+        for (Attribute attribute : Registry.ATTRIBUTE) {
+            AttributeInstance instance = player.getAttribute(attribute);
+            if (instance != null) {
+                for (AttributeModifier modifier : instance.getModifiers()) {
+                    NamespacedKey key = modifier.getKey();
+                    if (key.getNamespace().equals(potionKeysKey.getNamespace())
+                            && key.getKey().startsWith("buff_")) {
+                        managed.add(new AttributeKey(attribute, key));
+                    }
+                }
+            }
+        }
         managed.removeAll(desired.keySet());
         removeAttributeModifiers(player, managed);
 
@@ -227,7 +240,7 @@ final class BuffPlayerEffects {
             AttributeModifier current = instance.getModifier(expectation.key().modifierKey());
             boolean wasPreviouslyManaged = previous != null
                     && previous.attributes().contains(expectation.key());
-            if (current != null
+            if (wasPreviouslyManaged && current != null
                     && current.getOperation() == expectation.operation()
                     && Double.compare(current.getAmount(), expectation.amount()) == 0) {
                 continue;
