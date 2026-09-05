@@ -1604,7 +1604,7 @@ dialog:
     updated-title: '&6小镇规则已更新'
     confirm: '&a确认规则'
     later: '&c稍后'
-    later-tooltip: '&8关闭界面；小镇功能仍保持锁定'
+    later-tooltip: '&8关闭界面'
     required-title: '&6请确认小镇规则'
     required-message: '&f勾选“我已阅读并理解以上规则”后才能继续'
     current-heading: '&6{town} · 当前规则'
