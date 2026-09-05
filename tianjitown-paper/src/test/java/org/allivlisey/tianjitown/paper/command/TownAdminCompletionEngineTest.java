@@ -50,21 +50,8 @@ class TownAdminCompletionEngineTest {
     }
 
     @Test
-    void filtersRootCommandsAndIncludesContextualCommands() {
-        List<String> result = engine.complete(new String[]{"st"}, snapshot, dynamic);
-        assertEquals(List.of("station", "status"), result);
-        assertTrue(engine.complete(new String[]{"main"}, snapshot, dynamic).contains("maintenance"));
-        assertFalse(engine.complete(new String[]{""}, snapshot, dynamic).contains("data"));
-        assertEquals(List.of("application"), engine.complete(
-                new String[]{"help", "app"}, snapshot, dynamic));
-        assertEquals(List.of("1", "14", "180", "30", "7", "90"), engine.complete(
-                new String[]{"diagnose", ""}, snapshot, dynamic));
-    }
-
-    @Test
     void filtersApplicationsByWorkflowStatus() {
-        assertEquals(List.of("approve", "change", "list", "reject"), engine.complete(
-                new String[]{"application", ""}, snapshot, dynamic));
+
         assertEquals(List.of("待审小镇"), engine.complete(
                 new String[]{"application", "approve", "待"}, snapshot, dynamic));
         assertEquals(List.of("失败小镇"), engine.complete(
@@ -79,10 +66,7 @@ class TownAdminCompletionEngineTest {
 
     @Test
     void completesTownMembersReasonHintsAndRepairAction() {
-        assertEquals(List.of("create", "info", "list", "remove"), engine.complete(
-                new String[]{"station", ""}, snapshot, dynamic));
-        assertEquals(List.of("add", "remove", "role"), engine.complete(
-                new String[]{"member", ""}, snapshot, dynamic));
+
         assertEquals(List.of("MemberOne"), engine.complete(
                 new String[]{"member", "remove", "天际", "之城", ""},
                 snapshot, dynamic));
@@ -92,8 +76,7 @@ class TownAdminCompletionEngineTest {
         assertEquals(List.of("DEPUTY_MAYOR", "MEMBER"), engine.complete(
                 new String[]{"member", "role", "天际", "之城", "MemberOne", ""},
                 snapshot, dynamic));
-        assertEquals(List.of("cancel", "create-kick", "create-mayor", "settle"),
-                engine.complete(new String[]{"vote", ""}, snapshot, dynamic));
+
         assertEquals(List.of("MemberOne"), engine.complete(
                 new String[]{"vote", "create-kick", "天际", "之城", ""},
                 snapshot, dynamic));
@@ -101,19 +84,16 @@ class TownAdminCompletionEngineTest {
                 new String[]{"land", "reconcile", "天际", "之城", ""}, snapshot, dynamic));
         assertEquals(List.of("<原因>"), engine.complete(
                 new String[]{"town", "delete", "天际之城", ""}, snapshot, dynamic));
-        assertEquals(List.of("off", "on", "status"), engine.complete(
-                new String[]{"maintenance", ""}, snapshot, dynamic));
+
     }
 
     @Test
     void completesBuffManagementCommands() {
-        assertEquals(List.of("grant", "list"), engine.complete(
-                new String[]{"buff", ""}, snapshot, dynamic));
+
         assertEquals(List.of("<buffKey>"), engine.complete(
                 new String[]{"buff", "grant", "天际", "之城", ""}, snapshot, dynamic));
         assertEquals(List.of(), engine.complete(
                 new String[]{"order", "create", "天际", "之城", ""}, snapshot, dynamic));
-        assertFalse(engine.complete(new String[]{""}, snapshot, dynamic).contains("order"));
     }
 
     @Test
@@ -153,17 +133,4 @@ class TownAdminCompletionEngineTest {
                 messages::plainText));
     }
 
-    @Test
-    void limitsPlayerOnlyActionsForConsole() {
-        TownAdminCompletionEngine.Dynamic console = new TownAdminCompletionEngine.Dynamic(
-                List.of(), false);
-        List<String> roots = engine.complete(new String[]{""}, snapshot, console);
-        assertTrue(roots.contains("station"));
-        assertFalse(roots.contains("confirm"));
-        assertFalse(roots.contains("cancel"));
-        assertEquals(List.of("list"), engine.complete(
-                new String[]{"station", ""}, snapshot, console));
-        assertFalse(engine.complete(new String[]{"land", ""}, snapshot, console)
-                .contains("preview"));
-    }
 }

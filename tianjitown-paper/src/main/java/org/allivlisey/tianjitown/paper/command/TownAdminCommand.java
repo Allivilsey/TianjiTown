@@ -13,11 +13,16 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.jetbrains.annotations.NotNull;
+import revxrsal.commands.annotation.Command;
+import revxrsal.commands.annotation.Usage;
+import revxrsal.commands.annotation.Optional;
+import revxrsal.commands.annotation.Single;
+import revxrsal.commands.annotation.Default;
+import revxrsal.commands.annotation.Range;
+import revxrsal.commands.annotation.Suggest;
+import revxrsal.commands.bukkit.actor.BukkitCommandActor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +32,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-public final class TownAdminCommand implements CommandExecutor {
+public final class TownAdminCommand {
     private static final UUID CONSOLE_ID = new UUID(0, 0);
     private final TownAdminApplicationCommands townAdminApplicationCommands;
     private final TownAdminGovernanceCommands townAdminGovernanceCommands;
@@ -52,82 +57,38 @@ public final class TownAdminCommand implements CommandExecutor {
         plugin.messages().send(recipient, key, placeholders);
     }
 
-    @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
-                             @NotNull String label, @NotNull String[] args) {
-        if (args.length == 0) {
-            if (!TownAdminPermissions.hasAny(sender::hasPermission)) {
-                send(sender, "chat.admin.no-permission");
-                return true;
-            }
-            help(sender, null);
-            return true;
-        }
-        String root = args[0].toLowerCase(Locale.ROOT);
-        if (!TownAdminPermissions.canUseRoot(sender::hasPermission, root)) {
-            send(sender, "chat.admin.no-permission");
-            return true;
-        }
-        if (root.equals("help")) {
-            help(sender, args.length >= 2 ? args[1] : null);
-            return true;
-        }
-        try {
-            if (root.equals("confirm")) {
-                return confirm(sender, args);
-            }
-            if (root.equals("cancel")) {
-                return cancel(sender, args);
-            }
-            if (root.equals("status")) {
-                status(sender);
-                return true;
-            }
-            if (root.equals("reload")) {
-                plugin.reloadConfig();
-                plugin.reloadMessages();
-                send(sender, "chat.admin.reload");
-                return true;
-            }
-            if (root.equals("maintenance")) {
-                return maintenance(sender, args);
-            }
-            TownRuntime runtime = requireRuntime(sender);
-            if (runtime == null) {
-                return true;
-            }
-            return switch (root) {
-                case "audit" -> audit(sender, runtime, args);
-                case "station" -> station(sender, args);
-                case "handbook" -> handbook(sender, args);
-                case "application" -> application(sender, runtime, args);
-                case "town" -> town(sender, runtime, args);
-                case "member" -> member(sender, runtime, args);
-                case "mayor" -> mayor(sender, runtime, args);
-                case "vote" -> vote(sender, runtime, args);
-                case "land" -> land(sender, runtime, args);
-                case "money" -> money(sender, runtime, args);
-                case "tax" -> tax(sender, runtime, args);
-                case "ledger" -> ledger(sender, runtime, args);
-                case "expand" -> expand(sender, runtime, args);
-                case "buff" -> buff(sender, runtime, args);
-                case "diagnose" -> diagnose(sender, runtime, args);
-                default -> {
-                    send(sender, "chat.admin.unknown-command", Map.of("command", args[0]));
-                    yield true;
-                }
-            };
-        } catch (IllegalArgumentException exception) {
-            String detail = exception instanceof TownCommandParser.ParseException parse
-                    ? plugin.messages().text(parse.messageKey(), parse.placeholders())
-                    : safeMessage(exception);
-            send(sender, "chat.admin.argument-error", Map.of(
-                    "detail", detail));
-            return true;
-        }
+    public void register(revxrsal.commands.Lamp<BukkitCommandActor> lamp) {
+        lamp.register(this, townAdminApplicationCommands, townAdminGovernanceCommands,
+                townAdminEconomyCommands, townAdminLandCommands);
     }
 
-    private void status(CommandSender sender) {
+    @Command("townadmin")
+    @Usage("/townadmin help")
+    @AdminAccess
+    public void root(CommandSender sender) {
+        help(sender, null);
+    }
+
+    @Command("townadmin help")
+    @Usage("/townadmin help [分类]")
+    @AdminAccess
+    public void helpCommand(CommandSender sender, @Optional @Single String topic) {
+        help(sender, topic);
+    }
+
+    @Command("townadmin reload")
+    @Usage("/townadmin reload")
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void reload(CommandSender sender) {
+        plugin.reloadConfig();
+        plugin.reloadMessages();
+        send(sender, "chat.admin.reload");
+    }
+
+    @Command("townadmin status")
+    @Usage("/townadmin status")
+    @AdminAccess(TownAdminPermissions.OPERATIONS)
+    public void status(CommandSender sender) {
         GateStatus status = plugin.gateStatus();
         send(sender, "chat.admin.status-header", Map.of(
                 "version", plugin.getPluginMeta().getVersion(), "state", status.state()));
@@ -160,41 +121,37 @@ public final class TownAdminCommand implements CommandExecutor {
                 maintenanceMode() ? "MAINTENANCE" : "OPEN"));
     }
 
-    private boolean diagnose(CommandSender sender, TownRuntime runtime, String[] args) {
-        if (args.length > 2) {
-            throw messageArgument("chat.admin.usage-diagnose");
-        }
-        int days = args.length == 2 ? Integer.parseInt(args[1])
-                : runtime.bonuses().settings().operations().quickShopDiagnosticDays();
-        runtime.bonuses().diagnose(sender, days);
-        return true;
+    @Command("townadmin diagnose")
+    @Usage("/townadmin diagnose [1~180天]")
+    @AdminAccess(TownAdminPermissions.OPERATIONS)
+    public void diagnose(CommandSender sender, TownRuntime runtime,
+                         @Optional @Range(min = 1, max = 180) @Suggest({"1", "7", "14", "30", "90", "180"}) Integer days) {
+        runtime.bonuses().diagnose(sender, days == null
+                ? runtime.bonuses().settings().operations().quickShopDiagnosticDays() : days);
     }
 
-    private boolean maintenance(CommandSender sender, String[] args) {
-        if (args.length == 1) {
-            sendMaintenanceStatus(sender);
-            return true;
-        }
-        if (args.length != 2) {
-            throw messageArgument("chat.admin.usage-maintenance");
-        }
-        if (args[1].equalsIgnoreCase("status")) {
-            sendMaintenanceStatus(sender);
-            return true;
-        }
-        boolean enabled;
-        if (args[1].equalsIgnoreCase("on") || args[1].equalsIgnoreCase("enable")) {
-            enabled = true;
-        } else if (args[1].equalsIgnoreCase("off") || args[1].equalsIgnoreCase("disable")) {
-            enabled = false;
-        } else {
-            throw messageArgument("chat.admin.usage-maintenance");
-        }
+    @Command({"townadmin maintenance", "townadmin maintenance status"})
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void maintenanceStatus(CommandSender sender) {
+        sendMaintenanceStatus(sender);
+    }
+
+    @Command({"townadmin maintenance on", "townadmin maintenance enable"})
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void enableMaintenance(CommandSender sender) {
+        setMaintenance(sender, true);
+    }
+
+    @Command({"townadmin maintenance off", "townadmin maintenance disable"})
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void disableMaintenance(CommandSender sender) {
+        setMaintenance(sender, false);
+    }
+
+    private void setMaintenance(CommandSender sender, boolean enabled) {
         plugin.getConfig().set("town.maintenance-mode", enabled);
         plugin.saveConfig();
-        send(sender, enabled ? "chat.admin.maintenance-enabled"
-                : "chat.admin.maintenance-disabled");
-        return true;
+        send(sender, enabled ? "chat.admin.maintenance-enabled" : "chat.admin.maintenance-disabled");
     }
 
     private void sendMaintenanceStatus(CommandSender sender) {
@@ -210,25 +167,12 @@ public final class TownAdminCommand implements CommandExecutor {
         return new IllegalArgumentException(plugin.messages().text(key, placeholders));
     }
 
-    public void requireMessageLength(String[] args, int minimum, String key) {
-        if (args.length < minimum) {
-            throw messageArgument(key);
-        }
-    }
-
-    public void requireMessageLength(String[] args, int minimum, String key,
-                                      Map<String, ?> placeholders) {
-        if (args.length < minimum) {
-            throw messageArgument(key, placeholders);
-        }
-    }
-
-    private boolean confirm(CommandSender sender, String[] args) {
-        if (args.length != 2) {
-            send(sender, "chat.admin.confirm-invalid");
-            return true;
-        }
-        CommandConfirmationManager.Result result = confirmations.consume(ownerKey(sender), args[1]);
+    @revxrsal.commands.annotation.SecretCommand
+    @Command("townadmin confirm")
+    @Usage("/townadmin confirm <确认码>")
+    @AdminAccess
+    public void confirm(CommandSender sender, @Single String token) {
+        CommandConfirmationManager.Result result = confirmations.consume(ownerKey(sender), token);
         switch (result.status()) {
             case CONFIRMED -> {
                 send(sender, "chat.admin.confirm-success", Map.of(
@@ -247,15 +191,14 @@ public final class TownAdminCommand implements CommandExecutor {
             case NOT_OWNER -> send(sender, "chat.admin.confirm-not-owner");
             case NOT_FOUND, CANCELLED -> send(sender, "chat.admin.confirm-unavailable");
         }
-        return true;
     }
 
-    private boolean cancel(CommandSender sender, String[] args) {
-        if (args.length != 2) {
-            send(sender, "chat.admin.cancel-invalid");
-            return true;
-        }
-        CommandConfirmationManager.Result result = confirmations.cancel(ownerKey(sender), args[1]);
+    @revxrsal.commands.annotation.SecretCommand
+    @Command("townadmin cancel")
+    @Usage("/townadmin cancel <确认码>")
+    @AdminAccess
+    public void cancel(CommandSender sender, @Single String token) {
+        CommandConfirmationManager.Result result = confirmations.cancel(ownerKey(sender), token);
         switch (result.status()) {
             case CANCELLED -> send(sender, "chat.admin.cancel-success", Map.of(
                     "description", result.description()));
@@ -263,7 +206,6 @@ public final class TownAdminCommand implements CommandExecutor {
             case NOT_OWNER -> send(sender, "chat.admin.cancel-not-owner");
             case NOT_FOUND, CONFIRMED -> send(sender, "chat.admin.confirm-unavailable");
         }
-        return true;
     }
 
     public void requestConfirmation(CommandSender sender, String description, Runnable action) {
@@ -286,19 +228,11 @@ public final class TownAdminCommand implements CommandExecutor {
         sender.sendMessage(message);
     }
 
-    private boolean audit(CommandSender sender, TownRuntime runtime, String[] args) {
-        if (args.length > 2) {
-            throw messageArgument("chat.admin.usage-audit");
-        }
-        int limit;
-        try {
-            limit = args.length == 2 ? Integer.parseInt(args[1]) : 20;
-        } catch (NumberFormatException exception) {
-            throw messageArgument("chat.admin.audit-limit-integer");
-        }
-        if (limit < 1 || limit > 200) {
-            throw messageArgument("chat.admin.audit-limit-range");
-        }
+    @Command("townadmin audit")
+    @Usage("/townadmin audit [1~200]")
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void audit(CommandSender sender, TownRuntime runtime,
+                      @Default("20") @Range(min = 1, max = 200) @Suggest({"10", "20", "50", "100", "200"}) int limit) {
         runtime.read(sender, () -> runtime.repository().auditLog(limit), records -> {
             send(sender, "chat.admin.audit-title");
             for (AuditSnapshot record : records) {
@@ -308,30 +242,41 @@ public final class TownAdminCommand implements CommandExecutor {
                         "target-id", record.targetId(), "reason", record.reason()));
             }
         });
-        return true;
     }
 
-    private boolean station(CommandSender sender, String[] args) {
-        if (args.length != 2) {
-            stationHelp(sender);
-            return true;
-        }
-        String action = args[1].toLowerCase(Locale.ROOT);
-        if (action.equals("list")) {
-            plugin.townUi().listStations(sender);
-            return true;
-        }
-        if (!(sender instanceof Player player)) {
-            send(sender, "chat.admin.station-player-only");
-            return true;
-        }
-        switch (action) {
-            case "create" -> plugin.townUi().createStation(player);
-            case "remove" -> plugin.townUi().removeStation(player);
-            case "info" -> plugin.townUi().showStationInfo(player);
-            default -> stationHelp(sender);
-        }
-        return true;
+    @Command("townadmin station")
+    @Usage("/townadmin station")
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void station(CommandSender sender, TownRuntime runtime) {
+        stationHelp(sender);
+    }
+
+    @Command("townadmin station list")
+    @Usage("/townadmin station list")
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void listStations(CommandSender sender, TownRuntime runtime) {
+        plugin.townUi().listStations(sender);
+    }
+
+    @Command("townadmin station create")
+    @Usage("/townadmin station create")
+    @AdminAccess(value = TownAdminPermissions.ROOT, playerOnly = true)
+    public void createStation(Player player, TownRuntime runtime) {
+        plugin.townUi().createStation(player);
+    }
+
+    @Command("townadmin station remove")
+    @Usage("/townadmin station remove")
+    @AdminAccess(value = TownAdminPermissions.ROOT, playerOnly = true)
+    public void removeStation(Player player, TownRuntime runtime) {
+        plugin.townUi().removeStation(player);
+    }
+
+    @Command("townadmin station info")
+    @Usage("/townadmin station info")
+    @AdminAccess(value = TownAdminPermissions.ROOT, playerOnly = true)
+    public void stationInfo(Player player, TownRuntime runtime) {
+        plugin.townUi().showStationInfo(player);
     }
 
     private void stationHelp(CommandSender sender) {
@@ -339,16 +284,16 @@ public final class TownAdminCommand implements CommandExecutor {
         send(sender, "chat.admin.station-help-list");
     }
 
-    private boolean handbook(CommandSender sender, String[] args) {
-        Player target;
-        if (args.length >= 2) {
-            target = Bukkit.getPlayerExact(args[1]);
-        } else {
-            target = sender instanceof Player player ? player : null;
+    @Command("townadmin handbook")
+    @Usage("/townadmin handbook [玩家]")
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void handbook(CommandSender sender, TownRuntime runtime, @Optional @revxrsal.commands.annotation.NotSender Player target) {
+        if (target == null && sender instanceof Player player) {
+            target = player;
         }
         if (target == null) {
             send(sender, "chat.admin.handbook-target");
-            return true;
+            return;
         }
         boolean delivered = plugin.townUi().giveHandbook(target, true);
         if (!sender.equals(target) && delivered) {
@@ -356,51 +301,6 @@ public final class TownAdminCommand implements CommandExecutor {
         } else if (!sender.equals(target)) {
             send(sender, "chat.admin.handbook-cooldown", Map.of("player", target.getName()));
         }
-        return true;
-    }
-
-    private boolean application(CommandSender sender, TownRuntime runtime, String[] args) {
-        return townAdminApplicationCommands.application(sender, runtime, args);
-    }
-
-    private boolean town(CommandSender sender, TownRuntime runtime, String[] args) {
-        return townAdminApplicationCommands.town(sender, runtime, args);
-    }
-
-    private boolean member(CommandSender sender, TownRuntime runtime, String[] args) {
-        return townAdminGovernanceCommands.member(sender, runtime, args);
-    }
-
-    private boolean vote(CommandSender sender, TownRuntime runtime, String[] args) {
-        return townAdminGovernanceCommands.vote(sender, runtime, args);
-    }
-
-    private boolean mayor(CommandSender sender, TownRuntime runtime, String[] args) {
-        return townAdminGovernanceCommands.mayor(sender, runtime, args);
-    }
-
-    private boolean land(CommandSender sender, TownRuntime runtime, String[] args) {
-        return townAdminLandCommands.land(sender, runtime, args);
-    }
-
-    private boolean money(CommandSender sender, TownRuntime runtime, String[] args) {
-        return townAdminEconomyCommands.money(sender, runtime, args);
-    }
-
-    private boolean tax(CommandSender sender, TownRuntime runtime, String[] args) {
-        return townAdminEconomyCommands.tax(sender, runtime, args);
-    }
-
-    private boolean ledger(CommandSender sender, TownRuntime runtime, String[] args) {
-        return townAdminEconomyCommands.ledger(sender, runtime, args);
-    }
-
-    private boolean expand(CommandSender sender, TownRuntime runtime, String[] args) {
-        return townAdminLandCommands.expand(sender, runtime, args);
-    }
-
-    private boolean buff(CommandSender sender, TownRuntime runtime, String[] args) {
-        return townAdminEconomyCommands.buff(sender, runtime, args);
     }
 
     public void reconcileOne(CommandSender sender, TownRuntime runtime, UUID townId,
@@ -419,14 +319,6 @@ public final class TownAdminCommand implements CommandExecutor {
                 .orElseThrow(() -> messageArgument("chat.admin.town-record-not-found"));
     }
 
-    private TownRuntime requireRuntime(CommandSender sender) {
-        TownRuntime runtime = plugin.townRuntime();
-        if (runtime == null) {
-            send(sender, "chat.admin.runtime-not-ready");
-        }
-        return runtime;
-    }
-
     public static UUID actorId(CommandSender sender) {
         return sender instanceof Player player ? player.getUniqueId() : CONSOLE_ID;
     }
@@ -443,13 +335,6 @@ public final class TownAdminCommand implements CommandExecutor {
         } catch (IllegalArgumentException ignored) {
             OfflinePlayer player = Bukkit.getOfflinePlayer(value);
             return player.getUniqueId();
-        }
-    }
-
-    public void requirePermission(CommandSender sender, String permission) {
-        if (!TownAdminPermissions.has(sender::hasPermission, permission)) {
-            throw messageArgument("chat.admin.permission-missing", Map.of(
-                    "permission", safeText(permission)));
         }
     }
 

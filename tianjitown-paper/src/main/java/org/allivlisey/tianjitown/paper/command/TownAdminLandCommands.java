@@ -12,9 +12,11 @@ import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import revxrsal.commands.annotation.Command;
+import revxrsal.commands.annotation.Usage;
+
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,75 +30,81 @@ public final class TownAdminLandCommands {
         this.plugin = plugin;
     }
 
-    public boolean land(CommandSender sender, TownRuntime runtime, String[] args) {
-        facade.requireMessageLength(args, 3, "chat.admin.usage-land");
-        String action = args[1].toLowerCase(Locale.ROOT);
-        if (action.equals("preview")) {
-            if (!(sender instanceof Player player)) {
-                facade.send(sender, "chat.admin.land-player-only");
-                return true;
-            }
-            String townName = TownCommandParser.townName(args, 2);
-            runtime.read(sender, () -> facade.requireTown(runtime, townName),
-                    town -> plugin.townUi().previewTownForAdmin(player, town));
-            return true;
-        }
-        if (!action.equals("reconcile") && !action.equals("rebuild")) {
-            throw facade.messageArgument("chat.admin.land-action-unsupported");
-        }
-        if (action.equals("reconcile")) {
-            runtime.read(sender, () -> {
-                List<TownSnapshot> candidates = runtime.repository().listTowns(false);
-                List<String> names = new ArrayList<>(TownAdminCommand.townNames(candidates));
-                names.add("all");
-                TownCommandParser.NamedAction parsed = TownCommandParser.namedAction(args, 2,
-                        names, List.of("repair"));
-                List<TownSnapshot> targets = selectLandTargets(candidates, parsed.townName());
-                return new LandReconcileRequest(loadTownMembers(runtime, targets),
-                        parsed.action() != null);
-            }, request -> request.states().forEach(state -> runtime.reconcile(sender,
-                    state.town(), state.members(), request.repair())));
-        } else {
-            runtime.read(sender, () -> {
-                List<TownSnapshot> candidates = runtime.repository().listTowns(false);
-                List<String> names = new ArrayList<>(TownAdminCommand.townNames(candidates));
-                names.add("all");
-                String targetName = TownCommandParser.exactName(args, 2, names);
-                List<TownSnapshot> targets = selectLandTargets(candidates, targetName);
-                return new LandRebuildRequest(targetName.equalsIgnoreCase("all"),
-                        targets.stream().map(town -> new TownReference(town.id(),
-                                town.profile().name(), town.version())).toList());
-            }, request -> {
-                String description = request.all()
-                        ? plugin.messages().text("chat.admin.land-rebuild-confirmation-all",
-                                Map.of("count", request.towns().size()))
-                        : plugin.messages().text("chat.admin.land-rebuild-confirmation-town",
-                                Map.of("town", TownAdminCommand.safeText(request.towns().getFirst().townName())));
-                facade.requestConfirmation(sender, description,
-                        () -> rebuildLand(sender, runtime, request));
-            });
-        }
-        return true;
+    @Command("townadmin land preview")
+    @Usage("/townadmin land preview <小镇全名>")
+    @AdminAccess(value = TownAdminPermissions.ROOT, playerOnly = true)
+    public void previewLand(Player player, TownRuntime runtime, String input) {
+        String townName = input.strip();
+        runtime.read(player, () -> facade.requireTown(runtime, townName),
+                town -> plugin.townUi().previewTownForAdmin(player, town));
     }
 
-    public boolean expand(CommandSender sender, TownRuntime runtime, String[] args) {
-        facade.requirePermission(sender, TownAdminPermissions.EXPAND);
-        facade.requireMessageLength(args, 3, "chat.admin.usage-expand");
-        String action = args[1].toLowerCase(Locale.ROOT);
-        if (action.equals("preview") && !(sender instanceof Player)) {
-            facade.send(sender, "chat.admin.expand-player-only");
-            return true;
-        }
+    @Command("townadmin land reconcile")
+    @Usage("/townadmin land reconcile <小镇全名|all> [repair]")
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void reconcileLand(CommandSender sender, TownRuntime runtime, String input) {
+        runtime.read(sender, () -> {
+            List<TownSnapshot> candidates = runtime.repository().listTowns(false);
+            List<String> names = new ArrayList<>(TownAdminCommand.townNames(candidates));
+            names.add("all");
+            TownCommandParser.NamedAction parsed = TownCommandParser.namedAction(input.split(" "), 0,
+                    names, List.of("repair"));
+            List<TownSnapshot> targets = selectLandTargets(candidates, parsed.townName());
+            return new LandReconcileRequest(loadTownMembers(runtime, targets),
+                    parsed.action() != null);
+        }, request -> request.states().forEach(state -> runtime.reconcile(sender,
+                state.town(), state.members(), request.repair())));
+    }
+
+    @Command("townadmin land rebuild")
+    @Usage("/townadmin land rebuild <小镇全名|all>")
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void rebuildLandCommand(CommandSender sender, TownRuntime runtime, String input) {
+        runtime.read(sender, () -> {
+            List<TownSnapshot> candidates = runtime.repository().listTowns(false);
+            List<String> names = new ArrayList<>(TownAdminCommand.townNames(candidates));
+            names.add("all");
+            String targetName = TownCommandParser.exactName(input.split(" "), 0, names);
+            List<TownSnapshot> targets = selectLandTargets(candidates, targetName);
+            return new LandRebuildRequest(targetName.equalsIgnoreCase("all"),
+                    targets.stream().map(town -> new TownReference(town.id(),
+                            town.profile().name(), town.version())).toList());
+        }, request -> {
+            String description = request.all()
+                    ? plugin.messages().text("chat.admin.land-rebuild-confirmation-all",
+                            Map.of("count", request.towns().size()))
+                    : plugin.messages().text("chat.admin.land-rebuild-confirmation-town",
+                            Map.of("town", TownAdminCommand.safeText(request.towns().getFirst().townName())));
+            facade.requestConfirmation(sender, description,
+                    () -> rebuildLand(sender, runtime, request));
+        });
+    }
+
+    @Command("townadmin expand view")
+    @Usage("/townadmin expand view <小镇全名>")
+    @AdminAccess(TownAdminPermissions.EXPAND)
+    public void viewExpansion(CommandSender sender, TownRuntime runtime, String input) {
+        showExpansion(sender, runtime, input, false);
+    }
+
+    @Command("townadmin expand preview")
+    @Usage("/townadmin expand preview <小镇全名> <north|east|south|west>")
+    @AdminAccess(value = TownAdminPermissions.EXPAND, playerOnly = true)
+    public void previewExpansion(Player player, TownRuntime runtime, String input) {
+        showExpansion(player, runtime, input, true);
+    }
+
+    private void showExpansion(CommandSender sender, TownRuntime runtime, String input, boolean preview) {
         runtime.read(sender, () -> {
             List<TownSnapshot> towns = runtime.repository().listTowns(true);
-            if (action.equals("view")) {
-                String name = TownCommandParser.exactName(args, 2, TownAdminCommand.townNames(towns));
+            if (!preview) {
+                String name = TownCommandParser.exactName(input.split(" "), 0, TownAdminCommand.townNames(towns));
                 TownSnapshot town = towns.stream().filter(candidate -> TownAdminCommand.sameName(
                                 candidate.profile().name(), name)).findFirst().orElseThrow();
                 return new AdminExpansion(town, runtime.finance().territoryUnits(town.id()), null);
             }
-            if (action.equals("preview")) {
-                TownCommandParser.NamedAction parsed = TownCommandParser.namedAction(args, 2,
+            if (preview) {
+                TownCommandParser.NamedAction parsed = TownCommandParser.namedAction(input.split(" "), 0,
                         TownAdminCommand.townNames(towns), List.of("north", "east", "south", "west"));
                 if (parsed.action() == null) {
                     throw facade.messageArgument("chat.admin.expand-direction-required");
@@ -126,8 +134,8 @@ public final class TownAdminLandCommands {
                 facade.send(player, "chat.admin.expand-price", Map.of("price", runtime.money(price)));
             }
         });
-        return true;
-    }
+        return;
+        }
 
     private void rebuildLand(CommandSender sender, TownRuntime runtime,
                              LandRebuildRequest request) {

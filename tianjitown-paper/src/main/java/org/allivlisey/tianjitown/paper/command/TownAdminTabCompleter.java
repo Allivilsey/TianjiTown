@@ -6,11 +6,8 @@ import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
 import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
-import org.jetbrains.annotations.NotNull;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -22,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-public final class TownAdminTabCompleter implements TabCompleter {
+public final class TownAdminTabCompleter {
     private static final long REFRESH_INTERVAL_TICKS = 20L * 15;
     private static final long STALE_NANOS = Duration.ofSeconds(20).toNanos();
     private static final String COMPLETION_CACHE_RESTORED =
@@ -62,11 +59,7 @@ public final class TownAdminTabCompleter implements TabCompleter {
         refreshedAt.set(0L);
     }
 
-    @Override
-    public @NotNull List<String> onTabComplete(@NotNull CommandSender sender,
-                                               @NotNull Command command,
-                                               @NotNull String alias,
-                                               @NotNull String[] args) {
+    public List<String> complete(CommandSender sender, String[] args) {
         if (!TownAdminPermissions.hasAny(sender::hasPermission)) {
             return List.of();
         }
@@ -75,15 +68,7 @@ public final class TownAdminTabCompleter implements TabCompleter {
         }
         TownAdminCompletionEngine.Snapshot current = snapshot.get();
         List<String> suggestions = engine.complete(args, current, dynamic(sender, current));
-        if (args.length <= 1) {
-            return suggestions.stream().filter(root -> TownAdminPermissions.canUseRoot(
-                    sender::hasPermission, root)).toList();
-        }
-        String root = args[0].toLowerCase(Locale.ROOT);
-        if (!TownAdminPermissions.canUseRoot(sender::hasPermission, root)) {
-            return List.of();
-        }
-        if (root.equals("help") && args.length == 2) {
+        if (args.length == 2 && args[0].equalsIgnoreCase("help")) {
             return suggestions.stream().filter(topic -> TownAdminPermissions.canViewHelpTopic(
                     sender::hasPermission, topic)).toList();
         }

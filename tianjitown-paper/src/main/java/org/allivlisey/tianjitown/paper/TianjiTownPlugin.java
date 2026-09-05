@@ -1,6 +1,11 @@
 package org.allivlisey.tianjitown.paper;
 import org.allivlisey.tianjitown.paper.bonus.TownBonusRuntime;
 import org.allivlisey.tianjitown.paper.command.TownAdminCommand;
+import org.allivlisey.tianjitown.paper.command.TownAdminLamp;
+import revxrsal.commands.Lamp;
+import revxrsal.commands.bukkit.BukkitLamp;
+import revxrsal.commands.bukkit.BukkitLampConfig;
+import revxrsal.commands.bukkit.actor.BukkitCommandActor;
 import org.allivlisey.tianjitown.paper.command.TownAdminTabCompleter;
 import org.allivlisey.tianjitown.paper.config.ConfigurationValues;
 import org.allivlisey.tianjitown.paper.config.RuntimeConfigurationValidator;
@@ -46,8 +51,6 @@ public final class TianjiTownPlugin extends JavaPlugin {
     private static final String BOOTSTRAP_GATE_DETAIL = "TT-PLUGIN-NOT-STARTED";
     private static final String BOOTSTRAP_MESSAGES_NOT_LOADED = "TT-MESSAGES-NOT-LOADED";
     private static final String STARTUP_CHECKING = "diagnostic.lifecycle.startup-checking";
-    private static final String ADMIN_COMMAND_MISSING =
-            "diagnostic.lifecycle.admin-command-missing";
     private static final String CONFIG_SCHEMA_GATE_FAILED =
             "diagnostic.lifecycle.config-schema-gate-failed";
     private static final String CONFIGURATION_VALIDATION_PASSED =
@@ -146,6 +149,7 @@ public final class TianjiTownPlugin extends JavaPlugin {
     private volatile TownUiController townUi;
     private volatile TownAdminTabCompleter townAdminTabCompleter;
     private volatile PluginMessages messages;
+    private Lamp<BukkitCommandActor> commandLamp;
 
     @Override
     public void onEnable() {
@@ -159,12 +163,13 @@ public final class TianjiTownPlugin extends JavaPlugin {
         asyncTasks.startAccepting();
         asyncExecutor = Executors.newFixedThreadPool(4,
                 Thread.ofPlatform().daemon(true).name("TianjiTown-Async-", 0).factory());
-        org.bukkit.command.PluginCommand adminCommand = java.util.Objects.requireNonNull(
-                getCommand("townadmin"), messages().plainText(ADMIN_COMMAND_MISSING));
         TownAdminTabCompleter completer = new TownAdminTabCompleter(this);
         townAdminTabCompleter = completer;
-        adminCommand.setExecutor(new TownAdminCommand(this));
-        adminCommand.setTabCompleter(completer);
+        // Existing completion reads Bukkit state and must remain on the server thread.
+        commandLamp = TownAdminLamp.configure(BukkitLamp.builder(
+                BukkitLampConfig.<BukkitCommandActor>builder(this)
+                        .disableBrigadier().disableAsyncCompletion().build()), this, completer).build();
+        new TownAdminCommand(this).register(commandLamp);
 
         List<String> synchronousChecks = new ArrayList<>();
         if (!prepareConfigSchema(synchronousChecks)) {
@@ -195,6 +200,10 @@ public final class TianjiTownPlugin extends JavaPlugin {
     public void onDisable() {
         lifecycleGeneration.incrementAndGet();
         asyncTasks.stopAccepting();
+        if (commandLamp != null) {
+            commandLamp.unregisterAllCommands();
+            commandLamp = null;
+        }
         TownUiController ui = townUi;
         if (ui != null) {
             try {

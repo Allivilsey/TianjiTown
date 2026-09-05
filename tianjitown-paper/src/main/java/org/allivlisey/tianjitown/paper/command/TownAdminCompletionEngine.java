@@ -19,10 +19,6 @@ import java.util.function.Predicate;
 
 public final class TownAdminCompletionEngine {
     private static final int MAX_SUGGESTIONS = 100;
-    private static final List<String> ROOTS = List.of(
-            "help", "status", "reload", "audit", "station", "handbook", "application", "town",
-            "member", "mayor", "vote", "land", "money", "tax", "ledger", "expand",
-            "buff", "maintenance", "diagnose");
     private final BiFunction<String, Map<String, ?>, String> messageResolver;
 
     public TownAdminCompletionEngine(BiFunction<String, Map<String, ?>, String> messageResolver) {
@@ -33,24 +29,13 @@ public final class TownAdminCompletionEngine {
         Objects.requireNonNull(args, "args");
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(dynamic, "dynamic");
-        if (args.length <= 1) {
-            return filter(ROOTS, current(args));
+        if (args.length == 2 && args[0].equalsIgnoreCase("help")) {
+            return filter(helpTopics(), args[1]);
+        }
+        if (args.length < 3) {
+            return List.of();
         }
         return switch (args[0].toLowerCase(Locale.ROOT)) {
-            case "help" -> args.length == 2
-                    ? filter(helpTopics(), args[1]) : List.of();
-            case "audit" -> args.length == 2
-                    ? filter(List.of("10", "20", "50", "100", "200"), args[1]) : List.of();
-            case "diagnose" -> args.length == 2
-                    ? filter(List.of("1", "7", "14", "30", "90", "180"), args[1]) : List.of();
-            case "station" -> args.length == 2
-                    ? filter(dynamic.playerSender()
-                    ? List.of("create", "info", "list", "remove") : List.of("list"), args[1])
-                    : List.of();
-            case "handbook" -> args.length == 2
-                    ? filter(dynamic.onlinePlayerNames(), args[1]) : List.of();
-            case "maintenance" -> args.length == 2
-                    ? filter(List.of("off", "on", "status"), args[1]) : List.of();
             case "application" -> application(args, snapshot);
             case "town" -> town(args, snapshot);
             case "member" -> member(args, snapshot, dynamic);
@@ -73,9 +58,7 @@ public final class TownAdminCompletionEngine {
     }
 
     private List<String> application(String[] args, Snapshot snapshot) {
-        if (args.length == 2) {
-            return filter(List.of("list", "approve", "reject", "change"), args[1]);
-        }
+
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("list")) {
             return List.of();
@@ -95,9 +78,7 @@ public final class TownAdminCompletionEngine {
     }
 
     private List<String> town(String[] args, Snapshot snapshot) {
-        if (args.length == 2) {
-            return filter(List.of("view", "delete"), args[1]);
-        }
+
         List<String> names = townNames(snapshot, ignored -> true);
         if (args[1].equalsIgnoreCase("view")) {
             return completePhrase(args, 2, names);
@@ -109,9 +90,7 @@ public final class TownAdminCompletionEngine {
     }
 
     private List<String> member(String[] args, Snapshot snapshot, Dynamic dynamic) {
-        if (args.length == 2) {
-            return filter(List.of("add", "remove", "role"), args[1]);
-        }
+
         if (!Set.of("add", "remove", "role").contains(args[1].toLowerCase(Locale.ROOT))) {
             return List.of();
         }
@@ -146,9 +125,7 @@ public final class TownAdminCompletionEngine {
     }
 
     private List<String> vote(String[] args, Snapshot snapshot, Dynamic dynamic) {
-        if (args.length == 2) {
-            return filter(List.of("create-kick", "create-mayor", "settle", "cancel"), args[1]);
-        }
+
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("settle")) {
             return args.length == 3 ? filter(List.of("<voteId>"), args[2]) : List.of();
@@ -179,9 +156,7 @@ public final class TownAdminCompletionEngine {
     }
 
     private List<String> mayor(String[] args, Snapshot snapshot, Dynamic dynamic) {
-        if (args.length == 2) {
-            return filter(List.of("transfer"), args[1]);
-        }
+
         if (!args[1].equalsIgnoreCase("transfer")) {
             return List.of();
         }
@@ -203,13 +178,7 @@ public final class TownAdminCompletionEngine {
     }
 
     private List<String> land(String[] args, Snapshot snapshot, Dynamic dynamic) {
-        if (args.length == 2) {
-            List<String> actions = new ArrayList<>(List.of("reconcile", "rebuild"));
-            if (dynamic.playerSender()) {
-                actions.add("preview");
-            }
-            return filter(actions, args[1]);
-        }
+
         String action = args[1].toLowerCase(Locale.ROOT);
         List<String> candidates = new ArrayList<>(townNames(snapshot,
                 town -> town.status() != TownStatus.ARCHIVED));
@@ -229,15 +198,7 @@ public final class TownAdminCompletionEngine {
 
     private List<String> economyCommands(String[] args, Snapshot snapshot) {
         String root = args[0].toLowerCase(Locale.ROOT);
-        if (args.length == 2) {
-            return filter(switch (root) {
-                case "money" -> List.of("view", "adjust", "reconcile");
-                case "tax" -> List.of("set");
-                case "ledger" -> List.of("view");
-                case "expand" -> List.of("view", "preview");
-                default -> List.of();
-            }, args[1]);
-        }
+
         if (root.equals("money") && args[1].equalsIgnoreCase("reconcile")) {
             return List.of();
         }
@@ -264,9 +225,7 @@ public final class TownAdminCompletionEngine {
     }
 
     private List<String> buffs(String[] args, Snapshot snapshot) {
-        if (args.length == 2) {
-            return filter(List.of("list", "grant"), args[1]);
-        }
+
         String action = args[1].toLowerCase(Locale.ROOT);
         if (!action.equals("list") && !action.equals("grant")) {
             return List.of();

@@ -18,7 +18,6 @@ class TownAdminPermissionsTest {
         assertScopedCommand(TownAdminPermissions.BUFF, "buff");
         assertScopedCommand(TownAdminPermissions.OPERATIONS, "diagnose");
         Predicate<String> operations = Set.of(TownAdminPermissions.OPERATIONS)::contains;
-        assertTrue(TownAdminPermissions.canUseRoot(operations, "status"));
         assertTrue(TownAdminPermissions.canViewHelpTopic(operations, "system"));
     }
 
@@ -26,8 +25,6 @@ class TownAdminPermissionsTest {
     void rootPermissionGrantsEveryCommandAndScopedCheck() {
         Predicate<String> root = Set.of(TownAdminPermissions.ROOT)::contains;
 
-        assertTrue(TownAdminPermissions.canUseRoot(root, "town"));
-        assertTrue(TownAdminPermissions.canUseRoot(root, "money"));
         assertTrue(TownAdminPermissions.has(root, TownAdminPermissions.MONEY));
         assertTrue(TownAdminPermissions.canViewHelpTopic(root, "ledger"));
     }
@@ -37,16 +34,12 @@ class TownAdminPermissionsTest {
         Predicate<String> money = Set.of(TownAdminPermissions.MONEY)::contains;
 
         assertTrue(TownAdminPermissions.hasAny(money));
-        assertTrue(TownAdminPermissions.canUseRoot(money, "help"));
-        assertFalse(TownAdminPermissions.canUseRoot(money, "tax"));
-        assertFalse(TownAdminPermissions.canUseRoot(money, "status"));
         assertFalse(TownAdminPermissions.canViewHelpTopic(money, "system"));
     }
 
     private static void assertScopedCommand(String permission, String commandRoot) {
         Predicate<String> granted = Set.of(permission)::contains;
 
-        assertTrue(TownAdminPermissions.canUseRoot(granted, commandRoot));
         assertTrue(TownAdminPermissions.canViewHelpTopic(granted, commandRoot));
         assertTrue(TownAdminPermissions.has(granted, permission));
     }

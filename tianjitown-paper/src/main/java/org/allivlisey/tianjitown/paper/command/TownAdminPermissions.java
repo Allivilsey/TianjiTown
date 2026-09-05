@@ -37,19 +37,6 @@ public final class TownAdminPermissions {
         return hasPermission.test(ROOT) || hasPermission.test(permission);
     }
 
-    public static boolean canUseRoot(Predicate<String> hasPermission, String commandRoot) {
-        if (hasPermission.test(ROOT)) {
-            return true;
-        }
-        String normalized = commandRoot.toLowerCase(Locale.ROOT);
-        if (normalized.equals("help") || normalized.equals("confirm")
-                || normalized.equals("cancel")) {
-            return hasAny(hasPermission);
-        }
-        String scopedPermission = SCOPED_ROOTS.get(normalized);
-        return scopedPermission != null && hasPermission.test(scopedPermission);
-    }
-
     public static boolean canViewHelpTopic(Predicate<String> hasPermission, String topic) {
         if (hasPermission.test(ROOT)) {
             return true;

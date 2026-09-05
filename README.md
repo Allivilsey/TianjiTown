@@ -12,7 +12,7 @@
 mvn -B clean verify
 ```
 
-唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.4.0.jar`。Paper API、Residence 与 Vault API 使用 `provided` scope，不会打入插件 JAR；WorldBorder 通过运行时公开能力接入，同样不会被打入；HikariCP、Flyway 和 SQLite JDBC 会合并到最终 JAR。
+唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.4.0.jar`。Paper API、Residence 与 Vault API 使用 `provided` scope，不会打入插件 JAR；WorldBorder 通过运行时公开能力接入，同样不会被打入；HikariCP、Flyway、SQLite JDBC 和 Lamp 会合并到最终 JAR。Lamp 命令库会重定位到插件内部包，无需单独安装。
 
 ## 安装与 SQLite
 
@@ -39,6 +39,10 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 测试清单、历史报告与隔离测试接口统一见 [`test/README.md`](test/README.md)；测试接口默认关闭且使用独立权限，不属于玩家或管理员正式功能。
 
 ## 管理员帮助
+
+`/townadmin` 的各级子命令通过 [Lamp](https://github.com/Revxrsal/Lamp) 注解注册。Lamp 负责命令路由、数字与 UUID 参数解析、默认值、范围校验、权限过滤和静态补全；业务运行时通过上下文注入。框架参数缺失或包含多余内容时会显示中文提示，不会因前缀匹配误执行其他命令。
+
+不加引号的多词小镇名与其后金额、玩家、原因的组合，仍在异步数据库读取中按实际名称匹配。动态参数补全复用缓存并在服务器主线程执行，确认令牌与异步写入流程保持原有约束。
 
 `/townadmin` 或 `/townadmin help` 显示精简分类。使用 `/townadmin help <分类>` 查看完整语法，可用分类为 `system`、`station`、`application`、`town`、`member`、`vote`、`land`、`money`、`tax`、`ledger`、`expand` 和 `buff`。命令参数支持 Tab 自动补全；补全列表中的 `<原因>` 等尖括号内容只是当前位置的参数提示，必须替换为实际内容，不能原样提交。
 

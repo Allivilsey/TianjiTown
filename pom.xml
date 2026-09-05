@@ -28,6 +28,7 @@
         <!-- 使用可公开解析的 Residence API 构件编译；运行时只检查所需能力是否可用。 -->
         <residence.api.version>6.0.0.1</residence.api.version>
         <vault.api.version>1.7</vault.api.version>
+        <lamp.version>4.0.0-rc.17</lamp.version>
         <hikari.version>5.1.0</hikari.version>
         <flyway.version>13.1.0</flyway.version>
         <sqlite.version>3.53.1.0</sqlite.version>
@@ -48,6 +49,21 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>io.github.revxrsal</groupId>
+                <artifactId>lamp.common</artifactId>
+                <version>${lamp.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.revxrsal</groupId>
+                <artifactId>lamp.brigadier</artifactId>
+                <version>${lamp.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.revxrsal</groupId>
+                <artifactId>lamp.bukkit</artifactId>
+                <version>${lamp.version}</version>
+            </dependency>
             <dependency>
                 <groupId>io.papermc.paper</groupId>
                 <artifactId>paper-api</artifactId>
