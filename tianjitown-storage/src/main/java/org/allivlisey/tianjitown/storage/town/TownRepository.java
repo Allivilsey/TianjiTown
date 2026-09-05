@@ -1,12 +1,7 @@
 package org.allivlisey.tianjitown.storage.town;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -16,7 +11,6 @@ import java.util.function.BooleanSupplier;
 import javax.sql.DataSource;
 import org.allivlisey.tianjitown.core.application.ApplicationText;
 import org.allivlisey.tianjitown.core.land.InitialTerritory;
-import org.allivlisey.tianjitown.core.town.TownStatus;
 
 import static org.allivlisey.tianjitown.storage.town.TownPersistence.RULE_SEPARATOR;
 import static org.allivlisey.tianjitown.storage.town.TownSqlValues.readUuid;
@@ -25,6 +19,10 @@ import static org.allivlisey.tianjitown.storage.town.TownSqlValues.uuid;
 public final class TownRepository {
     private final TownJoinApplicationStore joinApplications;
     private final TownInvitationStore invitations;
+    private final TownDeletionStore deletionStore;
+    private final TownProfileStore profileStore;
+    private final TownAuditStore auditStore;
+    private final TownQueryStore queryStore;
     private final TownDatabase database;
     private final TownApplicationStore applicationStore;
     private final TownProvisioningStore provisioningStore;
@@ -32,6 +30,10 @@ public final class TownRepository {
 
     public TownRepository(DataSource dataSource, BooleanSupplier forbiddenThread) {
         this.database = new TownDatabase(dataSource, forbiddenThread);
+        this.queryStore = new TownQueryStore(database);
+        this.auditStore = new TownAuditStore(database);
+        this.profileStore = new TownProfileStore(database);
+        this.deletionStore = new TownDeletionStore(database);
         this.invitations = new TownInvitationStore(database);
         this.joinApplications = new TownJoinApplicationStore(database);
         this.applicationStore = new TownApplicationStore(database);
@@ -156,83 +158,23 @@ public final class TownRepository {
     }
 
     public Optional<TownSnapshot> findTown(UUID townId) {
-        database.requireWorkerThread();
-        return database.query(connection -> TownPersistence.findTown(connection, townId));
+        return queryStore.findTown(townId);
     }
 
     public Optional<TownSnapshot> findTownByName(String townName) {
-        database.requireWorkerThread();
-        String normalizedName = ApplicationText.normalizeNameKey(townName);
-        return database.query(connection -> {
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT town_id FROM towns WHERE normalized_name = ?
-                     ORDER BY (status = 'ARCHIVED'), reuse_blocked DESC, created_at DESC LIMIT 1
-                    """)) {
-                statement.setString(1, normalizedName);
-                try (ResultSet result = statement.executeQuery()) {
-                    return result.next()
-                            ? TownPersistence.findTown(connection, readUuid(result, "town_id")) : Optional.empty();
-                }
-            }
-        });
+        return queryStore.findTownByName(townName);
     }
 
     public Optional<TownSnapshot> findTownByMember(UUID playerId) {
-        database.requireWorkerThread();
-        return database.query(connection -> {
-            Optional<UUID> townId = TownPersistence.memberTownId(connection, playerId);
-            return townId.isPresent() ? TownPersistence.findTown(connection, townId.get()) : Optional.empty();
-        });
+        return queryStore.findTownByMember(playerId);
     }
 
     public PlayerDashboard dashboard(UUID playerId) {
-        database.requireWorkerThread();
-        return database.query(connection -> {
-            Optional<UUID> townId = TownPersistence.memberTownId(connection, playerId);
-            Optional<TownSnapshot> town = townId.isPresent()
-                    ? TownPersistence.findTown(connection, townId.get()) : Optional.empty();
-            if (town.isPresent() && town.get().status() != TownStatus.ACTIVE) {
-                town = Optional.empty();
-            }
-            Optional<ApplicationSnapshot> application;
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT application_id FROM town_applications WHERE active_applicant = ? LIMIT 1
-                    """)) {
-                statement.setBytes(1, uuid(playerId));
-                try (ResultSet result = statement.executeQuery()) {
-                    application = result.next()
-                            ? TownPersistence.findApplication(connection, readUuid(result, "application_id"))
-                            : Optional.empty();
-                }
-            }
-            List<JoinApplicationSnapshot> joinApplications = TownPersistence.listJoinApplicationsForPlayer(
-                    connection, playerId);
-            List<JoinApplicationSnapshot> incomingApplications = town.isPresent()
-                    && TownPersistence.canReviewJoinApplications(connection, town.get().id(), playerId)
-                    ? TownPersistence.listJoinApplicationsForTown(connection, town.get().id()) : List.of();
-            return new PlayerDashboard(town.orElse(null), application.orElse(null),
-                    joinApplications, incomingApplications);
-        });
+        return queryStore.dashboard(playerId);
     }
 
     public List<TownSnapshot> listTowns(boolean includeArchived) {
-        database.requireWorkerThread();
-        return database.query(connection -> {
-            List<TownSnapshot> towns = new ArrayList<>();
-            String sql = includeArchived ? """
-                    SELECT town_id FROM towns
-                     ORDER BY (status = 'ARCHIVED'), reuse_blocked DESC, created_at DESC, town_id
-                    """
-                    : "SELECT town_id FROM towns WHERE status <> 'ARCHIVED' "
-                    + "ORDER BY created_at, town_id";
-            try (PreparedStatement statement = connection.prepareStatement(sql);
-                 ResultSet result = statement.executeQuery()) {
-                while (result.next()) {
-                    TownPersistence.findTown(connection, readUuid(result, "town_id")).ifPresent(towns::add);
-                }
-            }
-            return List.copyOf(towns);
-        });
+        return queryStore.listTowns(includeArchived);
     }
 
     public TownSnapshot.Page listMembers(UUID townId, int page, int pageSize) {
@@ -364,290 +306,33 @@ public final class TownRepository {
     }
 
     public void deleteTown(UUID townId, UUID actorId, String actorName, String reason) {
-        database.requireWorkerThread();
-        TownPersistence.requireReason(reason);
-        database.transaction(connection -> {
-            prepareTownDeletion(connection, townId, actorId, actorName, reason, false, -1);
-            return null;
-        });
+        deletionStore.deleteTown(townId, actorId, actorName, reason);
     }
 
     public TownSnapshot disbandTown(UUID townId, UUID mayorId, long expectedVersion) {
-        database.requireWorkerThread();
-        return database.transaction(connection -> {
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT COUNT(*) FROM town_members WHERE town_id = ?")) {
-                statement.setBytes(1, uuid(townId));
-                try (ResultSet result = statement.executeQuery()) {
-                    if (!result.next() || result.getInt(1) != 1) {
-                        throw new ConflictException("仅剩镇长一名成员时才能解散，请先完成成员管理");
-                    }
-                }
-            }
-            return prepareTownDeletion(connection, townId, mayorId,
-                    mayorId.toString(), "镇长通过小镇界面解散", true, expectedVersion);
-        });
+        return deletionStore.disbandTown(townId, mayorId, expectedVersion);
     }
 
     public void completeTownDeletion(UUID townId, UUID actorId, String actorName, String reason) {
-        database.requireWorkerThread();
-        TownPersistence.requireReason(reason);
-        database.transaction(connection -> {
-            TownSnapshot current = TownPersistence.requireTown(connection, townId);
-            if (current.status() != TownStatus.ARCHIVED || !townReuseBlocked(connection, townId)) {
-                throw new ConflictException("小镇未处于等待资源释放的归档状态");
-            }
-            try (PreparedStatement town = connection.prepareStatement("""
-                    UPDATE towns SET reuse_blocked = FALSE, version = version + 1
-                     WHERE town_id = ? AND status = 'ARCHIVED' AND reuse_blocked = TRUE
-                    """);
-                 PreparedStatement units = connection.prepareStatement("""
-                         UPDATE territory_units SET reuse_blocked = FALSE
-                          WHERE town_id = ? AND reuse_blocked = TRUE
-                         """);
-                 PreparedStatement chunks = connection.prepareStatement("""
-                         DELETE FROM territory_chunks
-                          WHERE unit_id IN (SELECT unit_id FROM territory_units WHERE town_id = ?)
-                         """)) {
-                town.setBytes(1, uuid(townId));
-                TownPersistence.requireUpdated(town, "小镇删除资源已被其他操作释放");
-                units.setBytes(1, uuid(townId));
-                units.executeUpdate();
-                chunks.setBytes(1, uuid(townId));
-                chunks.executeUpdate();
-            }
-            TownPersistence.audit(connection, null, actorId, actorName, "TOWN_DELETE_COMPLETE", "TOWN",
-                    townId.toString(), reason, "Residence 已移除；名称、小镇代码和区块已允许复用");
-            return null;
-        });
+        deletionStore.completeTownDeletion(townId, actorId, actorName, reason);
     }
 
     public boolean archiveTownForMissingProjection(UUID townId, String detail) {
-        database.requireWorkerThread();
-        TownPersistence.requireReason(detail);
-        return database.transaction(connection -> {
-            try (PreparedStatement town = connection.prepareStatement("""
-                    UPDATE towns
-                       SET status = 'ARCHIVED', reuse_blocked = TRUE, archived_at = ?,
-                           archive_reason = ?, version = version + 1
-                     WHERE town_id = ? AND status = 'ACTIVE'
-                    """);
-                 PreparedStatement units = connection.prepareStatement("""
-                         UPDATE territory_units
-                            SET projection_status = 'FAILED', projection_error = ?, reuse_blocked = TRUE
-                          WHERE town_id = ?
-                         """);
-                 PreparedStatement members = connection.prepareStatement(
-                         "DELETE FROM town_members WHERE town_id = ?");
-                 PreparedStatement visitors = connection.prepareStatement(
-                         "DELETE FROM town_visitors WHERE town_id = ?");
-                 PreparedStatement invitations = connection.prepareStatement("""
-                         UPDATE town_invitations
-                            SET revoked_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
-                          WHERE town_id = ? AND accepted_at IS NULL AND revoked_at IS NULL
-                         """);
-                 PreparedStatement joinApplications = connection.prepareStatement("""
-                         UPDATE town_join_applications
-                            SET status = 'CANCELLED',
-                                decided_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
-                          WHERE town_id = ? AND status = 'PENDING'
-                         """)) {
-                snapshotMembers(connection, townId);
-                town.setLong(1, Instant.now().toEpochMilli());
-                town.setString(2, detail);
-                town.setBytes(3, uuid(townId));
-                if (town.executeUpdate() != 1) {
-                    return false;
-                }
-                units.setString(1, detail);
-                units.setBytes(2, uuid(townId));
-                units.executeUpdate();
-                members.setBytes(1, uuid(townId));
-                members.executeUpdate();
-                visitors.setBytes(1, uuid(townId));
-                visitors.executeUpdate();
-                invitations.setBytes(1, uuid(townId));
-                invitations.executeUpdate();
-                joinApplications.setBytes(1, uuid(townId));
-                joinApplications.executeUpdate();
-            }
-            TownPersistence.audit(connection, null, null, "SYSTEM", "TOWN_SAFETY_ARCHIVE", "TOWN",
-                    townId.toString(), "Residence 投影缺失", detail
-                            + "；名称、小镇代码和区块继续锁定，禁止自动复用");
-            return true;
-        });
+        return deletionStore.archiveTownForMissingProjection(townId, detail);
     }
 
     public TownSnapshot updateTownProfile(UUID townId, ApplicationText profile, long expectedVersion,
                                           UUID actorId, String actorName, String reason) {
-        database.requireWorkerThread();
-        profile.requireValid();
-        return database.transaction(connection -> {
-            TownPersistence.requireManager(connection, townId, actorId);
-            TownSnapshot current = TownPersistence.requireTown(connection, townId);
-            if (!current.profile().name().equals(profile.name())
-                    || !current.profile().shortName().equals(profile.shortName())
-                    || !current.profile().normalizedResidenceName()
-                    .equals(profile.normalizedResidenceName())) {
-                throw new ConflictException("玩家资料入口不能修改小镇名称或小镇代码");
-            }
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE towns SET description = ?, rules_text = ?,
-                        rules_revision = rules_revision + CASE WHEN rules_text <> ? THEN 1 ELSE 0 END,
-                        version = version + 1
-                     WHERE town_id = ? AND version = ? AND status <> 'ARCHIVED'
-                    """)) {
-                statement.setString(1, profile.description());
-                statement.setString(2, String.join(RULE_SEPARATOR, profile.rules()));
-                statement.setString(3, String.join(RULE_SEPARATOR, profile.rules()));
-                statement.setBytes(4, uuid(townId));
-                statement.setLong(5, expectedVersion);
-                TownPersistence.requireUpdated(statement, "小镇资料已被其他操作修改，请重新读取后再试");
-            }
-            TownPersistence.audit(connection, null, actorId, actorName, "PROFILE_UPDATE", "TOWN", townId.toString(),
-                    reason, current.profile().name());
-            return TownPersistence.requireTown(connection, townId);
-        });
+        return profileStore.updateTownProfile(townId, profile, expectedVersion, actorId, actorName, reason);
     }
 
     public List<AuditSnapshot> auditLog(int limit) {
-        database.requireWorkerThread();
-        int safeLimit = Math.max(1, Math.min(limit, 200));
-        return database.query(connection -> {
-            List<AuditSnapshot> records = new ArrayList<>();
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT audit_id, actor_name, action, target_type, target_id, reason, detail, created_at
-                      FROM audit_logs ORDER BY audit_id DESC LIMIT ?
-                    """)) {
-                statement.setInt(1, safeLimit);
-                try (ResultSet result = statement.executeQuery()) {
-                    while (result.next()) {
-                        records.add(new AuditSnapshot(result.getLong("audit_id"),
-                                result.getString("actor_name"), result.getString("action"),
-                                result.getString("target_type"), result.getString("target_id"),
-                                result.getString("reason"), result.getString("detail"),
-                                result.getTimestamp("created_at").toInstant()));
-                    }
-                }
-            }
-            return List.copyOf(records);
-        });
+        return auditStore.auditLog(limit);
     }
 
     public void recordAudit(UUID actorId, String actorName, String action, String targetType,
                             String targetId, String reason, String detail) {
-        database.requireWorkerThread();
-        database.transaction(connection -> {
-            TownPersistence.audit(connection, null, actorId, actorName, action, targetType, targetId, reason, detail);
-            return null;
-        });
-    }
-
-    private TownSnapshot prepareTownDeletion(Connection connection, UUID townId, UUID actorId,
-                                              String actorName, String reason, boolean mayorOnly,
-                                              long expectedVersion) throws SQLException {
-        TownSnapshot current = TownPersistence.requireTown(connection, townId);
-        if (mayorOnly) {
-            TownPersistence.requireManager(connection, townId, actorId);
-            if (current.version() != expectedVersion) {
-                throw new ConflictException("小镇状态已经变化，请重新打开界面确认");
-            }
-        }
-        boolean alreadyPrepared = current.status() == TownStatus.ARCHIVED
-                && townReuseBlocked(connection, townId);
-        if (current.status() == TownStatus.ARCHIVED && !alreadyPrepared) {
-            throw new ConflictException("小镇已经删除并完成资源释放");
-        }
-        if (mayorOnly && current.status() != TownStatus.ACTIVE) {
-            throw new ConflictException("只有正常运行的小镇可以由镇长解散");
-        }
-        try (PreparedStatement town = connection.prepareStatement("""
-                UPDATE towns
-                   SET status = 'ARCHIVED', reuse_blocked = TRUE, archived_at = ?,
-                       archive_reason = ?, version = version + 1
-                 WHERE town_id = ? AND status <> 'ARCHIVED'
-                """);
-             PreparedStatement unit = connection.prepareStatement(
-                     "UPDATE territory_units SET reuse_blocked = TRUE WHERE town_id = ?");
-             PreparedStatement members = connection.prepareStatement(
-                     "DELETE FROM town_members WHERE town_id = ?");
-             PreparedStatement visitors = connection.prepareStatement(
-                     "DELETE FROM town_visitors WHERE town_id = ?");
-             PreparedStatement invitations = connection.prepareStatement("""
-                     UPDATE town_invitations
-                        SET revoked_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
-                      WHERE town_id = ? AND accepted_at IS NULL AND revoked_at IS NULL
-                     """);
-             PreparedStatement joinApplications = connection.prepareStatement("""
-                     UPDATE town_join_applications
-                        SET status = 'CANCELLED', decided_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
-                      WHERE town_id = ? AND status = 'PENDING'
-                     """)) {
-            if (!alreadyPrepared) {
-                snapshotMembers(connection, townId);
-                town.setLong(1, Instant.now().toEpochMilli());
-                town.setString(2, reason);
-                town.setBytes(3, uuid(townId));
-                TownPersistence.requireUpdated(town, "小镇不存在或已经归档");
-            }
-            unit.setBytes(1, uuid(townId));
-            unit.executeUpdate();
-            members.setBytes(1, uuid(townId));
-            members.executeUpdate();
-            visitors.setBytes(1, uuid(townId));
-            visitors.executeUpdate();
-            invitations.setBytes(1, uuid(townId));
-            invitations.executeUpdate();
-            joinApplications.setBytes(1, uuid(townId));
-            joinApplications.executeUpdate();
-        }
-        String action = mayorOnly ? "TOWN_DISBAND_PREPARE"
-                : alreadyPrepared ? "TOWN_DELETE_RETRY" : "TOWN_DELETE_PREPARE";
-        TownPersistence.audit(connection, null, actorId, actorName, action, "TOWN", townId.toString(), reason,
-                "已安全归档；名称、小镇代码和区块保持锁定，等待移除投影");
-        return current;
-    }
-
-    private static void snapshotMembers(Connection connection, UUID townId) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement("""
-                INSERT OR IGNORE INTO town_archived_members
-                    (town_id, player_uuid, role, joined_at, last_active_at, rules_revision)
-                SELECT town_id, player_uuid, role, joined_at, last_active_at, rules_revision
-                  FROM town_members WHERE town_id = ?
-                """)) {
-            statement.setBytes(1, uuid(townId));
-            statement.executeUpdate();
-        }
-        try (PreparedStatement votes = connection.prepareStatement("""
-                UPDATE governance_votes SET status = 'CANCELLED', settled_at = ?,
-                       cancelled_reason = '小镇已归档'
-                 WHERE town_id = ? AND status = 'OPEN'
-                """);
-             PreparedStatement transfers = connection.prepareStatement("""
-                     UPDATE mayor_transfer_requests SET status = 'CANCELLED', decided_at = ?
-                      WHERE town_id = ? AND status = 'PENDING'
-                     """)) {
-            long now = Instant.now().toEpochMilli();
-            votes.setLong(1, now);
-            votes.setBytes(2, uuid(townId));
-            votes.executeUpdate();
-            transfers.setLong(1, now);
-            transfers.setBytes(2, uuid(townId));
-            transfers.executeUpdate();
-        }
-    }
-
-    private static boolean townReuseBlocked(Connection connection, UUID townId) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT reuse_blocked FROM towns WHERE town_id = ?")) {
-            statement.setBytes(1, uuid(townId));
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) {
-                    throw new ConflictException("小镇不存在");
-                }
-                return result.getBoolean("reuse_blocked");
-            }
-        }
+        auditStore.recordAudit(actorId, actorName, action, targetType, targetId, reason, detail);
     }
 
     public record Provisioning(UUID applicationId, TownSnapshot town, List<UUID> members) {

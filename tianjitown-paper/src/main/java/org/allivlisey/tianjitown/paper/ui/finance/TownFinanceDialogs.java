@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.finance;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.runtime.TownActions;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
@@ -31,6 +32,7 @@ import org.allivlisey.tianjitown.paper.ui.TownUiPresentation.MenuItem;
 
 /** Loads town finances and ledgers, and handles tax changes and donations. */
 public final class TownFinanceDialogs {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
     private final TianjiTownPlugin plugin;
     private final TownRuntime runtime;
@@ -38,6 +40,7 @@ public final class TownFinanceDialogs {
 
     public TownFinanceDialogs(TownUiLegacyFacade facade) {
         this.facade = facade;
+        this.presentation = facade.presentation();
         this.plugin = facade.plugin();
         this.runtime = facade.runtime();
         this.actions = facade.actions();
@@ -56,57 +59,57 @@ public final class TownFinanceDialogs {
     private void renderFinance(Player player, FinanceView view) {
         EconomyRepository.TownFinance account = view.account();
         List<String> summary = new ArrayList<>(List.of(
-                facade.dialogText("common.town", Map.of("town", TownUiLegacyFacade.safeText(account.townName()))),
-                facade.dialogText("finance.balance", Map.of("balance",
+                presentation.dialogText("common.town", Map.of("town", TownUiLegacyFacade.safeText(account.townName()))),
+                presentation.dialogText("finance.balance", Map.of("balance",
                         TownUiLegacyFacade.safeText(runtime.money(account.balanceMinor())))),
-                facade.dialogText("finance.tax-rate", Map.of("rate",
+                presentation.dialogText("finance.tax-rate", Map.of("rate",
                         TownUiLegacyFacade.safeText(TownRuntime.percent(account.taxRateBps())))),
-                facade.dialogText("common.territory-units", Map.of("count", account.unitCount(),
+                presentation.dialogText("common.territory-units", Map.of("count", account.unitCount(),
                         "maximum", runtime.economySettings().maximumUnits())),
-                facade.dialogText("finance.subsidy-twelve-hour", Map.of("amount", TownUiLegacyFacade.safeText(
+                presentation.dialogText("finance.subsidy-twelve-hour", Map.of("amount", TownUiLegacyFacade.safeText(
                                 runtime.money(view.subsidyQuota().twelveHourRemainingMinor())),
                         "refresh", TownUiLegacyFacade.safeText(view.subsidyQuota().twelveHourRefreshAt()))),
-                facade.dialogText("finance.subsidy-week", Map.of("amount", TownUiLegacyFacade.safeText(
+                presentation.dialogText("finance.subsidy-week", Map.of("amount", TownUiLegacyFacade.safeText(
                                 runtime.money(view.subsidyQuota().weeklyRemainingMinor())),
                         "refresh", TownUiLegacyFacade.safeText(view.subsidyQuota().weeklyRefreshAt())))));
         if (account.locked()) {
-            summary.add(facade.dialogText("finance.locked", Map.of("reason",
+            summary.add(presentation.dialogText("finance.locked", Map.of("reason",
                     TownUiLegacyFacade.safeText(account.lockReason()))));
         }
         List<MenuItem> items = new ArrayList<>();
-        items.add(new MenuItem(4, facade.button(account.locked() ? Material.REDSTONE_BLOCK
-                : Material.EMERALD_BLOCK, facade.dialogText("common.finance-title"), summary, null, null)));
+        items.add(new MenuItem(4, presentation.button(account.locked() ? Material.REDSTONE_BLOCK
+                : Material.EMERALD_BLOCK, presentation.dialogText("common.finance-title"), summary, null, null)));
         if (runtime.consumptionEnabled()) {
-            items.add(new MenuItem(10, facade.button(Material.SUNFLOWER,
-                    facade.dialogText("finance.donation"),
-                    List.of(facade.dialogText("tooltip.finance.donation"),
-                            facade.dialogText("tooltip.finance.donation-vault")),
+            items.add(new MenuItem(10, presentation.button(Material.SUNFLOWER,
+                    presentation.dialogText("finance.donation"),
+                    List.of(presentation.dialogText("tooltip.finance.donation"),
+                            presentation.dialogText("tooltip.finance.donation-vault")),
                     "DONATION_INPUT", null)));
         }
         if (account.role().equals("MAYOR") && runtime.taxEnabled()) {
-            items.add(new MenuItem(12, facade.button(Material.GOLD_NUGGET,
-                    facade.dialogText("finance.tax"),
-                    List.of(facade.dialogText("tooltip.finance.tax")), "TAX_MENU", null)));
+            items.add(new MenuItem(12, presentation.button(Material.GOLD_NUGGET,
+                    presentation.dialogText("finance.tax"),
+                    List.of(presentation.dialogText("tooltip.finance.tax")), "TAX_MENU", null)));
         }
-        items.add(new MenuItem(14, facade.button(Material.WRITTEN_BOOK,
-                facade.dialogText("finance.ledger"),
-                List.of(facade.dialogText("tooltip.finance.ledger"),
-                        facade.dialogText("tooltip.finance.ledger-subsidy")), "LEDGER", "0")));
-        items.add(new MenuItem(15, facade.button(Material.BREWING_STAND, facade.dialogText("finance.buff"),
+        items.add(new MenuItem(14, presentation.button(Material.WRITTEN_BOOK,
+                presentation.dialogText("finance.ledger"),
+                List.of(presentation.dialogText("tooltip.finance.ledger"),
+                        presentation.dialogText("tooltip.finance.ledger-subsidy")), "LEDGER", "0")));
+        items.add(new MenuItem(15, presentation.button(Material.BREWING_STAND, presentation.dialogText("finance.buff"),
                 List.of(runtime.buffs().buffShopEnabled()
-                                ? facade.dialogText("tooltip.finance.buff-active")
-                                : facade.dialogText("tooltip.finance.buff-paused")),
+                                ? presentation.dialogText("tooltip.finance.buff-active")
+                                : presentation.dialogText("tooltip.finance.buff-paused")),
                 "BUFF_SHOP", null)));
         if (account.role().equals("MAYOR") && runtime.consumptionEnabled()) {
             long expansionPriceMinor = ExpansionPricing.price(
                     runtime.economySettings().expansionCost(), runtime.settlement().scale())
                     .minorUnits();
-            items.add(new MenuItem(16, facade.button(Material.FILLED_MAP, facade.dialogText("finance.expansion"),
-                    List.of(facade.dialogText("tooltip.finance.expansion", Map.of("price",
+            items.add(new MenuItem(16, presentation.button(Material.FILLED_MAP, presentation.dialogText("finance.expansion"),
+                    List.of(presentation.dialogText("tooltip.finance.expansion", Map.of("price",
                             TownUiLegacyFacade.safeText(runtime.money(expansionPriceMinor))))),
                     "EXPANSION_MENU", null)));
         }
-        facade.openMenu(player, 27, facade.dialogText("common.finance-title"),
+        presentation.openMenu(player, 27, presentation.dialogText("common.finance-title"),
                 new DialogRoute("MAIN", null), items);
         if (account.hasUnreadTaxChange()) {
             actions.acknowledgeTaxRevision(player, account.taxRevision(), outcome ->
@@ -120,36 +123,36 @@ public final class TownFinanceDialogs {
                 .orElseThrow(() -> new IllegalArgumentException(
                         plugin.messages().plainText("chat.runtime.town-required"))), account -> {
             boolean editable = account.role().equals("MAYOR") && runtime.taxEnabled();
-            ItemStack summary = facade.button(Material.GOLD_INGOT, facade.dialogText("tax.summary-title"),
-                    List.of(facade.dialogText("tax.current-rate", Map.of("rate",
+            ItemStack summary = presentation.button(Material.GOLD_INGOT, presentation.dialogText("tax.summary-title"),
+                    List.of(presentation.dialogText("tax.current-rate", Map.of("rate",
                                     TownUiLegacyFacade.safeText(TownRuntime.percent(account.taxRateBps())))),
-                            facade.dialogText("tax.scope"),
-                            editable ? facade.dialogText("tax.editable-hint")
-                                    : facade.dialogText("tax.readonly-hint")),
+                            presentation.dialogText("tax.scope"),
+                            editable ? presentation.dialogText("tax.editable-hint")
+                                    : presentation.dialogText("tax.readonly-hint")),
                     null, null);
             if (!editable) {
-                facade.openMenu(player, 27, facade.dialogText("tax.menu-title"),
+                presentation.openMenu(player, 27, presentation.dialogText("tax.menu-title"),
                         new DialogRoute("FINANCE", "0"),
                         List.of(new MenuItem(0, summary)));
                 return;
             }
             DialogInput input = DialogInput.numberRange("tax_rate", 360,
-                    facade.dialogComponent("tax.rate-label"),
-                    facade.dialogFormat("tax.rate-format"), 5.0F,
+                    presentation.dialogComponent("tax.rate-label"),
+                    presentation.dialogFormat("tax.rate-format"), 5.0F,
                     runtime.economySettings().maximumTaxBps() / 100.0F,
                     account.taxRateBps() / 100.0F, 1.0F);
-            facade.openDialogPage(player, facade.dialogText("tax.title"), List.of(facade.dialogTextBody(summary)),
+            presentation.openDialogPage(player, presentation.dialogText("tax.title"), List.of(presentation.dialogTextBody(summary)),
                     List.of(input),
                     DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                             DialogType.multiAction(List.of(
-                                            ActionButton.create(facade.dialogComponent("common.save-changes"),
-                                                    facade.dialogComponent("tax.save-tooltip"),
-                                                    170, facade.dialogAction(player, session,
+                                            ActionButton.create(presentation.dialogComponent("common.save-changes"),
+                                                    presentation.dialogComponent("tax.save-tooltip"),
+                                                    170, presentation.dialogAction(player, session,
                                                             response -> applyTaxDialog(player, account, response))),
-                                            ActionButton.create(facade.dialogComponent("common.cancel"),
+                                            ActionButton.create(presentation.dialogComponent("common.cancel"),
                                                     null, 170,
-                                                    facade.dialogAction(player, session, "FINANCE", "0"))))
-                                    .exitAction(facade.returnButton(player, session,
+                                                    presentation.dialogAction(player, session, "FINANCE", "0"))))
+                                    .exitAction(presentation.returnButton(player, session,
                                             new DialogRoute("FINANCE", "0")))
                                     .columns(2).build(), new DialogRoute("FINANCE", "0"));
         });
@@ -159,26 +162,26 @@ public final class TownFinanceDialogs {
                                 DialogResponseView response) {
         Float selected = response.getFloat("tax_rate");
         if (selected == null) {
-            facade.openNotice(player, facade.dialogText("tax.select-title"),
-                    facade.dialogText("tax.select-message"), facade.dialogText("common.back"),
+            presentation.openNotice(player, presentation.dialogText("tax.select-title"),
+                    presentation.dialogText("tax.select-message"), presentation.dialogText("common.back"),
                     "TAX_MENU", null);
             return;
         }
         int rate = Math.round(selected) * 100;
         if (rate == account.taxRateBps()) {
-            facade.openNotice(player, facade.dialogText("tax.unchanged-title"),
-                    facade.dialogText("tax.unchanged-message", Map.of(
+            presentation.openNotice(player, presentation.dialogText("tax.unchanged-title"),
+                    presentation.dialogText("tax.unchanged-message", Map.of(
                             "rate", TownRuntime.percent(rate))),
-                    facade.dialogText("common.back"), "FINANCE", "0");
+                    presentation.dialogText("common.back"), "FINANCE", "0");
             return;
         }
         actions.changeTaxRate(player, account.townId(), rate, outcome ->
                 facade.handleOutcome(player, outcome, change -> {
                     notifyTaxRateChange(change);
-                    facade.openNotice(player, facade.dialogText("tax.saved-title"),
-                            facade.dialogText("tax.saved-message", Map.of(
+                    presentation.openNotice(player, presentation.dialogText("tax.saved-title"),
+                            presentation.dialogText("tax.saved-message", Map.of(
                                     "rate", TownRuntime.percent(change.basisPoints()))),
-                            facade.dialogText("common.back"), "FINANCE", "0");
+                            presentation.dialogText("common.back"), "FINANCE", "0");
                 }));
     }
 
@@ -196,50 +199,50 @@ public final class TownFinanceDialogs {
 
     private void renderLedger(Player player, LedgerPage ledger) {
         List<MenuItem> items = new ArrayList<>();
-        items.add(new MenuItem(0, facade.button(Material.WRITTEN_BOOK,
-                facade.dialogText("ledger.title", Map.of("town",
+        items.add(new MenuItem(0, presentation.button(Material.WRITTEN_BOOK,
+                presentation.dialogText("ledger.title", Map.of("town",
                         TownUiLegacyFacade.safeText(ledger.account().townName()))),
-                List.of(facade.dialogText("ledger.page", Map.of("page", ledger.page() + 1)),
-                        facade.dialogText("ledger.balance", Map.of("balance",
+                List.of(presentation.dialogText("ledger.page", Map.of("page", ledger.page() + 1)),
+                        presentation.dialogText("ledger.balance", Map.of("balance",
                                 TownUiLegacyFacade.safeText(runtime.money(ledger.account().balanceMinor()))))),
                 null, null)));
         if (ledger.entries().isEmpty()) {
-            items.add(new MenuItem(1, facade.button(Material.PAPER,
-                    facade.dialogText("ledger.empty"),
-                    List.of(facade.dialogText("ledger.empty-hint")), null, null)));
+            items.add(new MenuItem(1, presentation.button(Material.PAPER,
+                    presentation.dialogText("ledger.empty"),
+                    List.of(presentation.dialogText("ledger.empty-hint")), null, null)));
         }
         int slot = 1;
         for (EconomyRepository.LedgerEntry entry : ledger.entries()) {
             boolean income = entry.amountMinor() > 0;
-            String amount = facade.dialogText(income ? "ledger.income-amount" : "ledger.expense-amount",
+            String amount = presentation.dialogText(income ? "ledger.income-amount" : "ledger.expense-amount",
                     Map.of("amount", TownUiLegacyFacade.safeText(runtime.money(Math.abs(entry.amountMinor())))));
             String actor = displayActorName(entry);
             if (actor == null) {
                 String actorId = entry.actorId() == null ? "" : entry.actorId().toString()
                         .replace("-", "");
                 String suffix = actorId.length() > 24 ? actorId.substring(24) : actorId;
-                actor = facade.dialogText("common.unknown-player", Map.of("playerId", suffix));
+                actor = presentation.dialogText("common.unknown-player", Map.of("playerId", suffix));
             }
-            items.add(new MenuItem(slot++, facade.button(income ? Material.LIME_DYE : Material.RED_DYE,
-                    facade.dialogText("ledger.entry-title", Map.of("amount", amount,
+            items.add(new MenuItem(slot++, presentation.button(income ? Material.LIME_DYE : Material.RED_DYE,
+                    presentation.dialogText("ledger.entry-title", Map.of("amount", amount,
                             "type", ledgerLabel(entry.entryType()))),
-                    List.of(facade.dialogText("ledger.entry-balance", Map.of("balance",
+                    List.of(presentation.dialogText("ledger.entry-balance", Map.of("balance",
                                     TownUiLegacyFacade.safeText(runtime.money(entry.balanceAfterMinor())))),
-                            facade.dialogText("ledger.entry-actor", Map.of("actor", actor)),
-                            facade.dialogText("ledger.entry-time", Map.of("time",
+                            presentation.dialogText("ledger.entry-actor", Map.of("actor", actor)),
+                            presentation.dialogText("ledger.entry-time", Map.of("time",
                                     TownUiLegacyFacade.safeText(entry.createdAt()))),
-                            facade.dialogText("ledger.entry-note", Map.of("note",
+                            presentation.dialogText("ledger.entry-note", Map.of("note",
                                     TownUiLegacyFacade.safeText(entry.note())))), null, null)));
         }
         if (ledger.page() > 0) {
-            items.add(new MenuItem(20, facade.button(Material.ARROW, facade.dialogText("common.previous"),
+            items.add(new MenuItem(20, presentation.button(Material.ARROW, presentation.dialogText("common.previous"),
                     List.of(), "LEDGER", String.valueOf(ledger.page() - 1))));
         }
         if (ledger.entries().size() == 6) {
-            items.add(new MenuItem(21, facade.button(Material.ARROW, facade.dialogText("common.next"),
+            items.add(new MenuItem(21, presentation.button(Material.ARROW, presentation.dialogText("common.next"),
                     List.of(), "LEDGER", String.valueOf(ledger.page() + 1))));
         }
-        facade.openMenu(player, 27, facade.dialogText("ledger.page-title", Map.of("page", ledger.page() + 1)),
+        presentation.openMenu(player, 27, presentation.dialogText("ledger.page-title", Map.of("page", ledger.page() + 1)),
                 new DialogRoute("FINANCE", "0"), items);
     }
 
@@ -262,8 +265,8 @@ public final class TownFinanceDialogs {
             default -> null;
         };
         return key == null
-                ? facade.dialogText("ledger.type.unknown", Map.of("type", TownUiLegacyFacade.safeText(stableType)))
-                : facade.dialogText(key);
+                ? presentation.dialogText("ledger.type.unknown", Map.of("type", TownUiLegacyFacade.safeText(stableType)))
+                : presentation.dialogText(key);
     }
 
     private static String displayActorName(EconomyRepository.LedgerEntry entry) {
@@ -292,21 +295,21 @@ public final class TownFinanceDialogs {
                 }
                 member.sendMessage(plugin.messages().component("chat.notification.tax-updated", Map.of(
                                 "rate", TownRuntime.percent(change.basisPoints())))
-                        .append(facade.callbackButton(member, "chat.buttons.view-tax",
+                        .append(presentation.callbackButton(member, "chat.buttons.view-tax",
                                 () -> openTaxMenu(member)))
                         .append(Component.space())
-                        .append(facade.callbackButton(member, "chat.buttons.view-finance",
+                        .append(presentation.callbackButton(member, "chat.buttons.view-finance",
                                 () -> openFinance(member, 0))));
-                facade.playSound(member, Sound.BLOCK_BELL_USE);
+                presentation.playSound(member, Sound.BLOCK_BELL_USE);
             }
         });
     }
 
     public void startDonationInput(Player player) {
         if (!runtime.consumptionEnabled()) {
-            facade.openNotice(player, facade.dialogText("donation.unavailable-title"),
-                    facade.dialogText("donation.unavailable-message"),
-                    facade.dialogText("common.back"), "FINANCE", "0");
+            presentation.openNotice(player, presentation.dialogText("donation.unavailable-title"),
+                    presentation.dialogText("donation.unavailable-message"),
+                    presentation.dialogText("common.back"), "FINANCE", "0");
             return;
         }
         openDonationDialog(player, null, "");
@@ -317,32 +320,32 @@ public final class TownFinanceDialogs {
                 .orElseThrow(() -> new IllegalArgumentException(
                         plugin.messages().plainText("chat.runtime.town-required"))), account -> {
             List<String> description = new ArrayList<>(List.of(
-                    facade.dialogText("common.town", Map.of("town", TownUiLegacyFacade.safeText(account.townName()))),
-                    facade.dialogText("donation.balance", Map.of(
+                    presentation.dialogText("common.town", Map.of("town", TownUiLegacyFacade.safeText(account.townName()))),
+                    presentation.dialogText("donation.balance", Map.of(
                             "balance", TownUiLegacyFacade.safeText(runtime.money(account.balanceMinor())))),
-                    facade.dialogText("donation.amount-hint", Map.of(
+                    presentation.dialogText("donation.amount-hint", Map.of(
                             "scale", runtime.settlement().scale()))));
             if (error != null && !error.isBlank()) {
-                description.add(facade.dialogText("common.error", Map.of("error", TownUiLegacyFacade.safeText(error))));
+                description.add(presentation.dialogText("common.error", Map.of("error", TownUiLegacyFacade.safeText(error))));
             }
-            ItemStack summary = facade.button(Material.SUNFLOWER,
-                    facade.dialogText("donation.title"),
+            ItemStack summary = presentation.button(Material.SUNFLOWER,
+                    presentation.dialogText("donation.title"),
                     description, null, null);
             DialogInput amount = DialogInput.text("donation_amount", 360,
-                    facade.dialogComponent("donation.amount-label"), true,
+                    presentation.dialogComponent("donation.amount-label"), true,
                     initial, 64, null);
-            facade.openDialogPage(player, facade.dialogText("donation.title"),
-                    List.of(facade.dialogTextBody(summary)), List.of(amount),
+            presentation.openDialogPage(player, presentation.dialogText("donation.title"),
+                    List.of(presentation.dialogTextBody(summary)), List.of(amount),
                     DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                             DialogType.multiAction(List.of(
-                                            ActionButton.create(facade.dialogComponent("donation.confirm"),
-                                                    facade.dialogComponent("donation.confirm-tooltip"),
-                                                    170, facade.dialogAction(player, session,
+                                            ActionButton.create(presentation.dialogComponent("donation.confirm"),
+                                                    presentation.dialogComponent("donation.confirm-tooltip"),
+                                                    170, presentation.dialogAction(player, session,
                                                             response -> applyDonationDialog(player, response))),
-                                            ActionButton.create(facade.dialogComponent("common.cancel"),
+                                            ActionButton.create(presentation.dialogComponent("common.cancel"),
                                                     null, 170,
-                                                    facade.dialogAction(player, session, "FINANCE", "0"))))
-                                    .exitAction(facade.returnButton(player, session,
+                                                    presentation.dialogAction(player, session, "FINANCE", "0"))))
+                                    .exitAction(presentation.returnButton(player, session,
                                             new DialogRoute("FINANCE", "0")))
                                     .columns(2).build(), new DialogRoute("FINANCE", "0"));
         });
@@ -359,12 +362,12 @@ public final class TownFinanceDialogs {
             }
             actions.donate(player, amount.minorUnits(), outcome ->
                     facade.handleOutcome(player, outcome, mutation ->
-                            facade.openNotice(player, facade.dialogText("notice.donation-success-title"),
-                                    facade.dialogText("notice.donation-success-message", Map.of(
+                            presentation.openNotice(player, presentation.dialogText("notice.donation-success-title"),
+                                    presentation.dialogText("notice.donation-success-message", Map.of(
                                             "amount", runtime.money(amount.minorUnits()),
                                             "balance", runtime.money(
                                                     mutation.balanceAfterMinor()))),
-                                    facade.dialogText("common.back"), "FINANCE", "0")));
+                                    presentation.dialogText("common.back"), "FINANCE", "0")));
         } catch (ArithmeticException | NumberFormatException exception) {
             openDonationDialog(player, plugin.messages().plainText(
                     "dialog.donation.invalid-amount"), value);

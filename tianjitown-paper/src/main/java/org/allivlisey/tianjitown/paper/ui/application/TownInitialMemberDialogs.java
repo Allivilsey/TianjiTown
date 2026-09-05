@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.application;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.runtime.TownActions;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
@@ -23,6 +24,7 @@ import java.util.UUID;
 
 /** Sends initial-member invitations and handles replies and reminder cooldowns. */
 public final class TownInitialMemberDialogs {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
     private final TianjiTownPlugin plugin;
     private final TownRuntime runtime;
@@ -30,6 +32,7 @@ public final class TownInitialMemberDialogs {
 
     public TownInitialMemberDialogs(TownUiLegacyFacade facade) {
         this.facade = facade;
+        this.presentation = facade.presentation();
         this.plugin = facade.plugin();
         this.runtime = facade.runtime();
         this.actions = facade.actions();
@@ -53,9 +56,9 @@ public final class TownInitialMemberDialogs {
         Instant availableAt = facade.applicationFormUi().reminderAvailableAt(applicationId);
         if (availableAt != null && availableAt.isAfter(now)) {
             long remaining = Math.max(1, Duration.between(now, availableAt).toSeconds());
-            facade.openNotice(applicant, facade.dialogText("notice.reminder-cooldown-title"), plugin.messages().text(
+            presentation.openNotice(applicant, presentation.dialogText("notice.reminder-cooldown-title"), plugin.messages().text(
                             "application.reminder-cooldown", Map.of("seconds", remaining)),
-                    facade.dialogText("common.back"), "APPLICATION",
+                    presentation.dialogText("common.back"), "APPLICATION",
                     applicationId.toString());
             return;
         }
@@ -63,58 +66,58 @@ public final class TownInitialMemberDialogs {
                 .orElseThrow(() -> new IllegalArgumentException(
                         plugin.messages().plainText("chat.application.not-found"))), application -> {
             if (!application.applicantId().equals(applicant.getUniqueId())) {
-                facade.openNotice(applicant, facade.dialogText("notice.reminder-forbidden-title"),
-                        facade.dialogText("notice.reminder-forbidden-message"),
-                        facade.dialogText("common.back"), "MAIN", null);
+                presentation.openNotice(applicant, presentation.dialogText("notice.reminder-forbidden-title"),
+                        presentation.dialogText("notice.reminder-forbidden-message"),
+                        presentation.dialogText("common.back"), "MAIN", null);
                 return;
             }
             if (application.initialMembers().stream().noneMatch(member ->
                     member.status() == InitialMemberConfirmation.Status.PENDING)) {
-                facade.openNotice(applicant, facade.dialogText("notice.reminder-unneeded-title"),
-                        facade.dialogText("notice.reminder-unneeded-message"),
-                        facade.dialogText("common.back"), "APPLICATION",
+                presentation.openNotice(applicant, presentation.dialogText("notice.reminder-unneeded-title"),
+                        presentation.dialogText("notice.reminder-unneeded-message"),
+                        presentation.dialogText("common.back"), "APPLICATION",
                         applicationId.toString());
                 return;
             }
             notifyInitialMembers(application);
             facade.applicationFormUi().setReminderAvailableAt(applicationId, applicant.getUniqueId(),
                     now.plus(Duration.ofMinutes(5)));
-            facade.openNotice(applicant, facade.dialogText("notice.reminder-sent-title"),
+            presentation.openNotice(applicant, presentation.dialogText("notice.reminder-sent-title"),
                     plugin.messages().text("application.reminder-sent"),
-                    facade.dialogText("common.back"),
+                    presentation.dialogText("common.back"),
                     "APPLICATION", applicationId.toString());
         });
     }
 
     public void sendInitialMemberReminder(Player member, ApplicationSnapshot application) {
-        Component message = facade.dialogComponent("invitation.message", Map.of(
+        Component message = presentation.dialogComponent("invitation.message", Map.of(
                 "player", facade.displayName(application.applicantId()),
                 "town", TownUiLegacyFacade.safeText(application.text().name())));
-        facade.openDialogPage(member, facade.dialogText("invitation.title"),
+        presentation.openDialogPage(member, presentation.dialogText("invitation.title"),
                 List.of(DialogBody.plainMessage(message, 400)), List.of(),
                 DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                         DialogType.multiAction(List.of(
-                                ActionButton.create(facade.dialogComponent("invitation.accept"),
-                                        null, 170, facade.dialogAction(member, session,
+                                ActionButton.create(presentation.dialogComponent("invitation.accept"),
+                                        null, 170, presentation.dialogAction(member, session,
                                                 response -> respondInitialMember(member,
                                                         application.id(), true))),
-                                ActionButton.create(facade.dialogComponent("invitation.reject"),
-                                        null, 170, facade.dialogAction(member, session,
+                                ActionButton.create(presentation.dialogComponent("invitation.reject"),
+                                        null, 170, presentation.dialogAction(member, session,
                                                 response -> respondInitialMember(member,
                                                          application.id(), false)))))
-                                .exitAction(facade.returnButton(member, session, DialogRoute.ROOT))
+                                .exitAction(presentation.returnButton(member, session, DialogRoute.ROOT))
                                 .columns(2).build(), DialogRoute.ROOT);
     }
 
     private void respondInitialMember(Player member, UUID applicationId, boolean confirm) {
         actions.respondInitialMember(member, applicationId, confirm, outcome ->
                 facade.handleOutcome(member, outcome, application -> {
-                    facade.openNotice(member, confirm
-                                    ? facade.dialogText("notice.invitation-accepted-title")
-                                    : facade.dialogText("notice.invitation-rejected-title"),
-                            confirm ? facade.dialogText("notice.invitation-accepted-message")
-                                    : facade.dialogText("notice.invitation-rejected-message"),
-                            facade.dialogText("common.close"), "CLOSE", null);
+                    presentation.openNotice(member, confirm
+                                    ? presentation.dialogText("notice.invitation-accepted-title")
+                                    : presentation.dialogText("notice.invitation-rejected-title"),
+                            confirm ? presentation.dialogText("notice.invitation-accepted-message")
+                                    : presentation.dialogText("notice.invitation-rejected-message"),
+                            presentation.dialogText("common.close"), "CLOSE", null);
                     Player applicant = Bukkit.getPlayer(application.applicantId());
                     if (applicant != null) {
                         plugin.messages().send(applicant, confirm

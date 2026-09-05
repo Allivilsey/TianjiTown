@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.membership;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.runtime.TownActions;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
@@ -23,6 +24,7 @@ import org.allivlisey.tianjitown.paper.ui.TownUiPresentation.MenuItem;
 
 /** Handles browsing towns, join requests and manager decisions. */
 public final class TownJoinApplicationDialogs {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
     private final TianjiTownPlugin plugin;
     private final TownRuntime runtime;
@@ -30,6 +32,7 @@ public final class TownJoinApplicationDialogs {
 
     public TownJoinApplicationDialogs(TownUiLegacyFacade facade) {
         this.facade = facade;
+        this.presentation = facade.presentation();
         this.plugin = facade.plugin();
         this.runtime = facade.runtime();
         this.actions = facade.actions();
@@ -48,33 +51,33 @@ public final class TownJoinApplicationDialogs {
             List<TownSnapshot> visible = TownUiLegacyFacade.page(towns, page, 8);
             for (int index = 0; index < visible.size(); index++) {
                 TownSnapshot town = visible.get(index);
-                items.add(new MenuItem(index, facade.button(Material.BELL,
-                        facade.dialogText("common.town-name", Map.of(
+                items.add(new MenuItem(index, presentation.button(Material.BELL,
+                        presentation.dialogText("common.town-name", Map.of(
                                 "town", TownUiLegacyFacade.safeText(town.profile().name()))),
-                        List.of(facade.dialogText("common.town-code", Map.of(
+                        List.of(presentation.dialogText("common.town-code", Map.of(
                                         "code", TownUiLegacyFacade.safeText(town.profile().residenceName()))),
-                                facade.dialogText("common.town-description", Map.of(
+                                presentation.dialogText("common.town-description", Map.of(
                                         "description", TownUiLegacyFacade.safeText(TownUiLegacyFacade.preview(
                                                 town.profile().description(), 80)))),
-                                facade.dialogText("tooltip.join.town-apply")),
+                                presentation.dialogText("tooltip.join.town-apply")),
                         "JOIN_TOWN", town.id().toString())));
             }
             if (towns.isEmpty()) {
-                items.add(new MenuItem(0, facade.button(Material.BELL,
-                        facade.dialogText("join.empty-title"),
-                        List.of(facade.dialogText("join.empty-hint")), null, null)));
+                items.add(new MenuItem(0, presentation.button(Material.BELL,
+                        presentation.dialogText("join.empty-title"),
+                        List.of(presentation.dialogText("join.empty-hint")), null, null)));
             }
             if (page > 0) {
-                items.add(new MenuItem(45, facade.button(Material.ARROW,
-                        facade.dialogText("common.previous"), List.of(),
+                items.add(new MenuItem(45, presentation.button(Material.ARROW,
+                        presentation.dialogText("common.previous"), List.of(),
                         "JOIN_TOWNS_PAGE", String.valueOf(page - 1))));
             }
             if (TownUiLegacyFacade.hasNext(towns, page, 8)) {
-                items.add(new MenuItem(53, facade.button(Material.ARROW,
-                        facade.dialogText("common.next"), List.of(),
+                items.add(new MenuItem(53, presentation.button(Material.ARROW,
+                        presentation.dialogText("common.next"), List.of(),
                         "JOIN_TOWNS_PAGE", String.valueOf(page + 1))));
             }
-            facade.openMenu(player, 54, facade.dialogText("join.list-title", Map.of("page", page + 1)),
+            presentation.openMenu(player, 54, presentation.dialogText("join.list-title", Map.of("page", page + 1)),
                     new DialogRoute("MAIN", null), items);
         });
     }
@@ -88,20 +91,20 @@ public final class TownJoinApplicationDialogs {
             JoinTownMenuModel.Entry rulesEntry = joinTown.rulesEntry();
             JoinTownMenuModel.Entry applyEntry = joinTown.applyEntry();
             List<MenuItem> items = List.of(
-                    new MenuItem(4, facade.button(Material.BELL,
-                            facade.dialogText("common.town-name", Map.of(
+                    new MenuItem(4, presentation.button(Material.BELL,
+                            presentation.dialogText("common.town-name", Map.of(
                                     "town", TownUiLegacyFacade.safeText(town.profile().name()))),
                             joinTown.summaryLore(),
                             null, null)),
-                    new MenuItem(rulesEntry.slot(), facade.button(Material.WRITTEN_BOOK,
-                            facade.dialogText(rulesEntry.labelKey()), rulesEntry.loreKeys().stream()
-                                    .map(facade::dialogText).toList(), rulesEntry.action(),
+                    new MenuItem(rulesEntry.slot(), presentation.button(Material.WRITTEN_BOOK,
+                            presentation.dialogText(rulesEntry.labelKey()), rulesEntry.loreKeys().stream()
+                                    .map(facade.presentation()::dialogText).toList(), rulesEntry.action(),
                             rulesEntry.target())),
-                    new MenuItem(applyEntry.slot(), facade.button(Material.LIME_CONCRETE,
-                            facade.dialogText(applyEntry.labelKey()), applyEntry.loreKeys().stream()
-                                    .map(facade::dialogText).toList(), applyEntry.action(),
+                    new MenuItem(applyEntry.slot(), presentation.button(Material.LIME_CONCRETE,
+                            presentation.dialogText(applyEntry.labelKey()), applyEntry.loreKeys().stream()
+                                    .map(facade.presentation()::dialogText).toList(), applyEntry.action(),
                             applyEntry.target())));
-            facade.openMenu(player, 27, facade.dialogText("join.town-title", Map.of(
+            presentation.openMenu(player, 27, presentation.dialogText("join.town-title", Map.of(
                             "town", TownUiLegacyFacade.safeText(town.profile().name()))),
                     new DialogRoute("JOIN_TOWNS", null), items);
         });
@@ -113,15 +116,15 @@ public final class TownJoinApplicationDialogs {
                     List<MenuItem> items = new ArrayList<>();
                     for (int index = 0; index < Math.min(applications.size(), 45); index++) {
                         JoinApplicationSnapshot application = applications.get(index);
-                        items.add(new MenuItem(index, facade.button(Material.PAPER,
-                                facade.dialogText("common.town-entry-title", Map.of(
+                        items.add(new MenuItem(index, presentation.button(Material.PAPER,
+                                presentation.dialogText("common.town-entry-title", Map.of(
                                         "town", TownUiLegacyFacade.safeText(application.townName()))),
-                                List.of(facade.dialogText("common.expires", Map.of(
+                                List.of(presentation.dialogText("common.expires", Map.of(
                                                 "time", TownUiLegacyFacade.safeText(application.expiresAt()))),
-                                        facade.dialogText("tooltip.my-join.withdraw")),
+                                        presentation.dialogText("tooltip.my-join.withdraw")),
                                 "CONFIRM_CANCEL_JOIN", application.id().toString())));
                     }
-                    facade.openMenu(player, 54, facade.dialogText("my-join.list-title", Map.of(
+                    presentation.openMenu(player, 54, presentation.dialogText("my-join.list-title", Map.of(
                                     "count", applications.size())),
                             new DialogRoute("MAIN", null), items);
                 });
@@ -140,32 +143,32 @@ public final class TownJoinApplicationDialogs {
             for (int index = 0; index < visible.size(); index++) {
                 JoinApplicationSnapshot application = visible.get(index);
                 String name = facade.displayName(application.applicantId());
-                items.add(new MenuItem(index, facade.button(Material.PLAYER_HEAD,
-                        facade.dialogText("town-join.entry-title", Map.of(
+                items.add(new MenuItem(index, presentation.button(Material.PLAYER_HEAD,
+                        presentation.dialogText("town-join.entry-title", Map.of(
                                 "applicant", TownUiLegacyFacade.safeText(name))),
-                        List.of(facade.dialogText("tooltip.town-join.entry-created", Map.of(
+                        List.of(presentation.dialogText("tooltip.town-join.entry-created", Map.of(
                                         "time", TownUiLegacyFacade.safeText(application.createdAt()))),
-                                facade.dialogText("common.expires", Map.of(
+                                presentation.dialogText("common.expires", Map.of(
                                         "time", TownUiLegacyFacade.safeText(application.expiresAt()))),
-                                facade.dialogText("tooltip.town-join.entry-review")),
+                                presentation.dialogText("tooltip.town-join.entry-review")),
                         "JOIN_APPLICATION", application.id().toString())));
             }
             if (applications.isEmpty()) {
-                items.add(new MenuItem(0, facade.button(Material.BOOK,
-                        facade.dialogText("town-join.list-empty"),
-                        List.of(facade.dialogText("town-join.list-empty-hint")), null, null)));
+                items.add(new MenuItem(0, presentation.button(Material.BOOK,
+                        presentation.dialogText("town-join.list-empty"),
+                        List.of(presentation.dialogText("town-join.list-empty-hint")), null, null)));
             }
             if (page > 0) {
-                items.add(new MenuItem(45, facade.button(Material.ARROW,
-                        facade.dialogText("common.previous"), List.of(),
+                items.add(new MenuItem(45, presentation.button(Material.ARROW,
+                        presentation.dialogText("common.previous"), List.of(),
                         "JOIN_APPLICATIONS_PAGE", townId + ":" + (page - 1))));
             }
             if (TownUiLegacyFacade.hasNext(applications, page, 8)) {
-                items.add(new MenuItem(53, facade.button(Material.ARROW,
-                        facade.dialogText("common.next"), List.of(),
+                items.add(new MenuItem(53, presentation.button(Material.ARROW,
+                        presentation.dialogText("common.next"), List.of(),
                         "JOIN_APPLICATIONS_PAGE", townId + ":" + (page + 1))));
             }
-            facade.openMenu(mayor, 54, facade.dialogText("town-join.list-title", Map.of(
+            presentation.openMenu(mayor, 54, presentation.dialogText("town-join.list-title", Map.of(
                             "count", applications.size(), "page", page + 1)),
                     new DialogRoute("GOVERNANCE_CENTER", null), items);
         });
@@ -180,18 +183,18 @@ public final class TownJoinApplicationDialogs {
                     Bukkit.getOfflinePlayer(application.applicantId()).getName(),
                     application.applicantId().toString());
             List<MenuItem> items = List.of(
-                    new MenuItem(4, facade.button(Material.PLAYER_HEAD, "§6" + name,
+                    new MenuItem(4, presentation.button(Material.PLAYER_HEAD, "§6" + name,
                             List.of("§7玩家 UUID: " + application.applicantId(),
                                     "§7申请时间: " + application.createdAt(),
                                     "§7到期: " + application.expiresAt()), null, null)),
-                    new MenuItem(11, facade.button(Material.LIME_CONCRETE, "§a批准加入",
-                            List.of(facade.dialogText("tooltip.town-join.approve")),
+                    new MenuItem(11, presentation.button(Material.LIME_CONCRETE, "§a批准加入",
+                            List.of(presentation.dialogText("tooltip.town-join.approve")),
                             "CONFIRM_APPROVE_JOIN",
                             application.id().toString())),
-                    new MenuItem(15, facade.button(Material.RED_CONCRETE, "§c拒绝申请",
-                            List.of(facade.dialogText("tooltip.town-join.reject")),
+                    new MenuItem(15, presentation.button(Material.RED_CONCRETE, "§c拒绝申请",
+                            List.of(presentation.dialogText("tooltip.town-join.reject")),
                             "CONFIRM_REJECT_JOIN", application.id().toString())));
-            facade.openMenu(mayor, 27, "审核入镇申请",
+            presentation.openMenu(mayor, 27, "审核入镇申请",
                     new DialogRoute("JOIN_APPLICATIONS", application.townId().toString()), items);
         });
     }
@@ -199,12 +202,12 @@ public final class TownJoinApplicationDialogs {
     public void applyJoin(Player player, UUID townId) {
         actions.applyToTown(player, townId, outcome ->
                 facade.handleOutcome(player, outcome, application -> {
-                    facade.playSound(player, Sound.BLOCK_NOTE_BLOCK_PLING);
+                    presentation.playSound(player, Sound.BLOCK_NOTE_BLOCK_PLING);
                     notifyMayorJoinApplication(application);
-                    facade.openNotice(player, facade.dialogText("notice.join-submitted-title"),
-                            facade.dialogText("notice.join-submitted-message", Map.of(
+                    presentation.openNotice(player, presentation.dialogText("notice.join-submitted-title"),
+                            presentation.dialogText("notice.join-submitted-message", Map.of(
                                     "expires", application.expiresAt())),
-                            facade.dialogText("common.view-my-applications"),
+                            presentation.dialogText("common.view-my-applications"),
                             "MY_JOIN_APPLICATIONS", null);
                 }));
     }
@@ -212,9 +215,9 @@ public final class TownJoinApplicationDialogs {
     public void cancelJoin(Player player, UUID applicationId) {
         actions.cancelJoinApplication(player, applicationId, outcome ->
                 facade.handleOutcome(player, outcome, ignored -> {
-            facade.openNotice(player, facade.dialogText("notice.join-cancelled-title"),
-                    facade.dialogText("notice.join-cancelled-message"),
-                    facade.dialogText("common.back"),
+            presentation.openNotice(player, presentation.dialogText("notice.join-cancelled-title"),
+                    presentation.dialogText("notice.join-cancelled-message"),
+                    presentation.dialogText("common.back"),
                     "MY_JOIN_APPLICATIONS", null);
         }));
     }
@@ -222,11 +225,11 @@ public final class TownJoinApplicationDialogs {
     public void approveJoin(Player mayor, UUID applicationId) {
         actions.approveJoinApplication(mayor, applicationId, outcome ->
                 facade.handleOutcome(mayor, outcome, application -> {
-            facade.playSound(mayor, Sound.ENTITY_PLAYER_LEVELUP);
+            presentation.playSound(mayor, Sound.ENTITY_PLAYER_LEVELUP);
             notifyJoinDecision(application, true);
-            facade.openNotice(mayor, facade.dialogText("notice.join-approved-title"),
-                    facade.dialogText("notice.join-approved-message"),
-                    facade.dialogText("common.back"), "JOIN_APPLICATIONS",
+            presentation.openNotice(mayor, presentation.dialogText("notice.join-approved-title"),
+                    presentation.dialogText("notice.join-approved-message"),
+                    presentation.dialogText("common.back"), "JOIN_APPLICATIONS",
                     application.townId().toString());
         }));
     }
@@ -235,9 +238,9 @@ public final class TownJoinApplicationDialogs {
         actions.rejectJoinApplication(mayor, applicationId, outcome ->
                 facade.handleOutcome(mayor, outcome, application -> {
             notifyJoinDecision(application, false);
-            facade.openNotice(mayor, facade.dialogText("notice.join-rejected-title"),
-                    facade.dialogText("notice.join-rejected-message"),
-                    facade.dialogText("common.back"), "JOIN_APPLICATIONS",
+            presentation.openNotice(mayor, presentation.dialogText("notice.join-rejected-title"),
+                    presentation.dialogText("notice.join-rejected-message"),
+                    presentation.dialogText("common.back"), "JOIN_APPLICATIONS",
                     application.townId().toString());
         }));
     }
@@ -259,9 +262,9 @@ public final class TownJoinApplicationDialogs {
                 }
                 manager.sendMessage(plugin.messages().component("chat.notification.join-request", Map.of(
                                 "applicant", applicant, "town", application.townName()))
-                        .append(facade.callbackButton(manager, "chat.buttons.review-join",
+                        .append(presentation.callbackButton(manager, "chat.buttons.review-join",
                                 () -> openTownJoinApplication(manager, application.id()))));
-                facade.playSound(manager, Sound.BLOCK_AMETHYST_BLOCK_CHIME);
+                presentation.playSound(manager, Sound.BLOCK_AMETHYST_BLOCK_CHIME);
             }
         });
     }
@@ -275,9 +278,9 @@ public final class TownJoinApplicationDialogs {
                         ? "chat.notification.join-approved"
                         : "chat.notification.join-rejected",
                 Map.of("town", application.townName()))
-                .append(facade.callbackButton(applicant, "chat.buttons.open-system",
+                .append(presentation.callbackButton(applicant, "chat.buttons.open-system",
                         () -> facade.openMain(applicant))));
-        facade.playSound(applicant, approved ? Sound.ENTITY_PLAYER_LEVELUP : Sound.ENTITY_VILLAGER_NO);
+        presentation.playSound(applicant, approved ? Sound.ENTITY_PLAYER_LEVELUP : Sound.ENTITY_VILLAGER_NO);
     }
 
     private record ManagerNotification(TownSnapshot town, List<UUID> managerIds) {

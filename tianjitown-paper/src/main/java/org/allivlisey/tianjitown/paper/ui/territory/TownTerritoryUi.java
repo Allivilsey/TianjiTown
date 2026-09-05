@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.territory;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.land.SitePolicy;
 import org.allivlisey.tianjitown.paper.land.TerritoryService;
 import org.allivlisey.tianjitown.paper.message.LandProtectionMessages;
@@ -30,6 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** Owns expansion selection, territory previews, and town teleport-point routes. */
 public final class TownTerritoryUi {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
     private final Map<UUID, Set<TerritoryService.GridSelection>> expansionSelections =
             new ConcurrentHashMap<>();
@@ -37,6 +39,7 @@ public final class TownTerritoryUi {
 
     public TownTerritoryUi(TownUiLegacyFacade facade) {
         this.facade = Objects.requireNonNull(facade, "facade");
+        this.presentation = facade.presentation();
     }
 
     public static List<String> townTerritoryLore(PluginMessages messages, InitialTerritory territory) {
@@ -93,44 +96,44 @@ public final class TownTerritoryUi {
                     : Math.multiplyExact(map.priceMinor(), selected.size());
             String price = map.priceMinor() > 0
                     ? facade.runtime().money(map.priceMinor())
-                    : facade.dialogText("territory.limit-reached");
-            Component summary = facade.dialogComponent("territory.summary", Map.of(
+                    : presentation.dialogText("territory.limit-reached");
+            Component summary = presentation.dialogComponent("territory.summary", Map.of(
                             "current", map.currentUnits(), "maximum", map.maximumUnits()))
                     .append(Component.newline())
-                    .append(facade.dialogComponent("territory.batch-summary", Map.of(
+                    .append(presentation.dialogComponent("territory.batch-summary", Map.of(
                             "count", selected.size(), "price", facade.runtime().money(total),
                             "units", map.currentUnits() + selected.size(),
                             "maximum", map.maximumUnits())))
                     .append(Component.newline())
-                    .append(facade.dialogComponent("territory.legend"));
-            facade.openDialogPage(player, facade.dialogText("territory.title"),
+                    .append(presentation.dialogComponent("territory.legend"));
+            presentation.openDialogPage(player, presentation.dialogText("territory.title"),
                     List.of(DialogBody.plainMessage(summary, 360)), List.of(),
                     DialogBase.DialogAfterAction.NONE, session -> {
-                        ActionButton back = facade.returnButton(player, session,
+                        ActionButton back = presentation.returnButton(player, session,
                                 new DialogRoute("FINANCE", "0"));
                         List<TerritoryDialogRenderer.FooterAction> footer = new ArrayList<>();
                         if (!selected.isEmpty()) {
-                            Component confirmLabel = facade.dialogComponent("territory.batch-confirm");
+                            Component confirmLabel = presentation.dialogComponent("territory.batch-confirm");
                             footer.add(new TerritoryDialogRenderer.FooterAction(
                                     TerritoryDialogRenderer.FooterKind.CONFIRM,
                                     confirmLabel,
                                     confirmLabel.append(Component.newline()).append(
-                                            facade.dialogComponent(
+                                            presentation.dialogComponent(
                                                     "territory.batch-confirm-consequence", Map.of(
                                                             "price", facade.runtime().money(total),
                                                             "count", selected.size()))),
-                                    facade.dialogAction(player, session,
+                                    presentation.dialogAction(player, session,
                                             "CONFIRM_EXPANSION_BATCH", null)));
                             footer.add(new TerritoryDialogRenderer.FooterAction(
                                     TerritoryDialogRenderer.FooterKind.CLEAR,
-                                    facade.dialogComponent("territory.batch-clear"),
-                                    facade.dialogComponent("territory.batch-clear"),
-                                    facade.dialogAction(player, session,
+                                    presentation.dialogComponent("territory.batch-clear"),
+                                    presentation.dialogComponent("territory.batch-clear"),
+                                    presentation.dialogAction(player, session,
                                             "CLEAR_EXPANSION_SELECTION", null)));
                         }
                         return TerritoryDialogRenderer.render(map, price,
                                 facade.plugin().messages(), selected,
-                                cell -> facade.dialogAction(player, session, "TOGGLE_EXPANSION",
+                                cell -> presentation.dialogAction(player, session, "TOGGLE_EXPANSION",
                                         cell.gridX() + "," + cell.gridZ()), back, footer);
                     }, new DialogRoute("FINANCE", "0"));
         });
@@ -176,8 +179,8 @@ public final class TownTerritoryUi {
         }, exception -> {
             // The persistence layer refunds failed projection; a real retry needs a fresh key.
             expansionBatchRequestIds.remove(player.getUniqueId(), requestId);
-            facade.openNotice(player, facade.dialogText("territory.unavailable-title"),
-                    exception.getMessage(), facade.dialogText("common.back"),
+            presentation.openNotice(player, presentation.dialogText("territory.unavailable-title"),
+                    exception.getMessage(), presentation.dialogText("common.back"),
                     "EXPANSION_MENU", null);
         });
     }
@@ -188,16 +191,16 @@ public final class TownTerritoryUi {
                 player.getUniqueId(), grid.x(), grid.z()), preview -> {
             SitePolicy.Validation validation = facade.runtime().validateExpansionPreview(preview);
             if (!validation.valid()) {
-                facade.openNotice(player, facade.dialogText("territory.unavailable-title"),
-                        validation.error(), facade.dialogText("common.back"),
+                presentation.openNotice(player, presentation.dialogText("territory.unavailable-title"),
+                        validation.error(), presentation.dialogText("common.back"),
                         "EXPANSION_MENU", null);
                 return;
             }
-            facade.sitePolicy().preview(player, preview.candidate().territory());
+            facade.territoryPreviews().preview(player, preview.candidate().territory());
             String normalizedTarget = grid.x() + "," + grid.z();
-            facade.openConfirmation(player, facade.dialogText("territory.confirm-title", Map.of(
+            presentation.openConfirmation(player, presentation.dialogText("territory.confirm-title", Map.of(
                             "grid", normalizedTarget)), "EXPAND", normalizedTarget,
-                    facade.dialogText("territory.confirm-consequence", Map.of(
+                    presentation.dialogText("territory.confirm-consequence", Map.of(
                             "price", facade.runtime().money(preview.priceMinor()))),
                     "EXPANSION_MENU", null);
         });
@@ -207,10 +210,10 @@ public final class TownTerritoryUi {
         GridTarget grid = GridTarget.parse(target, facade.plugin());
         facade.actions().expandTown(player, grid.x(), grid.z(), outcome ->
                 facade.handleOutcome(player, outcome, operation ->
-                        facade.openNotice(player,
-                                facade.dialogText("notice.expansion-complete-title"),
-                                facade.dialogText("notice.expansion-complete-message"),
-                                facade.dialogText("common.back"), "EXPANSION_MENU", null)));
+                        presentation.openNotice(player,
+                                presentation.dialogText("notice.expansion-complete-title"),
+                                presentation.dialogText("notice.expansion-complete-message"),
+                                presentation.dialogText("common.back"), "EXPANSION_MENU", null)));
     }
 
     public void previewTown(Player player, String target) {
@@ -257,24 +260,24 @@ public final class TownTerritoryUi {
             if (!facade.runtime().landProtection().contains(town.residenceName(),
                     location.getWorld().getUID(), location.getBlockX(), location.getBlockY(),
                     location.getBlockZ())) {
-                facade.openNotice(player, facade.dialogText("site.teleport-point-outside-title"),
-                        facade.dialogText("site.teleport-point-outside-message"),
-                        facade.dialogText("common.back"), "TOWN", town.id().toString());
+                presentation.openNotice(player, presentation.dialogText("site.teleport-point-outside-title"),
+                        presentation.dialogText("site.teleport-point-outside-message"),
+                        presentation.dialogText("common.back"), "TOWN", town.id().toString());
                 return;
             }
             String unsafeMessageKey = unsafeTeleportReason(location);
             if (unsafeMessageKey != null) {
-                facade.openNotice(player, facade.dialogText("site.teleport-point-unsafe-title"),
-                        facade.dialogText(unsafeMessageKey), facade.dialogText("common.back"),
+                presentation.openNotice(player, presentation.dialogText("site.teleport-point-unsafe-title"),
+                        presentation.dialogText(unsafeMessageKey), presentation.dialogText("common.back"),
                         "TOWN", town.id().toString());
                 return;
             }
             facade.runtime().setTownTeleportPoint(player, town, location, result ->
-                    facade.openNotice(player, result.success()
-                                    ? facade.dialogText("site.teleport-point-set-title")
-                                    : facade.dialogText("site.teleport-point-failed-title"),
+                    presentation.openNotice(player, result.success()
+                                    ? presentation.dialogText("site.teleport-point-set-title")
+                                    : presentation.dialogText("site.teleport-point-failed-title"),
                             LandProtectionMessages.text(facade.plugin().messages(), result),
-                            facade.dialogText("common.back"), "TOWN", town.id().toString()));
+                            presentation.dialogText("common.back"), "TOWN", town.id().toString()));
         });
     }
 
@@ -303,16 +306,16 @@ public final class TownTerritoryUi {
 
     private void teleportTownAndPreview(Player player, TownTerritoryPreview preview) {
         if (preview.town().status() != TownStatus.ACTIVE) {
-            facade.openNotice(player, facade.dialogText("site.territory-teleport-unavailable-title"),
-                    facade.dialogText("site.territory-teleport-unavailable-message"),
-                    facade.dialogText("common.back"), "MAIN", null);
+            presentation.openNotice(player, presentation.dialogText("site.territory-teleport-unavailable-title"),
+                    presentation.dialogText("site.territory-teleport-unavailable-message"),
+                    presentation.dialogText("common.back"), "MAIN", null);
             return;
         }
         facade.closeUi(player);
         if (!player.performCommand("res tp " + preview.town().residenceName())) {
-            facade.openNotice(player, facade.dialogText("site.territory-teleport-failed-title"),
-                    facade.dialogText("site.territory-teleport-failed-message"),
-                    facade.dialogText("common.back"), "TOWN", preview.town().id().toString());
+            presentation.openNotice(player, presentation.dialogText("site.territory-teleport-failed-title"),
+                    presentation.dialogText("site.territory-teleport-failed-message"),
+                    presentation.dialogText("common.back"), "TOWN", preview.town().id().toString());
             return;
         }
         waitForTownTeleport(player, preview, 0);
@@ -326,13 +329,13 @@ public final class TownTerritoryUi {
         if (facade.runtime().landProtection().contains(preview.town().residenceName(),
                 location.getWorld().getUID(), location.getBlockX(), location.getBlockY(),
                 location.getBlockZ())) {
-            facade.sitePolicy().previewSilently(player, preview.territories());
+            facade.territoryPreviews().previewSilently(player, preview.territories());
             return;
         }
         if (attempt >= 120) {
-            facade.openNotice(player, facade.dialogText("site.territory-teleport-timeout-title"),
-                    facade.dialogText("site.territory-teleport-timeout-message"),
-                    facade.dialogText("common.back"), "TOWN", preview.town().id().toString());
+            presentation.openNotice(player, presentation.dialogText("site.territory-teleport-timeout-title"),
+                    presentation.dialogText("site.territory-teleport-timeout-message"),
+                    presentation.dialogText("common.back"), "TOWN", preview.town().id().toString());
             return;
         }
         facade.plugin().runMainLater(() -> waitForTownTeleport(player, preview, attempt + 1), 10L);

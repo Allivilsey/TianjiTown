@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.membership;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.ui.TownUiLegacyFacade;
 
 import org.bukkit.entity.Player;
@@ -7,10 +8,12 @@ import java.util.UUID;
 
 /** Owns the join-application route protocol and its target codecs. */
 public final class TownJoinApplicationUi {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
 
     public TownJoinApplicationUi(TownUiLegacyFacade facade) {
         this.facade = facade;
+        this.presentation = facade.presentation();
     }
 
     public void route(Player player, String action, String target) {
@@ -39,16 +42,16 @@ public final class TownJoinApplicationUi {
     }
 
     private void confirmApply(Player player, UUID townId) {
-        facade.openConfirmation(player, facade.dialogText("confirmation.apply-join-title"),
+        presentation.openConfirmation(player, presentation.dialogText("confirmation.apply-join-title"),
                 "APPLY_JOIN", townId.toString(),
-                facade.dialogText("confirmation.apply-join-consequence"), "JOIN_TOWN",
+                presentation.dialogText("confirmation.apply-join-consequence"), "JOIN_TOWN",
                 townId.toString());
     }
 
     private void confirmCancel(Player player, UUID applicationId) {
-        facade.openConfirmation(player, facade.dialogText("confirmation.cancel-join-title"),
+        presentation.openConfirmation(player, presentation.dialogText("confirmation.cancel-join-title"),
                 "CANCEL_JOIN", applicationId.toString(),
-                facade.dialogText("confirmation.cancel-join-consequence"),
+                presentation.dialogText("confirmation.cancel-join-consequence"),
                 "MY_JOIN_APPLICATIONS", null);
     }
 
@@ -57,10 +60,10 @@ public final class TownJoinApplicationUi {
     }
 
     private void confirmDecision(Player player, UUID applicationId, boolean approve) {
-        facade.openConfirmation(player, facade.dialogText(approve
+        presentation.openConfirmation(player, presentation.dialogText(approve
                         ? "confirmation.approve-join-title" : "confirmation.reject-join-title"),
                 approve ? "APPROVE_JOIN" : "REJECT_JOIN", applicationId.toString(),
-                facade.dialogText(approve ? "confirmation.approve-join-consequence"
+                presentation.dialogText(approve ? "confirmation.approve-join-consequence"
                         : "confirmation.reject-join-consequence"),
                 "JOIN_APPLICATION", applicationId.toString());
     }

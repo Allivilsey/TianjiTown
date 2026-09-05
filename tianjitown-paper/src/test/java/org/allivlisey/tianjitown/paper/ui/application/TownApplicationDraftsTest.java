@@ -27,6 +27,8 @@ class TownApplicationDraftsTest {
     private final Player player = mock(Player.class);
     private final UUID playerId = UUID.randomUUID();
     private final TownApplicationFormUi forms = new TownApplicationFormUi(facade);
+    private final org.allivlisey.tianjitown.paper.ui.TownUiPresentation presentation =
+            mock(org.allivlisey.tianjitown.paper.ui.TownUiPresentation.class);
     private TownApplicationDrafts drafts;
 
     @BeforeEach
@@ -37,7 +39,8 @@ class TownApplicationDraftsTest {
         when(facade.actions()).thenReturn(actions);
         when(facade.runtime()).thenReturn(runtime);
         when(facade.applicationFormUi()).thenReturn(forms);
-        when(facade.dialogText(anyString())).thenAnswer(call -> call.getArgument(0));
+        when(facade.presentation()).thenReturn(presentation);
+        when(presentation.dialogText(anyString())).thenAnswer(call -> call.getArgument(0));
         when(player.getUniqueId()).thenReturn(playerId);
         drafts = new TownApplicationDrafts(facade);
     }
@@ -51,7 +54,7 @@ class TownApplicationDraftsTest {
 
         assertSame(current, forms.session(playerId));
         verifyNoInteractions(actions, runtime);
-        verify(facade).openNotice(player, "notice.edit-expired-title",
+        verify(presentation).openNotice(player, "notice.edit-expired-title",
                 "notice.edit-expired-message", "common.reopen", "MAIN", null);
     }
 
@@ -65,7 +68,7 @@ class TownApplicationDraftsTest {
 
         assertNull(forms.session(playerId));
         verifyNoInteractions(actions, runtime);
-        verify(facade).openNotice(player, "notice.draft-not-saved-title", null,
+        verify(presentation).openNotice(player, "notice.draft-not-saved-title", null,
                 "common.close", "CLOSE", null);
     }
 
@@ -74,7 +77,7 @@ class TownApplicationDraftsTest {
         drafts.saveApplicationForm(player, UUID.randomUUID());
 
         verifyNoInteractions(actions, runtime);
-        verify(facade).openNotice(player, "notice.edit-expired-title",
+        verify(presentation).openNotice(player, "notice.edit-expired-title",
                 "notice.edit-expired-message", "common.reopen", "MAIN", null);
     }
 

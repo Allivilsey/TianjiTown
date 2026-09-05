@@ -1,5 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui;
-import org.allivlisey.tianjitown.paper.land.SitePolicy;
+import org.allivlisey.tianjitown.paper.land.TerritoryPreviewService;
 import org.allivlisey.tianjitown.paper.runtime.*;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.ui.application.*;
@@ -9,7 +9,6 @@ import org.allivlisey.tianjitown.paper.ui.governance.TownGovernanceDialogs;
 import org.allivlisey.tianjitown.paper.ui.home.*;
 import org.allivlisey.tianjitown.paper.ui.membership.*;
 
-import org.allivlisey.tianjitown.paper.ui.TownUiPresentation.MenuItem;
 
 import org.allivlisey.tianjitown.core.town.MemberRole;
 import org.allivlisey.tianjitown.core.governance.VoteType;
@@ -18,20 +17,12 @@ import org.allivlisey.tianjitown.storage.governance.*;
 import org.allivlisey.tianjitown.paper.ui.application.TownApplicationFormUi.ApplicationFormSession;
 import io.papermc.paper.dialog.DialogResponseView;
 import io.papermc.paper.registry.data.dialog.ActionButton;
-import io.papermc.paper.registry.data.dialog.DialogBase;
-import io.papermc.paper.registry.data.dialog.action.DialogAction;
-import io.papermc.paper.registry.data.dialog.body.DialogBody;
-import io.papermc.paper.registry.data.dialog.input.DialogInput;
-import io.papermc.paper.registry.data.dialog.type.DialogType;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
-import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.inventory.ItemStack;
 
 import java.util.List;
 import java.util.Map;
@@ -48,19 +39,19 @@ public final class TownUiLegacyFacade implements Listener {
     private final TianjiTownPlugin plugin;
     private final TownRuntime runtime;
     private final TownActions actions;
-    private final SitePolicy sitePolicy;
+    private final TerritoryPreviewService territoryPreviews;
     private final TownDialogService dialogs;
-    private final TownHomeDialogs townHomeDialogs;
-    private final TownFinanceDialogs townFinanceDialogs;
-    private final TownBuffShopDialogs townBuffShopDialogs;
-    private final TownMembershipDialogs townMembershipDialogs;
-    private final TownGovernanceDialogs townGovernanceDialogs;
-    private final TownJoinApplicationDialogs townJoinApplicationDialogs;
-    private final TownAdminApplicationDialogs townAdminApplicationDialogs;
-    private final TownApplicationDialogs townApplicationDialogs;
-    private final TownApplicationFormDialogs townApplicationFormDialogs;
-    private final TownApplicationDrafts townApplicationDrafts;
-    private final TownInitialMemberDialogs townInitialMemberDialogs;
+    private TownHomeDialogs townHomeDialogs;
+    private TownFinanceDialogs townFinanceDialogs;
+    private TownBuffShopDialogs townBuffShopDialogs;
+    private TownMembershipDialogs townMembershipDialogs;
+    private TownGovernanceDialogs townGovernanceDialogs;
+    private TownJoinApplicationDialogs townJoinApplicationDialogs;
+    private TownAdminApplicationDialogs townAdminApplicationDialogs;
+    private TownApplicationDialogs townApplicationDialogs;
+    private TownApplicationFormDialogs townApplicationFormDialogs;
+    private TownApplicationDrafts townApplicationDrafts;
+    private TownInitialMemberDialogs townInitialMemberDialogs;
     private final TownUiPresentation townUiPresentation;
     private TownUiActionRouter router;
     private TownApplicationFormUi applicationFormUi;
@@ -78,20 +69,37 @@ public final class TownUiLegacyFacade implements Listener {
         this.plugin = plugin;
         this.runtime = runtime;
         this.actions = actions;
-        this.sitePolicy = runtime.sitePolicy();
+        this.territoryPreviews = runtime.territoryPreviews();
         this.dialogs = new TownDialogService(plugin, this::routeAction);
         this.townUiPresentation = new TownUiPresentation(plugin, dialogs);
-        this.townHomeDialogs = new TownHomeDialogs(this);
-        this.townFinanceDialogs = new TownFinanceDialogs(this);
-        this.townBuffShopDialogs = new TownBuffShopDialogs(this);
-        this.townMembershipDialogs = new TownMembershipDialogs(this);
-        this.townGovernanceDialogs = new TownGovernanceDialogs(this);
-        this.townJoinApplicationDialogs = new TownJoinApplicationDialogs(this);
-        this.townAdminApplicationDialogs = new TownAdminApplicationDialogs(this);
-        this.townApplicationDialogs = new TownApplicationDialogs(this);
-        this.townApplicationFormDialogs = new TownApplicationFormDialogs(this);
-        this.townApplicationDrafts = new TownApplicationDrafts(this);
-        this.townInitialMemberDialogs = new TownInitialMemberDialogs(this);
+    }
+
+    void bindDialogs(TownHomeDialogs townHomeDialogs,
+            TownFinanceDialogs townFinanceDialogs,
+            TownBuffShopDialogs townBuffShopDialogs,
+            TownMembershipDialogs townMembershipDialogs,
+            TownGovernanceDialogs townGovernanceDialogs,
+            TownJoinApplicationDialogs townJoinApplicationDialogs,
+            TownAdminApplicationDialogs townAdminApplicationDialogs,
+            TownApplicationDialogs townApplicationDialogs,
+            TownApplicationFormDialogs townApplicationFormDialogs,
+            TownApplicationDrafts townApplicationDrafts,
+            TownInitialMemberDialogs townInitialMemberDialogs) {
+        this.townHomeDialogs = Objects.requireNonNull(townHomeDialogs);
+        this.townFinanceDialogs = Objects.requireNonNull(townFinanceDialogs);
+        this.townBuffShopDialogs = Objects.requireNonNull(townBuffShopDialogs);
+        this.townMembershipDialogs = Objects.requireNonNull(townMembershipDialogs);
+        this.townGovernanceDialogs = Objects.requireNonNull(townGovernanceDialogs);
+        this.townJoinApplicationDialogs = Objects.requireNonNull(townJoinApplicationDialogs);
+        this.townAdminApplicationDialogs = Objects.requireNonNull(townAdminApplicationDialogs);
+        this.townApplicationDialogs = Objects.requireNonNull(townApplicationDialogs);
+        this.townApplicationFormDialogs = Objects.requireNonNull(townApplicationFormDialogs);
+        this.townApplicationDrafts = Objects.requireNonNull(townApplicationDrafts);
+        this.townInitialMemberDialogs = Objects.requireNonNull(townInitialMemberDialogs);
+    }
+
+    public TownUiPresentation presentation() {
+        return townUiPresentation;
     }
 
     public final void setRouter(TownUiActionRouter router) {
@@ -126,8 +134,8 @@ public final class TownUiLegacyFacade implements Listener {
         return dialogs.close();
     }
 
-    public SitePolicy sitePolicy() {
-        return sitePolicy;
+    public TerritoryPreviewService territoryPreviews() {
+        return territoryPreviews;
     }
 
     public void openMain(Player player) {
@@ -142,7 +150,7 @@ public final class TownUiLegacyFacade implements Listener {
     public final void clearPlayerSession(Player player) {
         dialogs.clear(player);
         applicationFormUi.clearPlayer(player.getUniqueId());
-        sitePolicy.stopPreview(player.getUniqueId());
+        territoryPreviews.stopPreview(player.getUniqueId());
     }
 
     public void openGovernanceCenter(Player player) {
@@ -331,8 +339,8 @@ public final class TownUiLegacyFacade implements Listener {
 
     public boolean blockForMaintenance(Player player, String action) {
         if (maintenanceMode() && !"CLOSE".equals(action)) {
-            openNotice(player, dialogText("notice.maintenance-title"),
-                    plugin.messages().text("system.maintenance"), dialogText("common.close"),
+            townUiPresentation.openNotice(player, townUiPresentation.dialogText("notice.maintenance-title"),
+                    plugin.messages().text("system.maintenance"), townUiPresentation.dialogText("common.close"),
                     "CLOSE", null);
             return true;
         }
@@ -340,9 +348,9 @@ public final class TownUiLegacyFacade implements Listener {
     }
 
     public void openStaleMenu(Player player) {
-        openNotice(player, dialogText("notice.stale-data-title"),
+        townUiPresentation.openNotice(player, townUiPresentation.dialogText("notice.stale-data-title"),
                 plugin.messages().text("system.invalid-menu-data"),
-                dialogText("common.reopen"), "MAIN", null);
+                townUiPresentation.dialogText("common.reopen"), "MAIN", null);
     }
 
     public void changeMemberRole(Player mayor, UUID townId, UUID playerId, MemberRole role, int page) {
@@ -553,7 +561,7 @@ public final class TownUiLegacyFacade implements Listener {
     }
 
     public String memberRoleText(MemberRole role) {
-        return dialogText(MemberRoleText.messageKey(role));
+        return townUiPresentation.dialogText(MemberRoleText.messageKey(role));
     }
 
     public static boolean hasNext(List<?> values, int page, int pageSize) {
@@ -569,108 +577,30 @@ public final class TownUiLegacyFacade implements Listener {
         String detail = outcome.result().data().get("detail");
         String friendly = detail == null || detail.isBlank()
                 ? outcomeFailureDetail(outcome.result().reason()) : safeText(detail);
-        openNotice(player, dialogText("notice.operation-failed-title"),
+        townUiPresentation.openNotice(player, townUiPresentation.dialogText("notice.operation-failed-title"),
                 plugin.messages().text("system.operation-failed", Map.of("detail", friendly)),
-                dialogText("common.back"), "MAIN", null);
+                townUiPresentation.dialogText("common.back"), "MAIN", null);
     }
 
     private String outcomeFailureDetail(String reason) {
         return switch (reason) {
-            case "FEATURE_DISABLED" -> dialogText("notice.operation-failed-feature-disabled");
-            case "STORAGE_UNAVAILABLE" -> dialogText(
+            case "FEATURE_DISABLED" -> townUiPresentation.dialogText("notice.operation-failed-feature-disabled");
+            case "STORAGE_UNAVAILABLE" -> townUiPresentation.dialogText(
                     "notice.operation-failed-storage-unavailable");
-            case "INSUFFICIENT_BALANCE" -> dialogText(
+            case "INSUFFICIENT_BALANCE" -> townUiPresentation.dialogText(
                     "notice.operation-failed-insufficient-balance");
-            case "FORBIDDEN" -> dialogText("notice.operation-failed-forbidden");
-            case "NOT_FOUND" -> dialogText("notice.operation-failed-not-found");
-            default -> dialogText("notice.operation-failed-default");
+            case "FORBIDDEN" -> townUiPresentation.dialogText("notice.operation-failed-forbidden");
+            case "NOT_FOUND" -> townUiPresentation.dialogText("notice.operation-failed-not-found");
+            default -> townUiPresentation.dialogText("notice.operation-failed-default");
         };
-    }
-
-    public void openConfirmation(Player player, String title, String confirmedAction,
-                                  String target, String consequence, String returnAction,
-                                  String returnTarget) {
-        townUiPresentation.openConfirmation(player, title, confirmedAction, target, consequence, returnAction, returnTarget);
-    }
-
-    public UUID openMenu(Player player, int size, String title, DialogRoute parent,
-                          List<MenuItem> items) {
-        return townUiPresentation.openMenu(player, size, title, parent, items);
-    }
-
-    public UUID openDialogPage(Player player, String title, List<? extends DialogBody> bodies,
-                                List<? extends DialogInput> inputs,
-                                DialogBase.DialogAfterAction afterAction,
-        Function<UUID, DialogType> typeFactory, DialogRoute parent) {
-        return townUiPresentation.openDialogPage(player, title, bodies, inputs, afterAction, typeFactory, parent);
-    }
-
-    public void openNotice(Player player, String title, String message, String actionLabel,
-                            String action, String target) {
-        townUiPresentation.openNotice(player, title, message, actionLabel, action, target);
-    }
-
-    public DialogBody dialogTextBody(ItemStack item) {
-        return townUiPresentation.dialogTextBody(item);
-    }
-
-    public ActionButton returnButton(Player player, UUID session, DialogRoute parent) {
-        return townUiPresentation.returnButton(player, session, parent);
-    }
-
-    public ActionButton dialogButton(Player player, ItemStack item, UUID session) {
-        return townUiPresentation.dialogButton(player, item, session);
-    }
-
-    public DialogAction dialogAction(Player recipient, UUID session, String action,
-                                      String target) {
-        return townUiPresentation.dialogAction(recipient, session, action, target);
-    }
-
-    public DialogAction dialogAction(Player recipient, UUID session,
-                                      Consumer<DialogResponseView> handler) {
-        return townUiPresentation.dialogAction(recipient, session, handler);
     }
 
     public void closeUi(Player player) {
         player.closeDialog();
     }
 
-    public String dialogText(String key) {
-        return townUiPresentation.dialogText(key);
-    }
-
-    public String dialogText(String key, Map<String, ?> placeholders) {
-        return townUiPresentation.dialogText(key, placeholders);
-    }
-
-    public String dialogFormat(String key) {
-        return townUiPresentation.dialogFormat(key);
-    }
-
-    public Component dialogComponent(String key) {
-        return townUiPresentation.dialogComponent(key);
-    }
-
-    public Component dialogComponent(String key, Map<String, ?> placeholders) {
-        return townUiPresentation.dialogComponent(key, placeholders);
-    }
-
     public static Component legacyComponent(String value) {
         return TownUiPresentation.legacyComponent(value);
-    }
-
-    public Component callbackButton(Player recipient, String labelKey, Runnable action) {
-        return townUiPresentation.callbackButton(recipient, labelKey, action);
-    }
-
-    public void playSound(Player player, Sound sound) {
-        townUiPresentation.playSound(player, sound);
-    }
-
-    public ItemStack button(Material material, String name, List<String> lore,
-                             String action, String target) {
-        return townUiPresentation.button(material, name, lore, action, target);
     }
 
     public boolean isCurrent(Player player, UUID session) {
@@ -688,7 +618,7 @@ public final class TownUiLegacyFacade implements Listener {
     }
 
     public static String safeText(Object value) {
-        return String.valueOf(value).replace('&', '＆').replace('§', '�');
+        return TownUiPresentation.safeText(value);
     }
 
     public record GovernanceCenterView(TownRepository.PlayerDashboard dashboard,

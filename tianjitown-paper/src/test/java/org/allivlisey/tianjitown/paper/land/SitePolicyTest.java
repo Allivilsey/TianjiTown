@@ -47,8 +47,8 @@ class SitePolicyTest {
             assertFalse(rendered.contains("{"), key);
         }
 
-        assertEquals("5×5 区块", SitePolicy.previewScope(1, messages::plainText));
-        assertEquals("2 个领地单元", SitePolicy.previewScope(2, messages::plainText));
+        assertEquals("5×5 区块", TerritoryPreviewService.previewScope(1, messages::plainText));
+        assertEquals("2 个领地单元", TerritoryPreviewService.previewScope(2, messages::plainText));
     }
 
     @Test
@@ -59,14 +59,14 @@ class SitePolicyTest {
         InitialTerritory missingFocus = territory(WORLD_ID, 10, 10, "world");
 
         assertEquals("领地预览至少需要一个区域", assertThrows(IllegalArgumentException.class,
-                () -> SitePolicy.previewAreas(null, List.of(), messages::plainText)).getMessage());
+                () -> TerritoryPreviewService.previewAreas(null, List.of(), messages::plainText)).getMessage());
         assertEquals("领地预览区域必须位于同一世界",
                 assertThrows(IllegalArgumentException.class,
-                        () -> SitePolicy.previewAreas(null, List.of(area, otherWorldArea),
+                        () -> TerritoryPreviewService.previewAreas(null, List.of(area, otherWorldArea),
                                 messages::plainText)).getMessage());
         assertEquals("领地中心不在预览区域中",
                 assertThrows(IllegalArgumentException.class,
-                        () -> SitePolicy.previewAreas(missingFocus, List.of(area),
+                        () -> TerritoryPreviewService.previewAreas(missingFocus, List.of(area),
                                 messages::plainText)).getMessage());
     }
 
@@ -80,10 +80,10 @@ class SitePolicyTest {
         override.save(temporaryDirectory.resolve("messages.yml").toFile());
         messages.reload();
 
-        assertEquals("自定义单区域", SitePolicy.previewScope(1, messages::plainText));
-        assertEquals("3 个自定义区域", SitePolicy.previewScope(3, messages::plainText));
+        assertEquals("自定义单区域", TerritoryPreviewService.previewScope(1, messages::plainText));
+        assertEquals("3 个自定义区域", TerritoryPreviewService.previewScope(3, messages::plainText));
         assertEquals("自定义空预览错误", assertThrows(IllegalArgumentException.class,
-                () -> SitePolicy.previewAreas(null, List.of(), messages::plainText)).getMessage());
+                () -> TerritoryPreviewService.previewAreas(null, List.of(), messages::plainText)).getMessage());
     }
 
     private static InitialTerritory territory(UUID worldId, int x, int z, String worldName) {

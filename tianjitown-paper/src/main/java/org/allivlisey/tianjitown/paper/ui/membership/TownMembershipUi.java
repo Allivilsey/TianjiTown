@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.membership;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.ui.TownUiLegacyFacade;
 
 import org.allivlisey.tianjitown.core.town.MemberRole;
@@ -11,10 +12,12 @@ import java.util.Objects;
 
 /** Owns member, visitor, role, removal, and mayor-transfer route protocols. */
 public final class TownMembershipUi {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
 
     public TownMembershipUi(TownUiLegacyFacade facade) {
         this.facade = facade;
+        this.presentation = facade.presentation();
     }
 
     public static Map<String, String> townNotificationPlaceholders(TownPlayerChange change) {
@@ -66,11 +69,11 @@ public final class TownMembershipUi {
 
     private void confirmVisitor(Player player, String target, boolean adding) {
         MemberPage member = MemberPage.parse(target);
-        facade.openConfirmation(player,
-                facade.dialogText(adding ? "confirmation.add-visitor-title"
+        presentation.openConfirmation(player,
+                presentation.dialogText(adding ? "confirmation.add-visitor-title"
                         : "confirmation.remove-visitor-title"),
                 adding ? "ADD_VISITOR" : "REMOVE_VISITOR", member.encode(),
-                facade.dialogText(adding ? "confirmation.add-visitor-consequence"
+                presentation.dialogText(adding ? "confirmation.add-visitor-consequence"
                         : "confirmation.remove-visitor-consequence"),
                 adding ? "VISITOR_INVITE" : "VISITOR_LIST", member.townPage().encode());
     }
@@ -99,8 +102,8 @@ public final class TownMembershipUi {
 
     private void confirmRole(Player player, String target) {
         RoleTarget role = RoleTarget.parse(target);
-        facade.openConfirmation(player, facade.dialogText("confirmation.change-role-title"),
-                "SET_ROLE", role.encode(), facade.dialogText("confirmation.change-role-consequence",
+        presentation.openConfirmation(player, presentation.dialogText("confirmation.change-role-title"),
+                "SET_ROLE", role.encode(), presentation.dialogText("confirmation.change-role-consequence",
                         java.util.Map.of("role", facade.memberRoleText(role.role()))),
                 "MEMBER_DETAIL", role.member().encode());
     }
@@ -114,9 +117,9 @@ public final class TownMembershipUi {
 
     private void confirmKick(Player player, String target) {
         MemberPage member = MemberPage.parse(target);
-        facade.openConfirmation(player, facade.dialogText("confirmation.kick-member-title"),
+        presentation.openConfirmation(player, presentation.dialogText("confirmation.kick-member-title"),
                 "KICK_MEMBER", member.encode(),
-                facade.dialogText("confirmation.kick-member-consequence"), "MEMBER_DETAIL",
+                presentation.dialogText("confirmation.kick-member-consequence"), "MEMBER_DETAIL",
                 member.encode());
     }
 
@@ -128,9 +131,9 @@ public final class TownMembershipUi {
 
     private void confirmMayorTransfer(Player player, String target) {
         MemberPage member = MemberPage.parse(target);
-        facade.openConfirmation(player, facade.dialogText("confirmation.transfer-mayor-title"),
+        presentation.openConfirmation(player, presentation.dialogText("confirmation.transfer-mayor-title"),
                 "REQUEST_TRANSFER_MAYOR", member.encode(),
-                facade.dialogText("confirmation.transfer-mayor-consequence"), "MEMBER_DETAIL",
+                presentation.dialogText("confirmation.transfer-mayor-consequence"), "MEMBER_DETAIL",
                 member.encode());
     }
 
@@ -141,9 +144,9 @@ public final class TownMembershipUi {
 
     private void confirmTransferDecision(Player player, String target) {
         TransferDecision decision = TransferDecision.parse(target);
-        facade.openConfirmation(player, facade.dialogText(decision.accept()
+        presentation.openConfirmation(player, presentation.dialogText(decision.accept()
                         ? "confirmation.accept-transfer-title" : "confirmation.reject-transfer-title"),
-                "TRANSFER_DECISION", decision.encode(), facade.dialogText(decision.accept()
+                "TRANSFER_DECISION", decision.encode(), presentation.dialogText(decision.accept()
                         ? "confirmation.accept-transfer-consequence"
                         : "confirmation.reject-transfer-consequence"),
                 "TRANSFER_REQUEST", decision.transferId().toString());

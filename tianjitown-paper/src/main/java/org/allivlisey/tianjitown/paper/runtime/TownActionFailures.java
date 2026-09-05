@@ -8,6 +8,7 @@ import org.allivlisey.tianjitown.storage.governance.GovernanceRepository;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.allivlisey.tianjitown.storage.commerce.CommerceRepository;
 import org.allivlisey.tianjitown.storage.bonus.TownBonusRepository;
+import org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository;
 
 import java.util.Locale;
 import java.util.Map;
@@ -51,7 +52,8 @@ public final class TownActionFailures {
                 || exception instanceof GovernanceRepository.StorageUnavailableException
                 || exception instanceof EconomyRepository.StorageUnavailableException
                 || exception instanceof CommerceRepository.StorageUnavailableException
-                || exception instanceof TownBonusRepository.StorageUnavailableException) {
+                || exception instanceof TownBonusRepository.StorageUnavailableException
+                || exception instanceof TownDiagnosticRepository.StorageUnavailableException) {
             return "STORAGE_UNAVAILABLE";
         }
         String type = exception.getClass().getSimpleName().toUpperCase(Locale.ROOT);

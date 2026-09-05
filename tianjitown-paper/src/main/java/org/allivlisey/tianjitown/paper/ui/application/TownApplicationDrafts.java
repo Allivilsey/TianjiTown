@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.application;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.message.ApplicationTextMessages;
 import org.allivlisey.tianjitown.paper.runtime.TownActionOutcome;
 import org.allivlisey.tianjitown.paper.runtime.TownActions;
@@ -23,6 +24,7 @@ import java.util.function.Consumer;
 
 /** Loads, persists and submits founding drafts and town profile edits. */
 public final class TownApplicationDrafts {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
     private final TianjiTownPlugin plugin;
     private final TownRuntime runtime;
@@ -30,6 +32,7 @@ public final class TownApplicationDrafts {
 
     public TownApplicationDrafts(TownUiLegacyFacade facade) {
         this.facade = facade;
+        this.presentation = facade.presentation();
         this.plugin = facade.plugin();
         this.runtime = facade.runtime();
         this.actions = facade.actions();
@@ -61,8 +64,8 @@ public final class TownApplicationDrafts {
                                       ApplicationText text, List<String> initialMemberNames,
                                       int step) {
         if (facade.maintenanceMode()) {
-            facade.openNotice(player, facade.dialogText("notice.maintenance-title"),
-                    plugin.messages().text("system.maintenance"), facade.dialogText("common.close"),
+            presentation.openNotice(player, presentation.dialogText("notice.maintenance-title"),
+                    plugin.messages().text("system.maintenance"), presentation.dialogText("common.close"),
                     "CLOSE", null);
             return;
         }
@@ -94,9 +97,9 @@ public final class TownApplicationDrafts {
         persistApplicationForm(player, form, step, ignored -> {
             if (exitAfterSave) {
                 facade.applicationFormUi().removeSession(player.getUniqueId(), form);
-                facade.openNotice(player, facade.dialogText("common.draft-saved-title"),
-                        facade.dialogText("notice.form-draft-saved-message"),
-                        facade.dialogText("common.back"), "MAIN", null);
+                presentation.openNotice(player, presentation.dialogText("common.draft-saved-title"),
+                        presentation.dialogText("notice.form-draft-saved-message"),
+                        presentation.dialogText("common.back"), "MAIN", null);
             } else {
                 facade.renderApplicationFormStage(player, form.id(), step);
             }
@@ -142,8 +145,8 @@ public final class TownApplicationDrafts {
     private void startTownProfileForm(Player player, UUID townId, long version,
                                       ApplicationText text) {
         if (facade.maintenanceMode()) {
-            facade.openNotice(player, facade.dialogText("notice.maintenance-title"),
-                    plugin.messages().text("system.maintenance"), facade.dialogText("common.close"),
+            presentation.openNotice(player, presentation.dialogText("notice.maintenance-title"),
+                    plugin.messages().text("system.maintenance"), presentation.dialogText("common.close"),
                     "CLOSE", null);
             return;
         }
@@ -157,24 +160,24 @@ public final class TownApplicationDrafts {
     public void saveApplicationForm(Player player, UUID formId) {
         if (facade.maintenanceMode()) {
             facade.applicationFormUi().removeSession(player.getUniqueId());
-            facade.openNotice(player, facade.dialogText("notice.draft-not-saved-title"),
-                    plugin.messages().text("system.maintenance"), facade.dialogText("common.close"),
+            presentation.openNotice(player, presentation.dialogText("notice.draft-not-saved-title"),
+                    plugin.messages().text("system.maintenance"), presentation.dialogText("common.close"),
                     "CLOSE", null);
             return;
         }
         ApplicationFormSession form = facade.applicationFormUi().session(player.getUniqueId());
         if (form == null || !form.id().equals(formId)) {
-            facade.openNotice(player, facade.dialogText("notice.edit-expired-title"),
-                    facade.dialogText("notice.edit-expired-message"), facade.dialogText("common.reopen"),
+            presentation.openNotice(player, presentation.dialogText("notice.edit-expired-title"),
+                    presentation.dialogText("notice.edit-expired-message"), presentation.dialogText("common.reopen"),
                     "MAIN", null);
             return;
         }
         try {
             form.text().requireValid();
         } catch (ApplicationText.ValidationException exception) {
-            facade.openNotice(player, facade.dialogText("notice.draft-incomplete-title"),
+            presentation.openNotice(player, presentation.dialogText("notice.draft-incomplete-title"),
                     ApplicationTextMessages.join(plugin.messages(), exception.issues()),
-                    facade.dialogText("common.back"), "APPLICATION_MEMBERS_FORM",
+                    presentation.dialogText("common.back"), "APPLICATION_MEMBERS_FORM",
                     form.id().toString());
             return;
         }
@@ -182,8 +185,8 @@ public final class TownApplicationDrafts {
             try {
                 requireInitialMemberIds(player, form.initialMemberNames());
             } catch (IllegalArgumentException exception) {
-                facade.openNotice(player, facade.dialogText("notice.draft-incomplete-title"),
-                        exception.getMessage(), facade.dialogText("common.back"),
+                presentation.openNotice(player, presentation.dialogText("notice.draft-incomplete-title"),
+                        exception.getMessage(), presentation.dialogText("common.back"),
                         "APPLICATION_MEMBERS_FORM", form.id().toString());
                 return;
             }
@@ -192,9 +195,9 @@ public final class TownApplicationDrafts {
             actions.updateTownProfile(player, form.targetId(), form.text(), form.version(), outcome ->
                     facade.handleOutcome(player, outcome, town -> {
                 facade.applicationFormUi().removeSession(player.getUniqueId(), form);
-                facade.openNotice(player, facade.dialogText("notice.profile-saved-title"),
-                        facade.dialogText("notice.profile-saved-message"),
-                        facade.dialogText("common.back"), "TOWN", town.id().toString());
+                presentation.openNotice(player, presentation.dialogText("notice.profile-saved-title"),
+                        presentation.dialogText("notice.profile-saved-message"),
+                        presentation.dialogText("common.back"), "TOWN", town.id().toString());
             }));
             return;
         }
@@ -204,9 +207,9 @@ public final class TownApplicationDrafts {
                 () -> runtime.repository().initialMemberConflicts(initialMemberIds),
                 conflicts -> {
                     if (!conflicts.isEmpty()) {
-                        facade.openNotice(player, facade.dialogText(
+                        presentation.openNotice(player, presentation.dialogText(
                                         "application.initial-members-unavailable-title"),
-                                conflicts.stream().map(conflict -> facade.dialogText(
+                                conflicts.stream().map(conflict -> presentation.dialogText(
                                                 "application.initial-member-conflict", Map.of(
                                                         "player", TownUiLegacyFacade.safeText(facade.displayName(
                                                                 conflict.playerId())),
@@ -215,15 +218,15 @@ public final class TownApplicationDrafts {
                                                                 plugin.messages().plainText(
                                                                         "dialog.application.unknown-town"))))))
                                         .collect(java.util.stream.Collectors.joining("\n")),
-                                facade.dialogText("common.back"), "APPLICATION_MEMBERS_FORM",
+                                presentation.dialogText("common.back"), "APPLICATION_MEMBERS_FORM",
                                 form.id().toString());
                         return;
                     }
                     saveFormalApplication(player, form, initialMemberIds);
-                }, exception -> facade.openNotice(player, facade.dialogText(
+                }, exception -> presentation.openNotice(player, presentation.dialogText(
                                 "application.initial-members-precheck-failed-title"),
                         TownUiLegacyFacade.safeText(TownUiLegacyFacade.safeMessage(exception)),
-                        facade.dialogText("common.back"), "APPLICATION_MEMBERS_FORM",
+                        presentation.dialogText("common.back"), "APPLICATION_MEMBERS_FORM",
                         form.id().toString()));
     }
 
@@ -234,9 +237,9 @@ public final class TownApplicationDrafts {
                     handleApplicationSaveOutcome(player, form, outcome, application -> {
                 clearPersistedDraft(player);
                 facade.notifyInitialMembers(application);
-                facade.openNotice(player, facade.dialogText("common.draft-saved-title"),
+                presentation.openNotice(player, presentation.dialogText("common.draft-saved-title"),
                         plugin.messages().text("application.draft-saved"),
-                        facade.dialogText("common.continue-processing"),
+                        presentation.dialogText("common.continue-processing"),
                         "APPLICATION", application.id().toString());
             }));
         } else {
@@ -245,9 +248,9 @@ public final class TownApplicationDrafts {
                     handleApplicationSaveOutcome(player, form, outcome, application -> {
                 clearPersistedDraft(player);
                 facade.notifyInitialMembers(application);
-                facade.openNotice(player, facade.dialogText("common.draft-saved-title"),
+                presentation.openNotice(player, presentation.dialogText("common.draft-saved-title"),
                         plugin.messages().text("application.draft-saved"),
-                        facade.dialogText("common.continue-processing"),
+                        presentation.dialogText("common.continue-processing"),
                         "APPLICATION", application.id().toString());
             }));
         }
@@ -269,10 +272,10 @@ public final class TownApplicationDrafts {
                     : facade.displayName(UUID.fromString(playerId));
             String town = Objects.requireNonNullElse(townName,
                     plugin.messages().plainText("dialog.application.unknown-town"));
-            facade.openNotice(player, facade.dialogText("application.initial-members-unavailable-title"),
-                    facade.dialogText("application.initial-member-conflict-retry", Map.of(
+            presentation.openNotice(player, presentation.dialogText("application.initial-members-unavailable-title"),
+                    presentation.dialogText("application.initial-member-conflict-retry", Map.of(
                             "player", TownUiLegacyFacade.safeText(display), "town", TownUiLegacyFacade.safeText(town))),
-                    facade.dialogText("common.back"), "APPLICATION_MEMBERS_FORM", form.id().toString());
+                    presentation.dialogText("common.back"), "APPLICATION_MEMBERS_FORM", form.id().toString());
             return;
         }
         facade.handleOutcome(player, outcome, success);
@@ -294,8 +297,8 @@ public final class TownApplicationDrafts {
     private void cancelApplicationForm(Player player, UUID formId) {
         ApplicationFormSession form = facade.applicationFormUi().session(player.getUniqueId());
         if (form == null || !form.id().equals(formId)) {
-            facade.openNotice(player, facade.dialogText("notice.edit-expired-title"),
-                    facade.dialogText("notice.edit-expired-message"), facade.dialogText("common.reopen"),
+            presentation.openNotice(player, presentation.dialogText("notice.edit-expired-title"),
+                    presentation.dialogText("notice.edit-expired-message"), presentation.dialogText("common.reopen"),
                     "MAIN", null);
             return;
         }
@@ -325,17 +328,17 @@ public final class TownApplicationDrafts {
         for (String name : normalized) {
             Player member = Bukkit.getPlayerExact(name);
             if (member == null) {
-                throw new IllegalArgumentException(facade.dialogText(
+                throw new IllegalArgumentException(presentation.dialogText(
                         "application.initial-members-online-required"));
             }
             if (member.getUniqueId().equals(applicant.getUniqueId())) {
-                throw new IllegalArgumentException(facade.dialogText(
+                throw new IllegalArgumentException(presentation.dialogText(
                         "application.initial-members-applicant-forbidden"));
             }
             ids.add(member.getUniqueId());
         }
         if (ids.stream().distinct().count() != 2) {
-            throw new IllegalArgumentException(facade.dialogText(
+            throw new IllegalArgumentException(presentation.dialogText(
                     "application.initial-members-distinct-validation"));
         }
         return List.copyOf(ids);

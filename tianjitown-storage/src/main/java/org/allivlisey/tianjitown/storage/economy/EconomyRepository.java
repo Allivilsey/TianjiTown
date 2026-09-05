@@ -16,6 +16,7 @@ import org.allivlisey.tianjitown.core.land.TerritoryUnit;
 public final class EconomyRepository {
     private final EconomyDatabase database;
     private final TerritoryExpansionStore territoryExpansionStore;
+    private final TerritoryExpansionBatchStore territoryExpansionBatches;
     private final EconomyOperationStore economyOperationStore;
     private final EconomyTaxStore economyTaxStore;
     private final EconomyLedgerStore economyLedgerStore;
@@ -23,6 +24,7 @@ public final class EconomyRepository {
     public EconomyRepository(DataSource dataSource, BooleanSupplier forbiddenThread) {
         this.database = new EconomyDatabase(dataSource, forbiddenThread);
         this.territoryExpansionStore = new TerritoryExpansionStore(database);
+        this.territoryExpansionBatches = new TerritoryExpansionBatchStore(database);
         this.economyOperationStore = new EconomyOperationStore(database);
         this.economyTaxStore = new EconomyTaxStore(database);
         this.economyLedgerStore = new EconomyLedgerStore(database);
@@ -208,19 +210,19 @@ public final class EconomyRepository {
      * 整体回滚，不能通过重复调用单格接口模拟批量操作。
      */
     public ExpansionBatchOperation prepareExpansionBatch(ExpansionBatchRequest request) {
-        return territoryExpansionStore.prepareExpansionBatch(request);
+        return territoryExpansionBatches.prepareExpansionBatch(request);
     }
 
     public ExpansionBatchOperation completeExpansionBatch(UUID batchId) {
-        return territoryExpansionStore.completeExpansionBatch(batchId);
+        return territoryExpansionBatches.completeExpansionBatch(batchId);
     }
 
     public void refundExpansionBatch(UUID batchId, String error) {
-        territoryExpansionStore.refundExpansionBatch(batchId, error);
+        territoryExpansionBatches.refundExpansionBatch(batchId, error);
     }
 
     public List<ExpansionBatchOperation> pendingExpansionBatches() {
-        return territoryExpansionStore.pendingExpansionBatches();
+        return territoryExpansionBatches.pendingExpansionBatches();
     }
 
     public ExpansionOperation completeExpansion(UUID expansionId) {

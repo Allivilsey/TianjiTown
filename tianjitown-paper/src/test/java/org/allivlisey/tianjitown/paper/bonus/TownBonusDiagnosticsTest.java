@@ -8,7 +8,7 @@ import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.config.TownBonusSettings;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
-import org.allivlisey.tianjitown.storage.bonus.TownBonusRepository;
+import org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository;
 import org.allivlisey.tianjitown.storage.database.DatabaseGate;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.bukkit.Server;
@@ -33,7 +33,7 @@ class TownBonusDiagnosticsTest {
     @TempDir Path directory;
     private final TianjiTownPlugin plugin = mock(TianjiTownPlugin.class);
     private final TownRuntime host = mock(TownRuntime.class);
-    private final TownBonusRepository repository = mock(TownBonusRepository.class);
+    private final TownDiagnosticRepository repository = mock(TownDiagnosticRepository.class);
     private final QuickShopHistoryProbe history = mock(QuickShopHistoryProbe.class);
     private final VaultSettlementService settlement = mock(VaultSettlementService.class);
     private final EconomyRepository finance = mock(EconomyRepository.class);
@@ -65,7 +65,7 @@ class TownBonusDiagnosticsTest {
         EconomyRepository.Reconciliation reconciliation = mock(EconomyRepository.Reconciliation.class);
         when(reconciliation.healthy()).thenReturn(true);
         when(finance.inspectSettlement(100)).thenReturn(reconciliation);
-        when(repository.diagnose(any())).thenReturn(new TownBonusRepository.DiagnosticSnapshot(
+        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
                 "ok", 0, Map.of(), 2, 50, List.of()));
         when(history.inspect(any())).thenReturn(QuickShopHistoryProbe.Result.available(2, 50, false, "ok"));
         diagnostics = new TownBonusDiagnostics(plugin, host, repository,
@@ -74,9 +74,9 @@ class TownBonusDiagnosticsTest {
 
     @Test
     void capturesBalanceBeforeAsyncCollectionAndInspectsLandOnMainBeforeWritingReport() throws Exception {
-        var state = new TownBonusRepository.LandState(UUID.randomUUID(), "town", "res",
+        var state = new TownDiagnosticRepository.LandState(UUID.randomUUID(), "town", "res",
                 List.of(), List.of());
-        when(repository.diagnose(any())).thenReturn(new TownBonusRepository.DiagnosticSnapshot(
+        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
                 "ok", 0, Map.of(), 2, 50, List.of(state)));
         LandProtectionService.Inspection inspection = mock(LandProtectionService.Inspection.class);
         when(inspection.state()).thenReturn(LandProtectionService.ProjectionState.HEALTHY);

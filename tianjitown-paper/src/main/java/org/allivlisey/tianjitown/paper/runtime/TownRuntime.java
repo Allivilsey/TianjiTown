@@ -1,4 +1,6 @@
 package org.allivlisey.tianjitown.paper.runtime;
+import org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository;
+import org.allivlisey.tianjitown.paper.land.TerritoryPreviewService;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -76,6 +78,7 @@ public final class TownRuntime {
     private final EconomyRepository finance;
     private final LandProtectionService landProtection;
     private final SitePolicy sitePolicy;
+    private final TerritoryPreviewService territoryPreviews;
     private final EconomySettings economySettings;
     private final VaultSettlementService settlement;
     private final BuffRuntime buffs;
@@ -93,6 +96,7 @@ public final class TownRuntime {
         this.activeResidenceNames = java.util.Objects.requireNonNull(activeResidenceNames,
                 "activeResidenceNames");
         this.sitePolicy = new SitePolicy(plugin, landProtection, worldBoundaries);
+        this.territoryPreviews = new TerritoryPreviewService(plugin);
         this.repository = new TownRepository(database.dataSource(),
                 plugin.getServer()::isPrimaryThread);
         this.governance = new GovernanceRepository(database.dataSource(),
@@ -122,6 +126,8 @@ public final class TownRuntime {
                 BuffSettings.load(plugin.getConfig(), plugin.messages()));
         this.bonuses = new TownBonusRuntime(plugin, this,
                 new TownBonusRepository(database.dataSource(),
+                        plugin.getServer()::isPrimaryThread),
+                new TownDiagnosticRepository(database.dataSource(),
                         plugin.getServer()::isPrimaryThread),
                 TownBonusSettings.load(plugin.getConfig(), plugin.messages()::plainText),
                 java.util.Objects.requireNonNull(
@@ -196,6 +202,10 @@ public final class TownRuntime {
 
     public LandProtectionService landProtection() {
         return landProtection;
+    }
+
+    public TerritoryPreviewService territoryPreviews() {
+        return territoryPreviews;
     }
 
     public SitePolicy sitePolicy() {

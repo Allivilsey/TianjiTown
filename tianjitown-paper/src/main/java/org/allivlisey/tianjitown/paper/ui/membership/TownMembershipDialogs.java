@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.membership;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.runtime.TownActions;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
@@ -27,6 +28,7 @@ import org.allivlisey.tianjitown.paper.ui.TownUiPresentation.MenuItem;
 
 /** Displays member and visitor management and applies membership actions. */
 public final class TownMembershipDialogs {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
     private final TianjiTownPlugin plugin;
     private final TownRuntime runtime;
@@ -34,6 +36,7 @@ public final class TownMembershipDialogs {
 
     public TownMembershipDialogs(TownUiLegacyFacade facade) {
         this.facade = facade;
+        this.presentation = facade.presentation();
         this.plugin = facade.plugin();
         this.runtime = facade.runtime();
         this.actions = facade.actions();
@@ -47,16 +50,16 @@ public final class TownMembershipDialogs {
                 return;
             }
             List<MenuItem> items = new ArrayList<>();
-            items.add(new MenuItem(4, facade.button(Material.NAME_TAG, facade.dialogText("visitor.title"),
-                    List.of(facade.dialogText("visitor.current-count", Map.of("count",
+            items.add(new MenuItem(4, presentation.button(Material.NAME_TAG, presentation.dialogText("visitor.title"),
+                    List.of(presentation.dialogText("visitor.current-count", Map.of("count",
                             view.visitorCount()))), null, null)));
-            items.add(new MenuItem(11, facade.button(Material.PLAYER_HEAD, facade.dialogText("visitor.list"),
-                    List.of(facade.dialogText("tooltip.visitor.list")),
+            items.add(new MenuItem(11, presentation.button(Material.PLAYER_HEAD, presentation.dialogText("visitor.list"),
+                    List.of(presentation.dialogText("tooltip.visitor.list")),
                     "VISITOR_LIST", townId + ":0")));
-            items.add(new MenuItem(15, facade.button(Material.WRITABLE_BOOK, facade.dialogText("visitor.invite"),
-                    List.of(facade.dialogText("tooltip.visitor.invite")),
+            items.add(new MenuItem(15, presentation.button(Material.WRITABLE_BOOK, presentation.dialogText("visitor.invite"),
+                    List.of(presentation.dialogText("tooltip.visitor.invite")),
                     "VISITOR_INVITE", townId + ":0")));
-            facade.openMenu(player, 27, facade.dialogText("visitor.title"),
+            presentation.openMenu(player, 27, presentation.dialogText("visitor.title"),
                     new DialogRoute("GOVERNANCE_CENTER", null), items);
         });
     }
@@ -73,31 +76,31 @@ public final class TownMembershipDialogs {
             for (TownSnapshot.Visitor visitor : view.page().visitors()) {
                 String visitorName = facade.displayName(visitor.playerId());
                 String inviterName = facade.displayName(visitor.invitedBy());
-                items.add(new MenuItem(slot++, facade.button(Material.PLAYER_HEAD,
-                        facade.dialogText("visitor.entry-player", Map.of(
+                items.add(new MenuItem(slot++, presentation.button(Material.PLAYER_HEAD,
+                        presentation.dialogText("visitor.entry-player", Map.of(
                                 "player", TownUiLegacyFacade.safeText(visitorName))),
-                        List.of(facade.dialogText("tooltip.visitor.entry.inviter",
+                        List.of(presentation.dialogText("tooltip.visitor.entry.inviter",
                                         Map.of("player", TownUiLegacyFacade.safeText(inviterName))),
-                                facade.dialogText("tooltip.visitor.entry.added",
+                                presentation.dialogText("tooltip.visitor.entry.added",
                                         Map.of("time", visitor.addedAt())),
-                                facade.dialogText("tooltip.visitor.entry.remove")),
+                                presentation.dialogText("tooltip.visitor.entry.remove")),
                         "CONFIRM_REMOVE_VISITOR",
                         townId + ":" + visitor.playerId() + ":" + page)));
             }
             if (view.page().visitors().isEmpty()) {
-                items.add(new MenuItem(4, facade.button(Material.PAPER, facade.dialogText("visitor.list-empty"),
-                        List.of(facade.dialogText("visitor.list-empty-hint")), null, null)));
+                items.add(new MenuItem(4, presentation.button(Material.PAPER, presentation.dialogText("visitor.list-empty"),
+                        List.of(presentation.dialogText("visitor.list-empty-hint")), null, null)));
             }
             if (page > 0) {
-                items.add(new MenuItem(45, facade.button(Material.ARROW, facade.dialogText("common.previous"),
+                items.add(new MenuItem(45, presentation.button(Material.ARROW, presentation.dialogText("common.previous"),
                         List.of(),
                         "VISITOR_LIST", townId + ":" + (page - 1))));
             }
             if (view.page().hasNext()) {
-                items.add(new MenuItem(53, facade.button(Material.ARROW, facade.dialogText("common.next"), List.of(),
+                items.add(new MenuItem(53, presentation.button(Material.ARROW, presentation.dialogText("common.next"), List.of(),
                         "VISITOR_LIST", townId + ":" + (page + 1))));
             }
-            facade.openMenu(player, 54, facade.dialogText("visitor.list-title", Map.of("page", page + 1)),
+            presentation.openMenu(player, 54, presentation.dialogText("visitor.list-title", Map.of("page", page + 1)),
                     new DialogRoute("VISITOR_CENTER", townId.toString()), items);
         });
     }
@@ -120,27 +123,27 @@ public final class TownMembershipDialogs {
             List<MenuItem> items = new ArrayList<>();
             int slot = 0;
             for (Player candidate : visible) {
-                items.add(new MenuItem(slot++, facade.button(Material.PLAYER_HEAD,
-                        facade.dialogText("visitor.invite-player", Map.of(
+                items.add(new MenuItem(slot++, presentation.button(Material.PLAYER_HEAD,
+                        presentation.dialogText("visitor.invite-player", Map.of(
                                 "player", TownUiLegacyFacade.safeText(candidate.getName()))),
-                        List.of(facade.dialogText("tooltip.visitor.invite-entry.click")),
+                        List.of(presentation.dialogText("tooltip.visitor.invite-entry.click")),
                         "CONFIRM_ADD_VISITOR",
                         townId + ":" + candidate.getUniqueId() + ":" + page)));
             }
             if (visible.isEmpty()) {
-                items.add(new MenuItem(4, facade.button(Material.PAPER, facade.dialogText("visitor.no-candidates"),
+                items.add(new MenuItem(4, presentation.button(Material.PAPER, presentation.dialogText("visitor.no-candidates"),
                         List.of(), null, null)));
             }
             if (page > 0) {
-                items.add(new MenuItem(45, facade.button(Material.ARROW, facade.dialogText("common.previous"),
+                items.add(new MenuItem(45, presentation.button(Material.ARROW, presentation.dialogText("common.previous"),
                         List.of(),
                         "VISITOR_INVITE", townId + ":" + (page - 1))));
             }
             if (TownUiLegacyFacade.hasNext(candidates, page, 8)) {
-                items.add(new MenuItem(53, facade.button(Material.ARROW, facade.dialogText("common.next"), List.of(),
+                items.add(new MenuItem(53, presentation.button(Material.ARROW, presentation.dialogText("common.next"), List.of(),
                         "VISITOR_INVITE", townId + ":" + (page + 1))));
             }
-            facade.openMenu(player, 54, facade.dialogText("visitor.invite-title", Map.of("page", page + 1)),
+            presentation.openMenu(player, 54, presentation.dialogText("visitor.invite-title", Map.of("page", page + 1)),
                     new DialogRoute("VISITOR_CENTER", townId.toString()), items);
         });
     }
@@ -152,9 +155,9 @@ public final class TownMembershipDialogs {
                 && governance.role().isLeader()) {
             return false;
         }
-        facade.openNotice(player, facade.dialogText("notice.visitor-forbidden-title"),
-                facade.dialogText("notice.visitor-forbidden-message"),
-                facade.dialogText("common.back"), "GOVERNANCE_CENTER", null);
+        presentation.openNotice(player, presentation.dialogText("notice.visitor-forbidden-title"),
+                presentation.dialogText("notice.visitor-forbidden-message"),
+                presentation.dialogText("common.back"), "GOVERNANCE_CENTER", null);
         return true;
     }
 
@@ -165,39 +168,39 @@ public final class TownMembershipDialogs {
                                 plugin.messages().plainText("chat.runtime.town-not-found"))),
                 runtime.repository().listAllMembers(townId)), view -> {
             TownSnapshot.Page memberPage = facade.memberPage(view.members(), page);
-            Component content = facade.dialogComponent("town-members.heading", Map.of(
+            Component content = presentation.dialogComponent("town-members.heading", Map.of(
                     "town", TownUiLegacyFacade.safeText(view.town().profile().name()), "page", page + 1));
             if (memberPage.members().isEmpty()) {
                 content = content.append(Component.newline()).append(Component.newline())
-                        .append(facade.dialogComponent("town-members.empty"));
+                        .append(presentation.dialogComponent("town-members.empty"));
             } else {
                 for (int index = 0; index < memberPage.members().size(); index++) {
                     TownSnapshot.Member member = memberPage.members().get(index);
                     content = content.append(Component.newline()).append(Component.newline())
-                            .append(facade.dialogComponent("town-members.item", Map.of(
+                            .append(presentation.dialogComponent("town-members.item", Map.of(
                                     "index", page * 8 + index + 1,
                                     "name", facade.displayName(member.playerId()),
                                     "role", facade.memberRoleText(member.role()))));
                 }
             }
             DialogRoute parent = new DialogRoute("TOWN", townId.toString());
-            facade.openDialogPage(player, facade.dialogText("town-members.title", Map.of("page", page + 1)),
+            presentation.openDialogPage(player, presentation.dialogText("town-members.title", Map.of("page", page + 1)),
                     List.of(DialogBody.plainMessage(content, 420)), List.of(),
                     DialogBase.DialogAfterAction.NONE, session -> {
                         List<ActionButton> actions = new ArrayList<>();
                         if (page > 0) {
-                            actions.add(ActionButton.create(facade.dialogComponent("common.previous"),
-                                    null, 170, facade.dialogAction(player, session,
+                            actions.add(ActionButton.create(presentation.dialogComponent("common.previous"),
+                                    null, 170, presentation.dialogAction(player, session,
                                             "TOWN_MEMBER_OVERVIEW",
                                             townId + ":" + (page - 1))));
                         }
                         if (memberPage.hasNext()) {
-                            actions.add(ActionButton.create(facade.dialogComponent("common.next"),
-                                    null, 170, facade.dialogAction(player, session,
+                            actions.add(ActionButton.create(presentation.dialogComponent("common.next"),
+                                    null, 170, presentation.dialogAction(player, session,
                                             "TOWN_MEMBER_OVERVIEW",
                                             townId + ":" + (page + 1))));
                         }
-                        ActionButton back = facade.returnButton(player, session, parent);
+                        ActionButton back = presentation.returnButton(player, session, parent);
                         if (actions.isEmpty()) {
                             return DialogType.notice(back);
                         }
@@ -224,28 +227,28 @@ public final class TownMembershipDialogs {
                 };
                 boolean sameTown = view.governance() != null
                         && view.governance().townId().equals(townId);
-                items.add(new MenuItem(slot++, facade.button(Material.PLAYER_HEAD,
+                items.add(new MenuItem(slot++, presentation.button(Material.PLAYER_HEAD,
                         color + name,
-                        List.of(facade.dialogText("tooltip.members.role",
+                        List.of(presentation.dialogText("tooltip.members.role",
                                         Map.of("role", facade.memberRoleText(member.role()))),
-                                facade.dialogText("tooltip.members.joined",
+                                presentation.dialogText("tooltip.members.joined",
                                         Map.of("time", member.joinedAt())),
-                                sameTown ? facade.dialogText("tooltip.members.manage")
-                                        : facade.dialogText("tooltip.members.readonly")),
+                                sameTown ? presentation.dialogText("tooltip.members.manage")
+                                        : presentation.dialogText("tooltip.members.readonly")),
                         sameTown ? "MEMBER_DETAIL" : null,
                         sameTown ? townId + ":" + member.playerId() + ":" + page : null)));
             }
             if (page > 0) {
-                items.add(new MenuItem(45, facade.button(Material.ARROW,
-                        facade.dialogText("common.previous"), List.of(),
+                items.add(new MenuItem(45, presentation.button(Material.ARROW,
+                        presentation.dialogText("common.previous"), List.of(),
                         "MEMBERS", townId + ":" + (page - 1))));
             }
             if (memberPage.hasNext()) {
-                items.add(new MenuItem(53, facade.button(Material.ARROW,
-                        facade.dialogText("common.next"), List.of(),
+                items.add(new MenuItem(53, presentation.button(Material.ARROW,
+                        presentation.dialogText("common.next"), List.of(),
                         "MEMBERS", townId + ":" + (page + 1))));
             }
-            facade.openMenu(player, 54, facade.dialogText("town-members.title", Map.of("page", page + 1)),
+            presentation.openMenu(player, 54, presentation.dialogText("town-members.title", Map.of("page", page + 1)),
                     new DialogRoute("GOVERNANCE_CENTER", null), items);
         });
     }
@@ -257,60 +260,60 @@ public final class TownMembershipDialogs {
                                 plugin.messages().plainText("chat.runtime.town-required"))),
                 runtime.governance().memberRole(townId, targetId)), view -> {
             if (!view.viewer().townId().equals(townId)) {
-                facade.openNotice(player, facade.dialogText("notice.member-forbidden-title"),
-                        facade.dialogText("notice.member-forbidden-message"),
-                        facade.dialogText("common.back"), "MAIN", null);
+                presentation.openNotice(player, presentation.dialogText("notice.member-forbidden-title"),
+                        presentation.dialogText("notice.member-forbidden-message"),
+                        presentation.dialogText("common.back"), "MAIN", null);
                 return;
             }
             String name = facade.displayName(targetId);
             List<MenuItem> items = new ArrayList<>();
-            items.add(new MenuItem(4, facade.button(Material.PLAYER_HEAD, "§6" + name,
-                    List.of(facade.dialogText("member-role.identity", Map.of("role",
+            items.add(new MenuItem(4, presentation.button(Material.PLAYER_HEAD, "§6" + name,
+                    List.of(presentation.dialogText("member-role.identity", Map.of("role",
                             facade.memberRoleText(view.targetRole()))),
-                            facade.dialogText("member-detail.uuid", Map.of("id", targetId))), null, null)));
+                            presentation.dialogText("member-detail.uuid", Map.of("id", targetId))), null, null)));
             boolean targetIsMayor = view.targetRole() == MemberRole.MAYOR;
             boolean viewerIsMayor = view.viewer().role() == MemberRole.MAYOR;
             if (viewerIsMayor && !targetIsMayor) {
                 MemberRole nextRole = view.targetRole() == MemberRole.DEPUTY_MAYOR
                         ? MemberRole.MEMBER : MemberRole.DEPUTY_MAYOR;
-                items.add(new MenuItem(10, facade.button(Material.GOLDEN_HELMET,
+                items.add(new MenuItem(10, presentation.button(Material.GOLDEN_HELMET,
                         nextRole == MemberRole.DEPUTY_MAYOR
-                                ? facade.dialogText("member-detail.promote-deputy")
-                                : facade.dialogText("member-detail.demote-member"),
-                        List.of(facade.dialogText("tooltip.member-detail.max-deputies")), "CONFIRM_ROLE",
+                                ? presentation.dialogText("member-detail.promote-deputy")
+                                : presentation.dialogText("member-detail.demote-member"),
+                        List.of(presentation.dialogText("tooltip.member-detail.max-deputies")), "CONFIRM_ROLE",
                         townId + ":" + targetId + ":" + nextRole + ":" + page)));
             }
             boolean viewerCanRemove = view.viewer().role().isLeader() && !targetIsMayor
                     && (viewerIsMayor || view.targetRole() == MemberRole.MEMBER);
             if (viewerCanRemove) {
-                items.add(new MenuItem(12, facade.button(Material.RED_CONCRETE,
-                        facade.dialogText("member-detail.kick"),
-                        List.of(facade.dialogText("tooltip.member-detail.kick-now"),
-                            facade.dialogText("common.confirmation-required")),
+                items.add(new MenuItem(12, presentation.button(Material.RED_CONCRETE,
+                        presentation.dialogText("member-detail.kick"),
+                        List.of(presentation.dialogText("tooltip.member-detail.kick-now"),
+                            presentation.dialogText("common.confirmation-required")),
                         "CONFIRM_KICK_MEMBER", townId + ":" + targetId + ":" + page)));
             }
             if (viewerIsMayor && !targetIsMayor) {
-                items.add(new MenuItem(14, facade.button(Material.NETHER_STAR,
-                        facade.dialogText("member-detail.transfer"),
-                        List.of(facade.dialogText("tooltip.member-detail.transfer-expiry")),
+                items.add(new MenuItem(14, presentation.button(Material.NETHER_STAR,
+                        presentation.dialogText("member-detail.transfer"),
+                        List.of(presentation.dialogText("tooltip.member-detail.transfer-expiry")),
                         "CONFIRM_TRANSFER_MAYOR",
                         townId + ":" + targetId + ":" + page)));
             }
             if (!targetIsMayor && !targetId.equals(player.getUniqueId())) {
-                items.add(new MenuItem(16, facade.button(Material.PAPER,
-                        facade.dialogText("votes.action-kick-member"),
-                        List.of(facade.dialogText("tooltip.member-detail.vote-kick-threshold")),
+                items.add(new MenuItem(16, presentation.button(Material.PAPER,
+                        presentation.dialogText("votes.action-kick-member"),
+                        List.of(presentation.dialogText("tooltip.member-detail.vote-kick-threshold")),
                         "CONFIRM_CREATE_VOTE", townId + ":KICK_MEMBER:" + targetId
                                 + ":" + page)));
             }
             if (!targetIsMayor && view.viewer().role().isLeader()) {
-                items.add(new MenuItem(22, facade.button(Material.ENCHANTED_BOOK,
-                        facade.dialogText("votes.action-replace-mayor"),
-                        List.of(facade.dialogText("tooltip.member-detail.replace-mayor-threshold")),
+                items.add(new MenuItem(22, presentation.button(Material.ENCHANTED_BOOK,
+                        presentation.dialogText("votes.action-replace-mayor"),
+                        List.of(presentation.dialogText("tooltip.member-detail.replace-mayor-threshold")),
                         "CONFIRM_CREATE_VOTE", townId + ":REPLACE_MAYOR:" + targetId
                                 + ":" + page)));
             }
-            facade.openMenu(player, 27, facade.dialogText("member-detail.title", Map.of("name", name)),
+            presentation.openMenu(player, 27, presentation.dialogText("member-detail.title", Map.of("name", name)),
                     new DialogRoute("MEMBERS", townId + ":" + page), items);
         });
     }
@@ -318,10 +321,10 @@ public final class TownMembershipDialogs {
     public void changeMemberRole(Player mayor, UUID townId, UUID playerId, MemberRole role, int page) {
         actions.changeMemberRole(mayor, townId, playerId, role, outcome ->
                 facade.handleOutcome(mayor, outcome, changed -> {
-            facade.openNotice(mayor, facade.dialogText("notice.role-updated-title"),
-                    facade.dialogText("notice.role-updated-message", Map.of("role",
+            presentation.openNotice(mayor, presentation.dialogText("notice.role-updated-title"),
+                    presentation.dialogText("notice.role-updated-message", Map.of("role",
                             facade.memberRoleText(changed))),
-                    facade.dialogText("common.back"),
+                    presentation.dialogText("common.back"),
                     "MEMBER_DETAIL", townId + ":" + playerId + ":" + page);
         }));
     }
@@ -334,9 +337,9 @@ public final class TownMembershipDialogs {
                 plugin.messages().send(removed, "chat.notification.member-removed",
                         TownMembershipUi.townNotificationPlaceholders(change));
             }
-            facade.openNotice(mayor, facade.dialogText("notice.member-removed-title"),
-                    facade.dialogText("notice.member-removed-message"),
-                    facade.dialogText("common.back"), "MEMBERS", change.townId() + ":" + page);
+            presentation.openNotice(mayor, presentation.dialogText("notice.member-removed-title"),
+                    presentation.dialogText("notice.member-removed-message"),
+                    presentation.dialogText("common.back"), "MEMBERS", change.townId() + ":" + page);
         }));
     }
 
@@ -347,12 +350,12 @@ public final class TownMembershipDialogs {
             if (invited != null && invited.isOnline()) {
                 plugin.messages().send(invited, "chat.notification.visitor-added",
                         TownMembershipUi.townNotificationPlaceholders(change));
-                facade.playSound(invited, Sound.BLOCK_NOTE_BLOCK_PLING);
+                presentation.playSound(invited, Sound.BLOCK_NOTE_BLOCK_PLING);
             }
-            facade.openNotice(manager, facade.dialogText("notice.visitor-added-title"),
-                    facade.dialogText("notice.visitor-added-message", Map.of(
+            presentation.openNotice(manager, presentation.dialogText("notice.visitor-added-title"),
+                    presentation.dialogText("notice.visitor-added-message", Map.of(
                             "player", facade.displayName(change.playerId()))),
-                    facade.dialogText("common.back"), "VISITOR_LIST", change.townId() + ":0");
+                    presentation.dialogText("common.back"), "VISITOR_LIST", change.townId() + ":0");
         }));
     }
 
@@ -364,10 +367,10 @@ public final class TownMembershipDialogs {
                 plugin.messages().send(visitor, "chat.notification.visitor-removed",
                         TownMembershipUi.townNotificationPlaceholders(change));
             }
-            facade.openNotice(manager, facade.dialogText("notice.visitor-removed-title"),
-                    facade.dialogText("notice.visitor-removed-message", Map.of(
+            presentation.openNotice(manager, presentation.dialogText("notice.visitor-removed-title"),
+                    presentation.dialogText("notice.visitor-removed-message", Map.of(
                             "player", facade.displayName(change.playerId()))),
-                    facade.dialogText("common.back"), "VISITOR_LIST", change.townId() + ":" + page);
+                    presentation.dialogText("common.back"), "VISITOR_LIST", change.townId() + ":" + page);
         }));
     }
 

@@ -92,7 +92,7 @@ class TownBonusRuntimeTest {
                 new TownBonusSettings.BeaconEnhancement(true, 100),
                 new TownBonusSettings.Operations(7));
         when(host.settlement().accountId()).thenReturn(UUID.randomUUID());
-        runtime = new TownBonusRuntime(plugin, host, repository, settings, mock(org.bukkit.plugin.Plugin.class));
+        runtime = new TownBonusRuntime(plugin, host, repository, mock(org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository.class), settings, mock(org.bukkit.plugin.Plugin.class));
     }
 
     @Test

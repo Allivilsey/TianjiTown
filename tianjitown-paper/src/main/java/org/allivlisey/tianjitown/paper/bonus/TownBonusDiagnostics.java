@@ -7,7 +7,7 @@ import org.allivlisey.tianjitown.paper.bonus.TownBonusRuntime.DiagnosticResult;
 import org.allivlisey.tianjitown.paper.config.TownBonusSettings;
 import org.allivlisey.tianjitown.paper.message.LandProtectionMessages;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
-import org.allivlisey.tianjitown.storage.bonus.TownBonusRepository;
+import org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.bukkit.command.CommandSender;
 
@@ -38,14 +38,14 @@ final class TownBonusDiagnostics {
             .ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
     private final TianjiTownPlugin plugin;
     private final TownRuntime host;
-    private final TownBonusRepository repository;
+    private final TownDiagnosticRepository repository;
     private final TownBonusSettings.Operations settings;
     private final QuickShopHistoryProbe quickShopHistory;
     private final AtomicBoolean diagnosticRunning = new AtomicBoolean();
     private final AtomicReference<DiagnosticResult> lastDiagnostic;
 
     TownBonusDiagnostics(TianjiTownPlugin plugin, TownRuntime host,
-                         TownBonusRepository repository, TownBonusSettings.Operations settings,
+                         TownDiagnosticRepository repository, TownBonusSettings.Operations settings,
                          QuickShopHistoryProbe quickShopHistory) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.host = Objects.requireNonNull(host, "host");
@@ -118,7 +118,7 @@ final class TownBonusDiagnostics {
 
     private DiagnosticData collectDiagnosticData(int days, Instant since,
                                                  long capturedExternal) {
-        TownBonusRepository.DiagnosticSnapshot database = repository.diagnose(since);
+        TownDiagnosticRepository.DiagnosticSnapshot database = repository.diagnose(since);
         String schemaVersion = host.database().schemaVersion();
         EconomyRepository.Reconciliation settlement = capturedExternal < 0 ? null
                 : host.finance().inspectSettlement(capturedExternal);
@@ -163,7 +163,7 @@ final class TownBonusDiagnostics {
 
     private DiagnosticResult finishDiagnostic(CommandSender sender, DiagnosticData data) {
         int days = data.days();
-        TownBonusRepository.DiagnosticSnapshot database = data.database();
+        TownDiagnosticRepository.DiagnosticSnapshot database = data.database();
         String schemaVersion = data.schemaVersion();
         EconomyRepository.Reconciliation settlement = data.settlement();
         QuickShopHistoryProbe.Result history = data.history();
@@ -183,7 +183,7 @@ final class TownBonusDiagnostics {
         }
         int healthyResidence = 0;
         List<String> residenceErrors = new ArrayList<>();
-        for (TownBonusRepository.LandState state : database.landStates()) {
+        for (TownDiagnosticRepository.LandState state : database.landStates()) {
             LandProtectionService.Inspection inspection = host.landProtection().inspect(
                     state.residenceName(), state.areas(), state.members());
             if (inspection.state() == LandProtectionService.ProjectionState.HEALTHY) {
@@ -284,7 +284,7 @@ final class TownBonusDiagnostics {
     }
 
     private record DiagnosticData(int days,
-                                  TownBonusRepository.DiagnosticSnapshot database,
+                                  TownDiagnosticRepository.DiagnosticSnapshot database,
                                   String schemaVersion,
                                   EconomyRepository.Reconciliation settlement,
                                   QuickShopHistoryProbe.Result history) {

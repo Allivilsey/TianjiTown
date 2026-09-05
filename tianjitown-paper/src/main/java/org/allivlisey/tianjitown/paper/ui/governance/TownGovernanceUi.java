@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.governance;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.ui.TownUiLegacyFacade;
 
 import org.allivlisey.tianjitown.core.governance.VoteType;
@@ -8,10 +9,12 @@ import java.util.UUID;
 
 /** Owns governance, rule, and vote route protocols. */
 public final class TownGovernanceUi {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
 
     public TownGovernanceUi(TownUiLegacyFacade facade) {
         this.facade = facade;
+        this.presentation = facade.presentation();
     }
 
     public void route(Player player, String action, String target) {
@@ -44,9 +47,9 @@ public final class TownGovernanceUi {
 
     private void confirmCreateVote(Player player, String target) {
         VoteCreation vote = VoteCreation.parse(target);
-        facade.openConfirmation(player, facade.dialogText("confirmation.create-vote-title"),
+        presentation.openConfirmation(player, presentation.dialogText("confirmation.create-vote-title"),
                 "CREATE_VOTE", vote.encode(),
-                facade.dialogText("confirmation.create-vote-consequence"), "MEMBER_DETAIL",
+                presentation.dialogText("confirmation.create-vote-consequence"), "MEMBER_DETAIL",
                 vote.memberTarget());
     }
 
@@ -62,9 +65,9 @@ public final class TownGovernanceUi {
 
     private void confirmCancelVote(Player player, String target) {
         UUID voteId = townId(target);
-        facade.openConfirmation(player, facade.dialogText("confirmation.cancel-vote-title"),
+        presentation.openConfirmation(player, presentation.dialogText("confirmation.cancel-vote-title"),
                 "CANCEL_VOTE", voteId.toString(),
-                facade.dialogText("confirmation.cancel-vote-consequence"), "VOTE_DETAIL",
+                presentation.dialogText("confirmation.cancel-vote-consequence"), "VOTE_DETAIL",
                 voteId.toString());
     }
 

@@ -36,7 +36,9 @@ class ServiceStationControllerListenerTest {
 
     private static void assertHandler(String name, Class<?> eventType, EventPriority priority,
                                       boolean ignoreCancelled) throws NoSuchMethodException {
-        Method method = ServiceStationController.class.getMethod(name, eventType);
+        Class<?> owner = name.equals("onStationInteract") || name.equals("onStationInsertLecternBook")
+                ? ServiceStationController.class : StationProtectionListener.class;
+        Method method = owner.getMethod(name, eventType);
         EventHandler handler = method.getAnnotation(EventHandler.class);
         assertNotNull(handler, () -> name + " must be registered with Paper");
         assertEquals(priority, handler.priority(), name + " priority");

@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.bonus;
+import org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository;
 
 import org.allivlisey.tianjitown.integrations.quickshop.QuickShopHistoryProbe;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
@@ -37,7 +38,7 @@ public final class TownBonusRuntime implements Listener {
     private final TownBonusDiagnostics diagnostics;
 
     public TownBonusRuntime(TianjiTownPlugin plugin, TownRuntime host,
-                            TownBonusRepository repository, TownBonusSettings settings,
+                            TownBonusRepository repository, TownDiagnosticRepository diagnosticRepository, TownBonusSettings settings,
                             Plugin quickShop) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         Objects.requireNonNull(host, "host");
@@ -47,7 +48,7 @@ public final class TownBonusRuntime implements Listener {
                 settings.buildingRefund());
         this.beaconEffects = new TownBeaconEffects(plugin, host, repository,
                 settings.beacon(), index::get, this::refreshIndex);
-        this.diagnostics = new TownBonusDiagnostics(plugin, host, repository, settings.operations(),
+        this.diagnostics = new TownBonusDiagnostics(plugin, host, diagnosticRepository, settings.operations(),
                 new QuickShopHistoryProbe(quickShop, host.settlement().accountId(),
                         host.settlement().scale(), plugin.messages()::plainText));
     }

@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.application;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.ui.TownUiLegacyFacade;
 
 import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
@@ -8,10 +9,12 @@ import java.util.UUID;
 
 /** Owns the town-creation application routes after a draft has been saved. */
 public final class TownApplicationUi {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
 
     public TownApplicationUi(TownUiLegacyFacade facade) {
         this.facade = facade;
+        this.presentation = facade.presentation();
     }
 
     public void route(Player player, String action, String target) {
@@ -37,7 +40,7 @@ public final class TownApplicationUi {
     }
 
     private void confirmSubmit(Player player, UUID applicationId) {
-        facade.openConfirmation(player, facade.dialogText("confirmation.submit-application-title"),
+        presentation.openConfirmation(player, presentation.dialogText("confirmation.submit-application-title"),
                 "SUBMIT", applicationId.toString(),
                 ApplicationSubmissionDialogRenderer.confirmationConsequence(facade.plugin().messages(),
                         facade.runtime().money(facade.runtime().applicationFeeMinor())),
@@ -45,9 +48,9 @@ public final class TownApplicationUi {
     }
 
     private void confirmCancel(Player player, UUID applicationId) {
-        facade.openConfirmation(player, facade.dialogText("confirmation.cancel-application-title"),
+        presentation.openConfirmation(player, presentation.dialogText("confirmation.cancel-application-title"),
                 "CANCEL", applicationId.toString(),
-                facade.dialogText("confirmation.cancel-application-consequence"),
+                presentation.dialogText("confirmation.cancel-application-consequence"),
                 "APPLICATION", applicationId.toString());
     }
 

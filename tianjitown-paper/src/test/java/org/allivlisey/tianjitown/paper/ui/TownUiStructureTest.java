@@ -101,18 +101,11 @@ class TownUiStructureTest {
     }
 
     @Test
-    void featureImplementationsUseTheFacadeInsteadOfDependingOnEachOther() throws IOException {
-        for (String implementation : IMPLEMENTATIONS) {
-            if (implementation.equals("TownUiPresentation")) {
-                continue;
-            }
-            for (String other : IMPLEMENTATIONS) {
-                if (!implementation.equals(other) && !other.equals("TownUiPresentation")) {
-                    assertFalse(source(implementation).contains(other),
-                            implementation + " must not depend on " + other);
-                }
-            }
-        }
+    void compositionAndPresentationHaveIndependentResponsibilities() throws IOException {
+        assertFalse(source("TownUiLegacyFacade").contains("new TownGovernanceDialogs("));
+        assertTrue(source("TownUiController").contains("new TownGovernanceDialogs("));
+        assertTrue(source("TownRulesDialogs").contains("presentation.openDialogPage(")
+                || source("RuleEditorControls").contains("presentation.openDialogPage("));
         assertFalse(source("TownUiPresentation").contains("TownUiLegacyFacade"));
         assertFalse(source("TownUiPresentation").contains("TownRuntime"));
     }

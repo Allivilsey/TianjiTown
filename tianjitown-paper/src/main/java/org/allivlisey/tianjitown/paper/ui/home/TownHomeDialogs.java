@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.home;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.runtime.TownActions;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
@@ -28,6 +29,7 @@ import org.allivlisey.tianjitown.paper.ui.TownUiPresentation.MenuItem;
 
 /** Loads dashboards and town details, and handles leaving or disbanding a town. */
 public final class TownHomeDialogs {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
     private final TianjiTownPlugin plugin;
     private final TownRuntime runtime;
@@ -35,6 +37,7 @@ public final class TownHomeDialogs {
 
     public TownHomeDialogs(TownUiLegacyFacade facade) {
         this.facade = facade;
+        this.presentation = facade.presentation();
         this.plugin = facade.plugin();
         this.runtime = facade.runtime();
         this.actions = facade.actions();
@@ -45,7 +48,7 @@ public final class TownHomeDialogs {
             plugin.messages().send(player, "system.maintenance");
             return;
         }
-        UUID request = facade.openMenu(player, 9, facade.dialogText("main.loading-title"), DialogRoute.ROOT,
+        UUID request = presentation.openMenu(player, 9, presentation.dialogText("main.loading-title"), DialogRoute.ROOT,
                 List.of());
         runtime.read(player, () -> {
             runtime.governance().recordActivity(player.getUniqueId());
@@ -75,13 +78,13 @@ public final class TownHomeDialogs {
             }
             if (governance.requiresRulesConfirmation()) {
                 player.sendMessage(plugin.messages().component("chat.notification.rules-updated")
-                        .append(facade.callbackButton(player, "chat.buttons.view-rules",
+                        .append(presentation.callbackButton(player, "chat.buttons.view-rules",
                                 () -> openMain(player))));
             }
             if (governance.pendingTransfer() != null) {
                 player.sendMessage(plugin.messages().component("chat.notification.mayor-transfer",
                                 Map.of("town", governance.townName()))
-                        .append(facade.callbackButton(player, "chat.buttons.handle-transfer",
+                        .append(presentation.callbackButton(player, "chat.buttons.handle-transfer",
                                 () -> openMain(player))));
             }
             List<VoteSnapshot> pendingVotes = governance.votes().stream()
@@ -89,7 +92,7 @@ public final class TownHomeDialogs {
             if (!pendingVotes.isEmpty()) {
                 player.sendMessage(plugin.messages().component("chat.notification.pending-votes",
                                 Map.of("count", pendingVotes.size()))
-                        .append(facade.callbackButton(player, "chat.buttons.view-votes",
+                        .append(presentation.callbackButton(player, "chat.buttons.view-votes",
                                 () -> openMain(player))));
                 pendingVotes.forEach(vote -> facade.sendVoteReminder(player, vote));
             }
@@ -99,7 +102,7 @@ public final class TownHomeDialogs {
             if (runtime.taxEnabled() && finance != null && finance.hasUnreadTaxChange()) {
                 player.sendMessage(plugin.messages().component("chat.notification.tax-updated", Map.of(
                                 "rate", TownRuntime.percent(finance.taxRateBps())))
-                        .append(facade.callbackButton(player, "chat.buttons.view-finance",
+                        .append(presentation.callbackButton(player, "chat.buttons.view-finance",
                                 () -> facade.openFinance(player, 0))));
             }
         });
@@ -127,82 +130,82 @@ public final class TownHomeDialogs {
             int pendingTransfer = governance != null && governance.pendingTransfer() != null ? 1 : 0;
             int pendingTotal = pendingVotes + pendingJoins + pendingTransfer;
             List<String> summary = new ArrayList<>();
-            summary.add(facade.dialogText("member-role.identity", Map.of("role", governance == null
-                    ? facade.dialogText("member-role.member") : facade.memberRoleText(governance.role()))));
+            summary.add(presentation.dialogText("member-role.identity", Map.of("role", governance == null
+                    ? presentation.dialogText("member-role.member") : facade.memberRoleText(governance.role()))));
             if (finance != null) {
-                summary.add(facade.dialogText("main.finance-summary", Map.of(
+                summary.add(presentation.dialogText("main.finance-summary", Map.of(
                         "balance", runtime.money(finance.balanceMinor()),
                         "taxRate", TownRuntime.percent(finance.taxRateBps()))));
-                summary.add(facade.dialogText("common.territory-units", Map.of(
+                summary.add(presentation.dialogText("common.territory-units", Map.of(
                         "count", finance.unitCount(),
                         "maximum", runtime.economySettings().maximumUnits())));
             }
             summary.add(pendingTotal > 0
-                    ? facade.dialogText("votes.main-pending", Map.of("total", pendingTotal,
+                    ? presentation.dialogText("votes.main-pending", Map.of("total", pendingTotal,
                     "joins", pendingJoins, "votes", pendingVotes, "transfers", pendingTransfer))
-                    : facade.dialogText("main.no-pending"));
-            items.add(new MenuItem(0, facade.button(Material.BELL, facade.dialogText("common.town-name", Map.of(
+                    : presentation.dialogText("main.no-pending"));
+            items.add(new MenuItem(0, presentation.button(Material.BELL, presentation.dialogText("common.town-name", Map.of(
                     "town", town.profile().name())),
                     summary, null, null)));
-            items.add(new MenuItem(10, facade.button(Material.WRITTEN_BOOK, facade.dialogText("main.town-info"),
-                    List.of(facade.dialogText("tooltip.main.town")), "TOWN", town.id().toString())));
-            items.add(new MenuItem(12, facade.button(Material.EMERALD_BLOCK, facade.dialogText("common.finance-title"),
-                    List.of(facade.dialogText("tooltip.main.finance")), "FINANCE", "0")));
-            items.add(new MenuItem(14, facade.button(Material.GOLDEN_HELMET, facade.dialogText("main.governance"),
-                    List.of(facade.dialogText("tooltip.main.governance")), "GOVERNANCE_CENTER", null)));
-            items.add(new MenuItem(16, facade.button(pendingTotal > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
-                    pendingTotal > 0 ? facade.dialogText("main.pending-count",
-                            Map.of("count", pendingTotal)) : facade.dialogText("main.pending"),
-                    List.of(facade.dialogText("tooltip.main.pending")), "PENDING_CENTER", null)));
-            items.add(new MenuItem(18, facade.button(Material.PLAYER_HEAD, facade.dialogText("main.personal"),
-                    List.of(facade.dialogText("tooltip.main.personal")), "PERSONAL_CENTER", null)));
+            items.add(new MenuItem(10, presentation.button(Material.WRITTEN_BOOK, presentation.dialogText("main.town-info"),
+                    List.of(presentation.dialogText("tooltip.main.town")), "TOWN", town.id().toString())));
+            items.add(new MenuItem(12, presentation.button(Material.EMERALD_BLOCK, presentation.dialogText("common.finance-title"),
+                    List.of(presentation.dialogText("tooltip.main.finance")), "FINANCE", "0")));
+            items.add(new MenuItem(14, presentation.button(Material.GOLDEN_HELMET, presentation.dialogText("main.governance"),
+                    List.of(presentation.dialogText("tooltip.main.governance")), "GOVERNANCE_CENTER", null)));
+            items.add(new MenuItem(16, presentation.button(pendingTotal > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
+                    pendingTotal > 0 ? presentation.dialogText("main.pending-count",
+                            Map.of("count", pendingTotal)) : presentation.dialogText("main.pending"),
+                    List.of(presentation.dialogText("tooltip.main.pending")), "PENDING_CENTER", null)));
+            items.add(new MenuItem(18, presentation.button(Material.PLAYER_HEAD, presentation.dialogText("main.personal"),
+                    List.of(presentation.dialogText("tooltip.main.personal")), "PERSONAL_CENTER", null)));
         } else if (dashboard.application() != null) {
             ApplicationSnapshot application = dashboard.application();
-            items.add(new MenuItem(0, facade.button(Material.PAPER, facade.dialogText("main.application-title"),
+            items.add(new MenuItem(0, presentation.button(Material.PAPER, presentation.dialogText("main.application-title"),
                     List.of(application.reviewMessage() == null
-                            ? facade.dialogText("main.application-incomplete")
-                            : facade.dialogText("common.admin-review-message", Map.of(
+                            ? presentation.dialogText("main.application-incomplete")
+                            : presentation.dialogText("common.admin-review-message", Map.of(
                                     "message", TownUiLegacyFacade.safeText(application.reviewMessage())))), null, null)));
-            items.add(new MenuItem(11, facade.button(Material.MAP, facade.dialogText("main.application-continue"),
+            items.add(new MenuItem(11, presentation.button(Material.MAP, presentation.dialogText("main.application-continue"),
                     List.of(application.reviewMessage() == null
-                            ? facade.dialogText("tooltip.main.application-summary")
-                            : facade.dialogText("common.admin-review-message",
+                            ? presentation.dialogText("tooltip.main.application-summary")
+                            : presentation.dialogText("common.admin-review-message",
                             Map.of("message", TownUiLegacyFacade.safeText(application.reviewMessage())))),
                     "APPLICATION", application.id().toString())));
         } else {
-            items.add(new MenuItem(0, facade.button(Material.BELL, facade.dialogText("main.title"),
-                    List.of(facade.dialogText("main.no-town"), facade.dialogText("main.no-town-actions")),
+            items.add(new MenuItem(0, presentation.button(Material.BELL, presentation.dialogText("main.title"),
+                    List.of(presentation.dialogText("main.no-town"), presentation.dialogText("main.no-town-actions")),
                     null, null)));
             if (dashboard.joinApplications().isEmpty()) {
-                items.add(new MenuItem(11, facade.button(Material.WRITABLE_BOOK,
-                        facade.dialogText("main.create-application"),
-                        List.of(facade.dialogText("tooltip.main.create-application")),
+                items.add(new MenuItem(11, presentation.button(Material.WRITABLE_BOOK,
+                        presentation.dialogText("main.create-application"),
+                        List.of(presentation.dialogText("tooltip.main.create-application")),
                         "CREATE_APPLICATION", null)));
             }
-            items.add(new MenuItem(13, facade.button(Material.COMPASS, facade.dialogText("main.join-application"),
-                    List.of(facade.dialogText("tooltip.main.join-towns")), "JOIN_TOWNS", null)));
+            items.add(new MenuItem(13, presentation.button(Material.COMPASS, presentation.dialogText("main.join-application"),
+                    List.of(presentation.dialogText("tooltip.main.join-towns")), "JOIN_TOWNS", null)));
             if (!dashboard.joinApplications().isEmpty()) {
-                items.add(new MenuItem(15, facade.button(Material.PAPER,
-                        facade.dialogText("main.my-join-applications"),
-                        List.of(facade.dialogText("tooltip.main.my-applications-count",
+                items.add(new MenuItem(15, presentation.button(Material.PAPER,
+                        presentation.dialogText("main.my-join-applications"),
+                        List.of(presentation.dialogText("tooltip.main.my-applications-count",
                                         Map.of("count", dashboard.joinApplications().size())),
-                                facade.dialogText("common.join-application-limit")),
+                                presentation.dialogText("common.join-application-limit")),
                         "MY_JOIN_APPLICATIONS", null)));
             }
-            items.add(new MenuItem(31, facade.button(Material.WRITTEN_BOOK, facade.dialogText("common.handbook"),
-                    List.of(facade.dialogText("tooltip.main.handbook")), "GIVE_HANDBOOK", null)));
+            items.add(new MenuItem(31, presentation.button(Material.WRITTEN_BOOK, presentation.dialogText("common.handbook"),
+                    List.of(presentation.dialogText("tooltip.main.handbook")), "GIVE_HANDBOOK", null)));
         }
         if (player.hasPermission("tianjitown.admin")) {
             boolean pending = !view.reviewQueue().isEmpty();
-            items.add(new MenuItem(30, facade.button(pending ? Material.ENCHANTED_BOOK : Material.BOOK,
-                    pending ? facade.dialogText("main.admin-review-count",
+            items.add(new MenuItem(30, presentation.button(pending ? Material.ENCHANTED_BOOK : Material.BOOK,
+                    pending ? presentation.dialogText("main.admin-review-count",
                             Map.of("count", view.reviewQueue().size()))
-                            : facade.dialogText("main.admin-review"),
-                    pending ? List.of(facade.dialogText("tooltip.main.admin-review-pending"))
-                            : List.of(facade.dialogText("tooltip.main.admin-review-empty")),
+                            : presentation.dialogText("main.admin-review"),
+                    pending ? List.of(presentation.dialogText("tooltip.main.admin-review-pending"))
+                            : List.of(presentation.dialogText("tooltip.main.admin-review-empty")),
                     "ADMIN_APPLICATIONS", null)));
         }
-        facade.openMenu(player, 36, facade.dialogText("main.title"), DialogRoute.ROOT, items);
+        presentation.openMenu(player, 36, presentation.dialogText("main.title"), DialogRoute.ROOT, items);
     }
 
     public void openPendingCenter(Player player) {
@@ -222,32 +225,32 @@ public final class TownHomeDialogs {
             int pendingTransfer = governance.pendingTransfer() == null ? 0 : 1;
             int total = pendingJoins + pendingVotes + pendingTransfer;
             List<MenuItem> items = new ArrayList<>();
-            items.add(new MenuItem(0, facade.button(total > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
-                    total > 0 ? facade.dialogText("pending.count-title", Map.of("count", total))
-                            : facade.dialogText("pending.empty-title"),
-                    total > 0 ? List.of(facade.dialogText("pending.decisions-only"),
-                            facade.dialogText("votes.pending-summary", Map.of("joins", pendingJoins,
+            items.add(new MenuItem(0, presentation.button(total > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
+                    total > 0 ? presentation.dialogText("pending.count-title", Map.of("count", total))
+                            : presentation.dialogText("pending.empty-title"),
+                    total > 0 ? List.of(presentation.dialogText("pending.decisions-only"),
+                            presentation.dialogText("votes.pending-summary", Map.of("joins", pendingJoins,
                                     "votes", pendingVotes, "transfers", pendingTransfer)))
-                            : List.of(facade.dialogText("votes.pending-empty-hint")), null, null)));
+                            : List.of(presentation.dialogText("votes.pending-empty-hint")), null, null)));
             if (pendingJoins > 0) {
-                items.add(new MenuItem(10, facade.button(Material.ENCHANTED_BOOK,
-                        facade.dialogText("common.applications-count", Map.of("count", pendingJoins)),
-                        List.of(facade.dialogText("tooltip.pending.applications")),
+                items.add(new MenuItem(10, presentation.button(Material.ENCHANTED_BOOK,
+                        presentation.dialogText("common.applications-count", Map.of("count", pendingJoins)),
+                        List.of(presentation.dialogText("tooltip.pending.applications")),
                         "JOIN_APPLICATIONS", town.id().toString())));
             }
             if (pendingVotes > 0) {
-                items.add(new MenuItem(12, facade.button(Material.ENCHANTED_BOOK,
-                        facade.dialogText("votes.pending-title", Map.of("count", pendingVotes)),
-                        List.of(facade.dialogText("tooltip.pending.votes")),
+                items.add(new MenuItem(12, presentation.button(Material.ENCHANTED_BOOK,
+                        presentation.dialogText("votes.pending-title", Map.of("count", pendingVotes)),
+                        List.of(presentation.dialogText("tooltip.pending.votes")),
                         "VOTES", town.id().toString())));
             }
             if (governance.pendingTransfer() != null) {
-                items.add(new MenuItem(14, facade.button(Material.NETHER_STAR,
-                        facade.dialogText("pending.transfer"),
-                        List.of(facade.dialogText("tooltip.pending.transfer")),
+                items.add(new MenuItem(14, presentation.button(Material.NETHER_STAR,
+                        presentation.dialogText("pending.transfer"),
+                        List.of(presentation.dialogText("tooltip.pending.transfer")),
                         "TRANSFER_REQUEST", governance.pendingTransfer().id().toString())));
             }
-            facade.openMenu(player, 27, facade.dialogText("pending.title"),
+            presentation.openMenu(player, 27, presentation.dialogText("pending.title"),
                     new DialogRoute("MAIN", null), items);
         });
     }
@@ -256,27 +259,27 @@ public final class TownHomeDialogs {
         runtime.read(player, () -> runtime.repository().dashboard(player.getUniqueId()), dashboard -> {
             TownSnapshot town = dashboard.town();
             List<MenuItem> items = new ArrayList<>();
-            items.add(new MenuItem(0, facade.button(Material.PLAYER_HEAD,
-                    facade.dialogText("personal.player", Map.of("player", TownUiLegacyFacade.safeText(player.getName()))),
-                    List.of(town == null ? facade.dialogText("personal.no-town")
-                            : facade.dialogText("personal.town", Map.of(
+            items.add(new MenuItem(0, presentation.button(Material.PLAYER_HEAD,
+                    presentation.dialogText("personal.player", Map.of("player", TownUiLegacyFacade.safeText(player.getName()))),
+                    List.of(town == null ? presentation.dialogText("personal.no-town")
+                            : presentation.dialogText("personal.town", Map.of(
                                     "town", TownUiLegacyFacade.safeText(town.profile().name()))),
-                            facade.dialogText("personal.handbook-hint")), null, null)));
-            items.add(new MenuItem(10, facade.button(Material.WRITTEN_BOOK,
-                    facade.dialogText("common.handbook"),
-                    List.of(facade.dialogText("tooltip.personal.handbook")),
+                            presentation.dialogText("personal.handbook-hint")), null, null)));
+            items.add(new MenuItem(10, presentation.button(Material.WRITTEN_BOOK,
+                    presentation.dialogText("common.handbook"),
+                    List.of(presentation.dialogText("tooltip.personal.handbook")),
                     "GIVE_HANDBOOK", null)));
             if (town != null && town.mayorId().equals(player.getUniqueId())) {
-                items.add(new MenuItem(16, facade.button(Material.TNT, facade.dialogText("personal.disband"),
-                        List.of(facade.dialogText("tooltip.personal.disband-only"),
-                                facade.dialogText("common.irreversible")),
+                items.add(new MenuItem(16, presentation.button(Material.TNT, presentation.dialogText("personal.disband"),
+                        List.of(presentation.dialogText("tooltip.personal.disband-only"),
+                                presentation.dialogText("common.irreversible")),
                         "CONFIRM_DISBAND", town.id() + ":" + town.version())));
             } else if (town != null) {
-                items.add(new MenuItem(16, facade.button(Material.OAK_DOOR, facade.dialogText("personal.leave"),
-                        List.of(facade.dialogText("tooltip.personal.leave")),
+                items.add(new MenuItem(16, presentation.button(Material.OAK_DOOR, presentation.dialogText("personal.leave"),
+                        List.of(presentation.dialogText("tooltip.personal.leave")),
                         "CONFIRM_LEAVE", town.id().toString())));
             }
-            facade.openMenu(player, 27, facade.dialogText("personal.title"),
+            presentation.openMenu(player, 27, presentation.dialogText("personal.title"),
                     new DialogRoute("MAIN", null), items);
         });
     }
@@ -291,47 +294,47 @@ public final class TownHomeDialogs {
             TownDetailsMenuModel townDetails = TownDetailsMenuModel.create(
                     plugin.messages(), town);
             List<MenuItem> items = new ArrayList<>();
-            items.add(new MenuItem(4, facade.button(Material.BELL, facade.dialogText("common.town-name", Map.of(
+            items.add(new MenuItem(4, presentation.button(Material.BELL, presentation.dialogText("common.town-name", Map.of(
                             "town", TownUiLegacyFacade.safeText(town.profile().name()))),
                     townDetails.summaryLore(), null, null)));
             TownDetailsMenuModel.RulesEntry rulesEntry = townDetails.rulesEntry();
-            items.add(new MenuItem(rulesEntry.slot(), facade.button(Material.WRITTEN_BOOK,
-                    facade.dialogText(rulesEntry.labelKey()), List.of(facade.dialogText(rulesEntry.tooltipKey())),
+            items.add(new MenuItem(rulesEntry.slot(), presentation.button(Material.WRITTEN_BOOK,
+                    presentation.dialogText(rulesEntry.labelKey()), List.of(presentation.dialogText(rulesEntry.tooltipKey())),
                     rulesEntry.action(), rulesEntry.target())));
-            items.add(new MenuItem(12, facade.button(Material.PLAYER_HEAD, facade.dialogText("town.members"),
-                    List.of(facade.dialogText("tooltip.town.members")), "TOWN_MEMBER_OVERVIEW",
+            items.add(new MenuItem(12, presentation.button(Material.PLAYER_HEAD, presentation.dialogText("town.members"),
+                    List.of(presentation.dialogText("tooltip.town.members")), "TOWN_MEMBER_OVERVIEW",
                     town.id() + ":0")));
             if (governance != null && governance.role().isLeader()) {
-                items.add(new MenuItem(13, facade.button(Material.WRITABLE_BOOK,
-                        facade.dialogText("town.edit-description"),
-                        List.of(facade.dialogText("tooltip.town.edit-description")),
+                items.add(new MenuItem(13, presentation.button(Material.WRITABLE_BOOK,
+                        presentation.dialogText("town.edit-description"),
+                        List.of(presentation.dialogText("tooltip.town.edit-description")),
                         "EDIT_TOWN_DESCRIPTION", town.id().toString())));
-                items.add(new MenuItem(14, facade.button(Material.PAPER, facade.dialogText("town.edit-rules"),
-                        List.of(facade.dialogText("tooltip.town.edit-rules")),
+                items.add(new MenuItem(14, presentation.button(Material.PAPER, presentation.dialogText("town.edit-rules"),
+                        List.of(presentation.dialogText("tooltip.town.edit-rules")),
                         "EDIT_TOWN_RULES", town.id().toString())));
             }
             if (town.territory() != null) {
-                items.add(new MenuItem(16, facade.button(Material.MAP, facade.dialogText("town.territory"),
+                items.add(new MenuItem(16, presentation.button(Material.MAP, presentation.dialogText("town.territory"),
                         TownTerritoryUi.townTerritoryLore(plugin.messages(), town.territory()),
                         "PREVIEW_TOWN",
                         town.id().toString())));
             }
             if (governance != null && governance.role() == MemberRole.MAYOR) {
-                items.add(new MenuItem(17, facade.button(Material.ENDER_PEARL,
-                        facade.dialogText("town.set-teleport"),
-                        List.of(facade.dialogText("tooltip.town.set-teleport")),
+                items.add(new MenuItem(17, presentation.button(Material.ENDER_PEARL,
+                        presentation.dialogText("town.set-teleport"),
+                        List.of(presentation.dialogText("tooltip.town.set-teleport")),
                         "SET_TOWN_TELEPORT", town.id().toString())));
             }
-            facade.openMenu(player, 27, facade.dialogText("town.title"),
+            presentation.openMenu(player, 27, presentation.dialogText("town.title"),
                     new DialogRoute("MAIN", null), items);
         });
     }
 
     public void leave(Player player, UUID townId) {
         actions.leaveTown(player, townId, outcome -> facade.handleOutcome(player, outcome, result -> {
-            facade.openNotice(player, facade.dialogText("notice.left-town-title"),
-                    facade.dialogText("notice.left-town-message"),
-                    facade.dialogText("common.back"), "MAIN", null);
+            presentation.openNotice(player, presentation.dialogText("notice.left-town-title"),
+                    presentation.dialogText("notice.left-town-message"),
+                    presentation.dialogText("common.back"), "MAIN", null);
         }));
     }
 
@@ -341,11 +344,11 @@ public final class TownHomeDialogs {
         long expectedVersion = Long.parseLong(parts[1]);
         actions.disbandTown(mayor, townId, expectedVersion, outcome ->
                 facade.handleOutcome(mayor, outcome, completed -> {
-                facade.playSound(mayor, Sound.BLOCK_ANVIL_LAND);
-                facade.openNotice(mayor, facade.dialogText("notice.disbanded-title"),
-                        facade.dialogText("notice.disbanded-message", Map.of(
+                presentation.playSound(mayor, Sound.BLOCK_ANVIL_LAND);
+                presentation.openNotice(mayor, presentation.dialogText("notice.disbanded-title"),
+                        presentation.dialogText("notice.disbanded-message", Map.of(
                                 "town", completed.profile().name())),
-                        facade.dialogText("common.back"), "MAIN", null);
+                        presentation.dialogText("common.back"), "MAIN", null);
             }));
     }
 

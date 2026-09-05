@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.application;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.ui.TownUiLegacyFacade;
 
 import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
@@ -15,10 +16,12 @@ import java.util.UUID;
 
 /** Owns administrator application-review routes, recovery targets, and notifications. */
 public final class TownAdminApplicationUi {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
 
     public TownAdminApplicationUi(TownUiLegacyFacade facade) {
         this.facade = facade;
+        this.presentation = facade.presentation();
     }
 
     public void route(Player player, String action, String target) {
@@ -49,12 +52,12 @@ public final class TownAdminApplicationUi {
             facade.plugin().messages().send(sender, "chat.admin.application-entry", Map.of(
                     "town", application.text().name(), "applicant", application.applicantId()));
             if (sender instanceof Player admin) {
-                admin.sendMessage(facade.callbackButton(admin, "chat.buttons.review-application",
+                admin.sendMessage(presentation.callbackButton(admin, "chat.buttons.review-application",
                         () -> facade.openAdminApplication(admin, application.id())));
             }
         }
         if (sender instanceof Player player && !applications.isEmpty()) {
-            facade.playSound(player, Sound.BLOCK_NOTE_BLOCK_PLING);
+            presentation.playSound(player, Sound.BLOCK_NOTE_BLOCK_PLING);
         }
     }
 
@@ -68,7 +71,7 @@ public final class TownAdminApplicationUi {
                 applicant.sendMessage(facade.plugin().messages().component(
                         "chat.notification.application-approved",
                         Map.of("town", application.text().name())));
-                facade.playSound(applicant, Sound.ENTITY_PLAYER_LEVELUP);
+                presentation.playSound(applicant, Sound.ENTITY_PLAYER_LEVELUP);
             }
             case NEED_CHANGES -> {
                 applicant.sendMessage(facade.plugin().messages().component(
@@ -76,9 +79,9 @@ public final class TownAdminApplicationUi {
                                         "reason", TownUiLegacyFacade.safeText(Objects.requireNonNullElse(
                                                 application.reviewMessage(), facade.plugin().messages().plainText(
                                                         "chat.notification.application-needs-changes-default-reason")))))
-                        .append(facade.callbackButton(applicant, "chat.buttons.edit-application",
+                        .append(presentation.callbackButton(applicant, "chat.buttons.edit-application",
                                 () -> facade.loadApplication(applicant, application.id()))));
-                facade.playSound(applicant, Sound.BLOCK_NOTE_BLOCK_PLING);
+                presentation.playSound(applicant, Sound.BLOCK_NOTE_BLOCK_PLING);
             }
             case REJECTED -> {
                 applicant.sendMessage(facade.plugin().messages().component(
@@ -86,16 +89,16 @@ public final class TownAdminApplicationUi {
                                         "reason", TownUiLegacyFacade.safeText(Objects.requireNonNullElse(
                                                 application.reviewMessage(), facade.plugin().messages().plainText(
                                                         "chat.notification.application-rejected-default-reason")))))
-                        .append(facade.callbackButton(applicant, "chat.buttons.open-system",
+                        .append(presentation.callbackButton(applicant, "chat.buttons.open-system",
                                 () -> facade.openMain(applicant))));
-                facade.playSound(applicant, Sound.ENTITY_VILLAGER_NO);
+                presentation.playSound(applicant, Sound.ENTITY_VILLAGER_NO);
             }
             case PROVISION_FAILED -> {
                 applicant.sendMessage(facade.plugin().messages().component(
                                 "chat.notification.application-provision-failed")
-                        .append(facade.callbackButton(applicant, "chat.buttons.open-system",
+                        .append(presentation.callbackButton(applicant, "chat.buttons.open-system",
                                 () -> facade.openMain(applicant))));
-                facade.playSound(applicant, Sound.BLOCK_NOTE_BLOCK_BASS);
+                presentation.playSound(applicant, Sound.BLOCK_NOTE_BLOCK_BASS);
             }
             default -> {
                 // Other statuses are not review decisions requiring a notification.
@@ -104,16 +107,16 @@ public final class TownAdminApplicationUi {
     }
 
     private void confirmApprove(Player player, UUID applicationId) {
-        facade.openConfirmation(player, facade.dialogText("confirmation.admin-approve-title"),
+        presentation.openConfirmation(player, presentation.dialogText("confirmation.admin-approve-title"),
                 "ADMIN_APPROVE", applicationId.toString(),
-                facade.dialogText("confirmation.admin-approve-consequence"),
+                presentation.dialogText("confirmation.admin-approve-consequence"),
                 "ADMIN_APPLICATION", applicationId.toString());
     }
 
     private void confirmRecovery(Player player, RecoveryTarget recovery) {
-        facade.openConfirmation(player, facade.dialogText("confirmation.failed-recovery-title"),
+        presentation.openConfirmation(player, presentation.dialogText("confirmation.failed-recovery-title"),
                 "RECOVER_FAILED", recovery.encode(),
-                facade.dialogText("confirmation.failed-recovery-consequence"),
+                presentation.dialogText("confirmation.failed-recovery-consequence"),
                 "ADMIN_APPLICATION", recovery.applicationId().toString());
     }
 

@@ -1,4 +1,5 @@
 package org.allivlisey.tianjitown.paper.ui.buff;
+import org.allivlisey.tianjitown.paper.ui.TownUiPresentation;
 import org.allivlisey.tianjitown.paper.runtime.TownActions;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
@@ -26,6 +27,7 @@ import org.allivlisey.tianjitown.paper.ui.TownUiPresentation.MenuItem;
 
 /** Displays buff offers and duration choices, and submits buff purchases. */
 public final class TownBuffShopDialogs {
+    private final TownUiPresentation presentation;
     private final TownUiLegacyFacade facade;
     private final TianjiTownPlugin plugin;
     private final TownRuntime runtime;
@@ -33,6 +35,7 @@ public final class TownBuffShopDialogs {
 
     public TownBuffShopDialogs(TownUiLegacyFacade facade) {
         this.facade = facade;
+        this.presentation = facade.presentation();
         this.plugin = facade.plugin();
         this.runtime = facade.runtime();
         this.actions = facade.actions();
@@ -59,8 +62,8 @@ public final class TownBuffShopDialogs {
                     .collect(java.util.stream.Collectors.toMap(
                             CommerceRepository.ActiveBuff::buffKey, value -> value));
             List<MenuItem> items = new ArrayList<>();
-            items.add(new MenuItem(4, facade.button(Material.NETHER_STAR,
-                    facade.dialogText("buff.shop-summary-title"),
+            items.add(new MenuItem(4, presentation.button(Material.NETHER_STAR,
+                    presentation.dialogText("buff.shop-summary-title"),
                     List.of(BuffDialogRenderer.shopHint(plugin.messages(),
                             runtime.buffs().buffShopEnabled())), null, null)));
             int slot = 9;
@@ -68,7 +71,7 @@ public final class TownBuffShopDialogs {
                 CommerceRepository.SelectedBuffQuote quote = view.quotes().get(definition.key());
                 CommerceRepository.ActiveBuff current = active.get(definition.key());
                 boolean purchasable = runtime.buffs().buffShopEnabled() && quote != null;
-                items.add(new MenuItem(slot++, facade.button(purchasable ? Material.POTION
+                items.add(new MenuItem(slot++, presentation.button(purchasable ? Material.POTION
                                 : Material.GLASS_BOTTLE,
                         (purchasable ? "§d" : "§7")
                                 + runtime.buffs().settings().label(definition.key())
@@ -77,7 +80,7 @@ public final class TownBuffShopDialogs {
                         List.of(),
                         purchasable ? "BUFF_DURATIONS" : null, definition.key())));
             }
-            facade.openMenu(player, 54, facade.dialogText("buff.shop-title"),
+            presentation.openMenu(player, 54, presentation.dialogText("buff.shop-title"),
                     new DialogRoute("FINANCE", "0"), items);
         });
     }
@@ -94,31 +97,31 @@ public final class TownBuffShopDialogs {
             BuffDialogRenderer.ActiveState current = quote.current() == null ? null
                     : new BuffDialogRenderer.ActiveState(quote.current().level(),
                             quote.current().expiresAt().toString());
-            ItemStack summary = facade.button(Material.POTION, "§d"
+            ItemStack summary = presentation.button(Material.POTION, "§d"
                             + runtime.buffs().settings().label(definition.key()),
                     BuffDialogRenderer.parameterSummaryLore(plugin.messages(),
                             buffEffectDescription(definition), current), null, null);
             DialogInput duration = DialogInput.numberRange("buff_weeks", 420,
-                    facade.dialogComponent("buff.duration-label"),
-                    facade.dialogFormat("buff.duration-format"),
+                    presentation.dialogComponent("buff.duration-label"),
+                    presentation.dialogFormat("buff.duration-format"),
                     1.0F, 4.0F, 1.0F, 1.0F);
             DialogInput intensity = DialogInput.numberRange("buff_level", 420,
-                    facade.dialogComponent("buff.intensity-label"),
-                    facade.dialogFormat("buff.intensity-format"),
+                    presentation.dialogComponent("buff.intensity-label"),
+                    presentation.dialogFormat("buff.intensity-format"),
                     1.0F, Math.min(5, definition.maximumLevel()),
                     quote.current() == null ? 1.0F
                             : Math.min(5.0F, quote.current().level()), 1.0F);
-            facade.openDialogPage(player, facade.dialogText("buff.title"), List.of(facade.dialogTextBody(summary)),
+            presentation.openDialogPage(player, presentation.dialogText("buff.title"), List.of(presentation.dialogTextBody(summary)),
                     List.of(duration, intensity), DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                     session -> DialogType.multiAction(List.of(
-                                    ActionButton.create(facade.dialogComponent("buff.continue"),
-                                            null, 170, facade.dialogAction(player, session,
+                                    ActionButton.create(presentation.dialogComponent("buff.continue"),
+                                            null, 170, presentation.dialogAction(player, session,
                                                     response -> applyBuffDurationDialog(
                                                             player, buffKey, response))),
-                                    ActionButton.create(facade.dialogComponent("common.cancel"),
+                                    ActionButton.create(presentation.dialogComponent("common.cancel"),
                                             null, 170,
-                                            facade.dialogAction(player, session, "BUFF_SHOP", null))))
-                            .exitAction(facade.returnButton(player, session,
+                                            presentation.dialogAction(player, session, "BUFF_SHOP", null))))
+                            .exitAction(presentation.returnButton(player, session,
                                     new DialogRoute("BUFF_SHOP", null)))
                             .columns(2).build(), new DialogRoute("BUFF_SHOP", null));
         });
@@ -129,8 +132,8 @@ public final class TownBuffShopDialogs {
         Float selectedWeeks = response.getFloat("buff_weeks");
         Float selectedLevel = response.getFloat("buff_level");
         if (selectedWeeks == null || selectedLevel == null) {
-            facade.openNotice(player, facade.dialogText("buff.select-title"),
-                    facade.dialogText("buff.select-message"), facade.dialogText("common.back"),
+            presentation.openNotice(player, presentation.dialogText("buff.select-title"),
+                    presentation.dialogText("buff.select-message"), presentation.dialogText("common.back"),
                     "BUFF_DURATIONS", buffKey);
             return;
         }
@@ -140,9 +143,9 @@ public final class TownBuffShopDialogs {
             BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey);
             return runtime.buffs().repository().quoteBuff(player.getUniqueId(), definition,
                     weeks, level, runtime.settlement().scale(), Instant.now());
-        }, quote -> facade.openConfirmation(player, facade.dialogText("buff.confirm-title"), "BUY_BUFF",
+        }, quote -> presentation.openConfirmation(player, presentation.dialogText("buff.confirm-title"), "BUY_BUFF",
                 buffKey + ":" + weeks + ":" + level,
-                facade.dialogText("buff.confirm-consequence", Map.of(
+                presentation.dialogText("buff.confirm-consequence", Map.of(
                         "level", BuffDialogRenderer.roman(level), "weeks", weeks,
                         "price", runtime.money(quote.priceMinor()))),
                 "BUFF_DURATIONS", buffKey));
@@ -156,24 +159,24 @@ public final class TownBuffShopDialogs {
         actions.buyBuff(player, buffKey, weeks, level, outcome ->
                 facade.handleOutcome(player, outcome, purchase -> {
                     BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey);
-                    facade.openNotice(player, facade.dialogText("buff.success-title"),
-                            facade.dialogText("buff.success-message", Map.of(
+                    presentation.openNotice(player, presentation.dialogText("buff.success-title"),
+                            presentation.dialogText("buff.success-message", Map.of(
                                     "name", runtime.buffs().settings().label(definition.key()),
                                     "level", BuffDialogRenderer.roman(purchase.buff().level()),
                                     "expires", purchase.buff().expiresAt(),
                                     "balance", runtime.money(purchase.balanceAfterMinor()))),
-                            facade.dialogText("common.back"), "FINANCE", "0");
+                            presentation.dialogText("common.back"), "FINANCE", "0");
                 }));
     }
 
     private String buffEffectDescription(BuffDefinition definition) {
         if (definition.key().equals("health")) {
-            return facade.dialogText("buff.health-effect");
+            return presentation.dialogText("buff.health-effect");
         }
         if (definition.key().equals("speed")) {
-            return facade.dialogText("buff.speed-effect");
+            return presentation.dialogText("buff.speed-effect");
         }
-        return facade.dialogText("buff.generic-effect", Map.of(
+        return presentation.dialogText("buff.generic-effect", Map.of(
                 "effect", definition.effectKey(),
                 "amount", (definition.amountPerLevel() >= 0 ? "+" : "")
                         + definition.amountPerLevel()));

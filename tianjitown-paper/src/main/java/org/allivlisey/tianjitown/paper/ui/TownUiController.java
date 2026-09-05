@@ -30,6 +30,13 @@ import java.util.Map;
 import java.util.UUID;
 
 /** Composition root and compatibility facade for the town UI. */
+import org.allivlisey.tianjitown.paper.ui.application.*;
+import org.allivlisey.tianjitown.paper.ui.governance.*;
+import org.allivlisey.tianjitown.paper.ui.membership.*;
+import org.allivlisey.tianjitown.paper.ui.home.*;
+import org.allivlisey.tianjitown.paper.ui.finance.TownFinanceDialogs;
+import org.allivlisey.tianjitown.paper.ui.buff.TownBuffShopDialogs;
+
 public final class TownUiController implements Listener {
     private final TianjiTownPlugin plugin;
     private final TownUiLegacyFacade facade;
@@ -41,6 +48,19 @@ public final class TownUiController implements Listener {
     public TownUiController(TianjiTownPlugin plugin, TownRuntime runtime, TownActions actions) {
         this.plugin = plugin;
         facade = new TownUiLegacyFacade(plugin, runtime, actions);
+        RuleEditorControls ruleControls = new RuleEditorControls(facade.presentation());
+        facade.bindDialogs(new TownHomeDialogs(facade),
+                new TownFinanceDialogs(facade),
+                new TownBuffShopDialogs(facade),
+                new TownMembershipDialogs(facade),
+                new TownGovernanceDialogs(facade, new TownRulesDialogs(facade, ruleControls),
+                        new TownMayorTransferDialogs(facade), new TownVoteDialogs(facade), ruleControls),
+                new TownJoinApplicationDialogs(facade),
+                new TownAdminApplicationDialogs(facade),
+                new TownApplicationDialogs(facade),
+                new TownApplicationFormDialogs(facade),
+                new TownApplicationDrafts(facade),
+                new TownInitialMemberDialogs(facade));
         serviceStations = new ServiceStationController(plugin, runtime, facade::openMain,
                 facade.dialogs()::isActive);
         TownHomeUi homeUi = new TownHomeUi(facade, serviceStations);
@@ -95,7 +115,7 @@ public final class TownUiController implements Listener {
     }
 
     public List<Listener> listeners() {
-        return List.of(facade, this, serviceStations);
+        return List.of(facade, this, serviceStations, serviceStations.protectionListener());
     }
 
     public boolean createStation(Player player) {

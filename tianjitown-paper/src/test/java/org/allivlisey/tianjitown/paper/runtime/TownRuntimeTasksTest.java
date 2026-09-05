@@ -52,6 +52,19 @@ class TownRuntimeTasksTest {
     }
 
     @Test
+    void diagnosticStorageFailureLocksWritesAndKeepsTheOriginalFailure() {
+        var original = new org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository
+                .StorageUnavailableException("offline", null);
+        AtomicReference<RuntimeException> failure = new AtomicReference<>();
+        tasks.readAction(sender, () -> { throw original; },
+                ignored -> fail("failed diagnostic must not succeed"), failure::set);
+        worker.remove().run();
+        assertFalse(available.get());
+        main.remove().run();
+        assertSame(original, failure.get());
+    }
+
+    @Test
     void storageFailureLocksWritesAndReportsOriginalFailureOnMainThread() {
         RuntimeException original = new EconomyRepository.StorageUnavailableException("offline", null);
         AtomicReference<RuntimeException> failure = new AtomicReference<>();

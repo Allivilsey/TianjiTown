@@ -15,6 +15,13 @@ class TownActionFailuresTest {
     }
 
     @Test
+    void diagnosticStorageFailureUsesTheStorageReason() {
+        var failure = new org.allivlisey.tianjitown.storage.bonus.TownDiagnosticRepository
+                .StorageUnavailableException("offline", null);
+        assertEquals("STORAGE_UNAVAILABLE", TownActionFailures.from("DIAGNOSE", failure).reason());
+    }
+
+    @Test
     void missingTargetHasStableReason() {
         TownActionResult result = TownActionFailures.from("JOIN_APPLY",
                 new IllegalArgumentException("小镇不存在"));

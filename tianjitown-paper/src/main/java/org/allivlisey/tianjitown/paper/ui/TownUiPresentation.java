@@ -30,6 +30,10 @@ import java.util.function.Function;
 
 /** Renders shared dialog controls and binds callbacks to the active player session. */
 public final class TownUiPresentation {
+    public static String safeText(Object value) {
+        return String.valueOf(value).replace('&', '＆').replace('§', '�');
+    }
+
     private final TianjiTownPlugin plugin;
     private final TownDialogService dialogs;
 

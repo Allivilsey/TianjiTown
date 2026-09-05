@@ -10,7 +10,6 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
@@ -24,20 +23,11 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockExplodeEvent;
-import org.bukkit.event.block.BlockPistonExtendEvent;
-import org.bukkit.event.block.BlockPistonRetractEvent;
-import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.BookMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -45,15 +35,18 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
-/** Owns service-station state, handbook data, and all associated Paper events. */
+import org.allivlisey.tianjitown.paper.station.StationRegistry.StationRecord;
+
+/** Coordinates station creation, removal and player interaction. */
 public final class ServiceStationController implements Listener {
     private final TianjiTownPlugin plugin;
     private final TownRuntime runtime;
     private final Consumer<Player> openMain;
     private final BooleanSupplier dialogsActive;
     private final NamespacedKey stationKey;
-    private final NamespacedKey handbookKey;
-    private final NamespacedKey handbookCooldownKey;
+    private final StationRegistry registry;
+    private final HandbookService handbooks;
+    private final StationProtectionListener protection;
 
     public ServiceStationController(TianjiTownPlugin plugin, TownRuntime runtime,
                              Consumer<Player> openMain, BooleanSupplier dialogsActive) {
@@ -62,8 +55,17 @@ public final class ServiceStationController implements Listener {
         this.openMain = openMain;
         this.dialogsActive = dialogsActive;
         this.stationKey = new NamespacedKey(plugin, "service_station");
-        this.handbookKey = new NamespacedKey(plugin, "handbook");
-        this.handbookCooldownKey = new NamespacedKey(plugin, "handbook_received_at");
+        this.registry = new StationRegistry(plugin, stationKey);
+        this.handbooks = new HandbookService(plugin);
+        this.protection = new StationProtectionListener(registry);
+    }
+
+    public Listener protectionListener() {
+        return protection;
+    }
+
+    public boolean giveHandbook(Player player, boolean notifyPlayer) {
+        return handbooks.giveHandbook(player, notifyPlayer);
     }
 
     public boolean create(Player player) {
@@ -72,11 +74,11 @@ public final class ServiceStationController implements Listener {
             plugin.messages().send(player, "chat.station.target-lectern");
             return false;
         }
-        List<StationRecord> stations = stationRecords();
+        List<StationRecord> stations = registry.stationRecords();
         String existingId = lectern.getPersistentDataContainer().get(stationKey,
                 PersistentDataType.STRING);
         if (existingId != null && !existingId.isBlank()) {
-            if (registeredStation(block, existingId, stations) != null) {
+            if (registry.registeredStation(block, existingId, stations) != null) {
                 plugin.messages().send(player, "chat.station.already-exists",
                         Map.of("id", existingId));
             } else {
@@ -99,7 +101,7 @@ public final class ServiceStationController implements Listener {
         String stationId = UUID.randomUUID().toString();
         lectern.getPersistentDataContainer().set(stationKey, PersistentDataType.STRING, stationId);
         lectern.update(true);
-        registerStation(block, stationId, null, null);
+        registry.registerStation(block, stationId, null, null);
         plugin.messages().send(player, "chat.station.created", Map.of("id", stationId));
         return true;
     }
@@ -112,14 +114,14 @@ public final class ServiceStationController implements Listener {
         }
         String stationId = lectern.getPersistentDataContainer().get(stationKey,
                 PersistentDataType.STRING);
-        StationRecord registeredLocation = stationAt(block);
+        StationRecord registeredLocation = registry.stationAt(block);
         if ((stationId == null || stationId.isBlank()) && registeredLocation == null) {
             plugin.messages().send(player, "chat.station.unregistered");
             return false;
         }
         lectern.getPersistentDataContainer().remove(stationKey);
         lectern.update(true);
-        unregisterStationAt(block);
+        registry.unregisterStationAt(block);
         plugin.messages().send(player, "station.removed");
         return true;
     }
@@ -137,7 +139,7 @@ public final class ServiceStationController implements Listener {
                     Map.of("location", stationLocation(block)));
             return;
         }
-        if (registeredStation(block, stationId, stationRecords()) == null) {
+        if (registry.registeredStation(block, stationId, registry.stationRecords()) == null) {
             plugin.messages().send(player, "chat.station.invalid-marker");
             return;
         }
@@ -149,7 +151,7 @@ public final class ServiceStationController implements Listener {
     }
 
     public void list(CommandSender sender) {
-        List<StationRecord> stations = stationRecords();
+        List<StationRecord> stations = registry.stationRecords();
         plugin.messages().send(sender, "chat.station.list-title",
                 Map.of("count", stations.size()));
         if (stations.isEmpty()) {
@@ -186,9 +188,8 @@ public final class ServiceStationController implements Listener {
             return;
         }
         Block block = world.getBlockAt(station.x(), station.y(), station.z());
-        if (!(block.getState() instanceof Lectern lectern)
-                || !station.id().equals(lectern.getPersistentDataContainer().get(
-                stationKey, PersistentDataType.STRING))) {
+        if (!registry.isValidStation(block)
+                || !station.id().equals(registry.stationAt(block).id())) {
             plugin.messages().send(player, "chat.station.block-changed");
             return;
         }
@@ -205,83 +206,6 @@ public final class ServiceStationController implements Listener {
     private String plainStationStatus(StationRecord station) {
         return PlainTextComponentSerializer.plainText().serialize(
                 LegacyComponentSerializer.legacySection().deserialize(stationStatus(station)));
-    }
-
-    private void registerStation(Block block, String stationId, UUID townId, String townName) {
-        List<StationRecord> stations = new ArrayList<>(stationRecords());
-        stations.removeIf(station -> station.id().equals(stationId)
-                || station.sameLocation(block.getWorld().getUID(), block.getX(), block.getY(), block.getZ()));
-        stations.add(new StationRecord(stationId, block.getWorld().getUID(), block.getWorld().getName(),
-                block.getX(), block.getY(), block.getZ(), townId, townName));
-        saveStationRecords(stations);
-    }
-
-    private void unregisterStationAt(Block block) {
-        List<StationRecord> stations = new ArrayList<>(stationRecords());
-        stations.removeIf(station -> station.sameLocation(block.getWorld().getUID(), block.getX(),
-                block.getY(), block.getZ()));
-        saveStationRecords(stations);
-    }
-
-    private StationRecord stationAt(Block block) {
-        return stationRecords().stream().filter(station -> station.sameLocation(
-                block.getWorld().getUID(), block.getX(), block.getY(), block.getZ()))
-                .findFirst().orElse(null);
-    }
-
-    private static StationRecord registeredStation(Block block, String stationId,
-                                                     List<StationRecord> stations) {
-        return stations.stream().filter(station -> station.id().equals(stationId)
-                        && station.sameLocation(block.getWorld().getUID(), block.getX(), block.getY(),
-                        block.getZ()))
-                .findFirst().orElse(null);
-    }
-
-    private List<StationRecord> stationRecords() {
-        List<StationRecord> result = new ArrayList<>();
-        for (Map<?, ?> raw : plugin.getConfig().getMapList("town.service-stations")) {
-            try {
-                Object townId = raw.get("town-id");
-                result.add(new StationRecord(String.valueOf(raw.get("id")),
-                        UUID.fromString(String.valueOf(raw.get("world-uuid"))),
-                        String.valueOf(raw.get("world")), number(raw, "x"), number(raw, "y"),
-                        number(raw, "z"), townId == null ? null : UUID.fromString(String.valueOf(townId)),
-                        raw.get("town-name") == null ? null : String.valueOf(raw.get("town-name"))));
-            } catch (MissingIntegerException exception) {
-                plugin.getLogger().warning(plugin.messages().plainText(
-                        "log.station.invalid-record-missing-integer",
-                        Map.of("key", safeText(exception.key()))));
-            } catch (StationRecord.ValidationException exception) {
-                plugin.getLogger().warning(plugin.messages().plainText(
-                        "log.station.invalid-record",
-                        Map.of("detail", plugin.messages().plainText(exception.messageKey()))));
-            } catch (IllegalArgumentException exception) {
-                plugin.getLogger().warning(plugin.messages().plainText(
-                        "log.station.invalid-record",
-                        Map.of("detail", safeText(safeMessage(exception)))));
-            }
-        }
-        return List.copyOf(result);
-    }
-
-    private void saveStationRecords(List<StationRecord> stations) {
-        List<Map<String, Object>> serialized = new ArrayList<>();
-        for (StationRecord station : stations) {
-            Map<String, Object> value = new LinkedHashMap<>();
-            value.put("id", station.id());
-            value.put("world-uuid", station.worldId().toString());
-            value.put("world", station.worldName());
-            value.put("x", station.x());
-            value.put("y", station.y());
-            value.put("z", station.z());
-            if (station.townId() != null) {
-                value.put("town-id", station.townId().toString());
-                value.put("town-name", station.townName());
-            }
-            serialized.add(value);
-        }
-        plugin.getConfig().set("town.service-stations", serialized);
-        plugin.saveConfig();
     }
 
     private String stationStatus(StationRecord station) {
@@ -306,23 +230,9 @@ public final class ServiceStationController implements Listener {
                 : plugin.messages().text("chat.station.status-mismatch");
     }
 
-    private static int number(Map<?, ?> raw, String key) {
-        Object value = raw.get(key);
-        if (!(value instanceof Number number)) {
-            throw new MissingIntegerException(key);
-        }
-        return number.intValue();
-    }
-
     private static String stationLocation(Block block) {
         return block.getWorld().getName() + " " + block.getX() + "," + block.getY() + ","
                 + block.getZ();
-    }
-
-    private boolean isHandbook(ItemStack item) {
-        return item != null && item.hasItemMeta()
-                && item.getItemMeta().getPersistentDataContainer().has(handbookKey,
-                PersistentDataType.BYTE);
     }
 
     private static boolean hasBook(Lectern lectern) {
@@ -334,14 +244,6 @@ public final class ServiceStationController implements Listener {
      * Detects stale markers and registrations while creating or repairing a station. Such a
      * marker is deliberately not treated as a valid station for interaction protection.
      */
-    private boolean hasStationMarkerOrRegistration(Block block) {
-        if (!(block.getState() instanceof Lectern lectern)) {
-            return false;
-        }
-        return lectern.getPersistentDataContainer().has(stationKey, PersistentDataType.STRING)
-                || stationAt(block) != null;
-    }
-
     private void createStationFromHandbook(Player player, Block block) {
         if (player.hasPermission("tianjitown.admin")) {
             completeStationCreation(player, block, null, null);
@@ -358,11 +260,11 @@ public final class ServiceStationController implements Listener {
 
     private void completeStationCreation(Player player, Block block, UUID townId, String townName) {
         if (!(block.getState() instanceof Lectern lectern)
-                || !isHandbook(lectern.getInventory().getItem(0))
-                || hasStationMarkerOrRegistration(block)) {
+                || !handbooks.isHandbook(lectern.getInventory().getItem(0))
+                || registry.hasStationMarkerOrRegistration(block)) {
             return;
         }
-        if (townId != null && stationRecords().stream().anyMatch(station ->
+        if (townId != null && registry.stationRecords().stream().anyMatch(station ->
                 townId.equals(station.townId()))) {
             plugin.messages().send(player, "station.town-limit", Map.of("town", townName));
             return;
@@ -370,7 +272,7 @@ public final class ServiceStationController implements Listener {
         String stationId = UUID.randomUUID().toString();
         lectern.getPersistentDataContainer().set(stationKey, PersistentDataType.STRING, stationId);
         lectern.update(true);
-        registerStation(block, stationId, townId, townName);
+        registry.registerStation(block, stationId, townId, townName);
         plugin.messages().send(player, townId == null ? "station.created-public"
                 : "station.created-town", townId == null ? Map.of() : Map.of("town", townName));
         playSound(player, Sound.BLOCK_AMETHYST_BLOCK_CHIME);
@@ -381,42 +283,10 @@ public final class ServiceStationController implements Listener {
             lectern.getPersistentDataContainer().remove(stationKey);
             lectern.update(true);
         }
-        unregisterStationAt(block);
+        registry.unregisterStationAt(block);
         block.breakNaturally();
         plugin.messages().send(player, "station.removed");
         playSound(player, Sound.BLOCK_WOOD_BREAK);
-    }
-
-    public boolean giveHandbook(Player player, boolean notifyPlayer) {
-        long now = Instant.now().toEpochMilli();
-        Long lastReceived = player.getPersistentDataContainer().get(handbookCooldownKey,
-                PersistentDataType.LONG);
-        long cooldownMillis = Duration.ofMinutes(Math.max(1, plugin.getConfig().getLong(
-                "town.handbook-cooldown-minutes", 60))).toMillis();
-        if (lastReceived != null && now - lastReceived < cooldownMillis) {
-            long remainingMinutes = Math.max(1,
-                    (cooldownMillis - (now - lastReceived) + 59_999L) / 60_000L);
-            if (notifyPlayer) {
-                plugin.messages().send(player, "handbook.cooldown",
-                        Map.of("minutes", remainingMinutes));
-            }
-            return false;
-        }
-        ItemStack book = new ItemStack(Material.WRITTEN_BOOK);
-        BookMeta meta = (BookMeta) book.getItemMeta();
-        meta.setTitle(plugin.messages().plainText("handbook.item-title"));
-        meta.setAuthor("TianjiTown");
-        meta.setDisplayName(plugin.messages().text("handbook.item-display-name"));
-        meta.setPages(plugin.messages().text("handbook.item-pages"));
-        meta.getPersistentDataContainer().set(handbookKey, PersistentDataType.BYTE, (byte) 1);
-        book.setItemMeta(meta);
-        Map<Integer, ItemStack> leftovers = player.getInventory().addItem(book);
-        leftovers.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
-        player.getPersistentDataContainer().set(handbookCooldownKey, PersistentDataType.LONG, now);
-        if (notifyPlayer) {
-            plugin.messages().send(player, "handbook.received");
-        }
-        return true;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
@@ -426,7 +296,7 @@ public final class ServiceStationController implements Listener {
                 || event.getAction() == Action.RIGHT_CLICK_BLOCK;
         Block block = event.getClickedBlock();
         ServiceStationInteractionPolicy.Outcome stationOutcome =
-                ServiceStationInteractionPolicy.decide(isValidStation(block), event.getAction(),
+                ServiceStationInteractionPolicy.decide(registry.isValidStation(block), event.getAction(),
                         event.getHand(), event.getPlayer().hasPermission("tianjitown.admin"),
                         event.getPlayer().isSneaking());
         if (stationOutcome != ServiceStationInteractionPolicy.Outcome.PASS_THROUGH) {
@@ -442,8 +312,8 @@ public final class ServiceStationController implements Listener {
         }
         boolean emptyUnregisteredLectern = block != null
                 && block.getState() instanceof Lectern lectern
-                && !hasBook(lectern) && !hasStationMarkerOrRegistration(block);
-        if (rightClick && isHandbook(item) && !emptyUnregisteredLectern) {
+                && !hasBook(lectern) && !registry.hasStationMarkerOrRegistration(block);
+        if (rightClick && handbooks.isHandbook(item) && !emptyUnregisteredLectern) {
             Player player = event.getPlayer();
             event.setCancelled(true);
             event.setUseItemInHand(Event.Result.DENY);
@@ -458,7 +328,7 @@ public final class ServiceStationController implements Listener {
             String stationId = lectern.getPersistentDataContainer().get(stationKey,
                     PersistentDataType.STRING);
             if (stationId == null || stationId.isBlank()
-                    || registeredStation(block, stationId, stationRecords()) == null) {
+                    || registry.registeredStation(block, stationId, registry.stationRecords()) == null) {
                 // 复制或移动后的标记不享有绕过 Residence 的资格。
                 plugin.messages().send(event.getPlayer(), "chat.station.invalid-data");
                 return;
@@ -474,51 +344,14 @@ public final class ServiceStationController implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
-    public void onStationEntityExplosion(EntityExplodeEvent event) {
-        event.blockList().removeIf(this::isValidStation);
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
-    public void onStationBlockExplosion(BlockExplodeEvent event) {
-        event.blockList().removeIf(this::isValidStation);
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
-    public void onStationPistonExtend(BlockPistonExtendEvent event) {
-        if (event.getBlocks().stream().anyMatch(this::isValidStation)) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
-    public void onStationPistonRetract(BlockPistonRetractEvent event) {
-        if (event.getBlocks().stream().anyMatch(this::isValidStation)) {
-            event.setCancelled(true);
-        }
-    }
-
-    private boolean isValidStation(Block block) {
-        if (block == null) {
-            return false;
-        }
-        if (!(block.getState() instanceof Lectern lectern)) {
-            return false;
-        }
-        String stationId = lectern.getPersistentDataContainer().get(stationKey,
-                PersistentDataType.STRING);
-        return stationId != null && !stationId.isBlank()
-                && registeredStation(block, stationId, stationRecords()) != null;
-    }
-
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onStationInsertLecternBook(PlayerInsertLecternBookEvent event) {
-        if (!isHandbook(event.getBook())) {
+        if (!handbooks.isHandbook(event.getBook())) {
             return;
         }
         Block block = event.getBlock();
         if (!(block.getState() instanceof Lectern lectern) || hasBook(lectern)
-                || hasStationMarkerOrRegistration(block)) {
+                || registry.hasStationMarkerOrRegistration(block)) {
             return;
         }
         Player player = event.getPlayer();
@@ -529,14 +362,6 @@ public final class ServiceStationController implements Listener {
             }
         }, 1L);
     }
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
-    public void onStationBreak(BlockBreakEvent event) {
-        if (isValidStation(event.getBlock())) {
-            event.setCancelled(true);
-        }
-    }
-
 
     private Component callbackButton(Player recipient, String labelKey, Runnable action) {
         return plugin.messages().component(labelKey).decorate(TextDecoration.BOLD)
@@ -559,59 +384,7 @@ public final class ServiceStationController implements Listener {
         player.playSound(player.getLocation(), sound, SoundCategory.MASTER, 0.8F, 1.0F);
     }
 
-    private static String safeMessage(Throwable throwable) {
-        String message = throwable.getMessage();
-        return message == null || message.isBlank()
-                ? throwable.getClass().getSimpleName() : message;
-    }
 
-    private static String safeText(Object value) {
-        return String.valueOf(value).replace('&', '＆').replace('§', '�');
-    }
-
-    private static final class MissingIntegerException extends IllegalArgumentException {
-        private final String key;
-
-        private MissingIntegerException(String key) {
-            super("missing-integer:" + key);
-            this.key = key;
-        }
-
-        private String key() {
-            return key;
-        }
-    }
-
-    private record StationRecord(String id, UUID worldId, String worldName, int x, int y, int z,
-                                 UUID townId, String townName) {
-        StationRecord {
-            if (id == null || id.isBlank()) {
-                throw new ValidationException("log.station.record-id-empty");
-            }
-            Objects.requireNonNull(worldId, "worldId");
-            if (worldName == null || worldName.isBlank()) {
-                throw new ValidationException("log.station.record-world-name-empty");
-            }
-        }
-
-        private static final class ValidationException extends IllegalArgumentException {
-            private final String messageKey;
-
-            private ValidationException(String messageKey) {
-                super(messageKey);
-                this.messageKey = messageKey;
-            }
-
-            private String messageKey() {
-                return messageKey;
-            }
-        }
-
-        boolean sameLocation(UUID candidateWorld, int candidateX, int candidateY, int candidateZ) {
-            return worldId.equals(candidateWorld) && x == candidateX && y == candidateY
-                    && z == candidateZ;
-        }
-    }
 
 
 }
