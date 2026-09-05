@@ -105,14 +105,20 @@ public final class TownBuffShopDialogs {
                     presentation.dialogComponent("buff.duration-label"),
                     presentation.dialogFormat("buff.duration-format"),
                     1.0F, 4.0F, 1.0F, 1.0F);
-            DialogInput intensity = DialogInput.numberRange("buff_level", 420,
+            int maximumLevel = Math.min(5, definition.maximumLevel());
+            List<DialogInput> inputs = new ArrayList<>();
+            inputs.add(duration);
+            if (maximumLevel > 1) {
+                DialogInput intensity = DialogInput.numberRange("buff_level", 420,
                     presentation.dialogComponent("buff.intensity-label"),
                     presentation.dialogFormat("buff.intensity-format"),
-                    1.0F, Math.min(5, definition.maximumLevel()),
+                    1.0F, maximumLevel,
                     quote.current() == null ? 1.0F
-                            : Math.min(5.0F, quote.current().level()), 1.0F);
+                            : Math.min((float) maximumLevel, quote.current().level()), 1.0F);
+                inputs.add(intensity);
+            }
             presentation.openDialogPage(player, presentation.dialogText("buff.title"), List.of(presentation.dialogTextBody(summary)),
-                    List.of(duration, intensity), DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
+                    inputs, DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE,
                     session -> DialogType.multiAction(List.of(
                                     ActionButton.create(presentation.dialogComponent("buff.continue"),
                                             null, 170, presentation.dialogAction(player, session,
@@ -130,7 +136,8 @@ public final class TownBuffShopDialogs {
     private void applyBuffDurationDialog(Player player, String buffKey,
                                          DialogResponseView response) {
         Float selectedWeeks = response.getFloat("buff_weeks");
-        Float selectedLevel = response.getFloat("buff_level");
+        Float selectedLevel = runtime.buffs().settings().requireBuff(buffKey).maximumLevel() == 1
+                ? Float.valueOf(1.0F) : response.getFloat("buff_level");
         if (selectedWeeks == null || selectedLevel == null) {
             presentation.openNotice(player, presentation.dialogText("buff.select-title"),
                     presentation.dialogText("buff.select-message"), presentation.dialogText("common.back"),
@@ -170,6 +177,10 @@ public final class TownBuffShopDialogs {
     }
 
     private String buffEffectDescription(BuffDefinition definition) {
+        if (List.of("night_vision", "water_breathing", "safe_fall", "mining",
+                "fire_resistance").contains(definition.key())) {
+            return presentation.dialogText("buff." + definition.key() + "-effect");
+        }
         if (definition.key().equals("health")) {
             return presentation.dialogText("buff.health-effect");
         }

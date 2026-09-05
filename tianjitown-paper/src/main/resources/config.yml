@@ -1,5 +1,3 @@
-schema-version: 10
-
 database:
   # 相对路径以 plugins/TianjiTown 为基准，也可填写绝对路径。
   file: 'tianjitown.db'
@@ -49,8 +47,8 @@ economy:
     enabled: true
   reconciliation-interval-minutes: 5
   expansion:
-    # 每次扩张均使用同一价格，不随现有领地单元数增长。
-    fixed-cost: '3000.00'
+    # 首次扩张价格；第 n 次收费 = 基础价 × 1.05^(n-1)，批量选择逐块累计。
+    base-cost: '5000.00'
 
 buffs:
   # 关闭商店只会阻止新购买；已购买 Buff 仍持续到期并正常清理。
@@ -60,8 +58,8 @@ buffs:
       effect-kind: ATTRIBUTE
       effect-key: 'minecraft:movement_speed'
       operation: ADD_SCALAR
-      # 每小时基础价；玩家选择 1~4 周和 I~V 强度后按周折扣计价。
-      base-price: '500.00'
+      # I 级每周基础价；1~4 周分别无折扣、九五折、9折、八五折（每多一周优惠5个百分点）。
+      base-price: '6720.00'
       maximum-level: 5
       stacking: LEVEL_UP
       amount-per-level: 0.2
@@ -69,10 +67,51 @@ buffs:
       effect-kind: ATTRIBUTE
       effect-key: 'minecraft:max_health'
       operation: ADD_NUMBER
-      base-price: '1000.00'
+      base-price: '10080.00'
       maximum-level: 5
       stacking: LEVEL_UP
       amount-per-level: 4.0
+
+    night_vision:
+      effect-kind: POTION
+      effect-key: 'minecraft:night_vision'
+      operation: AMPLIFIER
+      base-price: '2688.00'
+      maximum-level: 1
+      stacking: REFRESH
+      amount-per-level: 1
+    water_breathing:
+      effect-kind: POTION
+      effect-key: 'minecraft:water_breathing'
+      operation: AMPLIFIER
+      base-price: '4032.00'
+      maximum-level: 1
+      stacking: REFRESH
+      amount-per-level: 1
+    safe_fall:
+      effect-kind: ATTRIBUTE
+      effect-key: 'minecraft:safe_fall_distance'
+      operation: ADD_NUMBER
+      base-price: '4032.00'
+      maximum-level: 3
+      stacking: REFRESH
+      amount-per-level: 2
+    mining:
+      effect-kind: ATTRIBUTE
+      effect-key: 'minecraft:block_break_speed'
+      operation: ADD_SCALAR
+      base-price: '6720.00'
+      maximum-level: 3
+      stacking: REFRESH
+      amount-per-level: 0.1
+    fire_resistance:
+      effect-kind: POTION
+      effect-key: 'minecraft:fire_resistance'
+      operation: AMPLIFIER
+      base-price: '8064.00'
+      maximum-level: 1
+      stacking: REFRESH
+      amount-per-level: 1
 
 territory:
   building-refund:

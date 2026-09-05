@@ -29,7 +29,7 @@ class EconomySettingsTest {
         assertEquals("tax", settings.settlementAccount());
         assertEquals(2, settings.fallbackScale());
         assertEquals(2500, settings.maximumTaxBps());
-        assertEquals(new BigDecimal("3000.00"), settings.expansionCost());
+        assertEquals(new BigDecimal("5000.00"), settings.expansionCost());
         assertEquals(25, settings.maximumUnits());
         assertEquals(new BigDecimal("50000.00"), settings.weeklySubsidyLimit());
         assertEquals(new BigDecimal("5000.00"), settings.twelveHourSubsidyLimit());
@@ -45,7 +45,7 @@ class EconomySettingsTest {
     void rejectsUnsafeTaxMoneyAndExpansionSettings() {
         for (Setting setting : new Setting[]{
                 new Setting("economy.money-scale", 9),
-                new Setting("economy.expansion.fixed-cost", "0")}) {
+                new Setting("economy.expansion.base-cost", "0")}) {
             MemoryConfiguration config = new MemoryConfiguration();
             config.set(setting.path(), setting.value());
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
@@ -77,8 +77,8 @@ class EconomySettingsTest {
                 reject(configuration("economy.settlement-account", ""), messages).getMessage());
         assertEquals("economy.money-scale 必须在 0~8 之间",
                 reject(configuration("economy.money-scale", 9), messages).getMessage());
-        assertEquals("economy.expansion.fixed-cost 必须大于 0",
-                reject(configuration("economy.expansion.fixed-cost", "0"), messages)
+        assertEquals("economy.expansion.base-cost 必须大于 0",
+                reject(configuration("economy.expansion.base-cost", "0"), messages)
                         .getMessage());
         assertEquals("economy.tax.subsidy.weekly-limit 不能小于 0",
                 reject(configuration("economy.tax.subsidy.weekly-limit", "-1"), messages)
@@ -94,7 +94,7 @@ class EconomySettingsTest {
                 reject(relation, messages).getMessage());
 
         IllegalArgumentException overflow = reject(
-                configuration("economy.expansion.fixed-cost", "1E100"), messages);
+                configuration("economy.expansion.base-cost", "1E100"), messages);
         assertEquals("economy.expansion 价格超出次级货币单位范围", overflow.getMessage());
         assertEquals("金额超过上限", overflow.getCause().getMessage());
 

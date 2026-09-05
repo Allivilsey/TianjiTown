@@ -20,7 +20,8 @@ public final class BuffPricing {
         BigDecimal value = definition.basePrice()
                 .multiply(BigDecimal.valueOf(duration.hours()))
                 .multiply(BigDecimal.valueOf(duration.discountBasisPoints(), 4))
-                .multiply(BigDecimal.valueOf(nextLevel));
+                .multiply(BigDecimal.valueOf(nextLevel))
+                .divide(BigDecimal.valueOf(168), scale, RoundingMode.CEILING);
         return MoneyAmount.rounded(value, scale, RoundingMode.CEILING);
     }
 
@@ -34,9 +35,8 @@ public final class BuffPricing {
                     + Math.min(5, definition.maximumLevel()) + " 之间");
         }
         BigDecimal value = definition.basePrice()
-                .multiply(BigDecimal.valueOf(24L * 7L * weeks))
-                .multiply(BigDecimal.valueOf(
-                        BuffDurationOption.ONE_WEEK.discountBasisPoints(), 4))
+                .multiply(BigDecimal.valueOf(weeks))
+                .multiply(BigDecimal.valueOf(10_000 - (weeks - 1) * 500, 4))
                 .multiply(BigDecimal.valueOf(level));
         return MoneyAmount.rounded(value, scale, RoundingMode.CEILING);
     }

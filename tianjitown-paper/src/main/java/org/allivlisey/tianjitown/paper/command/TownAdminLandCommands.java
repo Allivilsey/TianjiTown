@@ -129,6 +129,7 @@ public final class TownAdminLandCommands {
             if (view.preview() != null) {
                 Player player = (Player) sender;
                 long price = ExpansionPricing.price(runtime.economySettings().expansionCost(),
+                        view.units().size() - 1,
                         runtime.settlement().scale()).minorUnits();
                 runtime.territoryPreviews().preview(player, view.preview().territory());
                 facade.send(player, "chat.admin.expand-price", Map.of("price", runtime.money(price)));

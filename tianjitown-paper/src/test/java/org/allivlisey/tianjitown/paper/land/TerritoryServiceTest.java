@@ -76,6 +76,16 @@ class TerritoryServiceTest {
                     new SitePolicy(null, null, null), messages,
                     EconomySettings.load(new MemoryConfiguration()), 2);
 
+            assertEquals(500_000, service.preview(mayorId, ExpansionDirection.EAST).priceMinor());
+            TerritoryService.ExpansionBatchPreview batch = service.batchPreview(mayorId, Set.of(
+                    new TerritoryService.GridSelection(1, 0),
+                    new TerritoryService.GridSelection(2, 0),
+                    new TerritoryService.GridSelection(2, 1)));
+            assertEquals(List.of(500_000L, 525_000L, 551_250L), batch.candidates().stream()
+                    .map(TerritoryService.ExpansionPreview::priceMinor).toList());
+            assertEquals(1_576_250, batch.totalPriceMinor());
+            assertEquals(500_000, service.map(mayorId).priceMinor());
+
             assertMessage("请至少选择一个领地单元",
                     () -> service.batchPreview(mayorId, Set.of()));
             Set<TerritoryService.GridSelection> oversized = IntStream.range(0, 25)

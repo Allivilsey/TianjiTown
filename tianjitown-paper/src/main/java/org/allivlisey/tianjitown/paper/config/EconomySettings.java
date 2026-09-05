@@ -58,7 +58,7 @@ public record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, St
                 messageResolver);
         int maximumTaxBps = 2500;
         BigDecimal expansionCost = ConfigurationValues.decimalText(config,
-                "economy.expansion.fixed-cost", "3000.00", messageResolver);
+                "economy.expansion.base-cost", "5000.00", messageResolver);
         BigDecimal weeklySubsidyLimit = ConfigurationValues.decimalText(config,
                 "economy.tax.subsidy.weekly-limit", "50000.00", messageResolver);
         BigDecimal twelveHourSubsidyLimit = ConfigurationValues.decimalText(config,
@@ -77,7 +77,7 @@ public record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, St
         if (expansionCost.signum() <= 0) {
             throw new IllegalArgumentException(resolveMessage(messageResolver,
                     EXPANSION_COST_POSITIVE,
-                    Map.of("path", "economy.expansion.fixed-cost")));
+                    Map.of("path", "economy.expansion.base-cost")));
         }
         if (weeklySubsidyLimit.signum() < 0) {
             throw new IllegalArgumentException(resolveMessage(messageResolver,
@@ -100,6 +100,8 @@ public record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, St
                         EXPANSION_COST_OVERFLOW, Map.of()));
             }
             MoneyAmount.rounded(expansionCost, scale, RoundingMode.CEILING);
+            org.allivlisey.tianjitown.core.land.ExpansionPricing.batchPriceMinor(
+                    expansionCost, 0, maximumUnits - 1, scale);
             MoneyAmount.rounded(weeklySubsidyLimit, scale, RoundingMode.FLOOR);
             MoneyAmount.rounded(twelveHourSubsidyLimit, scale, RoundingMode.FLOOR);
         } catch (ArithmeticException exception) {

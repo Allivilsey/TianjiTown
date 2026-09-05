@@ -87,6 +87,7 @@ validation:
     focus-missing: '领地中心不在预览区域中'
   # TerritoryService 扩张校验消息；批量选择失败、身份校验和批量请求状态不含动态占位符
   territory:
+    price-changed: '&e扩张价格已变化，请重新查看价格后确认'
     batch-selection-required: '请至少选择一个领地单元'
     batch-capacity-exceeded: '批量扩张后超过领地单元上限'
     batch-grid-out-of-bounds: '选中的领地单元超出 5×5 扩张网格'
@@ -409,7 +410,7 @@ chat:
     help-buff-title: '&6公共 Buff 管理'
     help-buff-list: '&e/townadmin buff list <小镇全名>'
     help-buff-grant: '&e/townadmin buff grant <小镇全名> <buffKey> <原因>'
-    help-buff-note: '&7公共 Buff 购买后不接受退款；管理员代购默认持续一小时'
+    help-buff-note: '&7公共 Buff 购买后不接受退款；管理员代购默认持续一周'
     help-town-title: '&6小镇管理'
     help-town-list: '&e/townadmin town list &7列出所有小镇（含已归档）'
     town-list-title: '&6小镇列表 &7共 {count} 个（含已归档）'
@@ -589,7 +590,6 @@ diagnostic:
   lifecycle:
     startup-checking: '正在执行启动门禁'
     admin-command-missing: 'plugin.yml 缺少 townadmin'
-    config-schema-gate-failed: '配置 schema 门禁未通过'
     configuration-validation-passed: 'OK 配置类型、范围与世界引用校验通过'
     configuration-validation-failed: 'FAIL 配置校验: {detail}'
     business-config-gate-failed: '业务配置门禁未通过'
@@ -605,8 +605,6 @@ diagnostic:
     startup-diagnostic-passed: 'OK 启动统一诊断通过'
     startup-diagnostic-failed: 'FAIL 启动统一诊断: {detail}'
     startup-diagnostic-gate-failed: '启动统一诊断未通过，插件初始化已停止'
-    config-schema-too-new: 'FAIL config schema={schema} 高于本插件支持的 {supported}，拒绝降级读取'
-    config-schema-upgrade-required: 'FAIL config schema={schema} 不能直接安全升级到 {supported}；请先按对应版本升级手册处理'
     runtime-activation-failure: 'FAIL 业务运行时激活异常: {detail}'
     runtime-gate-failed: '业务运行时门禁未通过'
     runtime-initialization-failure: 'FAIL 业务配置、WorldBorder、玩家界面或清算账户: {detail}'
@@ -1597,6 +1595,11 @@ dialog:
     labels:
       speed: '速度'
       health: '生命'
+      night_vision: '夜视'
+      water_breathing: '水下呼吸'
+      safe_fall: '安全落地'
+      mining: '矿工'
+      fire_resistance: '防火'
     shop-title: '&6公共 Buff 商店'
     shop-summary-title: '&d小镇公共 Buff'
     shop-enabled-hint: '&7使用公共资金购买，效果作用于全体成员'
@@ -1605,7 +1608,7 @@ dialog:
     effect: '&7效果: {effect}'
     inactive: '&7当前未生效'
     active: '&a当前强度 {level}，到期 {expires}'
-    price-hint: '&7下一步会显示最终价格'
+    price-hint: '&71/2/3/4 周分别原价/九五折/9折/八五折；下一步显示总价'
     duration-label: '&6持续时间'
     duration-format: '&f%s: %s 周'
     intensity-label: '&6强度'
@@ -1622,6 +1625,11 @@ dialog:
     success-message: "&f已购买 {name}\n等级: {level}\n到期: {expires}\n公共余额: {balance}"
     health-effect: '&7每级最大生命值 +4（2 颗心）'
     speed-effect: '&7每级移动速度 +20%'
+    night_vision-effect: '&7黑暗中保持清晰视野，仅 I 级'
+    water_breathing-effect: '&7水下呼吸，仅 I 级'
+    safe_fall-effect: '&7每级安全坠落距离 +2 格，最高 III 级'
+    mining-effect: '&7每级方块破坏速度属性 +10%，最高 III 级'
+    fire_resistance-effect: '&7免受火焰与熔岩伤害，仅 I 级'
     generic-effect: '&7每级 {effect} {amount}'
 
   # 规则确认和规则查看

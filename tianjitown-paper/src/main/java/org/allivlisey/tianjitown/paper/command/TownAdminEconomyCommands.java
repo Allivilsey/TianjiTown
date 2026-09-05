@@ -118,7 +118,7 @@ public final class TownAdminEconomyCommands {
                                         runtime.buffs().settings().label(
                                                 request.definition().key()),
                                         runtime.settlement().scale(),
-                                        BuffDurationOption.ONE_HOUR,
+                                        BuffDurationOption.ONE_WEEK,
                         "admin-buff-purchase:" + UUID.randomUUID(),
                         java.time.Instant.now(), request.reason()),
                         purchase -> {

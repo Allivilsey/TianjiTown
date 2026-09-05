@@ -20,6 +20,32 @@ class BuffSettingsTest {
     Path temporaryDirectory;
 
     @Test
+    void defaultCatalogHasWeeklyBudgetPricesAndMeaningfulLevelCaps() throws Exception {
+        try (var reader = new java.io.InputStreamReader(
+                java.util.Objects.requireNonNull(getClass().getResourceAsStream("/config.yml")),
+                java.nio.charset.StandardCharsets.UTF_8)) {
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(reader);
+            BuffSettings settings = BuffSettings.load(config, messages());
+            assertFalse(config.contains("schema-version"));
+            assertEquals(7, settings.buffs().size());
+            String[] keys = {"speed", "health", "night_vision", "water_breathing",
+                    "safe_fall", "mining", "fire_resistance"};
+            long[] weeklyPrices = {6720, 10080, 2688, 4032, 4032, 6720, 8064};
+            int[] caps = {5, 5, 1, 1, 3, 3, 1};
+            for (int index = 0; index < keys.length; index++) {
+                BuffDefinition buff = settings.requireBuff(keys[index]);
+                assertEquals(weeklyPrices[index] * 100,
+                        org.allivlisey.tianjitown.core.consumption.BuffPricing
+                                .weeklyPrice(buff, 1, 1, 2).minorUnits());
+                assertEquals(caps[index], buff.maximumLevel());
+                assertFalse(buff.displayName().startsWith("dialog."));
+            }
+            assertEquals("minecraft:safe_fall_distance", settings.requireBuff("safe_fall").effectKey());
+            assertEquals("minecraft:block_break_speed", settings.requireBuff("mining").effectKey());
+        }
+    }
+
+    @Test
     void loadsConfiguredBuffCatalog() throws Exception {
         YamlConfiguration config = configuration("speed", "100.00", "LEVEL_UP");
         PluginMessages messages = messages();

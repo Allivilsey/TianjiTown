@@ -117,6 +117,13 @@ final class TownExpansionRuntime {
                            String requestId,
                            Consumer<EconomyRepository.ExpansionBatchOperation> success,
                            Consumer<RuntimeException> failure) {
+        expandBatchAction(mayor, selections, requestId, -1, success, failure);
+    }
+
+    void expandBatchAction(Player mayor, Set<TerritoryService.GridSelection> selections,
+                           String requestId, long expectedPriceMinor,
+                           Consumer<EconomyRepository.ExpansionBatchOperation> success,
+                           Consumer<RuntimeException> failure) {
         if (!consumptionEnabled.getAsBoolean()) {
             failure.accept(new IllegalStateException(
                     plugin.messages().plainText(CONSUMPTION_PAUSED)));
@@ -124,6 +131,11 @@ final class TownExpansionRuntime {
         }
         tasks.readAction(mayor, () -> territories.batchPreview(mayor.getUniqueId(), selections),
                 preview -> {
+                    if (expectedPriceMinor >= 0 && expectedPriceMinor != preview.totalPriceMinor()) {
+                        failure.accept(new IllegalArgumentException(plugin.messages().plainText(
+                                "validation.territory.price-changed")));
+                        return;
+                    }
                     for (TerritoryService.ExpansionPreview candidate : preview.candidates()) {
                         SitePolicy.Validation validation = territories.validate(candidate);
                         if (!validation.valid()) {
@@ -152,7 +164,8 @@ final class TownExpansionRuntime {
                                             new EconomyRepository.ExpansionBatchRequest(
                                                     preview.account().townId(), items,
                                                     preview.totalPriceMinor(), mayor.getUniqueId(),
-                                                    mayor.getName(), key));
+                                                    mayor.getName(), key,
+                                                    preview.totalUnits() - items.size()));
                             if (batch.status().equals("COMPLETED")) {
                                 plugin.runMain(() -> success.accept(batch));
                                 return;
@@ -194,7 +207,7 @@ final class TownExpansionRuntime {
                             new EconomyRepository.ExpansionRequest(preview.account().townId(),
                                     preview.candidate(), preview.residenceName(), preview.areaName(),
                                     preview.priceMinor(), mayor.getUniqueId(), mayor.getName(),
-                                    "expansion:" + UUID.randomUUID()));
+                                    "expansion:" + UUID.randomUUID(), preview.totalUnits() - 1));
                     plugin.runMain(
                             () -> projectExpansion(mayor, operation, success, failure));
                 } catch (RuntimeException exception) {

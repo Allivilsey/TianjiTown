@@ -331,7 +331,13 @@ public final class EconomyRepository {
 
     public record ExpansionRequest(UUID townId, TerritoryUnit unit, String residenceName,
                                    String residenceAreaName, long priceMinor, UUID actorId,
-                                   String actorName, String businessKey) {
+                                   String actorName, String businessKey, int expectedUnitCount) {
+        public ExpansionRequest(UUID townId, TerritoryUnit unit, String residenceName,
+                                String residenceAreaName, long priceMinor, UUID actorId,
+                                String actorName, String businessKey) {
+            this(townId, unit, residenceName, residenceAreaName, priceMinor, actorId,
+                    actorName, businessKey, -1);
+        }
     }
 
     public record ExpansionBatchItem(TerritoryUnit unit, String residenceName,
@@ -340,7 +346,12 @@ public final class EconomyRepository {
 
     public record ExpansionBatchRequest(UUID townId, List<ExpansionBatchItem> items,
                                         long totalPriceMinor, UUID actorId, String actorName,
-                                        String businessKey) {
+                                        String businessKey, int expectedUnitCount) {
+        public ExpansionBatchRequest(UUID townId, List<ExpansionBatchItem> items,
+                                     long totalPriceMinor, UUID actorId, String actorName,
+                                     String businessKey) {
+            this(townId, items, totalPriceMinor, actorId, actorName, businessKey, -1);
+        }
         public ExpansionBatchRequest {
             items = items == null ? List.of() : List.copyOf(items);
         }

@@ -105,7 +105,7 @@ class EconomyRepositorySqliteTest {
                             "expansion:invalid-grid")));
             EconomyRepository.ExpansionRequest expansion = new EconomyRepository.ExpansionRequest(
                     townId, east, "SKY", "unit_p1_p0", 200, mayorId, "Mayor",
-                    "expansion:test:1");
+                    "expansion:test:1", 1);
             assertThrows(EconomyRepository.ConflictException.class,
                     () -> repository.prepareExpansion(expansion));
 
@@ -114,6 +114,13 @@ class EconomyRepositorySqliteTest {
             EconomyRepository.ExpansionOperation prepared = repository.prepareExpansion(expansion);
             assertEquals(prepared.expansionId(), repository.prepareExpansion(expansion).expansionId());
             assertEquals(1_800, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
+            TerritoryUnit staleNorth = TerritoryRules.target(List.of(origin), 0, -1);
+            assertThrows(EconomyRepository.ConflictException.class,
+                    () -> repository.prepareExpansion(new EconomyRepository.ExpansionRequest(
+                            townId, staleNorth, "SKY", "unit_p0_m1", 200, mayorId, "Mayor",
+                            "expansion:stale", 1)));
+            assertEquals(1_800, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
+            assertEquals(2, repository.territoryUnits(townId).size());
             repository.refundExpansion(prepared.expansionId(), "Residence 测试失败");
             assertEquals(2_000, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
             assertEquals(1, repository.territoryUnits(townId).size());
@@ -261,7 +268,7 @@ class EconomyRepositorySqliteTest {
                     new EconomyRepository.ExpansionBatchItem(northEast, "SKY", "unit_p1_p1", 200));
             EconomyRepository.ExpansionBatchRequest request =
                     new EconomyRepository.ExpansionBatchRequest(townId, items, 400, mayorId,
-                            "Mayor", "batch:rollback");
+                            "Mayor", "batch:rollback", 1);
 
             EconomyRepository.ExpansionBatchOperation prepared =
                     repository.prepareExpansionBatch(request);
@@ -269,6 +276,13 @@ class EconomyRepositorySqliteTest {
             assertEquals(prepared.batchId(), repository.prepareExpansionBatch(request).batchId());
             assertEquals(600, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
             assertEquals(3, repository.territoryUnits(townId).size());
+            TerritoryUnit staleNorth = TerritoryRules.target(List.of(origin), 0, -1);
+            assertThrows(EconomyRepository.ConflictException.class,
+                    () -> repository.prepareExpansionBatch(new EconomyRepository.ExpansionBatchRequest(
+                            townId, List.of(new EconomyRepository.ExpansionBatchItem(
+                                    staleNorth, "SKY", "unit_p0_m1", 200)),
+                            200, mayorId, "Mayor", "batch:stale", 1)));
+            assertEquals(600, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
             repository.refundExpansionBatch(prepared.batchId(), "Residence 批量测试失败");
             repository.refundExpansionBatch(prepared.batchId(), "重复退款不应重复入账");
             assertEquals(1_000, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
@@ -539,39 +553,6 @@ class EconomyRepositorySqliteTest {
             var retry = repository.reserveQuickShopSubsidy(town, "retry-period", 100, 1000, 300,
                     Instant.parse(cases[1][0]), ZoneId.of("UTC"));
             assertEquals(original, retry);
-        }
-    }
-
-    @Test
-    void migratesLegacyQuotaByCreationTimeWithoutRepayingOrChangingAmounts() throws Exception {
-        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("upgrade.db");
-        UUID town = UUID.randomUUID();
-        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url, Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
-            org.flywaydb.core.Flyway.configure().dataSource(gate.dataSource())
-                    .locations("classpath:db/migration").target("1.1").load().migrate();
-            insertTown(gate, town, UUID.randomUUID(), UUID.randomUUID());
-            try (Connection connection = gate.dataSource().getConnection();
-                 PreparedStatement statement = connection.prepareStatement("INSERT INTO quickshop_subsidy_reservations (reservation_id,town_id,business_key,requested_minor,granted_minor,period_12h_start,week_start,status,created_at) VALUES (?,?,?,?,?,0,0,?,?)")) {
-                int index = 0;
-                for (String status : List.of("APPLIED", "RESERVED", "CANCELLED")) {
-                    statement.setBytes(1, uuid(UUID.randomUUID())); statement.setBytes(2, uuid(town));
-                    statement.setString(3, "legacy-" + index++); statement.setLong(4, 100); statement.setLong(5, 100);
-                    statement.setString(6, status);
-                    statement.setLong(7, Instant.parse("2026-09-06T19:59:59Z").toEpochMilli());
-                    statement.executeUpdate();
-                }
-            }
-            assertTrue(gate.verifyAndMigrate().healthy());
-            EconomyRepository repository = new EconomyRepository(gate.dataSource(), () -> false);
-            var quota = repository.quickShopSubsidyQuota(town, 1000, 300,
-                    Instant.parse("2026-09-06T19:59:59Z"), ZoneId.of("UTC"));
-            assertEquals(800, quota.weeklyRemainingMinor()); assertEquals(100, quota.twelveHourRemainingMinor());
-            var paid = repository.reserveQuickShopSubsidy(town, "legacy-0", 100, 1000, 300,
-                    Instant.parse("2026-09-07T00:00:00Z"), ZoneId.of("UTC"));
-            assertEquals("APPLIED", paid.status()); assertEquals(100, paid.grantedMinor());
-            assertTrue(gate.verifyAndMigrate().healthy());
-            assertEquals(paid, repository.reserveQuickShopSubsidy(town, "legacy-0", 100, 1000, 300,
-                    Instant.parse("2026-09-08T00:00:00Z"), ZoneId.of("UTC")));
         }
     }
 

@@ -13,6 +13,7 @@ import io.papermc.paper.registry.data.dialog.DialogBase;
 import io.papermc.paper.registry.data.dialog.body.DialogBody;
 import net.kyori.adventure.text.Component;
 import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.land.ExpansionPricing;
 import org.allivlisey.tianjitown.core.land.TerritoryCellState;
 import org.allivlisey.tianjitown.core.town.TownStatus;
 import org.allivlisey.tianjitown.storage.town.TownSnapshot;
@@ -68,7 +69,7 @@ public final class TownTerritoryUi {
                 case "EXPANSION_MENU" -> openExpansionMenu(player);
                 case "TOGGLE_EXPANSION" -> toggleExpansionSelection(player, target);
                 case "CLEAR_EXPANSION_SELECTION" -> clearExpansionSelection(player);
-                case "CONFIRM_EXPANSION_BATCH" -> confirmExpansionBatch(player);
+                case "CONFIRM_EXPANSION_BATCH" -> confirmExpansionBatch(player, Long.parseLong(target));
                 case "PREVIEW_EXPANSION" -> previewExpansion(player, target);
                 case "EXPAND" -> expand(player, target);
                 case "PREVIEW_TOWN" -> previewTown(player, target);
@@ -93,8 +94,7 @@ public final class TownTerritoryUi {
             if (selected.isEmpty()) {
                 expansionBatchRequestIds.remove(player.getUniqueId());
             }
-            long total = map.priceMinor() <= 0 ? 0
-                    : Math.multiplyExact(map.priceMinor(), selected.size());
+            long total = selectionPrice(map, selected.size());
             String price = map.priceMinor() > 0
                     ? facade.runtime().money(map.priceMinor())
                     : presentation.dialogText("territory.limit-reached");
@@ -125,14 +125,14 @@ public final class TownTerritoryUi {
         Set<TerritoryService.GridSelection> selected = expansionSelections.getOrDefault(player.getUniqueId(), Set.of());
         facade.runtime().loadTerritoryMap(player, map -> {
             List<TownUiPresentation.MenuItem> items = new ArrayList<>();
-            long total = map.priceMinor() <= 0 ? 0 : Math.multiplyExact(map.priceMinor(), selected.size());
+            long total = selectionPrice(map, selected.size());
             items.add(new TownUiPresentation.MenuItem(0, presentation.button(Material.PAPER,
                     presentation.dialogText("territory.batch-summary", Map.of("count", selected.size(),
                             "price", facade.runtime().money(total), "units", map.currentUnits() + selected.size(),
                             "maximum", map.maximumUnits())), List.of(), null, null)));
             if (!selected.isEmpty()) {
                 items.add(new TownUiPresentation.MenuItem(1, presentation.button(Material.LIME_CONCRETE,
-                        presentation.dialogText("territory.batch-confirm"), List.of(), "CONFIRM_EXPANSION_BATCH", null)));
+                        presentation.dialogText("territory.batch-confirm"), List.of(), "CONFIRM_EXPANSION_BATCH", Long.toString(total))));
                 items.add(new TownUiPresentation.MenuItem(2, presentation.button(Material.BARRIER,
                         presentation.dialogText("territory.batch-clear"), List.of(), "CLEAR_EXPANSION_SELECTION", null)));
             }
@@ -165,7 +165,16 @@ public final class TownTerritoryUi {
         openExpansionMenu(player);
     }
 
+    private long selectionPrice(TerritoryService.TerritoryMap map, int count) {
+        return ExpansionPricing.batchPriceMinor(facade.runtime().economySettings().expansionCost(),
+                map.currentUnits() - 1, count, facade.runtime().settlement().scale());
+    }
+
     public void confirmExpansionBatch(Player player) {
+        openSelectionActions(player);
+    }
+
+    private void confirmExpansionBatch(Player player, long expectedPriceMinor) {
         Set<TerritoryService.GridSelection> selected = expansionSelections.get(player.getUniqueId());
         if (selected == null || selected.isEmpty()) {
             openExpansionMenu(player);
@@ -175,7 +184,7 @@ public final class TownTerritoryUi {
         UUID requestId = expansionBatchRequestIds.computeIfAbsent(player.getUniqueId(),
                 ignored -> UUID.randomUUID());
         facade.closeUi(player);
-        facade.runtime().expandBatchAction(player, snapshot, requestId.toString(), ignored -> {
+        facade.runtime().expandBatchAction(player, snapshot, requestId.toString(), expectedPriceMinor, ignored -> {
             if (Objects.equals(expansionBatchRequestIds.get(player.getUniqueId()), requestId)) {
                 clear(player.getUniqueId());
             }

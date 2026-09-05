@@ -56,7 +56,6 @@ public final class MessageContract {
         required(entries, List.of(
                 "diagnostic.lifecycle.startup-checking",
                 "diagnostic.lifecycle.admin-command-missing",
-                "diagnostic.lifecycle.config-schema-gate-failed",
                 "diagnostic.lifecycle.configuration-validation-passed",
                 "diagnostic.lifecycle.configuration-validation-failed",
                 "diagnostic.lifecycle.business-config-gate-failed",
@@ -72,8 +71,6 @@ public final class MessageContract {
                 "diagnostic.lifecycle.startup-diagnostic-passed",
                 "diagnostic.lifecycle.startup-diagnostic-failed",
                 "diagnostic.lifecycle.startup-diagnostic-gate-failed",
-                "diagnostic.lifecycle.config-schema-too-new",
-                "diagnostic.lifecycle.config-schema-upgrade-required",
                 "diagnostic.lifecycle.runtime-activation-failure",
                 "diagnostic.lifecycle.runtime-gate-failed",
                 "diagnostic.lifecycle.runtime-initialization-failure",

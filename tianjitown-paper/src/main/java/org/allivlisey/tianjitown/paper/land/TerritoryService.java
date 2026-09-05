@@ -123,7 +123,8 @@ public final class TerritoryService {
                 throw new IllegalArgumentException(messages.plainText(BATCH_NOT_CONNECTED));
             }
         }
-        long totalPrice = Math.multiplyExact(price(), candidates.size());
+        long totalPrice = candidates.stream().mapToLong(ExpansionPreview::priceMinor)
+                .reduce(0L, Math::addExact);
         return new ExpansionBatchPreview(context.account(), candidates, totalPrice,
                 context.units().size() + candidates.size());
     }
@@ -191,7 +192,8 @@ public final class TerritoryService {
                 }
             }
         }
-        long nextPrice = context.units().size() < settings.maximumUnits() ? price() : 0;
+        long nextPrice = context.units().size() < settings.maximumUnits()
+                ? price(context.units().size() - 1) : 0;
         return new TerritoryMap(cells, context.units().size(), settings.maximumUnits(),
                 nextPrice);
     }
@@ -242,12 +244,13 @@ public final class TerritoryService {
         String areaName = "unit_" + coordinate(candidate.gridX()) + "_"
                 + coordinate(candidate.gridZ());
         return new ExpansionPreview(context.account(), candidate,
-                context.origin().residenceName(), areaName, price(),
+                context.origin().residenceName(), areaName, price(totalUnits - 2),
                 totalUnits);
     }
 
-    private long price() {
-        return ExpansionPricing.price(settings.expansionCost(), moneyScale).minorUnits();
+    private long price(int completedExpansions) {
+        return ExpansionPricing.price(settings.expansionCost(), completedExpansions,
+                moneyScale).minorUnits();
     }
 
     private String cellDetail(List<TerritoryUnit> units, int gridX, int gridZ) {

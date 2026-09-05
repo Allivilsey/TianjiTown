@@ -447,7 +447,14 @@ public final class TownRuntime {
     }
 
     public void expandBatchAction(Player mayor, Set<TerritoryService.GridSelection> selections,
-                           String requestId,
+                                 String requestId, long expectedPriceMinor,
+                                 Consumer<EconomyRepository.ExpansionBatchOperation> success,
+                                 Consumer<RuntimeException> failure) {
+        expansions.expandBatchAction(mayor, selections, requestId, expectedPriceMinor, success, failure);
+    }
+
+    public void expandBatchAction(Player mayor, Set<TerritoryService.GridSelection> selections,
+                                 String requestId,
                            Consumer<EconomyRepository.ExpansionBatchOperation> success,
                            Consumer<RuntimeException> failure) {
         expansions.expandBatchAction(mayor, selections, requestId, success, failure);

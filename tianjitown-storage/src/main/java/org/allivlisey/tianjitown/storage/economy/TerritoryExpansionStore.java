@@ -91,6 +91,10 @@ final class TerritoryExpansionStore {
                 throw new ConflictException("小镇余额不足");
             }
             List<TerritoryUnitSnapshot> snapshots = listTerritoryUnits(connection, request.townId());
+            if (request.expectedUnitCount() >= 0
+                    && request.expectedUnitCount() != snapshots.size()) {
+                throw new ConflictException("领地数量已变化，请刷新扩张报价后重试");
+            }
             List<TerritoryUnit> units = snapshots.stream().map(TerritoryUnitSnapshot::unit).toList();
             TerritoryUnit origin = units.stream()
                     .filter(unit -> unit.gridX() == 0 && unit.gridZ() == 0)

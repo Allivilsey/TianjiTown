@@ -49,6 +49,10 @@ final class TerritoryExpansionBatchStore {
             }
             List<TerritoryUnitSnapshot> snapshots = listTerritoryUnits(connection,
                     request.townId());
+            if (request.expectedUnitCount() >= 0
+                    && request.expectedUnitCount() != snapshots.size()) {
+                throw new ConflictException("领地数量已变化，请刷新扩张报价后重试");
+            }
             List<TerritoryUnit> units = new ArrayList<>(snapshots.stream()
                     .map(TerritoryUnitSnapshot::unit).toList());
             if (units.size() + request.items().size() > TerritoryRules.MAXIMUM_UNITS) {

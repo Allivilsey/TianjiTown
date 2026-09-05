@@ -100,9 +100,11 @@ public final class TownFinanceDialogs {
                                 ? presentation.dialogText("tooltip.finance.buff-active")
                                 : presentation.dialogText("tooltip.finance.buff-paused")),
                 "BUFF_SHOP", null)));
-        if (account.role().equals("MAYOR") && runtime.consumptionEnabled()) {
+        if (account.role().equals("MAYOR") && runtime.consumptionEnabled()
+                && account.unitCount() < runtime.economySettings().maximumUnits()) {
             long expansionPriceMinor = ExpansionPricing.price(
-                    runtime.economySettings().expansionCost(), runtime.settlement().scale())
+                    runtime.economySettings().expansionCost(), account.unitCount() - 1,
+                    runtime.settlement().scale())
                     .minorUnits();
             items.add(new MenuItem(16, presentation.button(Material.FILLED_MAP, presentation.dialogText("finance.expansion"),
                     List.of(presentation.dialogText("tooltip.finance.expansion", Map.of("price",

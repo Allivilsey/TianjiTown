@@ -45,12 +45,9 @@ final class TownStartupCoordinator {
         this.scheduler = new LifecycleTaskScheduler(plugin, this);
         this.registrar = new TownComponentRegistrar(plugin, this);
     }
-    static final int CONFIG_SCHEMA = 10;
     static final String BOOTSTRAP_GATE_DETAIL = "TT-PLUGIN-NOT-STARTED";
     static final String BOOTSTRAP_MESSAGES_NOT_LOADED = "TT-MESSAGES-NOT-LOADED";
     static final String STARTUP_CHECKING = "diagnostic.lifecycle.startup-checking";
-    static final String CONFIG_SCHEMA_GATE_FAILED =
-            "diagnostic.lifecycle.config-schema-gate-failed";
     static final String CONFIGURATION_VALIDATION_PASSED =
             "diagnostic.lifecycle.configuration-validation-passed";
     static final String CONFIGURATION_VALIDATION_FAILED =
@@ -81,10 +78,6 @@ final class TownStartupCoordinator {
             "diagnostic.lifecycle.startup-diagnostic-failed";
     static final String STARTUP_DIAGNOSTIC_GATE_FAILED =
             "diagnostic.lifecycle.startup-diagnostic-gate-failed";
-    static final String CONFIG_SCHEMA_TOO_NEW =
-            "diagnostic.lifecycle.config-schema-too-new";
-    static final String CONFIG_SCHEMA_UPGRADE_REQUIRED =
-            "diagnostic.lifecycle.config-schema-upgrade-required";
     static final String RUNTIME_ACTIVATION_FAILURE =
             "diagnostic.lifecycle.runtime-activation-failure";
     static final String RUNTIME_GATE_FAILED =
@@ -160,10 +153,6 @@ final class TownStartupCoordinator {
         new TownAdminCommand(plugin).register(commandLamp);
 
         List<String> synchronousChecks = new ArrayList<>();
-        if (!prepareConfigSchema(synchronousChecks)) {
-            lock(messages().plainText(CONFIG_SCHEMA_GATE_FAILED), synchronousChecks);
-            return;
-        }
         RuntimeConfigurationValidator.DatabaseSettings databaseSettings;
         try {
             databaseSettings = RuntimeConfigurationValidator.validate(plugin.getConfig(), messages());
@@ -341,22 +330,6 @@ final class TownStartupCoordinator {
                     Map.of("detail", safeText(safeMessage(exception)))));
             lock(messages().plainText(DATABASE_CONFIG_GATE_FAILED), details);
         }
-    }
-
-    private boolean prepareConfigSchema(List<String> details) {
-        int configured = plugin.getConfig().getInt("schema-version", -1);
-        if (configured == CONFIG_SCHEMA) {
-            details.add("OK config schema=" + CONFIG_SCHEMA);
-            return true;
-        }
-        if (configured > CONFIG_SCHEMA) {
-            details.add(messages().plainText(CONFIG_SCHEMA_TOO_NEW,
-                    Map.of("schema", configured, "supported", CONFIG_SCHEMA)));
-        } else {
-            details.add(messages().plainText(CONFIG_SCHEMA_UPGRADE_REQUIRED,
-                    Map.of("schema", configured, "supported", CONFIG_SCHEMA)));
-        }
-        return false;
     }
 
     private String resolveDatabaseUrl() {

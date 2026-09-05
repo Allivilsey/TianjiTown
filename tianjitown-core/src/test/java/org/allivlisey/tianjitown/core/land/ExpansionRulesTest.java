@@ -51,10 +51,22 @@ class ExpansionRulesTest {
     }
 
     @Test
-    void appliesFixedPriceWithEconomyPrecision() {
-        MoneyAmount price = ExpansionPricing.price(new BigDecimal("3000.001"), 2);
+    void appliesCompoundingPriceWithEconomyPrecision() {
+        MoneyAmount price = ExpansionPricing.price(new BigDecimal("5000.001"), 0, 2);
 
-        assertEquals(new BigDecimal("3000.01"), price.decimal());
+        assertEquals(new BigDecimal("5000.01"), price.decimal());
+        BigDecimal base = new BigDecimal("5000");
+        assertEquals(new BigDecimal("5000.00"), ExpansionPricing.price(base, 0, 2).decimal());
+        assertEquals(new BigDecimal("5250.00"), ExpansionPricing.price(base, 1, 2).decimal());
+        assertEquals(new BigDecimal("5512.50"), ExpansionPricing.price(base, 2, 2).decimal());
+        assertEquals(new BigDecimal("5788.13"), ExpansionPricing.price(base, 3, 2).decimal());
+        assertEquals(1_576_250, ExpansionPricing.batchPriceMinor(base, 0, 3, 2));
+        assertEquals(1_655_063, ExpansionPricing.batchPriceMinor(base, 1, 3, 2));
+        assertEquals(0, ExpansionPricing.batchPriceMinor(base, 24, 0, 2));
+        assertThrows(IllegalArgumentException.class,
+                () -> ExpansionPricing.batchPriceMinor(base, 23, 2, 2));
+        assertThrows(IllegalArgumentException.class, () -> ExpansionPricing.price(base, -1, 2));
+        assertThrows(IllegalArgumentException.class, () -> ExpansionPricing.price(base, 25, 2));
     }
 
     @Test

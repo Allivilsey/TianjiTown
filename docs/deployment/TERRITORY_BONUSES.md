@@ -1,14 +1,14 @@
 # 领地加成上线、验收与回滚
 
-当前数据库初始版本为 `1.0`，配置 schema 为 `10`。该基线面向首次正式部署，不提供旧开发数据库升级路径；部署时应使用新建 SQLite 数据库。
+开发阶段仅维护数据库初始结构，配置不设版本号。该基线面向首次正式部署，不提供旧开发数据库升级路径；部署时应使用新建 SQLite 数据库。
 
 ## 上线前
 
 1. 开启维护模式，停止新税收与新消费，完成补偿任务和开放投票检查，并导出未结束的历史资源订单供升级后核对。
 2. 在同一停服时间点备份 TianjiTown SQLite、配置/JAR、Residence、QuickShop H2、XConomy 数据，并记录 Vault 清算账户精确余额。
-3. 在隔离环境恢复生产副本，以 `1.3.0` 确认基线后替换为 `1.4.0`；不得直接在唯一生产副本上首次验证迁移。
+3. 使用当前 `1.0.0-SNAPSHOT` 构建、默认配置和可重建的开发数据库验证。
 4. 按地图和经济规模配置 `territory.building-refund`、`territory.beacon` 与 `operations`。返还黑名单默认包含红石类别和高获取难度方块。
-5. 启动后确认 `/townadmin status` 显示 config schema `10`、Flyway schema `7.0` 和 `READY`；插件会在初始化阶段自动执行统一诊断，未通过时不会进入 `READY`。
+5. 启动后确认 `/townadmin status` 显示 `READY`，数据库初始化及配置内容校验通过；插件会在初始化阶段自动执行统一诊断，未通过时不会进入 `READY`。
 6. 执行 `/townadmin diagnose 7`，保存诊断报告；SQLite 另按运维手册停服备份。
 
 ## 领地加成验收
@@ -36,9 +36,9 @@ QuickShop 查询最多读取 1000 条时报告标记 `INCOMPLETE`，不得误报
 ## 回滚
 
 1. 开启维护模式并关闭经济、Buff 与领地加成的新写入口，导出升级后审计、税收、历史资源订单、返还计数和领地变化清单。
-2. 停服并保留当前 `1.4.0` 全量副本。
-3. 同时恢复升级前的 TianjiTown SQLite、配置/JAR、Residence、QuickShop、XConomy 和清算账户状态；不能将 `1.3.0` JAR 指向 schema `5.0`。
+2. 停服并保留当前 `1.0.0-SNAPSHOT` 全量副本。
+3. 同时恢复升级前的 TianjiTown SQLite、配置/JAR、Residence、QuickShop、XConomy 和清算账户状态；不提供旧开发结构的升级兼容。
 4. 在隔离端口启动，执行上一版本的状态、领地和资金检查，并确认历史资源数据未变化；确认后才切回生产。
-5. 人工决定如何补录 `1.4.0` 运行期间发生的真实经济交易，不直接编辑 QuickShop 数据库或 Flyway history。
+5. 人工决定如何补录 `1.0.0-SNAPSHOT` 运行期间发生的真实经济交易，不直接编辑 QuickShop 数据库或 Flyway history。
 
 故障注入和最终验收矩阵见 [ALERTS_AND_FAULT_INJECTION.md](../operations/ALERTS_AND_FAULT_INJECTION.md)。

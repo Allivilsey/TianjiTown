@@ -1,6 +1,6 @@
 # TianjiTown
 
-天际服自用的单 Paper 服务器小镇系统。当前版本 `1.4.0` 包含申请、治理、统一收入税、完整公共账本、付费领地扩张、公共 Buff、每周建筑返还、领地信标和统一运维诊断。
+天际服自用的单 Paper 服务器小镇系统。当前开发版本 `1.0.0-SNAPSHOT` 包含申请、治理、统一收入税、完整公共账本、付费领地扩张、公共 Buff、每周建筑返还、领地信标和统一运维诊断。
 
 文档按职责分类，入口见 [`docs/README.md`](docs/README.md)；完整功能与玩法规则见 [`docs/FUNCTIONS_AND_GAMEPLAY.md`](docs/FUNCTIONS_AND_GAMEPLAY.md)。
 
@@ -12,7 +12,7 @@
 mvn -B clean verify
 ```
 
-唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.4.0.jar`。Paper API、Residence 与 Vault API 使用 `provided` scope，不会打入插件 JAR；WorldBorder 通过运行时公开能力接入，同样不会被打入。最终 JAR 仅合并项目模块和 Lamp；Lamp 命令库会重定位到插件内部包，无需单独安装。HikariCP、Flyway、SQLite JDBC 及其传递依赖由 Paper 根据 `plugin.yml` 的 `libraries` 下载并加载，版本取自 Maven 构建属性。
+唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.0.0-SNAPSHOT.jar`。Paper API、Residence 与 Vault API 使用 `provided` scope，不会打入插件 JAR；WorldBorder 通过运行时公开能力接入，同样不会被打入。最终 JAR 仅合并项目模块和 Lamp；Lamp 命令库会重定位到插件内部包，无需单独安装。HikariCP、Flyway、SQLite JDBC 及其传递依赖由 Paper 根据 `plugin.yml` 的 `libraries` 下载并加载，版本取自 Maven 构建属性。
 
 首次启动（或升级到尚未缓存的依赖版本）需要服务器能够访问 Paper 配置的 Maven Central 镜像；依赖缓存在服务端 `libraries` 目录。离线部署需预先准备对应依赖缓存，不要把这些依赖 JAR 放入 `plugins`。构建测试仍使用完整存储依赖，Shade 打包白名单仅包含项目模块和 Lamp；新增需要内嵌的依赖时应同步更新白名单。
 
@@ -132,7 +132,9 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 /townadmin buff grant <小镇全名> <buffKey> <原因>
 ```
 
-Buff 目录位于 `config.yml` 的 `buffs` 配置节。公共 Buff 不受世界限制，购买时可用滑块选择 1～4 周和 I～V 级；再次购买会按新选择覆盖同类生效项，且购买后不接受退款。默认“速度”每级提升 20%，“生命”每级增加 4 点生命值。效果、每小时价格和角色权限在启动时校验，修改后需要重启；`shop-enabled` 开关可通过 `reload` 热更新。
+Buff 目录位于 `config.yml` 的 `buffs` 配置节。公共 Buff 不受世界限制，购买时可用滑块选择 1～4 周和 I～V 级；再次购买会按新选择覆盖同类生效项，且购买后不接受退款。默认“速度”每级提升 20%，“生命”每级增加 4 点生命值。效果、每周基础价格和角色权限在启动时校验，修改后需要重启；`shop-enabled` 开关可通过 `reload` 热更新。
+
+周价、七种默认商品和递增扩张规则见 [定价说明](docs/deployment/PRICING.md)。
 
 ### 领地加成
 
@@ -144,7 +146,7 @@ Buff 目录位于 `config.yml` 的 `buffs` 配置节。公共 Buff 不受世界�
 
 Buff 在登录、重生、跨世界、成员关系变化和到期时重新计算，Attribute Modifier 使用稳定 namespaced key。退出时保留玩家效果，仅清理本服任务和缓存，允许 HuskSync 携带属性 Buff；数据库到期时间不变，其他子服允许暂时超期。安装 HuskSync 时，回服校正在其同步完成后执行；未安装时在登录后执行。跨服同步范围及验收见 [Buff 部署文档](docs/deployment/BUFFS_AND_RESOURCES.md)。
 
-申请选址和小镇领地预览按钮会传送至领地中心传送点，并显示持续刷新的火焰粒子边界；扩张预览只显示目标 5×5 区块边界，不会移动当前玩家。扩张页使用 25 个原版 Sprite 按钮展示完整 5×5 单元网格，玩家可直接选择与现有领地四方向相邻的格子；每次扩张固定支付 `3000.00` 公共资金。
+申请选址和小镇领地预览按钮会传送至领地中心传送点，并显示持续刷新的火焰粒子边界；扩张预览只显示目标 5×5 区块边界，不会移动当前玩家。扩张页使用 25 个原版 Sprite 按钮展示完整 5×5 单元网格，玩家可直接选择与现有领地四方向相邻的格子；首次扩张支付 `5000.00` 公共资金，此后每次价格增长 5%，批量扩张逐块累计。
 
 成员在自己小镇领地内放置未列入黑名单的普通建筑方块时，可能收到一个同种方块返还，操作栏会显示本周用量。有效小镇信标的原版效果会覆盖整个小镇领地；玩家无需额外领取。
 
