@@ -85,7 +85,7 @@ class TownAdminCommandDispatchTest {
                     "town", "天际 之城", "code", "sky",
                     "status", org.allivlisey.tianjitown.core.town.TownStatus.ARCHIVED));
         }
-        assertEquals(List.of("list"), lamp.autoCompleter().complete(actor, "townadmin town li"));
+        assertEquals(List.of("list"), lamp.autoCompleter().complete(actor, "tianjitown town li"));
     }
 
     @Test
@@ -126,27 +126,27 @@ class TownAdminCommandDispatchTest {
     @Test
     void lampCompletesRootAndNestedArguments() {
         when(sender.hasPermission(TownAdminPermissions.MONEY)).thenReturn(true);
-        assertEquals(List.of("money"), lamp.autoCompleter().complete(actor, "townadmin mo"));
-        assertEquals(List.of("reconcile"), lamp.autoCompleter().complete(actor, "townadmin money rec"));
+        assertEquals(List.of("money"), lamp.autoCompleter().complete(actor, "tianjitown mo"));
+        assertEquals(List.of("reconcile"), lamp.autoCompleter().complete(actor, "tianjitown money rec"));
         assertEquals(java.util.Set.of("reconcile", "view", "adjust"),
-                java.util.Set.copyOf(lamp.autoCompleter().complete(actor, "townadmin money ")));
+                java.util.Set.copyOf(lamp.autoCompleter().complete(actor, "tianjitown money ")));
         verifyNoInteractions(completer);
     }
 
     @Test
     void permissionFilteredCompletionsDoNotExposeOtherScopesOrSecretCommands() {
         when(sender.hasPermission(TownAdminPermissions.MONEY)).thenReturn(true);
-        assertEquals(Set.of("help", "money"), Set.copyOf(lamp.autoCompleter().complete(actor, "townadmin ")));
-        assertEquals(List.of(), lamp.autoCompleter().complete(actor, "townadmin tax "));
+        assertEquals(Set.of("help", "money"), Set.copyOf(lamp.autoCompleter().complete(actor, "tianjitown ")));
+        assertEquals(List.of(), lamp.autoCompleter().complete(actor, "tianjitown tax "));
         verifyNoInteractions(runtime);
     }
 
     @Test
     void consoleCannotExecuteOrCompletePlayerOnlyActions() {
         when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
-        assertEquals(List.of("list"), lamp.autoCompleter().complete(actor, "townadmin station "));
-        assertFalse(lamp.autoCompleter().complete(actor, "townadmin land ").contains("preview"));
-        assertFalse(lamp.autoCompleter().complete(actor, "townadmin expand ").contains("preview"));
+        assertEquals(List.of("list"), lamp.autoCompleter().complete(actor, "tianjitown station "));
+        assertFalse(lamp.autoCompleter().complete(actor, "tianjitown land ").contains("preview"));
+        assertFalse(lamp.autoCompleter().complete(actor, "tianjitown expand ").contains("preview"));
         execute("station", "create");
         verify(messages).send(sender, "chat.admin.lamp-player-only");
         verifyNoInteractions(runtime);
@@ -189,7 +189,7 @@ class TownAdminCommandDispatchTest {
             "money view", "reload extra", "money reconcile extra", "confirm token extra"})
     void rejectsInvalidInputBeforeAnyBusinessAction(String input) {
         when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
-        lamp.dispatch(actor, "townadmin " + input);
+        lamp.dispatch(actor, "tianjitown " + input);
         verify(messages).send(eq(sender), eq("chat.admin.argument-error"), anyMap());
         verifyNoInteractions(runtime);
         verify(plugin, never()).reloadConfig();
@@ -236,8 +236,8 @@ class TownAdminCommandDispatchTest {
                 .thenReturn(List.of("之城"));
         when(completer.complete(eq(sender), aryEq(new String[]{"money", "adjust", "天际", "之城", "10", ""})))
                 .thenReturn(List.of("<原因>"));
-        assertEquals(List.of("之城"), lamp.autoCompleter().complete(actor, "townadmin money view 天际 "));
-        assertEquals(List.of("<原因>"), lamp.autoCompleter().complete(actor, "townadmin money adjust 天际 之城 10 "));
+        assertEquals(List.of("之城"), lamp.autoCompleter().complete(actor, "tianjitown money view 天际 "));
+        assertEquals(List.of("<原因>"), lamp.autoCompleter().complete(actor, "tianjitown money adjust 天际 之城 10 "));
         verifyNoInteractions(runtime);
     }
 
@@ -245,11 +245,11 @@ class TownAdminCommandDispatchTest {
     void numericSuggestionsComeFromLampAnnotations() {
         when(sender.hasPermission(TownAdminPermissions.OPERATIONS)).thenReturn(true);
         assertEquals(Set.of("1", "7", "14", "30", "90", "180"),
-                Set.copyOf(lamp.autoCompleter().complete(actor, "townadmin diagnose ")));
+                Set.copyOf(lamp.autoCompleter().complete(actor, "tianjitown diagnose ")));
         verifyNoInteractions(completer);
     }
 
     private void execute(String... args) {
-        lamp.dispatch(actor, "townadmin" + (args.length == 0 ? "" : " " + String.join(" ", args)));
+        lamp.dispatch(actor, "tianjitown" + (args.length == 0 ? "" : " " + String.join(" ", args)));
     }
 }

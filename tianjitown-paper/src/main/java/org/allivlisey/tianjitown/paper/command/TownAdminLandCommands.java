@@ -30,8 +30,8 @@ public final class TownAdminLandCommands {
         this.plugin = plugin;
     }
 
-    @Command("townadmin land preview")
-    @Usage("/townadmin land preview <小镇全名>")
+    @Command("tianjitown land preview")
+    @Usage("/tianjitown land preview <小镇全名>")
     @AdminAccess(value = TownAdminPermissions.ROOT, playerOnly = true)
     public void previewLand(Player player, TownRuntime runtime, String input) {
         String townName = input.strip();
@@ -39,8 +39,8 @@ public final class TownAdminLandCommands {
                 town -> plugin.townUi().previewTownForAdmin(player, town));
     }
 
-    @Command("townadmin land reconcile")
-    @Usage("/townadmin land reconcile <小镇全名|all> [repair]")
+    @Command("tianjitown land reconcile")
+    @Usage("/tianjitown land reconcile <小镇全名|all> [repair]")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void reconcileLand(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {
@@ -56,8 +56,8 @@ public final class TownAdminLandCommands {
                 state.town(), state.members(), request.repair())));
     }
 
-    @Command("townadmin land rebuild")
-    @Usage("/townadmin land rebuild <小镇全名|all>")
+    @Command("tianjitown land rebuild")
+    @Usage("/tianjitown land rebuild <小镇全名|all>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void rebuildLandCommand(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {
@@ -80,15 +80,15 @@ public final class TownAdminLandCommands {
         });
     }
 
-    @Command("townadmin expand view")
-    @Usage("/townadmin expand view <小镇全名>")
+    @Command("tianjitown expand view")
+    @Usage("/tianjitown expand view <小镇全名>")
     @AdminAccess(TownAdminPermissions.EXPAND)
     public void viewExpansion(CommandSender sender, TownRuntime runtime, String input) {
         showExpansion(sender, runtime, input, false);
     }
 
-    @Command("townadmin expand preview")
-    @Usage("/townadmin expand preview <小镇全名> <north|east|south|west>")
+    @Command("tianjitown expand preview")
+    @Usage("/tianjitown expand preview <小镇全名> <north|east|south|west>")
     @AdminAccess(value = TownAdminPermissions.EXPAND, playerOnly = true)
     public void previewExpansion(Player player, TownRuntime runtime, String input) {
         showExpansion(player, runtime, input, true);

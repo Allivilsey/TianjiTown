@@ -84,7 +84,7 @@ Residence 领地中的成员权限由 TianjiTown 统一投影。所有成员都�
 - 默认还要与其他小镇或申请保留至少 1 个区块的缓冲；
 - 5×5 区块及其缓冲范围必须完整位于目标世界的 WorldBorder 边界内。
 
-WorldBorder 是运行时必需依赖；`plugin.yml` 以软依赖声明，使其缺失时 TianjiTown 仍能加载并通过 `/townadmin status` 报告 `LOCKED`。未启用、API 不兼容或目标世界未配置边界时，插件会锁定或安全拒绝选址。
+WorldBorder 是运行时必需依赖；`plugin.yml` 以软依赖声明，使其缺失时 TianjiTown 仍能加载并通过 `/tianjitown status` 报告 `LOCKED`。未启用、API 不兼容或目标世界未配置边界时，插件会锁定或安全拒绝选址。
 
 成功选址会产生默认 60 分钟的临时预留，并显示约 15 秒的三维火焰粒子边界。选址预览会将玩家传送到领地中心地表附近。预留过期、申请撤回或被拒绝后，占位会释放。
 
@@ -357,23 +357,23 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 
 ## 14. 管理功能与命令
 
-普通玩家不需要也不能使用以下命令。管理员可执行 `/townadmin help <分类>` 查看游戏内帮助，命令支持 Tab 补全；`<原因>` 等尖括号文本只是占位提示，必须替换为实际内容。
+普通玩家不需要也不能使用以下命令。管理员可执行 `/tianjitown help <分类>` 查看游戏内帮助，命令支持 Tab 补全；`<原因>` 等尖括号文本只是占位提示，必须替换为实际内容。
 
 ### 14.1 系统、服务台与审核
 
 ```text
-/townadmin status
-/townadmin reload
-/townadmin maintenance <on|off|status>
-/townadmin audit [1~200]
-/townadmin diagnose [1~180天]
+/tianjitown status
+/tianjitown reload
+/tianjitown maintenance <on|off|status>
+/tianjitown audit [1~200]
+/tianjitown diagnose [1~180天]
 
-/townadmin station create|remove|info
-/townadmin station list
-/townadmin handbook [player]
+/tianjitown station create|remove|info
+/tianjitown station list
+/tianjitown handbook [player]
 
-/townadmin application list
-/townadmin application approve|reject|change <小镇全名> <原因>
+/tianjitown application list
+/tianjitown application approve|reject|change <小镇全名> <原因>
 ```
 
 - `reload` 会热重读税收/消费开关、Buff 商店开关、建筑返还/信标开关以及 `messages.yml`；数据库位置、清算账户、金额精度和商品定义仍需重启。
@@ -384,21 +384,21 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 ### 14.2 小镇、成员、投票与领地
 
 ```text
-/townadmin town view <小镇全名>
-/townadmin town delete <小镇全名> <原因>
+/tianjitown town view <小镇全名>
+/tianjitown town delete <小镇全名> <原因>
 
-/townadmin member add|remove <小镇全名> <玩家> <原因>
-/townadmin member role <小镇全名> <玩家> <DEPUTY_MAYOR|MEMBER>
-/townadmin mayor transfer <小镇全名> <玩家> <原因>
+/tianjitown member add|remove <小镇全名> <玩家> <原因>
+/tianjitown member role <小镇全名> <玩家> <DEPUTY_MAYOR|MEMBER>
+/tianjitown mayor transfer <小镇全名> <玩家> <原因>
 
-/townadmin vote create-kick <小镇全名> <目标玩家>
-/townadmin vote create-mayor <小镇全名> <候选玩家>
-/townadmin vote settle <voteId>
-/townadmin vote cancel <voteId> <原因>
+/tianjitown vote create-kick <小镇全名> <目标玩家>
+/tianjitown vote create-mayor <小镇全名> <候选玩家>
+/tianjitown vote settle <voteId>
+/tianjitown vote cancel <voteId> <原因>
 
-/townadmin land preview <小镇全名>
-/townadmin land reconcile <小镇全名|all> [repair]
-/townadmin land rebuild <小镇全名|all>
+/tianjitown land preview <小镇全名>
+/tianjitown land reconcile <小镇全名|all> [repair]
+/tianjitown land rebuild <小镇全名|all>
 ```
 
 管理员成员添加、移除、角色调整、紧急镇长转移和投票创建属于运营代办入口，可以绕过部分正常玩家流程，但都会留下审计记录。`land reconcile` 默认只检查，显式填写 `repair` 才修改 Residence；`land rebuild` 需二次确认。
@@ -406,15 +406,15 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 ### 14.3 经济、扩张与 Buff
 
 ```text
-/townadmin money view <小镇全名>
-/townadmin money adjust <小镇全名> <带符号金额> <原因>
-/townadmin money reconcile
-/townadmin tax set <小镇全名> <百分比> <原因>
-/townadmin ledger view <小镇全名>
-/townadmin expand view|preview <小镇全名> [north|east|south|west]
+/tianjitown money view <小镇全名>
+/tianjitown money adjust <小镇全名> <带符号金额> <原因>
+/tianjitown money reconcile
+/tianjitown tax set <小镇全名> <百分比> <原因>
+/tianjitown ledger view <小镇全名>
+/tianjitown expand view|preview <小镇全名> [north|east|south|west]
 
-/townadmin buff list <小镇全名>
-/townadmin buff grant <小镇全名> <buffKey> <原因>
+/tianjitown buff list <小镇全名>
+/tianjitown buff grant <小镇全名> <buffKey> <原因>
 ```
 
 `ledger view` 在聊天中展示最新 45 条，玩家 Dialog 可继续翻页查看完整历史。管理员代购 Buff 会从目标小镇公共资金扣款，购买后不接受退款。
@@ -437,7 +437,7 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 
 插件启动时会检查配置 schema、SQLite/Flyway、Residence、Vault、XConomy、WorldBorder、QuickShop-Hikari、Jobs 和 GlobalMarketPlus。必需依赖缺失、未启用，WorldBorder API 不兼容，或 Vault 没有可用 Economy provider 时，写功能保持锁定。
 
-`/townadmin diagnose` 会汇总：
+`/tianjitown diagnose` 会汇总：
 
 - SQLite `quick_check`、外键违规、关键表计数和失败/待补偿操作；
 - 所有运行中小镇的 Residence 边界、区域和成员权限；

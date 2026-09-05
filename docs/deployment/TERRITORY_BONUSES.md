@@ -8,8 +8,8 @@
 2. 在同一停服时间点备份 TianjiTown SQLite、配置/JAR、Residence、QuickShop H2、XConomy 数据，并记录 Vault 清算账户精确余额。
 3. 使用当前 `1.0.0-SNAPSHOT` 构建、默认配置和可重建的开发数据库验证。
 4. 按地图和经济规模配置 `territory.building-refund`、`territory.beacon` 与 `operations`。返还黑名单默认包含红石类别和高获取难度方块。
-5. 启动后确认 `/townadmin status` 显示 `READY`，数据库初始化及配置内容校验通过；插件会在初始化阶段自动执行统一诊断，未通过时不会进入 `READY`。
-6. 执行 `/townadmin diagnose 7`，保存诊断报告；SQLite 另按运维手册停服备份。
+5. 启动后确认 `/tianjitown status` 显示 `READY`，数据库初始化及配置内容校验通过；插件会在初始化阶段自动执行统一诊断，未通过时不会进入 `READY`。
+6. 执行 `/tianjitown diagnose 7`，保存诊断报告；SQLite 另按运维手册停服备份。
 
 ## 领地加成验收
 
@@ -22,7 +22,7 @@
 
 ## 统一诊断验收
 
-`/townadmin diagnose [天数]` 必须同时给出：
+`/tianjitown diagnose [天数]` 必须同时给出：
 
 - SQLite `quick_check`、外键违规、关键对象计数、失败投影、锁定账户、待补偿操作和账户/末笔流水一致性；
 - 每个 ACTIVE 小镇的 Residence 边界、区域数量和成员权限；

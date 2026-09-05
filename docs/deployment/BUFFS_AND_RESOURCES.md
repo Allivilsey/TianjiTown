@@ -8,7 +8,7 @@
 1. 停服备份 TianjiTown SQLite、QuickShop H2、XConomy 数据及清算账户余额。
 2. 在隔离预发服恢复生产副本，再替换当前版本 JAR。
 3. 按实际经济规模调整 `config.yml` 的 `buffs.catalog`；修改目录后需要重启。
-4. 启动后执行 `/townadmin status` 和 `/townadmin money reconcile`，确认迁移完成且清算账户无短款。
+4. 启动后执行 `/tianjitown status` 和 `/tianjitown money reconcile`，确认迁移完成且清算账户无短款。
 
 ## Buff 验收
 
@@ -64,7 +64,7 @@ checksum 校验；直接删除历史表或流水类型会造成审计数据丢�
 
 ## 功能开关与回滚
 
-`buffs.shop-enabled` 可通过 `/townadmin reload` 热更新。关闭后只停止新购买，
+`buffs.shop-enabled` 可通过 `/tianjitown reload` 热更新。关闭后只停止新购买，
 已购买效果继续到期并正常清理。
 
 回滚前停止新的经济和 Buff 写入，完成清算对账并备份。旧版本可能重新包含资源订单

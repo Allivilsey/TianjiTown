@@ -29,8 +29,8 @@ public final class TownAdminGovernanceCommands {
         this.plugin = plugin;
     }
 
-    @Command("townadmin member add")
-    @Usage("/townadmin member add <小镇全名> <玩家> <原因>")
+    @Command("tianjitown member add")
+    @Usage("/tianjitown member add <小镇全名> <玩家> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void addMember(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> memberRequest(runtime, input), request -> {
@@ -51,8 +51,8 @@ public final class TownAdminGovernanceCommands {
         });
     }
 
-    @Command("townadmin member remove")
-    @Usage("/townadmin member remove <小镇全名> <玩家> <原因>")
+    @Command("tianjitown member remove")
+    @Usage("/tianjitown member remove <小镇全名> <玩家> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void removeMember(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> memberRequest(runtime, input), request -> {
@@ -73,8 +73,8 @@ public final class TownAdminGovernanceCommands {
         });
     }
 
-    @Command("townadmin member role")
-    @Usage("/townadmin member role <小镇全名> <玩家> <角色>")
+    @Command("tianjitown member role")
+    @Usage("/tianjitown member role <小镇全名> <玩家> <角色>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void roleMember(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> memberRequest(runtime, input), request -> {
@@ -99,8 +99,8 @@ public final class TownAdminGovernanceCommands {
         });
     }
 
-    @Command("townadmin vote settle")
-    @Usage("/townadmin vote settle <voteId>")
+    @Command("tianjitown vote settle")
+    @Usage("/tianjitown vote settle <voteId>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void settleVote(CommandSender sender, TownRuntime runtime, UUID voteId) {
         runtime.write(sender, () -> runtime.governance().settleVote(voteId,
@@ -113,8 +113,8 @@ public final class TownAdminGovernanceCommands {
         });
     }
 
-    @Command("townadmin vote cancel")
-    @Usage("/townadmin vote cancel <voteId> <原因>")
+    @Command("tianjitown vote cancel")
+    @Usage("/tianjitown vote cancel <voteId> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void cancelVote(CommandSender sender, TownRuntime runtime, UUID voteId, String inputReason) {
         String reason = TownCommandParser.reason(inputReason.split(" "), 0, plugin.messages()::plainText);
@@ -123,15 +123,15 @@ public final class TownAdminGovernanceCommands {
                 facade.send(sender, "chat.admin.vote-cancelled", Map.of("id", vote.id())));
     }
 
-    @Command("townadmin vote create-kick")
-    @Usage("/townadmin vote create-kick <小镇全名> <玩家>")
+    @Command("tianjitown vote create-kick")
+    @Usage("/tianjitown vote create-kick <小镇全名> <玩家>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void createKickVote(CommandSender sender, TownRuntime runtime, String input) {
         createVote(sender, runtime, input, VoteType.KICK_MEMBER);
     }
 
-    @Command("townadmin vote create-mayor")
-    @Usage("/townadmin vote create-mayor <小镇全名> <玩家>")
+    @Command("tianjitown vote create-mayor")
+    @Usage("/tianjitown vote create-mayor <小镇全名> <玩家>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void createMayorVote(CommandSender sender, TownRuntime runtime, String input) {
         createVote(sender, runtime, input, VoteType.REPLACE_MAYOR);
@@ -160,8 +160,8 @@ public final class TownAdminGovernanceCommands {
         });
     }
 
-    @Command("townadmin mayor transfer")
-    @Usage("/townadmin mayor transfer <小镇全名> <玩家> <原因>")
+    @Command("tianjitown mayor transfer")
+    @Usage("/tianjitown mayor transfer <小镇全名> <玩家> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void transferMayor(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> memberRequest(runtime, input), request -> {

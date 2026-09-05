@@ -25,16 +25,16 @@ public final class TownAdminApplicationCommands {
         this.plugin = plugin;
     }
 
-    @Command("townadmin application list")
-    @Usage("/townadmin application list")
+    @Command("tianjitown application list")
+    @Usage("/tianjitown application list")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void listApplications(CommandSender sender, TownRuntime runtime) {
         runtime.read(sender, () -> runtime.repository().listReviewQueue(100),
                 applications -> plugin.townUi().showAdminApplicationList(sender, applications));
     }
 
-    @Command("townadmin application approve")
-    @Usage("/townadmin application approve <小镇全名> <原因>")
+    @Command("tianjitown application approve")
+    @Usage("/tianjitown application approve <小镇全名> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void approveApplication(CommandSender sender, TownRuntime runtime, String input) {
         readApplication(sender, runtime, input, request -> {
@@ -51,8 +51,8 @@ public final class TownAdminApplicationCommands {
         });
     }
 
-    @Command("townadmin application reject")
-    @Usage("/townadmin application reject <小镇全名> <原因>")
+    @Command("tianjitown application reject")
+    @Usage("/tianjitown application reject <小镇全名> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void rejectApplication(CommandSender sender, TownRuntime runtime, String input) {
         readApplication(sender, runtime, input, request -> {
@@ -65,8 +65,8 @@ public final class TownAdminApplicationCommands {
         });
     }
 
-    @Command("townadmin application change")
-    @Usage("/townadmin application change <小镇全名> <原因>")
+    @Command("tianjitown application change")
+    @Usage("/tianjitown application change <小镇全名> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void changeApplication(CommandSender sender, TownRuntime runtime, String input) {
         readApplication(sender, runtime, input, request -> {
@@ -96,8 +96,8 @@ public final class TownAdminApplicationCommands {
         }, success);
     }
 
-    @Command("townadmin town list")
-    @Usage("/townadmin town list")
+    @Command("tianjitown town list")
+    @Usage("/tianjitown town list")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void listTowns(CommandSender sender, TownRuntime runtime) {
         runtime.read(sender, () -> runtime.repository().listTowns(true), towns -> {
@@ -115,8 +115,8 @@ public final class TownAdminApplicationCommands {
         });
     }
 
-    @Command("townadmin town view")
-    @Usage("/townadmin town view <小镇全名>")
+    @Command("tianjitown town view")
+    @Usage("/tianjitown town view <小镇全名>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void viewTown(CommandSender sender, TownRuntime runtime, String input) {
         String townName = input.strip();
@@ -136,8 +136,8 @@ public final class TownAdminApplicationCommands {
         });
     }
 
-    @Command("townadmin town delete")
-    @Usage("/townadmin town delete <小镇全名> <原因>")
+    @Command("tianjitown town delete")
+    @Usage("/tianjitown town delete <小镇全名> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void deleteTownCommand(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {

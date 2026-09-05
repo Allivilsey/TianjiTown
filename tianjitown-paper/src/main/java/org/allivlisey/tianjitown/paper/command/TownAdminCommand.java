@@ -62,22 +62,22 @@ public final class TownAdminCommand {
                 townAdminEconomyCommands, townAdminLandCommands);
     }
 
-    @Command("townadmin")
-    @Usage("/townadmin help")
+    @Command("tianjitown")
+    @Usage("/tianjitown help")
     @AdminAccess
     public void root(CommandSender sender) {
         help(sender, null);
     }
 
-    @Command("townadmin help")
-    @Usage("/townadmin help [分类]")
+    @Command("tianjitown help")
+    @Usage("/tianjitown help [分类]")
     @AdminAccess
     public void helpCommand(CommandSender sender, @Optional @Single String topic) {
         help(sender, topic);
     }
 
-    @Command("townadmin reload")
-    @Usage("/townadmin reload")
+    @Command("tianjitown reload")
+    @Usage("/tianjitown reload")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void reload(CommandSender sender) {
         plugin.reloadConfig();
@@ -85,8 +85,8 @@ public final class TownAdminCommand {
         send(sender, "chat.admin.reload");
     }
 
-    @Command("townadmin status")
-    @Usage("/townadmin status")
+    @Command("tianjitown status")
+    @Usage("/tianjitown status")
     @AdminAccess(TownAdminPermissions.OPERATIONS)
     public void status(CommandSender sender) {
         GateStatus status = plugin.gateStatus();
@@ -121,8 +121,8 @@ public final class TownAdminCommand {
                 maintenanceMode() ? "MAINTENANCE" : "OPEN"));
     }
 
-    @Command("townadmin diagnose")
-    @Usage("/townadmin diagnose [1~180天]")
+    @Command("tianjitown diagnose")
+    @Usage("/tianjitown diagnose [1~180天]")
     @AdminAccess(TownAdminPermissions.OPERATIONS)
     public void diagnose(CommandSender sender, TownRuntime runtime,
                          @Optional @Range(min = 1, max = 180) @Suggest({"1", "7", "14", "30", "90", "180"}) Integer days) {
@@ -130,19 +130,19 @@ public final class TownAdminCommand {
                 ? runtime.bonuses().settings().operations().quickShopDiagnosticDays() : days);
     }
 
-    @Command({"townadmin maintenance", "townadmin maintenance status"})
+    @Command({"tianjitown maintenance", "tianjitown maintenance status"})
     @AdminAccess(TownAdminPermissions.ROOT)
     public void maintenanceStatus(CommandSender sender) {
         sendMaintenanceStatus(sender);
     }
 
-    @Command({"townadmin maintenance on", "townadmin maintenance enable"})
+    @Command({"tianjitown maintenance on", "tianjitown maintenance enable"})
     @AdminAccess(TownAdminPermissions.ROOT)
     public void enableMaintenance(CommandSender sender) {
         setMaintenance(sender, true);
     }
 
-    @Command({"townadmin maintenance off", "townadmin maintenance disable"})
+    @Command({"tianjitown maintenance off", "tianjitown maintenance disable"})
     @AdminAccess(TownAdminPermissions.ROOT)
     public void disableMaintenance(CommandSender sender) {
         setMaintenance(sender, false);
@@ -168,8 +168,8 @@ public final class TownAdminCommand {
     }
 
     @revxrsal.commands.annotation.SecretCommand
-    @Command("townadmin confirm")
-    @Usage("/townadmin confirm <确认码>")
+    @Command("tianjitown confirm")
+    @Usage("/tianjitown confirm <确认码>")
     @AdminAccess
     public void confirm(CommandSender sender, @Single String token) {
         CommandConfirmationManager.Result result = confirmations.consume(ownerKey(sender), token);
@@ -194,8 +194,8 @@ public final class TownAdminCommand {
     }
 
     @revxrsal.commands.annotation.SecretCommand
-    @Command("townadmin cancel")
-    @Usage("/townadmin cancel <确认码>")
+    @Command("tianjitown cancel")
+    @Usage("/tianjitown cancel <确认码>")
     @AdminAccess
     public void cancel(CommandSender sender, @Single String token) {
         CommandConfirmationManager.Result result = confirmations.cancel(ownerKey(sender), token);
@@ -211,8 +211,8 @@ public final class TownAdminCommand {
     public void requestConfirmation(CommandSender sender, String description, Runnable action) {
         CommandConfirmationManager.Confirmation confirmation = confirmations.request(
                 ownerKey(sender), description, action);
-        String confirmCommand = "/townadmin confirm " + confirmation.token();
-        String cancelCommand = "/townadmin cancel " + confirmation.token();
+        String confirmCommand = "/tianjitown confirm " + confirmation.token();
+        String cancelCommand = "/tianjitown cancel " + confirmation.token();
         Component message = plugin.messages().component("chat.admin.confirmation-prompt", Map.of(
                         "description", description))
                 .append(plugin.messages().component("chat.buttons.confirm")
@@ -228,8 +228,8 @@ public final class TownAdminCommand {
         sender.sendMessage(message);
     }
 
-    @Command("townadmin audit")
-    @Usage("/townadmin audit [1~200]")
+    @Command("tianjitown audit")
+    @Usage("/tianjitown audit [1~200]")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void audit(CommandSender sender, TownRuntime runtime,
                       @Default("20") @Range(min = 1, max = 200) @Suggest({"10", "20", "50", "100", "200"}) int limit) {
@@ -244,36 +244,36 @@ public final class TownAdminCommand {
         });
     }
 
-    @Command("townadmin station")
-    @Usage("/townadmin station")
+    @Command("tianjitown station")
+    @Usage("/tianjitown station")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void station(CommandSender sender, TownRuntime runtime) {
         stationHelp(sender);
     }
 
-    @Command("townadmin station list")
-    @Usage("/townadmin station list")
+    @Command("tianjitown station list")
+    @Usage("/tianjitown station list")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void listStations(CommandSender sender, TownRuntime runtime) {
         plugin.townUi().listStations(sender);
     }
 
-    @Command("townadmin station create")
-    @Usage("/townadmin station create")
+    @Command("tianjitown station create")
+    @Usage("/tianjitown station create")
     @AdminAccess(value = TownAdminPermissions.ROOT, playerOnly = true)
     public void createStation(Player player, TownRuntime runtime) {
         plugin.townUi().createStation(player);
     }
 
-    @Command("townadmin station remove")
-    @Usage("/townadmin station remove")
+    @Command("tianjitown station remove")
+    @Usage("/tianjitown station remove")
     @AdminAccess(value = TownAdminPermissions.ROOT, playerOnly = true)
     public void removeStation(Player player, TownRuntime runtime) {
         plugin.townUi().removeStation(player);
     }
 
-    @Command("townadmin station info")
-    @Usage("/townadmin station info")
+    @Command("tianjitown station info")
+    @Usage("/tianjitown station info")
     @AdminAccess(value = TownAdminPermissions.ROOT, playerOnly = true)
     public void stationInfo(Player player, TownRuntime runtime) {
         plugin.townUi().showStationInfo(player);
@@ -284,8 +284,8 @@ public final class TownAdminCommand {
         send(sender, "chat.admin.station-help-list");
     }
 
-    @Command("townadmin handbook")
-    @Usage("/townadmin handbook [玩家]")
+    @Command("tianjitown handbook")
+    @Usage("/tianjitown handbook [玩家]")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void handbook(CommandSender sender, TownRuntime runtime, @Optional @revxrsal.commands.annotation.NotSender Player target) {
         if (target == null && sender instanceof Player player) {

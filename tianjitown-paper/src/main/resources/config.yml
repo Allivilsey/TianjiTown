@@ -5,7 +5,7 @@ database:
   busy-timeout-ms: 5000
 
 town:
-  # 可通过 /townadmin maintenance on|off 即时切换；开启时玩家 UI 和表单全部暂停。
+  # 可通过 /tianjitown maintenance on|off 即时切换；开启时玩家 UI 和表单全部暂停。
   maintenance-mode: false
   # 由服务台管理命令维护；列表同时保留方块 PDC 中的服务台 ID 和当前位置。
   service-stations: []
@@ -154,5 +154,5 @@ territory:
 
 operations:
   # 插件初始化阶段执行一次统一诊断；校验失败时保持 LOCKED，不注册业务运行时。
-  # 运行期间可使用 /townadmin diagnose 手动执行。
+  # 运行期间可使用 /tianjitown diagnose 手动执行。
   quickshop-diagnostic-days: 7

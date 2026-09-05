@@ -27,16 +27,16 @@ public final class TownAdminEconomyCommands {
         this.plugin = plugin;
     }
 
-    @Command("townadmin money reconcile")
-    @Usage("/townadmin money reconcile")
+    @Command("tianjitown money reconcile")
+    @Usage("/tianjitown money reconcile")
     @AdminAccess(TownAdminPermissions.MONEY)
     public void reconcileMoney(CommandSender sender, TownRuntime runtime) {
         runtime.reconcileSettlement();
         facade.send(sender, "chat.admin.settlement-reconcile-submitted");
     }
 
-    @Command("townadmin money view")
-    @Usage("/townadmin money view <小镇全名>")
+    @Command("tianjitown money view")
+    @Usage("/tianjitown money view <小镇全名>")
     @AdminAccess(TownAdminPermissions.MONEY)
     public void viewMoney(CommandSender sender, TownRuntime runtime, String input) {
         String townName = input.strip();
@@ -49,8 +49,8 @@ public final class TownAdminEconomyCommands {
                 "reason", account.locked() ? account.lockReason() : "")));
     }
 
-    @Command("townadmin money adjust")
-    @Usage("/townadmin money adjust <小镇全名> <带符号金额> <原因>")
+    @Command("tianjitown money adjust")
+    @Usage("/tianjitown money adjust <小镇全名> <带符号金额> <原因>")
     @AdminAccess(TownAdminPermissions.MONEY)
     public void adjustMoney(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {
@@ -70,8 +70,8 @@ public final class TownAdminEconomyCommands {
                 request.reason()));
     }
 
-    @Command("townadmin buff list")
-    @Usage("/townadmin buff list <小镇全名>")
+    @Command("tianjitown buff list")
+    @Usage("/tianjitown buff list <小镇全名>")
     @AdminAccess(TownAdminPermissions.BUFF)
     public void listBuffs(CommandSender sender, TownRuntime runtime, String input) {
         String townName = input.strip();
@@ -87,8 +87,8 @@ public final class TownAdminEconomyCommands {
         });
     }
 
-    @Command("townadmin buff grant")
-    @Usage("/townadmin buff grant <小镇全名> <buffKey> <原因>")
+    @Command("tianjitown buff grant")
+    @Usage("/tianjitown buff grant <小镇全名> <buffKey> <原因>")
     @AdminAccess(TownAdminPermissions.BUFF)
     public void grantBuff(CommandSender sender, TownRuntime runtime, String input) {
         if (!runtime.buffs().buffShopEnabled() || !runtime.consumptionEnabled()) {
@@ -128,8 +128,8 @@ public final class TownAdminEconomyCommands {
                         })));
     }
 
-    @Command("townadmin tax set")
-    @Usage("/townadmin tax set <小镇全名> <百分比> <原因>")
+    @Command("tianjitown tax set")
+    @Usage("/tianjitown tax set <小镇全名> <百分比> <原因>")
     @AdminAccess(TownAdminPermissions.TAX)
     public void tax(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {
@@ -146,8 +146,8 @@ public final class TownAdminEconomyCommands {
                 request.reason()));
     }
 
-    @Command("townadmin ledger view")
-    @Usage("/townadmin ledger view <小镇全名>")
+    @Command("tianjitown ledger view")
+    @Usage("/tianjitown ledger view <小镇全名>")
     @AdminAccess(TownAdminPermissions.LEDGER)
     public void ledger(CommandSender sender, TownRuntime runtime, String input) {
         String townName = input.strip();

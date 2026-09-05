@@ -15,8 +15,8 @@
 
 1. 停止 Paper，保留旧 `1.0.0` JAR、配置和完整备份。
 2. 替换为 `TianjiTown-1.1.0.jar` 后启动服务器。
-3. 执行 `/townadmin status`，确认门禁为 `READY`、schema 为 `2.1`。
-4. 对所有现有小镇执行 `/townadmin land reconcile all`，确认成员 UUID 与 Residence 权限一致；需要修复时再显式执行 `repair`。
+3. 执行 `/tianjitown status`，确认门禁为 `READY`、schema 为 `2.1`。
+4. 对所有现有小镇执行 `/tianjitown land reconcile all`，确认成员 UUID 与 Residence 权限一致；需要修复时再显式执行 `repair`。
 
 ## 验收重点
 
@@ -37,4 +37,4 @@ Flyway `2.0` 会增加治理表并替换成员角色约束，`2.1` 会收紧同�
 1. 停止服务器并保存升级后数据库副本用于审计。
 2. 恢复升级前 SQLite 与 Residence 备份。
 3. 恢复 `1.0.0` JAR 和旧配置后启动。
-4. 执行 `/townadmin status` 与领地只读对账，确认旧版数据链路恢复后再开放玩家入口。
+4. 执行 `/tianjitown status` 与领地只读对账，确认旧版数据链路恢复后再开放玩家入口。

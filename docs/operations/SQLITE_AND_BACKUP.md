@@ -30,7 +30,7 @@ bash scripts/backup_sqlite.sh \
 
 1. 停止隔离测试服务器。
 2. 将备份数据库复制到 `database.file` 指定位置，不要同时复制来源环境的 `-wal` 或 `-shm` 文件。
-3. 启动同版本预发服，执行 `/townadmin status` 和 `PRAGMA integrity_check`。
+3. 启动同版本预发服，执行 `/tianjitown status` 和 `PRAGMA integrity_check`。
 4. 验证申请、小镇、成员、领地投影与审计记录后，再将该备份标记为可恢复。
 
 生产回滚默认只回退 JAR 和配置，不自动删除 SQLite 表或 Residence 领地。SQLite 版不会自动导入旧 MySQL 数据，转换必须在隔离环境另行验证。

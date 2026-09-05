@@ -2,24 +2,24 @@
 
 ## 每日检查
 
-1. `/townadmin status`：必须为 `READY`，SQLite 为 `READY`，查看最近诊断时间与报告。
-2. `/townadmin money reconcile`：清算账户不得短款；出现锁定时先停止消费并核对外部账户。
+1. `/tianjitown status`：必须为 `READY`，SQLite 为 `READY`，查看最近诊断时间与报告。
+2. `/tianjitown money reconcile`：清算账户不得短款；出现锁定时先停止消费并核对外部账户。
 3. 检查控制台中的 `SEVERE`、`WRITE_LOCKED`、`DIFFERENCE`、`INCOMPLETE` 和 `COMPENSATION_REQUIRED`。
 
 ## 常用运维命令
 
 ```text
-/townadmin status
-/townadmin diagnose [1~180]
-/townadmin maintenance on|off|status
-/townadmin money reconcile
-/townadmin land reconcile all
-/townadmin land reconcile all repair
+/tianjitown status
+/tianjitown diagnose [1~180]
+/tianjitown maintenance on|off|status
+/tianjitown money reconcile
+/tianjitown land reconcile all
+/tianjitown land reconcile all repair
 ```
 
 `diagnose` 是只读检查，不会自动修改 QuickShop 历史或 Residence。系统定时领地对账发现差异时，会依照 SQLite 中的小镇、成员和已生效领地单元自动修复；`land reconcile ... repair` 可用于立即手动触发同类修复。SQLite 与依赖插件仍需按停服流程完成同一时间点备份。
 
-统一诊断在插件初始化阶段执行一次，必须通过后才会注册业务监听器和定时任务；任一检查失败时插件保持 `LOCKED`。运行期间不会自动重复，需要复核时执行 `/townadmin diagnose [1~180]`。
+统一诊断在插件初始化阶段执行一次，必须通过后才会注册业务监听器和定时任务；任一检查失败时插件保持 `LOCKED`。运行期间不会自动重复，需要复核时执行 `/tianjitown diagnose [1~180]`。
 
 ## 定时任务
 

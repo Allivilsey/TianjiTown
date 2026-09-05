@@ -10,9 +10,9 @@ libraries:
   - 'org.xerial:sqlite-jdbc:${sqlite.version}'
 softdepend: [Vault, Residence, QuickShop-Hikari, Jobs, GlobalMarketPlus, XConomy, WorldBorder, HuskSync]
 commands:
-  townadmin:
+  tianjitown:
     description: TianjiTown 管理命令
-    usage: /townadmin help
+    usage: /tianjitown help
 permissions:
   tianjitown.admin:
     description: TianjiTown 全部管理权限

@@ -49,7 +49,7 @@ class PluginDescriptorTest {
 
         assertFalse(commandSection.lines().map(String::strip)
                 .anyMatch(line -> line.startsWith("permission:")),
-                "townadmin 不能在命令根节点要求完整管理员权限");
+                "tianjitown 不能在命令根节点要求完整管理员权限");
         for (String permission : List.of("tianjitown.admin.money", "tianjitown.admin.tax",
                 "tianjitown.admin.ledger", "tianjitown.admin.expand",
                 "tianjitown.admin.buff", "tianjitown.admin.operations")) {
@@ -68,8 +68,8 @@ class PluginDescriptorTest {
                 "执行统一诊断")) {
             assertTrue(descriptor.contains("description: " + localizedText), localizedText);
         }
-        assertTrue(descriptor.contains("usage: /townadmin help"));
-        assertFalse(descriptor.contains("/townadmin reload"));
+        assertTrue(descriptor.contains("usage: /tianjitown help"));
+        assertFalse(descriptor.contains("/tianjitown reload"));
     }
 
     @Test
@@ -78,9 +78,9 @@ class PluginDescriptorTest {
 
         assertEquals("TianjiTown", parsed.getName());
         assertEquals("org.allivlisey.tianjitown.paper.TianjiTownPlugin", parsed.getMain());
-        assertEquals("/townadmin help", parsed.getCommands().get("townadmin").get("usage"));
+        assertEquals("/tianjitown help", parsed.getCommands().get("tianjitown").get("usage"));
         assertEquals("TianjiTown 管理命令",
-                parsed.getCommands().get("townadmin").get("description"));
+                parsed.getCommands().get("tianjitown").get("description"));
         assertEquals(7, parsed.getPermissions().size());
     }
 

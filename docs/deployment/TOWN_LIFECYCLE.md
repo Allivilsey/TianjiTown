@@ -19,9 +19,9 @@
 2. 备份插件目录和数据库；不要删除已有 Flyway history。
 3. 替换插件 JAR，保留并人工合并现有 `config.yml`，然后启动服务器。
 4. Flyway 会保留安装门禁记录，再创建 `1.x` 建镇与成员业务表。禁止手工修改 Flyway history。
-5. 执行 `/townadmin status`。只有状态为 `READY` 时才开放服务台。
+5. 执行 `/tianjitown status`。只有状态为 `READY` 时才开放服务台。
 6. 在隔离环境批准一个测试小镇，确认 Residence 创建、边界读取和成员 `build` 权限正确，再通过管理员删除流程验证投影清理。
-7. 用 `/townadmin station create|info|list|remove` 创建、核对并移除服务台；用 `/townadmin handbook <player>` 做手册发放测试。
+7. 用 `/tianjitown station create|info|list|remove` 创建、核对并移除服务台；用 `/tianjitown handbook <player>` 做手册发放测试。
 
 从早期含 YAML 镜像的版本升级时，原 `plugins/TianjiTown/towns` 文件不会再被读取或改写。确认 SQLite 资料完整并保留一次备份后，可由管理员另行归档这些旧文件。`town_profile_sync` 表为停用遗留表，运行代码不再访问；不要手工改写 Flyway history。旧 MySQL 数据不会自动导入，必须在隔离环境另行转换。
 
@@ -34,8 +34,8 @@
 3. 管理员依次验证 `application list/approve/reject/change <小镇全名>`，并验证管理员主菜单中的审核按钮会随待办状态改变外观。
 4. 批准后同时核对 SQLite、镇长成员记录和 Residence；小镇代码只允许 `3..9` 个英文字母并直接按小写生成 Residence 名称，例如 `SKY` 生成 `sky`。建议使用三个字母，不添加任何前后缀，也不接受小镇 UUID 或旧格式。
 5. 验证两名初始成员会收到带音效的 Dialog 提醒，再分别完成接受与拒绝；建镇后另行验证入镇申请和主动退出。
-6. 检查成员列表分页入口、镇长修改简介/规则，以及 `/townadmin audit` 审计记录。
-7. 确认玩家没有 `/town` 等命令，菜单和 `/townadmin help` 中也没有 money、tax、buff、order、vote 或 expand。
+6. 检查成员列表分页入口、镇长修改简介/规则，以及 `/tianjitown audit` 审计记录。
+7. 确认玩家没有 `/town` 等命令，菜单和 `/tianjitown help` 中也没有 money、tax、buff、order、vote 或 expand。
 
 ## 并发与故障验收
 
@@ -43,26 +43,26 @@
 2. 两名玩家同时预留重叠选址，只能有一人成功。
 3. 快速重复点击提交、接受邀请和批准按钮，不能产生重复数据。
 4. 在预发副本中注入 SQLite 磁盘 I/O 或权限故障：新申请、审批和成员变更必须被锁定，已有 Residence 继续保护。恢复文件可写后最多等待 30 秒，写操作应自动恢复。
-5. 临时移除测试镇 Residence 并等待自动对账，或执行 `/townadmin land reconcile <小镇全名> repair`；投影应按数据库边界和成员权限重建，小镇不得被归档。
+5. 临时移除测试镇 Residence 并等待自动对账，或执行 `/tianjitown land reconcile <小镇全名> repair`；投影应按数据库边界和成员权限重建，小镇不得被归档。
 6. 重启服务器，核对申请、预留、小镇、成员和 Residence 恢复，并确认启动后的自动修复没有触碰 SQLite 未登记的外部领地。
 
 ## 维护模式
 
-- 开启：`/townadmin maintenance on`
-- 查询：`/townadmin maintenance status` 或 `/townadmin status`
-- 关闭：`/townadmin maintenance off`
+- 开启：`/tianjitown maintenance on`
+- 查询：`/tianjitown maintenance status` 或 `/tianjitown status`
+- 关闭：`/tianjitown maintenance off`
 
 开启维护模式会暂停服务台、手册、玩家界面和表单提交，但不会停用管理员命令或现有 Residence 保护。状态会写回 `config.yml`，重启后保持不变。
 
 ## 管理员常用操作
 
-- 审批：`/townadmin application list|approve|reject|change <小镇全名> <原因>`
-- 查看：`/townadmin town view <小镇全名>`
-- 删除：`/townadmin town delete <小镇全名> <原因>`，随后点击聊天栏确认按钮
-- 成员：`/townadmin member invite|add|remove <小镇全名> <玩家> <原因>`
-- 镇长：`/townadmin mayor transfer <小镇全名> <玩家> <原因>`
-- 领地检查/修复：`/townadmin land reconcile <小镇全名|all> [repair]`
-- 领地重建：`/townadmin land rebuild <小镇全名|all>`，随后点击聊天栏确认按钮
+- 审批：`/tianjitown application list|approve|reject|change <小镇全名> <原因>`
+- 查看：`/tianjitown town view <小镇全名>`
+- 删除：`/tianjitown town delete <小镇全名> <原因>`，随后点击聊天栏确认按钮
+- 成员：`/tianjitown member invite|add|remove <小镇全名> <玩家> <原因>`
+- 镇长：`/tianjitown mayor transfer <小镇全名> <玩家> <原因>`
+- 领地检查/修复：`/tianjitown land reconcile <小镇全名|all> [repair]`
+- 领地重建：`/tianjitown land rebuild <小镇全名|all>`，随后点击聊天栏确认按钮
 
 Tab 补全中的 `<原因>` 是位置提示，必须替换为实际内容。危险操作的聊天确认仅限发起者使用，60 秒后失效；确认前若目标版本变化，操作会安全中止。删除操作先安全归档并保持名称、小镇代码和区块锁定；只有对应 Residence 确认移除后才释放这些占位，同时保留小镇历史记录与审计记录。升级前已经归档的小镇默认继续锁定，可重新执行删除命令并点击确认完成安全释放。若 `ACTIVE` 小镇的 Residence 被外部删除，系统会阻止删除、通知删除来源，并立即触发投影对账恢复。
 
