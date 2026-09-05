@@ -4,6 +4,10 @@ main: org.allivlisey.tianjitown.paper.TianjiTownPlugin
 api-version: '26.2'
 load: POSTWORLD
 authors: [Allivilsey]
+libraries:
+  - 'com.zaxxer:HikariCP:${hikari.version}'
+  - 'org.flywaydb:flyway-core:${flyway.version}'
+  - 'org.xerial:sqlite-jdbc:${sqlite.version}'
 softdepend: [Vault, Residence, QuickShop-Hikari, Jobs, GlobalMarketPlus, XConomy, WorldBorder]
 commands:
   townadmin:

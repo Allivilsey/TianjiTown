@@ -12,7 +12,9 @@
 mvn -B clean verify
 ```
 
-唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.4.0.jar`。Paper API、Residence 与 Vault API 使用 `provided` scope，不会打入插件 JAR；WorldBorder 通过运行时公开能力接入，同样不会被打入；HikariCP、Flyway、SQLite JDBC 和 Lamp 会合并到最终 JAR。Lamp 命令库会重定位到插件内部包，无需单独安装。
+唯一安装包输出为 `tianjitown-paper/target/TianjiTown-1.4.0.jar`。Paper API、Residence 与 Vault API 使用 `provided` scope，不会打入插件 JAR；WorldBorder 通过运行时公开能力接入，同样不会被打入。最终 JAR 仅合并项目模块和 Lamp；Lamp 命令库会重定位到插件内部包，无需单独安装。HikariCP、Flyway、SQLite JDBC 及其传递依赖由 Paper 根据 `plugin.yml` 的 `libraries` 下载并加载，版本取自 Maven 构建属性。
+
+首次启动（或升级到尚未缓存的依赖版本）需要服务器能够访问 Paper 配置的 Maven Central 镜像；依赖缓存在服务端 `libraries` 目录。离线部署需预先准备对应依赖缓存，不要把这些依赖 JAR 放入 `plugins`。构建测试仍使用完整存储依赖，Shade 打包白名单仅包含项目模块和 Lamp；新增需要内嵌的依赖时应同步更新白名单。
 
 ## 安装与 SQLite
 

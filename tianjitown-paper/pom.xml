@@ -91,6 +91,14 @@
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <shadedArtifactAttached>false</shadedArtifactAttached>
                             <minimizeJar>false</minimizeJar>
+                            <!-- Storage libraries and their transitive dependencies are loaded by Paper
+                                 through plugin.yml. Keep only project modules and relocated Lamp here. -->
+                            <artifactSet>
+                                <includes>
+                                    <include>org.allivlisey:*</include>
+                                    <include>io.github.revxrsal:*</include>
+                                </includes>
+                            </artifactSet>
                             <relocations>
                                 <relocation>
                                     <pattern>revxrsal.commands</pattern>
