@@ -49,6 +49,46 @@ class TownAdminCommandDispatchTest {
     }
 
     @Test
+    void townListRequiresAdminPermission() {
+        execute("town", "list");
+        verify(messages).send(sender, "chat.admin.no-permission");
+        verifyNoInteractions(runtime);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void townListReadsAndDisplaysTownsIncludingArchived(boolean empty) {
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
+        TownRepository repository = mock(TownRepository.class);
+        when(runtime.repository()).thenReturn(repository);
+        TownSnapshot town = mock(TownSnapshot.class, RETURNS_DEEP_STUBS);
+        when(town.profile().name()).thenReturn("天际 之城");
+        when(town.profile().residenceName()).thenReturn("sky");
+        when(town.status()).thenReturn(org.allivlisey.tianjitown.core.town.TownStatus.ARCHIVED);
+        List<TownSnapshot> towns = empty ? List.of() : List.of(town);
+        when(repository.listTowns(true)).thenReturn(towns);
+        doAnswer(invocation -> {
+            Object result = ((Supplier<?>) invocation.getArgument(1)).get();
+            java.util.function.Consumer<Object> success = invocation.getArgument(2);
+            success.accept(result);
+            return null;
+        }).when(runtime).read(eq(sender), any(), any());
+
+        execute("town", "list");
+
+        verify(repository).listTowns(true);
+        verify(messages).send(sender, "chat.admin.town-list-title", java.util.Map.of("count", towns.size()));
+        if (empty) {
+            verify(messages).send(sender, "chat.admin.town-list-empty");
+        } else {
+            verify(messages).send(sender, "chat.admin.town-list-entry", java.util.Map.of(
+                    "town", "天际 之城", "code", "sky",
+                    "status", org.allivlisey.tianjitown.core.town.TownStatus.ARCHIVED));
+        }
+        assertEquals(List.of("list"), lamp.autoCompleter().complete(actor, "townadmin town li"));
+    }
+
+    @Test
     void unauthorizedCommandNeverReachesTheExtractedHandler() {
         execute("money", "reconcile");
 

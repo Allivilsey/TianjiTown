@@ -472,6 +472,7 @@ public final class TownAdminCommand {
 
     private void townHelp(CommandSender sender) {
         send(sender, "chat.admin.help-town-title");
+        send(sender, "chat.admin.help-town-list");
         send(sender, "chat.admin.help-town-view");
         send(sender, "chat.admin.help-town-delete");
     }

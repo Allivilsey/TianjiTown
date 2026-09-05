@@ -96,6 +96,25 @@ public final class TownAdminApplicationCommands {
         }, success);
     }
 
+    @Command("townadmin town list")
+    @Usage("/townadmin town list")
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void listTowns(CommandSender sender, TownRuntime runtime) {
+        runtime.read(sender, () -> runtime.repository().listTowns(true), towns -> {
+            facade.send(sender, "chat.admin.town-list-title", Map.of("count", towns.size()));
+            if (towns.isEmpty()) {
+                facade.send(sender, "chat.admin.town-list-empty");
+                return;
+            }
+            for (TownSnapshot town : towns) {
+                facade.send(sender, "chat.admin.town-list-entry", Map.of(
+                        "town", TownAdminCommand.safeText(town.profile().name()),
+                        "code", TownAdminCommand.safeText(town.profile().residenceName()),
+                        "status", town.status()));
+            }
+        });
+    }
+
     @Command("townadmin town view")
     @Usage("/townadmin town view <小镇全名>")
     @AdminAccess(TownAdminPermissions.ROOT)

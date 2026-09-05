@@ -2,10 +2,10 @@
 # 所有文本均支持 & 颜色码；{name} 形式的内容是运行时占位符
 system:
   # 玩家入口处于维护状态时显示
-  maintenance: '&c小镇系统正在维护，请稍后再试'
+  maintenance: '&c小镇系统正在维护'
   # 玩家点击已经失效的 Dialog 操作时显示
-  menu-expired: '&c这个界面已经失效，请重新打开小镇服务'
-  invalid-menu-data: '&c界面数据已过期，请重新打开后再试'
+  menu-expired: '&c此界面已失效'
+  invalid-menu-data: '&c此界面已过期'
   # {detail} 为具体失败原因
   operation-failed: '&c这项操作错误：{detail}'
   # {key} 为未找到配置值的消息键；这是消息文件可用时的运行期回退
@@ -407,6 +407,10 @@ chat:
     help-buff-grant: '&e/townadmin buff grant <小镇全名> <buffKey> <原因>'
     help-buff-note: '&7公共 Buff 购买后不接受退款；管理员代购默认持续一小时'
     help-town-title: '&6小镇管理'
+    help-town-list: '&e/townadmin town list &7列出所有小镇（含已归档）'
+    town-list-title: '&6小镇列表 &7共 {count} 个（含已归档）'
+    town-list-empty: '&7暂无小镇。'
+    town-list-entry: '&e{town} &7代号：{code} | 状态：{status}'
     help-town-view: '&e/townadmin town view <小镇全名> &7查看小镇资料与投影状态'
     help-town-delete: '&e/townadmin town delete <小镇全名> <原因> &7随后点击聊天确认按钮'
     help-member-title: '&6成员与镇长管理'
