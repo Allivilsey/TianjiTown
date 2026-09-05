@@ -1722,8 +1722,8 @@ dialog:
     unknown-town: '未知小镇'
     profile-title: '&6编辑小镇简介'
     profile-name: '&6{name}'
-    profile-guidance: '&7名称和小镇代码需要管理员代办；此处只编辑简介和规则'
-    profile-description-guidance: '&7这里只修改简介；规则请在上一页单独编辑'
+    profile-guidance: '&7名称和小镇代码需要管理员代办'
+    profile-description-guidance: '&7这里只修改简介'
     # 建镇申请详情摘要；动态值均为已过滤颜色代码的玩家/申请文本，{status} 为消息键
     # 解析后的申请状态或初始成员状态，{index} 为从 1 开始的规则序号
     summary-title: '&6申请摘要'
