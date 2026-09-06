@@ -122,6 +122,8 @@ public final class LandProtectionMessages {
                     "chat.land-protection.projection-boundary-mismatch";
             case MONSTER_SPAWN_FLAG_MISMATCH -> "chat.land-protection.monster-spawn-flag-mismatch";
             case MONSTER_SPAWN_FLAG_WRITE_FAILED -> "chat.land-protection.monster-spawn-flag-write-failed";
+            case MONSTER_ENTRY_FLAG_MISMATCH -> "chat.land-protection.monster-entry-flag-mismatch";
+            case MONSTER_ENTRY_FLAG_WRITE_FAILED -> "chat.land-protection.monster-entry-flag-write-failed";
             case EXPLOSION_FLAG_MISMATCH -> "chat.land-protection.explosion-flag-mismatch";
             case EXPLOSION_FLAG_WRITE_FAILED ->
                     "chat.land-protection.explosion-flag-write-failed";

@@ -2,12 +2,27 @@ package org.allivlisey.tianjitown.paper.action;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TownActionResultTest {
+    @Test
+    void timestampOutputUsesShanghaiOffsetAndPreservesTheInstant() {
+        Instant expiresAt = Instant.parse("2026-12-31T16:16:55.617Z");
+        TownActionResult result = TownActionResult.success("BUFF_BUY",
+                Map.of("expires_at", expiresAt));
+
+        assertEquals("RESULT success=true action=BUFF_BUY expires_at=2027-01-01T00:16:55.617+08:00",
+                result.machineLine());
+        assertEquals(expiresAt, Instant.parse(result.data().get("expires_at")));
+        assertEquals("2027-01-01T00:16:55.617+08:00",
+                TownActionResult.failure("BUFF_BUY", "INVALID_STATE",
+                        Map.of("expires_at", expiresAt)).data().get("expires_at"));
+    }
+
     @Test
     void successOutputIsStableAndKeysAreSorted() {
         TownActionResult result = TownActionResult.success("TOWN_EXPAND",

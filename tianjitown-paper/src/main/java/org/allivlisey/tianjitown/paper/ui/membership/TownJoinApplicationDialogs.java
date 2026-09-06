@@ -189,8 +189,8 @@ public final class TownJoinApplicationDialogs {
             List<MenuItem> items = List.of(
                     new MenuItem(4, presentation.button(Material.PLAYER_HEAD, "§6" + name,
                             List.of("§7玩家 UUID: " + application.applicantId(),
-                                    "§7申请时间: " + application.createdAt(),
-                                    "§7到期: " + application.expiresAt()), null, null)),
+                                    "§7申请时间: " + TownUiLegacyFacade.safeText(application.createdAt()),
+                                    "§7到期: " + TownUiLegacyFacade.safeText(application.expiresAt())), null, null)),
                     new MenuItem(11, presentation.button(Material.LIME_CONCRETE, "§a批准加入",
                             List.of(presentation.dialogText("tooltip.town-join.approve")),
                             "CONFIRM_APPROVE_JOIN",

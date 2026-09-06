@@ -55,6 +55,7 @@ TianjiTown 是面向单个 Paper 服务器的小镇治理与统一经济插件�
 Residence 领地中的成员权限由 TianjiTown 统一投影。所有成员都会获得 Residence `/res padd` 当前配置的完整 `trusted` 权限组，并额外获得 `ignite` 点火权限和 `vehicledestroy` 载具破坏权限；离镇后这些玩家权限会被清除。系统领地不能由玩家使用 `/res` 或 `/residence` 命令直接修改。
 
 小镇领地统一设置 `monsters=false`，阻止 Residence 识别的怪物生成（包括自然生成、刷怪笼和刷怪蛋）。该标记随领地创建及权限同步写入，并纳入领地检查与修复。
+同时设置 `nomobs=true`，启用 Residence 的怪物进入保护，同样纳入创建、权限同步、检查与修复。该功能依赖 Residence 配置开启 `AutoMobRemoval`，通过周期清理领地内的怪物生效，并非边界即时拦截。
 
 ## 4. 建立小镇
 

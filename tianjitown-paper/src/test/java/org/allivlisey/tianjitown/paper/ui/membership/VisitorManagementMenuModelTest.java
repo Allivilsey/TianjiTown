@@ -1,5 +1,4 @@
 package org.allivlisey.tianjitown.paper.ui.membership;
-import org.allivlisey.tianjitown.paper.message.MessageTestSupport;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 
 import org.allivlisey.tianjitown.core.town.MemberRole;
@@ -22,17 +21,6 @@ class VisitorManagementMenuModelTest {
 
     @TempDir
     Path temporaryDirectory;
-
-    @Test
-    void visitorPermissionHintIsConfiguredAndDoesNotUseMissingMessageFallback() {
-        PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
-
-        assertTrue(messages.hasMessage(PERMISSION_KEY));
-        String hint = MessageTestSupport.assertConfigured(messages, PERMISSION_KEY);
-        assertFalse(hint.contains("缺少消息配置"));
-        assertTrue(hint.contains("镇长"));
-        assertTrue(hint.contains("副镇长"));
-    }
 
     @Test
     void onlyMayorAndDeputySeeVisitorEntryWithTheConfiguredPermissionHint() {

@@ -1,5 +1,9 @@
 package org.allivlisey.tianjitown.paper.action;
 
+import org.allivlisey.tianjitown.core.time.TownTime;
+
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -49,7 +53,9 @@ public record TownActionResult(boolean success, String action, String reason,
     private static Map<String, String> stringify(Map<String, ?> values) {
         Map<String, String> result = new LinkedHashMap<>();
         Objects.requireNonNull(values, "values").forEach((key, value) ->
-                result.put(key, Objects.toString(value, "null")));
+                result.put(key, value instanceof Instant instant
+                        ? DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(instant.atZone(TownTime.ZONE))
+                        : Objects.toString(value, "null")));
         return result;
     }
 

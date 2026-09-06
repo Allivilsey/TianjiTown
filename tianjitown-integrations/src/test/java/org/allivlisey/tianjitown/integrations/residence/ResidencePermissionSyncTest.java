@@ -30,6 +30,7 @@ class ResidencePermissionSyncTest {
         when(server.isPrimaryThread()).thenReturn(true);
         when(residence.getPermissions()).thenReturn(permissions);
         when(residence.isTrusted(member)).thenReturn(true);
+        when(permissions.has("nomobs", false)).thenReturn(true);
         flags.put("ignite", true);
         when(permissions.getPlayerFlags()).thenReturn(Map.of(member, flags));
         when(permissions.getPlayerFlags(member)).thenReturn(flags);
@@ -109,7 +110,41 @@ class ResidencePermissionSyncTest {
         verify(permissions, never()).setPlayerFlag(any(UUID.class), anyString(), any());
     }
 
+    @Test
+    void detectsMissingOrDisabledMonsterEntryFlagWithoutWriting() {
+        when(permissions.has("nomobs", false)).thenReturn(false);
+
+        assertEquals(ResultCode.MONSTER_ENTRY_FLAG_MISMATCH,
+                sync.verifyPermissions("town", residence, List.of(member), false).code());
+
+        verify(permissions, never()).setFlag(any(), anyString(), any(), anyBoolean(), anyBoolean());
+        verify(permissions, never()).setPlayerFlag(any(UUID.class), anyString(), any());
+    }
+
+    @Test
+    void enablesMonsterEntryProtectionDuringPermissionSync() {
+        allowWrites();
+
+        assertTrue(sync.verifyPermissions("town", residence, List.of(member), true).success());
+
+        verify(permissions).setFlag(null, "nomobs", FlagPermissions.FlagState.TRUE, true, false);
+        verify(permissions).setFlag(null, "monsters", FlagPermissions.FlagState.FALSE, true, false);
+    }
+
+    @Test
+    void reportsMonsterEntryFlagWriteFailure() {
+        allowWrites();
+        when(permissions.setFlag(null, "nomobs", FlagPermissions.FlagState.TRUE, true, false))
+                .thenReturn(false);
+
+        assertEquals(ResultCode.MONSTER_ENTRY_FLAG_WRITE_FAILED,
+                sync.verifyPermissions("town", residence, List.of(member), true).code());
+        verify(permissions, never()).setPlayerFlag(any(UUID.class), anyString(), any());
+    }
+
     private void allowWrites() {
+        when(permissions.setFlag(null, "nomobs", FlagPermissions.FlagState.TRUE, true, false))
+                .thenReturn(true);
         when(permissions.setFlag(any(), anyString(), eq(FlagPermissions.FlagState.FALSE), eq(true), eq(false)))
                 .thenReturn(true);
         when(permissions.setFlagGroupOnPlayer(null, member, padd.groupedFlag, "true", true)).thenReturn(true);

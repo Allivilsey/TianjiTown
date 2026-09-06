@@ -15,6 +15,7 @@ import static org.allivlisey.tianjitown.integrations.residence.ResidenceLandProt
 
 final class ResidencePermissionSync {
     private static final String MONSTER_SPAWN_FLAG = "monsters";
+    private static final String MONSTER_ENTRY_FLAG = "nomobs";
     private static final String IGNITE_FLAG = "ignite";
     private static final String VEHICLE_DESTROY_FLAG = "vehicledestroy";
     private static final List<String> PROTECTED_EXPLOSION_FLAGS = List.of(
@@ -49,6 +50,14 @@ final class ResidencePermissionSync {
                 server.getConsoleSender(), MONSTER_SPAWN_FLAG, FlagPermissions.FlagState.FALSE, true,
                 false)) {
             return Result.failureCode(ResultCode.MONSTER_SPAWN_FLAG_WRITE_FAILED);
+        }
+        if (!applyPermissions && !residence.getPermissions().has(MONSTER_ENTRY_FLAG, false)) {
+            return Result.failureCode(ResultCode.MONSTER_ENTRY_FLAG_MISMATCH);
+        }
+        if (applyPermissions && !residence.getPermissions().setFlag(
+                server.getConsoleSender(), MONSTER_ENTRY_FLAG, FlagPermissions.FlagState.TRUE, true,
+                false)) {
+            return Result.failureCode(ResultCode.MONSTER_ENTRY_FLAG_WRITE_FAILED);
         }
         java.util.Set<UUID> existingPlayers = java.util.Set.copyOf(
                 residence.getPermissions().getPlayerFlags().keySet());

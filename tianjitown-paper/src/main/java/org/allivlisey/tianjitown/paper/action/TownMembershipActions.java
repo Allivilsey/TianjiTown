@@ -51,6 +51,10 @@ final class TownMembershipActions {
         support.write("JOIN_APPROVE", actor,
                 () -> runtime.repository().approveJoinApplication(applicationId,
                         actor.getUniqueId()), application -> {
+                    Player joined = plugin.getServer().getPlayer(application.applicantId());
+                    if (joined != null) {
+                        runtime.buffs().refreshPlayer(joined);
+                    }
                     support.syncResidence(actor, application.townId());
                     return support.joinData(application);
                 }, completion);

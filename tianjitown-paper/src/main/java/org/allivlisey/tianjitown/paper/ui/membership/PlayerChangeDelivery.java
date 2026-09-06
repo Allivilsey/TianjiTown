@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -47,9 +46,8 @@ public final class PlayerChangeDelivery {
                         List<Long> sent = new ArrayList<>();
                         acknowledgements.put(playerId, sent);
                         for (var record : records) {
-                            plugin.messages().send(player, "chat.notification.identity-changed", Map.of(
-                                    "town", TownUiPresentation.safeText(record.townName()),
-                                    "oldRole", role(record.oldRole()), "newRole", role(record.newRole())));
+                            plugin.messages().send(player, notificationKey(record), Map.of(
+                                    "town", TownUiPresentation.safeText(record.townName())));
                             sent.add(record.id());
                         }
                         if (sent.isEmpty()) acknowledgements.remove(playerId);
@@ -65,7 +63,17 @@ public final class PlayerChangeDelivery {
             }
         })) busy.remove(playerId);
     }
-    private String role(String role) {
-        return plugin.messages().plainText("dialog.member-role." + role.toLowerCase(Locale.ROOT).replace('_', '-'));
+    private String notificationKey(TownRepository.PlayerChangeNotification record) {
+        return "chat.notification." + switch (record.newRole()) {
+            case "MAYOR" -> "became-mayor";
+            case "DEPUTY_MAYOR" -> "became-deputy-mayor";
+            case "MEMBER" -> switch (record.oldRole()) {
+                case "NONE", "VISITOR" -> "member-joined";
+                default -> "became-member";
+            };
+            case "VISITOR" -> "visitor-added";
+            case "NONE" -> "VISITOR".equals(record.oldRole()) ? "visitor-removed" : "member-left";
+            default -> throw new IllegalArgumentException("Unknown town role: " + record.newRole());
+        };
     }
 }

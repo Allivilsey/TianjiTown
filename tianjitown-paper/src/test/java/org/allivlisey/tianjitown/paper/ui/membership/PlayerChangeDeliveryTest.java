@@ -8,6 +8,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 import org.allivlisey.tianjitown.storage.town.TownRepository;
@@ -26,6 +28,37 @@ class PlayerChangeDeliveryTest {
         return plugin;
     }
 
+    @ParameterizedTest
+    @CsvSource({
+            "NONE, MEMBER, 你已加入“测试镇”小镇",
+            "VISITOR, MEMBER, 你已加入“测试镇”小镇",
+            "NONE, MAYOR, 你已成为“测试镇”小镇的镇长",
+            "MEMBER, MAYOR, 你已成为“测试镇”小镇的镇长",
+            "DEPUTY_MAYOR, MAYOR, 你已成为“测试镇”小镇的镇长",
+            "MEMBER, DEPUTY_MAYOR, 你已成为“测试镇”小镇的副镇长",
+            "MAYOR, MEMBER, 你现在是“测试镇”小镇的普通成员",
+            "DEPUTY_MAYOR, MEMBER, 你现在是“测试镇”小镇的普通成员",
+            "MEMBER, NONE, 你已离开“测试镇”小镇",
+            "DEPUTY_MAYOR, NONE, 你已离开“测试镇”小镇",
+            "MAYOR, NONE, 你已离开“测试镇”小镇",
+            "NONE, VISITOR, 你已成为“测试镇”小镇的访客",
+            "VISITOR, NONE, 你已不再是“测试镇”小镇的访客"
+    })
+    void deliversSpecificMessageForIdentityTransition(String oldRole, String newRole, String expected) {
+        UUID target = UUID.randomUUID();
+        TownRepository repository = mock(TownRepository.class);
+        when(repository.pendingPlayerChanges(target)).thenReturn(List.of(
+                new TownRepository.PlayerChangeNotification(1, target, "测试镇", oldRole, newRole)));
+        Player player = mock(Player.class);
+        when(player.isOnline()).thenReturn(true);
+        try (var bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(() -> Bukkit.getPlayer(target)).thenReturn(player);
+            new PlayerChangeDelivery(plugin(), repository).deliver(target);
+            verify(player).sendMessage(contains(expected));
+            verify(repository).acknowledgePlayerChanges(target, List.of(1L));
+        }
+    }
+
     @Test void acknowledgementFailureRetriesWithoutSendingAgain() {
         UUID target = UUID.randomUUID();
         TownRepository repository = mock(TownRepository.class);
@@ -41,7 +74,7 @@ class PlayerChangeDeliveryTest {
             delivery.deliver(target);
             delivery.deliver(target);
             delivery.deliver(target);
-            verify(player, times(1)).sendMessage(contains("成员 变更为 副镇长"));
+            verify(player, times(1)).sendMessage(contains("你已成为“测试镇”小镇的副镇长"));
             verify(repository, times(2)).acknowledgePlayerChanges(target, List.of(1L));
         }
     }
@@ -59,7 +92,7 @@ class PlayerChangeDeliveryTest {
             verify(repository, never()).acknowledgePlayerChanges(any(), any());
             bukkit.when(() -> Bukkit.getPlayer(target)).thenReturn(player);
             delivery.deliver(target);
-            verify(player).sendMessage(contains("副镇长 变更为 成员"));
+            verify(player).sendMessage(contains("你现在是“测试镇”小镇的普通成员"));
             verify(repository).acknowledgePlayerChanges(target, List.of(1L));
         }
     }

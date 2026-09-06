@@ -288,8 +288,7 @@ public final class TownMembershipDialogs {
             if (viewerCanRemove) {
                 items.add(new MenuItem(12, presentation.button(Material.RED_CONCRETE,
                         presentation.dialogText("member-detail.kick"),
-                        List.of(presentation.dialogText("tooltip.member-detail.kick-now"),
-                            presentation.dialogText("common.confirmation-required")),
+                        List.of(presentation.dialogText("tooltip.member-detail.kick-now")),
                         "CONFIRM_KICK_MEMBER", townId + ":" + targetId + ":" + page)));
             }
             if (viewerIsMayor && !targetIsMayor) {

@@ -6,6 +6,7 @@ import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.buff.BuffRuntime;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.storage.governance.VoteSnapshot;
+import org.allivlisey.tianjitown.storage.town.JoinApplicationSnapshot;
 import org.allivlisey.tianjitown.storage.town.TownPlayerChange;
 import org.bukkit.Server;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -43,6 +44,34 @@ class TownMembershipBuffTest {
             committed = call.getArgument(2);
             return null;
         }).when(runtime).writeAction(any(), any(), any(), any());
+    }
+
+    @Test
+    void approvedJoinRefreshesApplicantAfterCommit() {
+        Player applicant = mock(Player.class);
+        when(plugin.getServer().getPlayer(targetId)).thenReturn(applicant);
+        new TownMembershipActions(support).approveJoinApplication(actor, UUID.randomUUID(),
+                outcome -> assertTrue(outcome.result().success()));
+        verifyNoInteractions(buffs);
+        committed.accept(approvedJoin());
+        verify(buffs).refreshPlayer(applicant);
+        verifyNoMoreInteractions(buffs);
+    }
+
+    @Test
+    void offlineApplicantDoesNotPreventSuccessfulJoinCompletion() {
+        when(plugin.getServer().getPlayer(targetId)).thenReturn(null);
+        new TownMembershipActions(support).approveJoinApplication(actor, UUID.randomUUID(),
+                outcome -> assertTrue(outcome.result().success()));
+        assertDoesNotThrow(() -> committed.accept(approvedJoin()));
+        verifyNoInteractions(buffs);
+    }
+
+    private JoinApplicationSnapshot approvedJoin() {
+        Instant now = Instant.now();
+        return new JoinApplicationSnapshot(UUID.randomUUID(), townId, "测试镇", targetId,
+                JoinApplicationSnapshot.Status.APPROVED, now.plusSeconds(3600),
+                actor.getUniqueId(), now, now);
     }
 
     @Test
