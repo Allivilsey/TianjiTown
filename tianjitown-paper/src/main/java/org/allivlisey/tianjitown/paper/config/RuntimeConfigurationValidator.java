@@ -42,7 +42,6 @@ public final class RuntimeConfigurationValidator {
         Objects.requireNonNull(messageResolver, "messageResolver");
         Objects.requireNonNull(requiredMessageResolver, "requiredMessageResolver");
         ConfigurationValues.bool(config, "town.maintenance-mode", false, messageResolver);
-        ConfigurationValues.list(config, "town.service-stations", messageResolver);
         validateTown(config, messageResolver);
         EconomySettings economy = EconomySettings.load(config, messageResolver);
         ApplicationSettings.feeMinor(config, economy.fallbackScale(), messageResolver);

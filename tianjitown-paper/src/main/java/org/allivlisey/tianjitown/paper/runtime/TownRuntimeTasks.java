@@ -11,6 +11,7 @@ import org.allivlisey.tianjitown.storage.commerce.CommerceRepository;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.allivlisey.tianjitown.storage.governance.GovernanceRepository;
 import org.allivlisey.tianjitown.storage.town.TownRepository;
+import org.allivlisey.tianjitown.storage.station.StationRepository;
 import org.bukkit.command.CommandSender;
 
 import static org.allivlisey.tianjitown.paper.runtime.RuntimeText.safeMessage;
@@ -107,7 +108,8 @@ final class TownRuntimeTasks {
     }
 
     void markStorageFailure(RuntimeException exception) {
-        if (exception instanceof TownRepository.StorageUnavailableException
+        if (exception instanceof StationRepository.StorageUnavailableException
+                || exception instanceof TownRepository.StorageUnavailableException
                 || exception instanceof GovernanceRepository.StorageUnavailableException
                 || exception instanceof EconomyRepository.StorageUnavailableException
                 || exception instanceof CommerceRepository.StorageUnavailableException

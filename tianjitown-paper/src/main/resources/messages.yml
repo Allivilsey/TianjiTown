@@ -160,6 +160,7 @@ chat:
     target-lectern: '&c请看向 6 格内的讲台后重试'
     target-station: '&c请看向 6 格内的小镇服务台后重试'
     already-exists: '&e该讲台已经是小镇服务台'
+    registration-conflict: '&e该位置或小镇已经登记了服务台，请查询服务台列表'
     invalid-data: '&c该讲台数据异常'
     restored: '&a已恢复该小镇服务台标记，ID: {id}'
     created: '&a已创建小镇服务台，ID: {id}'
@@ -713,12 +714,6 @@ log:
     # 账本历史操作人回填；{playerId}=玩家 UUID，{detail}=异常详情
     ledger-actor-name-backfill-failure: '回填账本玩家名失败 {playerId}: {detail}'
     ledger-actor-scan-failure: '扫描历史 UUID 操作人失败: {detail}'
-  # 服务台配置登记解析日志；{detail}=异常详情，{key}=缺失整数的配置字段
-  station:
-    invalid-record: '忽略无效的小镇服务台登记: {detail}'
-    invalid-record-missing-integer: '忽略无效的小镇服务台登记: 缺少整数 {key}'
-    record-id-empty: '服务台 ID 为空'
-    record-world-name-empty: '服务台世界名为空'
   # 建镇审批和领地投影过程日志；{application}=申请 UUID，{time}=事件时间，
   # {detail}=技术详情，{success}=流程是否完成
   provision:

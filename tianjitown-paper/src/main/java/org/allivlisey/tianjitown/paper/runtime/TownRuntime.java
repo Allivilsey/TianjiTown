@@ -1,4 +1,6 @@
 package org.allivlisey.tianjitown.paper.runtime;
+import org.allivlisey.tianjitown.paper.station.StationDirectory;
+import org.allivlisey.tianjitown.storage.station.StationRepository;
 import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
 import org.allivlisey.tianjitown.paper.land.TerritoryPreviewService;
 
@@ -72,6 +74,7 @@ public final class TownRuntime {
     private final TownRuntimeTasks tasks;
     private final TianjiTownPlugin plugin;
     private final DatabaseGate database;
+    private final StationDirectory stations;
     private final TownRepository repository;
     private final GovernanceRepository governance;
     private final EconomyRepository finance;
@@ -96,6 +99,9 @@ public final class TownRuntime {
                 "activeResidenceNames");
         this.sitePolicy = new SitePolicy(plugin, landProtection, worldBoundaries);
         this.territoryPreviews = new TerritoryPreviewService(plugin);
+        this.stations = new StationDirectory(
+                new StationRepository(database.dataSource(),
+                        plugin.getServer()::isPrimaryThread));
         this.repository = new TownRepository(database.dataSource(),
                 plugin.getServer()::isPrimaryThread);
         this.governance = new GovernanceRepository(database.dataSource(),
@@ -137,6 +143,10 @@ public final class TownRuntime {
                 databaseAvailable, tasks, taxes, this::consumptionEnabled);
         this.land = new TownLandRuntime(plugin, repository, finance, landProtection,
                 databaseAvailable, tasks, taxes::refreshTaxPolicies);
+    }
+
+    public StationDirectory stations() {
+        return stations;
     }
 
     public TownRepository repository() {

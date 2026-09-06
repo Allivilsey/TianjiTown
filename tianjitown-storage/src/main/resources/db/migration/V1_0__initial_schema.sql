@@ -819,3 +819,16 @@ BEGIN
     INSERT INTO player_change_notifications(player_uuid, town_name, old_role, new_role)
     SELECT OLD.player_uuid, name, 'VISITOR', 'NONE' FROM towns WHERE town_id = OLD.town_id;
 END;
+
+CREATE TABLE service_stations (
+    station_id TEXT NOT NULL PRIMARY KEY CHECK (length(trim(station_id)) > 0),
+    world_uuid BLOB NOT NULL CHECK (length(world_uuid) = 16),
+    world_name TEXT NOT NULL CHECK (length(trim(world_name)) > 0),
+    x INTEGER NOT NULL,
+    y INTEGER NOT NULL,
+    z INTEGER NOT NULL,
+    town_id BLOB UNIQUE,
+    town_name TEXT,
+    CONSTRAINT uq_service_station_location UNIQUE (world_uuid, x, y, z),
+    CONSTRAINT fk_service_station_town FOREIGN KEY (town_id) REFERENCES towns (town_id)
+);

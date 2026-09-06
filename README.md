@@ -62,6 +62,8 @@ SQLite 采用单连接串行写入、WAL、外键约束和 5 秒忙等待，无�
 
 ### 服务台与手册
 
+服务台 ID、世界、坐标和归属小镇保存在 SQLite 的 `service_stations` 表中，启动时加载；讲台 PDC 保留对应 ID 用于校验。创建和移除操作在数据库写入成功后才更新讲台并提示成功。
+
 ```text
 /tianjitown station create|remove|info
 /tianjitown station list

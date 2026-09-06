@@ -35,7 +35,7 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
-import org.allivlisey.tianjitown.paper.station.StationRegistry.StationRecord;
+import org.allivlisey.tianjitown.storage.station.StationRecord;
 
 /** Coordinates station creation, removal and player interaction. */
 public final class ServiceStationController implements Listener {
@@ -55,7 +55,7 @@ public final class ServiceStationController implements Listener {
         this.openMain = openMain;
         this.dialogsActive = dialogsActive;
         this.stationKey = new NamespacedKey(plugin, "service_station");
-        this.registry = new StationRegistry(plugin, stationKey);
+        this.registry = new StationRegistry(runtime.stations(), stationKey);
         this.handbooks = new HandbookService(plugin);
         this.protection = new StationProtectionListener(registry);
     }
@@ -74,6 +74,7 @@ public final class ServiceStationController implements Listener {
             plugin.messages().send(player, "chat.station.target-lectern");
             return false;
         }
+        if (registry.isPending(block)) return false;
         List<StationRecord> stations = registry.stationRecords();
         String existingId = lectern.getPersistentDataContainer().get(stationKey,
                 PersistentDataType.STRING);
@@ -99,10 +100,8 @@ public final class ServiceStationController implements Listener {
             return true;
         }
         String stationId = UUID.randomUUID().toString();
-        lectern.getPersistentDataContainer().set(stationKey, PersistentDataType.STRING, stationId);
-        lectern.update(true);
-        registry.registerStation(block, stationId, null, null);
-        plugin.messages().send(player, "chat.station.created", Map.of("id", stationId));
+        persistCreation(player, block, stationId, null, null,
+                () -> plugin.messages().send(player, "chat.station.created", Map.of("id", stationId)));
         return true;
     }
 
@@ -119,11 +118,7 @@ public final class ServiceStationController implements Listener {
             plugin.messages().send(player, "chat.station.unregistered");
             return false;
         }
-        lectern.getPersistentDataContainer().remove(stationKey);
-        lectern.update(true);
-        registry.unregisterStationAt(block);
-        plugin.messages().send(player, "station.removed");
-        return true;
+        return persistRemoval(player, block, false);
     }
 
     public void showInfo(Player player) {
@@ -188,8 +183,9 @@ public final class ServiceStationController implements Listener {
             return;
         }
         Block block = world.getBlockAt(station.x(), station.y(), station.z());
-        if (!registry.isValidStation(block)
-                || !station.id().equals(registry.stationAt(block).id())) {
+        StationRecord registered = registry.stationAt(block);
+        if (registry.isPending(block) || registered == null || !registry.isValidStation(block)
+                || !station.id().equals(registered.id())) {
             plugin.messages().send(player, "chat.station.block-changed");
             return;
         }
@@ -270,23 +266,66 @@ public final class ServiceStationController implements Listener {
             return;
         }
         String stationId = UUID.randomUUID().toString();
-        lectern.getPersistentDataContainer().set(stationKey, PersistentDataType.STRING, stationId);
-        lectern.update(true);
-        registry.registerStation(block, stationId, townId, townName);
-        plugin.messages().send(player, townId == null ? "station.created-public"
-                : "station.created-town", townId == null ? Map.of() : Map.of("town", townName));
-        playSound(player, Sound.BLOCK_AMETHYST_BLOCK_CHIME);
+        persistCreation(player, block, stationId, townId, townName, () -> {
+            plugin.messages().send(player, townId == null ? "station.created-public"
+                    : "station.created-town", townId == null ? Map.of() : Map.of("town", townName));
+            playSound(player, Sound.BLOCK_AMETHYST_BLOCK_CHIME);
+        });
+    }
+
+    private void persistCreation(Player player, Block block, String stationId, UUID townId,
+                                 String townName, Runnable success) {
+        if (!registry.beginChange(block)) return;
+        StationRecord record = new StationRecord(stationId, block.getWorld().getUID(),
+                block.getWorld().getName(), block.getX(), block.getY(), block.getZ(), townId, townName);
+        runtime.writeAction(player, () -> runtime.stations().insert(record), inserted -> {
+            registry.endChange(block);
+            if (!inserted) {
+                plugin.messages().send(player, "chat.station.registration-conflict");
+                return;
+            }
+            if (!(block.getState() instanceof Lectern current)) {
+                plugin.messages().send(player, "chat.station.block-changed");
+                return;
+            }
+            current.getPersistentDataContainer().set(stationKey, PersistentDataType.STRING, stationId);
+            if (!current.update(false)) {
+                plugin.messages().send(player, "chat.station.block-changed");
+                return;
+            }
+            success.run();
+        }, failure -> stationWriteFailed(player, block, failure));
+    }
+
+    private boolean persistRemoval(Player player, Block block, boolean destroy) {
+        if (!registry.beginChange(block)) return false;
+        UUID world = block.getWorld().getUID();
+        int x = block.getX(), y = block.getY(), z = block.getZ();
+        runtime.writeAction(player, () -> {
+            runtime.stations().deleteAt(world, x, y, z);
+            return true;
+        }, ignored -> {
+            registry.endChange(block);
+            if (block.getState() instanceof Lectern current) {
+                current.getPersistentDataContainer().remove(stationKey);
+                current.update(false);
+                if (destroy) block.breakNaturally();
+            }
+            plugin.messages().send(player, "station.removed");
+            if (destroy) playSound(player, Sound.BLOCK_WOOD_BREAK);
+        }, failure -> stationWriteFailed(player, block, failure));
+        return true;
+    }
+
+    private void stationWriteFailed(Player player, Block block, RuntimeException failure) {
+        registry.endChange(block);
+        plugin.messages().send(player, "chat.runtime.operation-failed",
+                Map.of("detail", Objects.toString(failure.getMessage(), failure.getClass().getSimpleName())
+                        .replace('&', '＆').replace('§', '�')));
     }
 
     private void destroyStation(Player player, Block block) {
-        if (block.getState() instanceof Lectern lectern) {
-            lectern.getPersistentDataContainer().remove(stationKey);
-            lectern.update(true);
-        }
-        registry.unregisterStationAt(block);
-        block.breakNaturally();
-        plugin.messages().send(player, "station.removed");
-        playSound(player, Sound.BLOCK_WOOD_BREAK);
+        persistRemoval(player, block, true);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
@@ -295,6 +334,12 @@ public final class ServiceStationController implements Listener {
         boolean rightClick = event.getAction() == Action.RIGHT_CLICK_AIR
                 || event.getAction() == Action.RIGHT_CLICK_BLOCK;
         Block block = event.getClickedBlock();
+        if (registry.isPending(block)) {
+            event.setCancelled(true);
+            event.setUseItemInHand(Event.Result.DENY);
+            event.setUseInteractedBlock(Event.Result.DENY);
+            return;
+        }
         ServiceStationInteractionPolicy.Outcome stationOutcome =
                 ServiceStationInteractionPolicy.decide(registry.isValidStation(block), event.getAction(),
                         event.getHand(), event.getPlayer().hasPermission("tianjitown.admin"),

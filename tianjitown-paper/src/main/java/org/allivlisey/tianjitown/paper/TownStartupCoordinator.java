@@ -404,17 +404,32 @@ final class TownStartupCoordinator {
         }
         // 在异步启动诊断期间也要由 onDisable 统一回收数据源；此时尚未注册业务组件。
         databaseGate = candidate;
-        try {
-            runtime.bonuses().diagnoseAtStartup(diagnostic -> completeRuntimeActivation(
-                    candidate, previousDetails, databaseDetail, generation, runtime, actions, ui,
-                    residenceProtection, managedResidenceNames, activeResidenceNames, diagnostic));
-        } catch (RuntimeException | LinkageError exception) {
-            closeDatabaseCandidate(candidate);
-            List<String> details = new ArrayList<>(previousDetails);
-            details.add(messages().plainText(STARTUP_DIAGNOSTIC_FAILED,
-                    Map.of("detail", safeText(safeMessage(exception)))));
-            lock(messages().plainText(STARTUP_DIAGNOSTIC_GATE_FAILED), details);
-        }
+        scheduler.runAsync(() -> {
+            try {
+                runtime.stations().load();
+                scheduler.runMain(() -> {
+                    if (!scheduler.isCurrentLifecycle(generation)) return;
+                    try {
+                        runtime.bonuses().diagnoseAtStartup(diagnostic -> completeRuntimeActivation(
+                                candidate, previousDetails, databaseDetail, generation, runtime, actions, ui,
+                                residenceProtection, managedResidenceNames, activeResidenceNames, diagnostic));
+                    } catch (RuntimeException | LinkageError exception) {
+                        failStartupDiagnostic(candidate, previousDetails, exception);
+                    }
+                });
+            } catch (RuntimeException | LinkageError exception) {
+                scheduler.runMain(() -> failStartupDiagnostic(candidate, previousDetails, exception));
+            }
+        });
+    }
+
+    private void failStartupDiagnostic(DatabaseGate candidate, List<String> previousDetails,
+                                       Throwable exception) {
+        closeDatabaseCandidate(candidate);
+        List<String> details = new ArrayList<>(previousDetails);
+        details.add(messages().plainText(STARTUP_DIAGNOSTIC_FAILED,
+                Map.of("detail", safeText(safeMessage(exception)))));
+        lock(messages().plainText(STARTUP_DIAGNOSTIC_GATE_FAILED), details);
     }
 
     private void completeRuntimeActivation(DatabaseGate candidate, List<String> previousDetails,

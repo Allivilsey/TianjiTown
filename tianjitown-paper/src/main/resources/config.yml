@@ -7,8 +7,6 @@ database:
 town:
   # 可通过 /tianjitown maintenance on|off 即时切换；开启时玩家 UI 和表单全部暂停。
   maintenance-mode: false
-  # 由服务台管理命令维护；列表同时保留方块 PDC 中的服务台 ID 和当前位置。
-  service-stations: []
   # 玩家每次领取手册后需要等待的时间，管理员发放同样遵守该冷却。
   handbook-cooldown-minutes: 60
   application:
@@ -60,7 +58,6 @@ buffs:
       effect-kind: ATTRIBUTE
       effect-key: 'minecraft:movement_speed'
       operation: ADD_SCALAR
-      # I 级每周基础价；1~4 周分别无折扣、九五折、9折、八五折（每多一周优惠5个百分点）。
       base-price: '6720.00'
       maximum-level: 5
       stacking: LEVEL_UP
@@ -73,7 +70,6 @@ buffs:
       maximum-level: 5
       stacking: LEVEL_UP
       amount-per-level: 4.0
-
     night_vision:
       effect-kind: POTION
       effect-key: 'minecraft:night_vision'

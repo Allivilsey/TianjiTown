@@ -19,31 +19,31 @@ public final class StationProtectionListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onStationEntityExplosion(EntityExplodeEvent event) {
-        event.blockList().removeIf(registry::isValidStation);
+        event.blockList().removeIf(registry::isProtected);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onStationBlockExplosion(BlockExplodeEvent event) {
-        event.blockList().removeIf(registry::isValidStation);
+        event.blockList().removeIf(registry::isProtected);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onStationPistonExtend(BlockPistonExtendEvent event) {
-        if (event.getBlocks().stream().anyMatch(registry::isValidStation)) {
+        if (event.getBlocks().stream().anyMatch(registry::isProtected)) {
             event.setCancelled(true);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onStationPistonRetract(BlockPistonRetractEvent event) {
-        if (event.getBlocks().stream().anyMatch(registry::isValidStation)) {
+        if (event.getBlocks().stream().anyMatch(registry::isProtected)) {
             event.setCancelled(true);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onStationBreak(BlockBreakEvent event) {
-        if (registry.isValidStation(event.getBlock())) {
+        if (registry.isProtected(event.getBlock())) {
             event.setCancelled(true);
         }
     }
