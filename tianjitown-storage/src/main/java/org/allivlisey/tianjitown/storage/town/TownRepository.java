@@ -99,6 +99,42 @@ public final class TownRepository {
         });
     }
 
+    public record VoteResultNotification(long id, UUID playerId, String townName,
+                                         UUID voteId, String voteType, String status,
+                                         int yesVotes, int noVotes, int requiredYes) {}
+
+    public List<VoteResultNotification> pendingVoteResults(UUID playerId) {
+        database.requireWorkerThread();
+        return database.query(connection -> {
+            List<VoteResultNotification> result = new java.util.ArrayList<>();
+            try (var statement = connection.prepareStatement("SELECT * FROM vote_result_notifications WHERE player_uuid = ? ORDER BY notification_id LIMIT 100")) {
+                statement.setBytes(1, uuid(playerId));
+                try (var rows = statement.executeQuery()) {
+                    while (rows.next()) result.add(new VoteResultNotification(rows.getLong("notification_id"),
+                            readUuid(rows, "player_uuid"), rows.getString("town_name"),
+                            readUuid(rows, "vote_id"), rows.getString("vote_type"), rows.getString("status"),
+                            rows.getInt("yes_votes"), rows.getInt("no_votes"), rows.getInt("required_yes")));
+                }
+            }
+            return List.copyOf(result);
+        });
+    }
+
+    public void acknowledgeVoteResults(UUID playerId, List<Long> ids) {
+        database.requireWorkerThread();
+        database.transaction(connection -> {
+            try (var statement = connection.prepareStatement("DELETE FROM vote_result_notifications WHERE player_uuid = ? AND notification_id = ?")) {
+                for (long id : ids) {
+                    statement.setBytes(1, uuid(playerId));
+                    statement.setLong(2, id);
+                    statement.addBatch();
+                }
+                statement.executeBatch();
+            }
+            return null;
+        });
+    }
+
     public ApplicationSnapshot submit(UUID applicationId, UUID applicantId) {
         return applicationStore.submit(applicationId, applicantId);
     }

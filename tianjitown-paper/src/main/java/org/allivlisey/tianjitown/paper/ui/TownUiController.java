@@ -39,6 +39,7 @@ import org.allivlisey.tianjitown.paper.ui.buff.TownBuffShopDialogs;
 
 public final class TownUiController implements Listener {
     private final PlayerChangeDelivery playerChanges;
+    private final VoteResultDelivery voteResults;
     private final TianjiTownPlugin plugin;
     private final TownUiLegacyFacade facade;
     private final ServiceStationController serviceStations;
@@ -49,6 +50,7 @@ public final class TownUiController implements Listener {
     public TownUiController(TianjiTownPlugin plugin, TownRuntime runtime, TownActions actions) {
         this.plugin = plugin;
         playerChanges = new PlayerChangeDelivery(plugin, runtime.repository());
+        voteResults = new VoteResultDelivery(plugin, runtime.repository());
         facade = new TownUiLegacyFacade(plugin, runtime, actions);
         RuleEditorControls ruleControls = new RuleEditorControls(facade.presentation());
         facade.bindDialogs(new TownHomeDialogs(facade),
@@ -111,16 +113,17 @@ public final class TownUiController implements Listener {
                 .registerAll(applicationFormUi::route, "CREATE_APPLICATION", "EDIT_APPLICATION",
                         "EDIT_TOWN", "EDIT_TOWN_DESCRIPTION", "APPLICATION_BASICS_FORM",
                         "APPLICATION_CONTENT_FORM", "APPLICATION_MEMBERS_FORM", "SELECT_INITIAL_MEMBER",
-                        "CHOOSE_INITIAL_MEMBER", "SAVE_APPLICATION_DRAFT", "SAVE_FORM_DRAFT",
+                        "CHOOSE_INITIAL_MEMBER", "CLEAR_INITIAL_MEMBER", "SAVE_APPLICATION_DRAFT", "SAVE_FORM_DRAFT",
                         "DISCARD_FORM_DRAFT")
                 .build());
     }
 
-    public void deliverPlayerChanges() { playerChanges.poll(); }
+    public void deliverPlayerChanges() { playerChanges.poll(); voteResults.poll(); }
 
     @EventHandler
     public void deliverPlayerChanges(org.bukkit.event.player.PlayerJoinEvent event) {
         playerChanges.deliver(event.getPlayer().getUniqueId());
+        voteResults.deliver(event.getPlayer().getUniqueId());
     }
 
     public List<Listener> listeners() {

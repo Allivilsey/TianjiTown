@@ -283,13 +283,13 @@ public final class TownApplicationFormDialogs {
         Map<InitialMemberDialogLayout.Action, ItemStack> items = Map.of(
                 InitialMemberDialogLayout.Action.FIRST_MEMBER, presentation.button(Material.PLAYER_HEAD,
                 first.isBlank() ? presentation.dialogText("application.member-one-placeholder")
-                        : "§a" + first,
+                        : presentation.dialogText("application.member-selected", Map.of("player", first)),
                 List.of(presentation.dialogText("common.application-member-select")),
                 "SELECT_INITIAL_MEMBER",
                 form.id() + ":0"),
                 InitialMemberDialogLayout.Action.SECOND_MEMBER, presentation.button(Material.PLAYER_HEAD,
                 second.isBlank() ? presentation.dialogText("application.member-two-placeholder")
-                        : "§a" + second,
+                        : presentation.dialogText("application.member-selected", Map.of("player", second)),
                 List.of(presentation.dialogText("common.application-member-select")),
                 "SELECT_INITIAL_MEMBER",
                 form.id() + ":1"),
@@ -308,7 +308,8 @@ public final class TownApplicationFormDialogs {
                         "DISCARD_FORM_DRAFT", form.id().toString()));
         InitialMemberDialogLayout.Layout layout = InitialMemberDialogLayout.layout();
         DialogRoute parent = new DialogRoute("APPLICATION_CONTENT_FORM", form.id().toString());
-        presentation.openDialogPage(player, presentation.dialogText("application.members-title"), List.of(), List.of(),
+        presentation.openDialogPage(player, presentation.dialogText("application.members-title"),
+                List.of(DialogBody.plainMessage(presentation.dialogComponent("application.members-guidance"), 400)), List.of(),
                 DialogBase.DialogAfterAction.NONE, session -> DialogType.multiAction(
                                 layout.actions().stream()
                                         .map(action -> presentation.dialogButton(player, items.get(action), session))
@@ -329,7 +330,8 @@ public final class TownApplicationFormDialogs {
                         form.initialMemberNames().get(1 - memberIndex)))
                 .sorted(java.util.Comparator.comparing(Player::getName,
                         String.CASE_INSENSITIVE_ORDER)).toList();
-        if (candidates.isEmpty()) {
+        boolean hasSelection = !form.initialMemberNames().get(memberIndex).isBlank();
+        if (candidates.isEmpty() && !hasSelection) {
             presentation.openNotice(player, presentation.dialogText("notice.no-candidates-title"),
                     presentation.dialogText("notice.no-candidates-message"),
                     presentation.dialogText("common.back"), "APPLICATION_MEMBERS_FORM",
@@ -337,6 +339,12 @@ public final class TownApplicationFormDialogs {
             return;
         }
         List<MenuItem> items = new ArrayList<>();
+        if (hasSelection) {
+            items.add(new MenuItem(-1, presentation.button(Material.BARRIER,
+                    presentation.dialogText("application.clear-member"),
+                    List.of(presentation.dialogText("application.clear-member-hint")),
+                    "CLEAR_INITIAL_MEMBER", formId + ":" + memberIndex)));
+        }
         for (int index = 0; index < candidates.size(); index++) {
             Player candidate = candidates.get(index);
             items.add(new MenuItem(index, presentation.button(Material.PLAYER_HEAD, "§e" + candidate.getName(),
@@ -366,8 +374,26 @@ public final class TownApplicationFormDialogs {
                     "SELECT_INITIAL_MEMBER", formId + ":" + memberIndex);
             return;
         }
+        if (candidate.getName().equalsIgnoreCase(form.initialMemberNames().get(1 - memberIndex))) {
+            presentation.openNotice(player, presentation.dialogText("notice.player-unavailable-title"),
+                    presentation.dialogText("application.initial-members-distinct-required"),
+                    presentation.dialogText("common.select-again"),
+                    "SELECT_INITIAL_MEMBER", formId + ":" + memberIndex);
+            return;
+        }
+        updateInitialMember(player, form, memberIndex, candidate.getName());
+    }
+
+    public void clearInitialMember(Player player, UUID formId, int memberIndex) {
+        ApplicationFormSession form = requireApplicationForm(player, formId);
+        if (form != null) {
+            updateInitialMember(player, form, memberIndex, "");
+        }
+    }
+
+    private void updateInitialMember(Player player, ApplicationFormSession form, int memberIndex, String name) {
         List<String> members = new ArrayList<>(form.initialMemberNames());
-        members.set(memberIndex, candidate.getName());
+        members.set(memberIndex, name);
         ApplicationFormSession updated = new ApplicationFormSession(form.id(), form.purpose(),
                 form.targetId(), form.version(), form.text(), members);
         facade.applicationFormUi().putSession(player.getUniqueId(), updated);

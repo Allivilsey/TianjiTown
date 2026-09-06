@@ -10,6 +10,8 @@ libraries:
   - 'org.xerial:sqlite-jdbc:${sqlite.version}'
 softdepend: [Vault, Residence, QuickShop-Hikari, Jobs, GlobalMarketPlus, XConomy, WorldBorder, HuskSync]
 commands:
+  tianjitown-callback:
+    description: 小镇聊天按钮回调
   tianjitown:
     description: TianjiTown 管理命令
     usage: /tianjitown help

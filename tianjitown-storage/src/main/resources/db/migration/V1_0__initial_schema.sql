@@ -832,3 +832,32 @@ CREATE TABLE service_stations (
     CONSTRAINT uq_service_station_location UNIQUE (world_uuid, x, y, z),
     CONSTRAINT fk_service_station_town FOREIGN KEY (town_id) REFERENCES towns (town_id)
 );
+
+
+-- Durable town-wide results, committed atomically with every terminal vote transition.
+CREATE TABLE vote_result_notifications (
+    notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_uuid BLOB NOT NULL,
+    town_name TEXT NOT NULL,
+    vote_id BLOB NOT NULL,
+    vote_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    yes_votes INTEGER NOT NULL,
+    no_votes INTEGER NOT NULL,
+    required_yes INTEGER NOT NULL
+);
+CREATE INDEX ix_vote_result_pending ON vote_result_notifications(player_uuid, notification_id);
+
+CREATE TRIGGER notify_vote_result AFTER UPDATE OF status ON governance_votes
+WHEN OLD.status = 'OPEN' AND NEW.status IN ('PASSED', 'REJECTED', 'CANCELLED')
+BEGIN
+    INSERT INTO vote_result_notifications
+        (player_uuid, town_name, vote_id, vote_type, status, yes_votes, no_votes, required_yes)
+    SELECT recipients.player_uuid, t.name, NEW.vote_id, NEW.vote_type, NEW.status,
+           NEW.yes_votes, NEW.no_votes, NEW.required_yes
+      FROM towns t CROSS JOIN (
+          SELECT player_uuid FROM town_members WHERE town_id = NEW.town_id
+          UNION SELECT NEW.subject_uuid
+      ) recipients
+     WHERE t.town_id = NEW.town_id;
+END;

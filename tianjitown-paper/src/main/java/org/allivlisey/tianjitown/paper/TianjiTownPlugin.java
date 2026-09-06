@@ -4,6 +4,7 @@ import org.allivlisey.tianjitown.paper.runtime.GateStatus;
 import org.allivlisey.tianjitown.paper.action.TownActions;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.ui.TownUiController;
+import org.allivlisey.tianjitown.paper.ui.ChatCallbackService;
 
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -11,15 +12,22 @@ import org.bukkit.plugin.java.JavaPlugin;
 /** Paper entry point; startup and task ownership live in lifecycle components. */
 public final class TianjiTownPlugin extends JavaPlugin {
     private final TownStartupCoordinator startup = new TownStartupCoordinator(this);
+    private final ChatCallbackService chatCallbacks = new ChatCallbackService();
 
     @Override
     public void onEnable() {
+        chatCallbacks.register(this);
         startup.onEnable();
     }
 
     @Override
     public void onDisable() {
+        chatCallbacks.clear();
         startup.onDisable();
+    }
+
+    public ChatCallbackService chatCallbacks() {
+        return chatCallbacks;
     }
 
     public GateStatus gateStatus() {

@@ -20,7 +20,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -79,6 +78,11 @@ public final class TownUiPresentation {
 
     public UUID openMenu(Player player, int size, String title, DialogRoute parent,
                          List<MenuItem> items, int columns) {
+        return openMenu(player, size, title, parent, items, columns, 180);
+    }
+
+    public UUID openMenu(Player player, int size, String title, DialogRoute parent,
+                         List<MenuItem> items, int columns, int buttonWidth) {
         List<MenuItem> ordered = items.stream()
                 .sorted(java.util.Comparator.comparingInt(MenuItem::slot))
                 .toList();
@@ -98,7 +102,7 @@ public final class TownUiPresentation {
                         return DialogType.notice(exit);
                     }
                     List<ActionButton> buttons = actions.stream()
-                            .map(item -> dialogButton(player, item.item(), session))
+                            .map(item -> dialogButton(player, item.item(), session, buttonWidth))
                             .toList();
                     return DialogType.multiAction(buttons)
                             .exitAction(exit)
@@ -143,13 +147,17 @@ public final class TownUiPresentation {
     }
 
     public ActionButton dialogButton(Player player, ItemStack item, UUID session) {
+        return dialogButton(player, item, session, 180);
+    }
+
+    private ActionButton dialogButton(Player player, ItemStack item, UUID session, int width) {
         ItemMeta meta = item.getItemMeta();
         Component label = meta != null && meta.hasDisplayName() && meta.displayName() != null
                 ? meta.displayName() : Component.text(item.getType().name());
         Component tooltip = dialogTooltip(meta);
         String action = itemAction(item);
         String target = dialogs.target(meta);
-        return ActionButton.create(label, tooltip, 180,
+        return ActionButton.create(label, tooltip, width,
                 action == null ? null : dialogAction(player, session, action, target));
     }
 
@@ -228,19 +236,11 @@ public final class TownUiPresentation {
     }
 
     private ClickEvent callbackEvent(Player recipient, Runnable action) {
-        return ClickEvent.callback(audience -> {
-            if (!dialogs.isActive() || !(audience instanceof Player clicked)
-                    || !clicked.getUniqueId().equals(recipient.getUniqueId())) {
-                return;
-            }
-            plugin.runMain(() -> {
-                if (!clicked.isOnline()) {
-                    return;
-                }
-                playSound(clicked, Sound.UI_BUTTON_CLICK);
-                action.run();
-            });
-        }, options -> options.uses(5).lifetime(Duration.ofDays(7)));
+        return plugin.chatCallbacks().create(recipient.getUniqueId(),
+                () -> dialogs.isActive() && recipient.isOnline(), () -> {
+                    playSound(recipient, Sound.UI_BUTTON_CLICK);
+                    action.run();
+                });
     }
 
     public void playSound(Player player, Sound sound) {

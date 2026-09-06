@@ -88,6 +88,10 @@ final class TownGovernanceActions {
                 () -> runtime.governance().castVote(voteId, actor.getUniqueId(), approve),
                 vote -> {
                     if (vote.passed() && vote.type() == VoteType.KICK_MEMBER) {
+                        Player removed = plugin.getServer().getPlayer(vote.subjectId());
+                        if (removed != null) {
+                            runtime.buffs().refreshPlayer(removed);
+                        }
                         support.syncResidence(actor, vote.townId());
                     }
                     return support.voteData(vote);

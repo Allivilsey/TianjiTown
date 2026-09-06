@@ -5,9 +5,13 @@ import org.allivlisey.tianjitown.core.consumption.BuffDurationOption;
 import org.allivlisey.tianjitown.core.consumption.BuffStackingRule;
 import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
 import org.allivlisey.tianjitown.storage.database.DatabaseGate;
+import org.allivlisey.tianjitown.storage.governance.GovernanceRepository;
+import org.allivlisey.tianjitown.storage.town.TownRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.sql.DataSource;
 import java.lang.reflect.Proxy;
@@ -31,6 +35,40 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CommerceRepositorySqliteTest {
     @TempDir
     Path temporaryDirectory;
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void leavingOrBeingKickedRemovesBuffEligibilityWithoutCancellingTownBuff(boolean voluntary)
+            throws Exception {
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("departing-member.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID townId = UUID.randomUUID();
+            UUID mayorId = UUID.randomUUID();
+            UUID memberId = UUID.randomUUID();
+            insertTown(gate, townId, mayorId, memberId);
+            CommerceRepository commerce = new CommerceRepository(gate.dataSource(), () -> false);
+            var towns = new TownRepository(gate.dataSource(), () -> false);
+            var governance = new GovernanceRepository(gate.dataSource(), () -> false);
+            Instant now = Instant.now();
+            BuffDefinition definition = new BuffDefinition("speed", "公共迅捷",
+                    BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                    BigDecimal.ONE, 1, BuffStackingRule.LEVEL_UP, 1);
+            var buff = commerce.purchaseBuff(mayorId, "Mayor", definition,
+                    BuffDurationOption.ONE_HOUR, 2, "departure:buff", now).buff();
+            assertEquals(List.of(buff), commerce.activeBuffsForPlayer(memberId, now));
+
+            if (voluntary) {
+                towns.leaveTown(memberId);
+            } else {
+                governance.removeMemberByMayor(townId, memberId, mayorId, "Mayor");
+            }
+            assertTrue(commerce.activeBuffsForPlayer(memberId, now).isEmpty());
+            assertEquals(List.of(buff), commerce.activeBuffsForPlayer(mayorId, now));
+            assertEquals(List.of(buff), commerce.activeBuffsForTown(townId, now));
+        }
+    }
 
     @Test
     void rejectsEveryPublicOperationBeforeAccessingDataSourceOnMainThread() {

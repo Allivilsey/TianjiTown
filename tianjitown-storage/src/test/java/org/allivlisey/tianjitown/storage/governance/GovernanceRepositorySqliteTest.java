@@ -37,6 +37,64 @@ class GovernanceRepositorySqliteTest {
     Path temporaryDirectory;
 
     @Test
+    void persistsVoteResultsForAllMembersAcrossSettlementPaths() throws Exception {
+        DatabaseConfig config = new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("vote-results.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5));
+        try (DatabaseGate gate = new DatabaseGate(config)) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            TownRepository towns = new TownRepository(gate.dataSource(), () -> false);
+            GovernanceRepository governance = new GovernanceRepository(gate.dataSource(), () -> false);
+            CreatedTown created = createTown(towns);
+            UUID target = UUID.randomUUID();
+            towns.addMember(created.town().id(), target, created.mayorId(), "Admin", "测试");
+            governance.recordActivity(created.mayorId());
+            for (String path : List.of("ballot", "due", "admin", "cancel")) {
+                governance.recordActivity(target);
+                VoteSnapshot vote = governance.createVote(created.town().id(),
+                        path.equals("ballot") ? VoteType.KICK_MEMBER : VoteType.REPLACE_MAYOR,
+                        target, created.mayorId(), Duration.ofDays(30), Duration.ZERO,
+                        Duration.ofHours(1), true);
+                assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM vote_result_notifications"));
+                if (path.equals("ballot")) {
+                    for (UUID voter : governance.listVoteVoterIds(vote.id())) {
+                        governance.castVote(vote.id(), voter, true);
+                    }
+                } else if (path.equals("due")) {
+                    setLongForUuid(gate, "UPDATE governance_votes SET ends_at = ? WHERE vote_id = ?",
+                            0, vote.id());
+                    governance.settleDueVotes();
+                } else if (path.equals("admin")) {
+                    installAuditFailure(gate, "fail_result", "VOTE_SETTLE");
+                    assertThrows(RuntimeException.class, () -> governance.settleVote(
+                            vote.id(), created.mayorId(), "Admin", true));
+                    assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM vote_result_notifications"));
+                    dropTrigger(gate, "fail_result");
+                    governance.settleVote(vote.id(), created.mayorId(), "Admin", true);
+                } else {
+                    governance.cancelOwnVote(vote.id(), created.mayorId(), "Mayor");
+                }
+                assertEquals(4, scalar(gate, "SELECT COUNT(*) FROM vote_result_notifications"));
+                var result = towns.pendingVoteResults(created.mayorId()).getFirst();
+                assertEquals(vote.id(), result.voteId());
+                assertEquals(path.equals("ballot") ? "PASSED" : path.equals("cancel")
+                        ? "CANCELLED" : "REJECTED", result.status());
+                assertEquals(1, towns.pendingVoteResults(target).size());
+                governance.settleVote(vote.id(), created.mayorId(), "Admin", true);
+                assertEquals(4, scalar(gate, "SELECT COUNT(*) FROM vote_result_notifications"));
+                towns.acknowledgeVoteResults(UUID.randomUUID(), List.of(result.id()));
+                assertEquals(1, towns.pendingVoteResults(created.mayorId()).size());
+                towns.acknowledgeVoteResults(created.mayorId(), List.of(result.id()));
+                assertTrue(towns.pendingVoteResults(created.mayorId()).isEmpty());
+                execute(gate, "DELETE FROM vote_result_notifications");
+                if (path.equals("ballot")) {
+                    towns.addMember(created.town().id(), target, created.mayorId(), "Admin", "测试");
+                }
+            }
+        }
+    }
+
+    @Test
     void handlesOfficerRulesTransferAndVotesTransactionally() throws Exception {
         DatabaseConfig config = new DatabaseConfig(
                 "jdbc:sqlite:" + temporaryDirectory.resolve("governance.db"),

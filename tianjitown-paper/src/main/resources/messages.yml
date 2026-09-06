@@ -220,6 +220,7 @@ chat:
     application-needs-changes-default-reason: '请查看申请详情'
     application-rejected-default-reason: '未提供原因'
     application-provision-failed: '&c你的小镇已通过审核，但自动创建暂时失败；管理员会处理 '
+    vote-result: '&e小镇 {town}：“{type}”投票已结束，结果：{status}；赞成 {yes} 票，反对 {no} 票，通过需要 {required} 票。投票编号：{id}'
     identity-changed: '&e小镇 {town}：你的身份由 {oldRole} 变更为 {newRole}'
     member-removed: '&c你已被移出小镇 {town}'
     visitor-added: '&a你已被加入小镇 {town} 的访客名单'
@@ -516,12 +517,16 @@ chat:
     projection-bounds-or-area-count-mismatch: 'Residence 边界或区域数量不一致'
     projection-boundary-mismatch: 'Residence 边界不覆盖预期的 5×5 区块'
     explosion-flag-mismatch: 'Residence 爆炸保护标记不一致: {flag}'
+    monster-spawn-flag-mismatch: 'Residence 怪物生成保护标记不一致: monsters'
+    monster-spawn-flag-write-failed: '无法写入 Residence 怪物生成保护标记: monsters'
     explosion-flag-write-failed: '无法写入 Residence 爆炸保护标记: {flag}'
     membership-mismatch: 'Residence 成员权限列表与数据库不一致'
     member-padd-permission-mismatch: '成员 {member} 的 padd 权限组不一致'
     member-ignite-permission-mismatch: '成员 {member} 的点火权限不一致'
+    member-vehicle-destroy-permission-mismatch: '成员 {member} 的载具破坏权限不一致'
     member-padd-permission-write-failed: '无法写入成员 {member} 的 padd 权限组'
     member-ignite-permission-write-failed: '无法写入成员 {member} 的点火权限'
+    member-vehicle-destroy-permission-write-failed: '无法写入成员 {member} 的载具破坏权限'
     projection-healthy: 'Residence 投影正常: {residence}'
     unsupported-teleport-point: '&c当前领地适配器不支持设置传送点'
     unsupported-multi-area: '&c当前领地适配器不支持多区域 Residence'
@@ -695,6 +700,7 @@ diagnostic:
 log:
   notification:
     delivery-failed: '玩家身份通知投递失败，将重试: {detail}'
+    vote-result-delivery-failed: '投票结果通知投递失败，将重试: {detail}'
   # 插件停服期间的资源清理和异步任务等待；{detail}=异常详情，{active}=未结束任务数，{player}=玩家 UUID
   lifecycle:
     ui-close-failure: '停服关闭玩家界面失败: {detail}'
@@ -1719,6 +1725,10 @@ dialog:
     content-guidance: '&7 在此填写小镇规则'
     member-one-placeholder: '&e<小镇初始成员一>'
     member-two-placeholder: '&e<小镇初始成员二>'
+    member-selected: '&a{player}'
+    members-guidance: '&7点击成员按钮可选择、更换或清空；点击“完成资料并发送邀请”后才会通知所选成员。'
+    clear-member: '&e清空当前选择'
+    clear-member-hint: '&7清空此成员位置，可稍后重新选择；不会发送邀请'
     save: '&a保存'
     save-draft: '&e保存草稿并退出'
     save-draft-tooltip: '&7保存已填写内容'

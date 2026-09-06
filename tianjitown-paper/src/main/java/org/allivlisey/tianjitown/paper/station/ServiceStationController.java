@@ -4,7 +4,6 @@ import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 
 import io.papermc.paper.event.player.PlayerInsertLecternBookEvent;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
@@ -27,7 +26,6 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -410,17 +408,8 @@ public final class ServiceStationController implements Listener {
 
     private Component callbackButton(Player recipient, String labelKey, Runnable action) {
         return plugin.messages().component(labelKey).decorate(TextDecoration.BOLD)
-                .clickEvent(ClickEvent.callback(audience -> {
-                    if (!dialogsActive.getAsBoolean() || !(audience instanceof Player clicked)
-                            || !clicked.getUniqueId().equals(recipient.getUniqueId())) {
-                        return;
-                    }
-                    plugin.runMain(() -> {
-                        if (clicked.isOnline()) {
-                            action.run();
-                        }
-                    });
-                }, options -> options.uses(5).lifetime(Duration.ofDays(7))))
+                .clickEvent(plugin.chatCallbacks().create(recipient.getUniqueId(),
+                        () -> dialogsActive.getAsBoolean() && recipient.isOnline(), action))
                 .hoverEvent(HoverEvent.showText(
                         plugin.messages().component("chat.buttons.open-tooltip")));
     }

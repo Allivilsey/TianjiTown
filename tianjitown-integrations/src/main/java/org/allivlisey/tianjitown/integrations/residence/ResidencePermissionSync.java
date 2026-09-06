@@ -8,14 +8,15 @@ import org.bukkit.Server;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 import org.allivlisey.tianjitown.core.ports.LandProtectionService.*;
 import static org.allivlisey.tianjitown.integrations.residence.ResidenceLandProtectionService.safeText;
 
 final class ResidencePermissionSync {
+    private static final String MONSTER_SPAWN_FLAG = "monsters";
     private static final String IGNITE_FLAG = "ignite";
+    private static final String VEHICLE_DESTROY_FLAG = "vehicledestroy";
     private static final List<String> PROTECTED_EXPLOSION_FLAGS = List.of(
             "explode", "tnt", "creeper");
     private final Server server;
@@ -41,6 +42,14 @@ final class ResidencePermissionSync {
                         Map.of("flag", safeText(flag)));
             }
         }
+        if (!applyPermissions && residence.getPermissions().has(MONSTER_SPAWN_FLAG, true)) {
+            return Result.failureCode(ResultCode.MONSTER_SPAWN_FLAG_MISMATCH);
+        }
+        if (applyPermissions && !residence.getPermissions().setFlag(
+                server.getConsoleSender(), MONSTER_SPAWN_FLAG, FlagPermissions.FlagState.FALSE, true,
+                false)) {
+            return Result.failureCode(ResultCode.MONSTER_SPAWN_FLAG_WRITE_FAILED);
+        }
         java.util.Set<UUID> existingPlayers = java.util.Set.copyOf(
                 residence.getPermissions().getPlayerFlags().keySet());
         if (!applyPermissions && !existingPlayers.equals(java.util.Set.copyOf(members))) {
@@ -64,6 +73,10 @@ final class ResidencePermissionSync {
                 return Result.failureCode(ResultCode.MEMBER_IGNITE_PERMISSION_MISMATCH,
                         Map.of("member", safeText(member)));
             }
+            if (!applyPermissions && !Boolean.TRUE.equals(playerFlags.get(VEHICLE_DESTROY_FLAG))) {
+                return Result.failureCode(ResultCode.MEMBER_VEHICLE_DESTROY_PERMISSION_MISMATCH,
+                        Map.of("member", safeText(member)));
+            }
             if (applyPermissions && !residence.getPermissions().setFlagGroupOnPlayer(
                      server.getConsoleSender(), member, padd.groupedFlag, "true", true)) {
                 return Result.failureCode(ResultCode.MEMBER_PADD_PERMISSION_WRITE_FAILED,
@@ -72,6 +85,11 @@ final class ResidencePermissionSync {
             if (applyPermissions && !residence.getPermissions().setPlayerFlag(member, IGNITE_FLAG,
                     FlagPermissions.FlagState.TRUE)) {
                 return Result.failureCode(ResultCode.MEMBER_IGNITE_PERMISSION_WRITE_FAILED,
+                        Map.of("member", safeText(member)));
+            }
+            if (applyPermissions && !residence.getPermissions().setPlayerFlag(member, VEHICLE_DESTROY_FLAG,
+                    FlagPermissions.FlagState.TRUE)) {
+                return Result.failureCode(ResultCode.MEMBER_VEHICLE_DESTROY_PERMISSION_WRITE_FAILED,
                         Map.of("member", safeText(member)));
             }
         }

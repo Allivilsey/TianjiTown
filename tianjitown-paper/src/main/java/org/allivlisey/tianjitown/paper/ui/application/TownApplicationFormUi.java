@@ -40,6 +40,10 @@ public final class TownApplicationFormUi {
                 }
                 case "CHOOSE_INITIAL_MEMBER" -> facade.chooseInitialMember(player,
                         InitialMemberChoice.parse(target).encode());
+                case "CLEAR_INITIAL_MEMBER" -> {
+                    InitialMemberTarget member = InitialMemberTarget.parse(target);
+                    facade.clearInitialMember(player, member.formId(), member.index());
+                }
                 case "SAVE_APPLICATION_DRAFT" -> facade.saveApplicationForm(player, uuid(target));
                 case "SAVE_FORM_DRAFT" -> facade.persistCurrentApplicationForm(player, uuid(target));
                 case "DISCARD_FORM_DRAFT" -> facade.discardApplicationForm(player, uuid(target));

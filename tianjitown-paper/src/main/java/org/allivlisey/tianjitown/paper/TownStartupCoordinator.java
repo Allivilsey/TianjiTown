@@ -140,7 +140,9 @@ final class TownStartupCoordinator {
     public void onEnable() {
         long generation = scheduler.start();
         plugin.saveDefaultConfig();
-        plugin.saveResource("messages.yml", false);
+        if (Files.notExists(plugin.getDataFolder().toPath().resolve("messages.yml"))) {
+            plugin.saveResource("messages.yml", false);
+        }
         messages = new PluginMessages(plugin.getDataFolder());
         gateStatus.set(new GateStatus(GateStatus.State.CHECKING,
                 List.of(messages().plainText(STARTUP_CHECKING))));

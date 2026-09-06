@@ -120,6 +120,8 @@ public final class LandProtectionMessages {
                     "chat.land-protection.projection-bounds-or-area-count-mismatch";
             case PROJECTION_BOUNDARY_MISMATCH ->
                     "chat.land-protection.projection-boundary-mismatch";
+            case MONSTER_SPAWN_FLAG_MISMATCH -> "chat.land-protection.monster-spawn-flag-mismatch";
+            case MONSTER_SPAWN_FLAG_WRITE_FAILED -> "chat.land-protection.monster-spawn-flag-write-failed";
             case EXPLOSION_FLAG_MISMATCH -> "chat.land-protection.explosion-flag-mismatch";
             case EXPLOSION_FLAG_WRITE_FAILED ->
                     "chat.land-protection.explosion-flag-write-failed";
@@ -128,10 +130,14 @@ public final class LandProtectionMessages {
                     "chat.land-protection.member-padd-permission-mismatch";
             case MEMBER_IGNITE_PERMISSION_MISMATCH ->
                     "chat.land-protection.member-ignite-permission-mismatch";
+            case MEMBER_VEHICLE_DESTROY_PERMISSION_MISMATCH ->
+                    "chat.land-protection.member-vehicle-destroy-permission-mismatch";
             case MEMBER_PADD_PERMISSION_WRITE_FAILED ->
                     "chat.land-protection.member-padd-permission-write-failed";
             case MEMBER_IGNITE_PERMISSION_WRITE_FAILED ->
                     "chat.land-protection.member-ignite-permission-write-failed";
+            case MEMBER_VEHICLE_DESTROY_PERMISSION_WRITE_FAILED ->
+                    "chat.land-protection.member-vehicle-destroy-permission-write-failed";
             case PROJECTION_HEALTHY -> "chat.land-protection.projection-healthy";
         };
     }

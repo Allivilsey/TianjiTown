@@ -148,6 +148,8 @@ public final class MessageContract {
         text(entries, "dialog.provision.timeout-recovery-action");
         text(entries, "dialog.confirmation.submit-application-consequence", "amount");
         text(entries, "dialog.tooltip.town.territory-center", "x", "z");
+        text(entries, "log.notification.vote-result-delivery-failed", "detail");
+        text(entries, "chat.notification.vote-result", "town", "id", "type", "status", "yes", "no", "required");
         text(entries, "chat.notification.identity-changed", "town", "oldRole", "newRole");
         text(entries, "chat.notification.member-removed", "town");
         text(entries, "chat.notification.visitor-added", "town");

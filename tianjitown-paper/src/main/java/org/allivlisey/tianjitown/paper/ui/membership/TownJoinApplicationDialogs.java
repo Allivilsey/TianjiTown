@@ -178,7 +178,11 @@ public final class TownJoinApplicationDialogs {
         runtime.read(mayor, () -> runtime.repository().dashboard(mayor.getUniqueId()), dashboard -> {
             JoinApplicationSnapshot application = dashboard.incomingJoinApplications().stream()
                     .filter(candidate -> candidate.id().equals(applicationId))
-                    .findFirst().orElseThrow(() -> new IllegalArgumentException("申请已过期或已处理"));
+                    .findFirst().orElse(null);
+            if (application == null) {
+                facade.openStaleMenu(mayor);
+                return;
+            }
             String name = Objects.requireNonNullElse(
                     Bukkit.getOfflinePlayer(application.applicantId()).getName(),
                     application.applicantId().toString());

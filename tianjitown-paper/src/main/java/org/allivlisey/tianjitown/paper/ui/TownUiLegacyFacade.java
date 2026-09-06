@@ -514,6 +514,10 @@ public final class TownUiLegacyFacade implements Listener {
         townApplicationFormDialogs.chooseInitialMember(player, target);
     }
 
+    public void clearInitialMember(Player player, UUID formId, int memberIndex) {
+        townApplicationFormDialogs.clearInitialMember(player, formId, memberIndex);
+    }
+
     public ApplicationFormSession requireApplicationForm(Player player, UUID formId) {
         return townApplicationFormDialogs.requireApplicationForm(player, formId);
     }

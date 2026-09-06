@@ -76,7 +76,7 @@ public final class TownVoteDialogs {
                         "VOTES_PAGE", townId + ":" + (page + 1))));
             }
             presentation.openMenu(player, 54, presentation.dialogText("votes.list-title", Map.of("page", page + 1)),
-                    new DialogRoute("GOVERNANCE_CENTER", null), items);
+                    new DialogRoute("GOVERNANCE_CENTER", null), items, 1, 400);
         });
     }
 
