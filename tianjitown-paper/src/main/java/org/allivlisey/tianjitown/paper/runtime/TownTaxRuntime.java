@@ -3,7 +3,6 @@ package org.allivlisey.tianjitown.paper.runtime;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,10 +30,10 @@ final class TownTaxRuntime {
             "log.quick-shop.tax-ledger-write-failure";
     private static final String GLOBAL_MARKET_PLUS_INCOME_TAX_DEBIT_FAILURE =
             "log.global-market-plus.income-tax-debit-failure";
-    private static final String GLOBAL_MARKET_PLUS_SUBSIDY_SETTLEMENT_REFUNDED =
-            "log.global-market-plus.subsidy-settlement-failure-refunded";
-    private static final String GLOBAL_MARKET_PLUS_SUBSIDY_SETTLEMENT_REFUND_FAILED =
-            "log.global-market-plus.subsidy-settlement-failure-refund-failed";
+    private static final String EXTERNAL_SUBSIDY_SETTLEMENT_FAILURE =
+            "log.external-income-tax.subsidy-settlement-failure";
+    private static final String EXTERNAL_SUBSIDY_SETTLEMENT_AMBIGUOUS =
+            "log.external-income-tax.subsidy-settlement-ambiguous";
     private static final String JOBS_INCOME_TAX_SETTLEMENT_FAILURE =
             "log.jobs.income-tax-settlement-failure";
     private static final String EXTERNAL_INCOME_TAX_LEDGER_WRITE_FAILURE =
@@ -47,6 +46,8 @@ final class TownTaxRuntime {
     private final Map<UUID, QuickShopTaxAdapter.TaxPolicy> taxPolicies = new ConcurrentHashMap<>();
     private final RetryingWorkQueue<QuickShopTaxAdapter.SuccessfulTax> pendingTaxes;
     private final RetryingWorkQueue<EconomyRepository.ExternalIncomeTax> pendingIncomeTaxes;
+    private final RetryingWorkQueue<PendingIncomeSubsidy> pendingIncomeSubsidies;
+    private final RetryingWorkQueue<PendingIncomeSubsidy> pendingIncomeSubsidyPayments;
     private final AtomicBoolean quickShopTaxAvailable = new AtomicBoolean(false);
     private static final String SCHEDULER_LIFECYCLE_STOPPED = "log.scheduler.lifecycle-stopped";
 
@@ -60,41 +61,83 @@ final class TownTaxRuntime {
         this.economySettings = economySettings;
         this.settlement = settlement;
         this.databaseAvailable = databaseAvailable;
-        this.pendingTaxes = new RetryingWorkQueue<>(new RetryingWorkQueue.Scheduler() {
-            @Override
-            public void executeAsync(Runnable task) {
-                if (!plugin.runAsync(task)) {
-                    throw new java.util.concurrent.RejectedExecutionException(
-                            plugin.messages().plainText(SCHEDULER_LIFECYCLE_STOPPED));
-                }
-            }
-
-            @Override
-            public void schedule(Runnable task, long delayTicks) {
-                if (!plugin.runMainLater(task, delayTicks)) {
-                    throw new java.util.concurrent.RejectedExecutionException(
-                            plugin.messages().plainText(SCHEDULER_LIFECYCLE_STOPPED));
-                }
-            }
-        }, 20L * 5, 20L * 30, this::recordQuickShopTax, this::handleQuickShopTaxFailure);
-        this.pendingIncomeTaxes = new RetryingWorkQueue<>(new RetryingWorkQueue.Scheduler() {
-            @Override
-            public void executeAsync(Runnable task) {
-                if (!plugin.runAsync(task)) {
-                    throw new java.util.concurrent.RejectedExecutionException(
-                            plugin.messages().plainText(SCHEDULER_LIFECYCLE_STOPPED));
-                }
-            }
-
-            @Override
-            public void schedule(Runnable task, long delayTicks) {
-                if (!plugin.runMainLater(task, delayTicks)) {
-                    throw new java.util.concurrent.RejectedExecutionException(
-                            plugin.messages().plainText(SCHEDULER_LIFECYCLE_STOPPED));
-                }
-            }
-        }, 20L * 5, 20L * 30, this::recordExternalIncomeTax,
+        RetryingWorkQueue.Scheduler asyncScheduler = taxScheduler(false);
+        this.pendingTaxes = new RetryingWorkQueue<>(asyncScheduler,
+                20L * 5, 20L * 30, this::recordQuickShopTax, this::handleQuickShopTaxFailure);
+        this.pendingIncomeTaxes = new RetryingWorkQueue<>(asyncScheduler,
+                20L * 5, 20L * 30, this::recordExternalIncomeTax,
                 this::handleExternalIncomeTaxFailure);
+        this.pendingIncomeSubsidyPayments = new RetryingWorkQueue<>(taxScheduler(true),
+                20L * 5, 20L * 30, this::payExternalSubsidy,
+                (pending, exception) -> plugin.getLogger().severe(plugin.messages().plainText(
+                        EXTERNAL_SUBSIDY_SETTLEMENT_FAILURE,
+                        Map.of("businessKey", safeText(pending.tax.businessKey()),
+                                "detail", safeText(safeMessage(exception))))));
+        this.pendingIncomeSubsidies = new RetryingWorkQueue<>(asyncScheduler,
+                20L * 5, 20L * 30, pending -> {
+                    if (pending.reservation == null) {
+                        pending.reservation = finance.reserveTaxSubsidy(pending.tax.townId(),
+                                pending.tax.businessKey(), pending.tax.taxMinor(),
+                                economySettings.weeklySubsidyLimitMinor(settlement.scale()),
+                                economySettings.twelveHourSubsidyLimitMinor(settlement.scale()),
+                                Instant.now(), org.allivlisey.tianjitown.core.time.TownTime.ZONE);
+                    }
+                    pendingIncomeSubsidyPayments.submit(pending);
+                }, (pending, exception) -> handleExternalIncomeTaxFailure(pending.tax, exception));
+    }
+
+    private RetryingWorkQueue.Scheduler taxScheduler(boolean mainThread) {
+        return new RetryingWorkQueue.Scheduler() {
+            @Override
+            public void executeAsync(Runnable task) {
+                boolean accepted = mainThread ? plugin.runMain(task) : plugin.runAsync(task);
+                if (!accepted) {
+                    throw new java.util.concurrent.RejectedExecutionException(
+                            plugin.messages().plainText(SCHEDULER_LIFECYCLE_STOPPED));
+                }
+            }
+
+            @Override
+            public void schedule(Runnable task, long delayTicks) {
+                if (!plugin.runMainLater(task, delayTicks)) {
+                    throw new java.util.concurrent.RejectedExecutionException(
+                            plugin.messages().plainText(SCHEDULER_LIFECYCLE_STOPPED));
+                }
+            }
+        };
+    }
+
+    private void payExternalSubsidy(PendingIncomeSubsidy pending) {
+        // Preserve successful and ambiguous Vault results across queue retries.
+        // Only definite failures may safely invoke Vault again.
+        if (pending.result == null || (!pending.result.success()
+                && !pending.result.compensationRequired())) {
+            pending.result = pending.reservation.grantedMinor() == 0
+                    ? VaultSettlementService.Result.success(plugin.messages().plainText(
+                            QUICK_SHOP_TAX_SUBSIDY_QUOTA_EXHAUSTED))
+                    : settlement.adjustSettlement(pending.reservation.grantedMinor());
+        }
+        if (pending.result.compensationRequired()) {
+            // Keep the reservation for manual reconciliation; do not block unrelated payments.
+            plugin.getLogger().severe(plugin.messages().plainText(EXTERNAL_SUBSIDY_SETTLEMENT_AMBIGUOUS,
+                    Map.of("businessKey", safeText(pending.tax.businessKey()),
+                            "detail", safeText(pending.result.message()))));
+            return;
+        }
+        if (!pending.result.success()) {
+            throw new IllegalStateException(pending.result.message());
+        }
+        pendingIncomeTaxes.submit(pending.tax);
+    }
+
+    private static final class PendingIncomeSubsidy {
+        private final EconomyRepository.ExternalIncomeTax tax;
+        private EconomyRepository.SubsidyReservation reservation;
+        private VaultSettlementService.Result result;
+
+        private PendingIncomeSubsidy(EconomyRepository.ExternalIncomeTax tax) {
+            this.tax = tax;
+        }
     }
 
     QuickShopTaxAdapter.TaxPolicy taxPolicy(UUID receiverId) {
@@ -118,7 +161,7 @@ final class TownTaxRuntime {
         plugin.runAsync(() -> {
             try {
                 EconomyRepository.SubsidyReservation reservation =
-                        finance.reserveQuickShopSubsidy(tax.townId(), tax.businessKey(),
+                        finance.reserveTaxSubsidy(tax.townId(), tax.businessKey(),
                                 tax.taxMinor(), economySettings.weeklySubsidyLimitMinor(
                                         settlement.scale()),
                                 economySettings.twelveHourSubsidyLimitMinor(settlement.scale()),
@@ -141,7 +184,7 @@ final class TownTaxRuntime {
             return;
         }
         String subsidyDetail = subsidy.message();
-        plugin.runAsync(() -> finance.cancelQuickShopSubsidy(tax.businessKey(),
+        plugin.runAsync(() -> finance.cancelTaxSubsidy(tax.businessKey(),
                 subsidyDetail));
         plugin.getLogger().severe(plugin.messages().plainText(
                 QUICK_SHOP_TAX_SUBSIDY_SETTLEMENT_FAILURE,
@@ -150,6 +193,8 @@ final class TownTaxRuntime {
 
     void flushPendingTaxes() {
         pendingTaxes.flush();
+        pendingIncomeSubsidies.flush();
+        pendingIncomeSubsidyPayments.flush();
         pendingIncomeTaxes.flush();
     }
 
@@ -161,8 +206,8 @@ final class TownTaxRuntime {
         databaseAvailable.set(true);
     }
 
-    EconomyRepository.SubsidyQuota quickShopSubsidyQuota(UUID townId) {
-        return finance.quickShopSubsidyQuota(townId,
+    EconomyRepository.SubsidyQuota taxSubsidyQuota(UUID townId) {
+        return finance.taxSubsidyQuota(townId,
                 economySettings.weeklySubsidyLimitMinor(settlement.scale()),
                 economySettings.twelveHourSubsidyLimitMinor(settlement.scale()),
                 Instant.now(), org.allivlisey.tianjitown.core.time.TownTime.ZONE);
@@ -187,15 +232,14 @@ final class TownTaxRuntime {
         if (tax == null) {
             return JobsIncomeTaxAdapter.TaxResult.unchanged(earning.grossAmount());
         }
-        VaultSettlementService.Result transferred = settlement.adjustSettlement(
-                Math.multiplyExact(tax.taxMinor(), 2));
+        VaultSettlementService.Result transferred = settlement.adjustSettlement(tax.taxMinor());
         if (!transferred.success()) {
             plugin.getLogger().severe(plugin.messages().plainText(
                     JOBS_INCOME_TAX_SETTLEMENT_FAILURE,
                     Map.of("detail", safeText(transferred.message()))));
             return JobsIncomeTaxAdapter.TaxResult.unchanged(earning.grossAmount());
         }
-        pendingIncomeTaxes.submit(tax);
+        pendingIncomeSubsidies.submit(new PendingIncomeSubsidy(tax));
         double net = BigDecimal.valueOf(tax.grossMinor() - tax.taxMinor(),
                 settlement.scale()).doubleValue();
         return JobsIncomeTaxAdapter.TaxResult.taxed(net);
@@ -216,18 +260,7 @@ final class TownTaxRuntime {
                     Map.of("detail", safeText(transferred.message()))));
             return;
         }
-        VaultSettlementService.Result subsidy = settlement.adjustSettlement(tax.taxMinor());
-        if (!subsidy.success()) {
-            VaultSettlementService.Result refunded = settlement.transferToPlayer(
-                    earning.player(), tax.taxMinor());
-            String messageKey = refunded.success()
-                    ? GLOBAL_MARKET_PLUS_SUBSIDY_SETTLEMENT_REFUNDED
-                    : GLOBAL_MARKET_PLUS_SUBSIDY_SETTLEMENT_REFUND_FAILED;
-            plugin.getLogger().severe(plugin.messages().plainText(messageKey,
-                    Map.of("detail", safeText(subsidy.message()))));
-            return;
-        }
-        pendingIncomeTaxes.submit(tax);
+        pendingIncomeSubsidies.submit(new PendingIncomeSubsidy(tax));
         Player receiver = earning.player().getPlayer();
         if (receiver != null) {
             plugin.messages().send(receiver, "chat.runtime.global-market-income", Map.of(

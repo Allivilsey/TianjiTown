@@ -39,7 +39,7 @@ economy:
   tax:
     enabled: true
     subsidy:
-      # QuickShop 等额补贴按小镇分别计数；上海时间每周一 04:00 与每天 04:00/16:00 刷新。
+      # QuickShop、Jobs 和 GlobalMarketPlus 共用补贴额度，按小镇分别计数；上海时间每周一 04:00 与每天 04:00/16:00 刷新。
       weekly-limit: '10000.00'
       twelve-hour-limit: '2000.00'
   # 可立即停止捐款、扩张等新资金写入，不影响税款入账、退款和查询。

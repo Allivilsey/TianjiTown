@@ -20,17 +20,12 @@ import org.allivlisey.tianjitown.storage.economy.EconomyRepository.ExternalIncom
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository.LedgerMutation;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository.MemberTaxPolicy;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository.QuickShopTax;
-import org.allivlisey.tianjitown.storage.economy.EconomyRepository.StorageUnavailableException;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository.SubsidyQuota;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository.SubsidyReservation;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository.TaxChange;
 
 /** Tax rates, subsidy quotas and tax ledger workflows. */
 final class EconomyTaxStore {
-    // 兼容直接调用 recordQuickShopTax 的旧入口；未显式预留的补贴仍受默认限额约束。
-    private static final long LEGACY_WEEKLY_SUBSIDY_LIMIT_MINOR = 5_000_000L;
-    private static final long LEGACY_TWELVE_HOUR_SUBSIDY_LIMIT_MINOR = 500_000L;
-
     private final EconomyDatabase database;
 
     EconomyTaxStore(EconomyDatabase database) {
@@ -125,7 +120,7 @@ final class EconomyTaxStore {
         });
     }
 
-    SubsidyReservation reserveQuickShopSubsidy(UUID townId, String businessKey,
+    SubsidyReservation reserveTaxSubsidy(UUID townId, String businessKey,
                                                        long requestedMinor,
                                                        long weeklyLimitMinor,
                                                        long twelveHourLimitMinor,
@@ -143,7 +138,13 @@ final class EconomyTaxStore {
             Optional<SubsidyReservation> existing = findSubsidyReservation(connection,
                     businessKey);
             if (existing.isPresent()) {
-                return existing.get();
+                SubsidyReservation reservation = existing.get();
+                if (!reservation.townId().equals(townId)
+                        || reservation.requestedMinor() != requestedMinor
+                        || reservation.status().equals("CANCELLED")) {
+                    throw new ConflictException("税收补贴预留与请求不一致");
+                }
+                return reservation;
             }
             long usedWeekly = subsidyUsed(connection, townId, "week_start",
                     periods.weekStart().toEpochMilli());
@@ -175,7 +176,7 @@ final class EconomyTaxStore {
         });
     }
 
-    void cancelQuickShopSubsidy(String businessKey, String error) {
+    void cancelTaxSubsidy(String businessKey, String error) {
         database.requireWorkerThread();
         Objects.requireNonNull(businessKey, "businessKey");
         database.transaction(connection -> {
@@ -192,7 +193,7 @@ final class EconomyTaxStore {
         });
     }
 
-    SubsidyQuota quickShopSubsidyQuota(UUID townId, long weeklyLimitMinor,
+    SubsidyQuota taxSubsidyQuota(UUID townId, long weeklyLimitMinor,
                                                long twelveHourLimitMinor, Instant now,
                                                ZoneId zoneId) {
         database.requireWorkerThread();
@@ -223,12 +224,11 @@ final class EconomyTaxStore {
                 return EconomyPersistence.findLedgerByBusinessKey(connection, tax.businessKey() + ":subsidy")
                         .orElse(existing.get());
             }
-            SubsidyReservation subsidy = findSubsidyReservation(connection, tax.businessKey())
-                    .orElseGet(() -> legacySubsidyReservation(connection, tax));
+            SubsidyReservation subsidy = requireSubsidyReservation(connection, tax.businessKey());
             if (!subsidy.townId().equals(tax.townId())
                     || subsidy.requestedMinor() != tax.taxMinor()
                     || subsidy.status().equals("CANCELLED")) {
-                throw new ConflictException("QuickShop 补贴预留与税款不一致");
+                throw new ConflictException("税收补贴预留与税款不一致");
             }
             UUID taxId = UUID.randomUUID();
             try (PreparedStatement statement = connection.prepareStatement("""
@@ -270,7 +270,7 @@ final class EconomyTaxStore {
                      WHERE business_key = ? AND status IN ('RESERVED', 'APPLIED')
                     """)) {
                 statement.setString(1, tax.businessKey());
-                EconomyPersistence.requireUpdated(statement, "QuickShop 补贴预留已失效");
+                EconomyPersistence.requireUpdated(statement, "税收补贴预留已失效");
             }
             return result;
         });
@@ -288,9 +288,17 @@ final class EconomyTaxStore {
         requireTaxRate(tax.taxRateBps());
         return database.transaction(connection -> {
             String subsidyKey = tax.businessKey() + ":subsidy";
-            Optional<LedgerMutation> existing = EconomyPersistence.findLedgerByBusinessKey(connection, subsidyKey);
+            Optional<LedgerMutation> existing = EconomyPersistence.findLedgerByBusinessKey(
+                    connection, tax.businessKey());
             if (existing.isPresent()) {
-                return existing.get();
+                return EconomyPersistence.findLedgerByBusinessKey(connection, subsidyKey)
+                        .orElse(existing.get());
+            }
+            SubsidyReservation subsidy = requireSubsidyReservation(connection, tax.businessKey());
+            if (!subsidy.townId().equals(tax.townId())
+                    || subsidy.requestedMinor() != tax.taxMinor()
+                    || !subsidy.status().equals("RESERVED")) {
+                throw new ConflictException("税收补贴预留与税款不一致");
             }
             UUID taxId = UUID.randomUUID();
             try (PreparedStatement statement = connection.prepareStatement("""
@@ -309,11 +317,23 @@ final class EconomyTaxStore {
                 statement.setLong(8, tax.taxMinor());
                 statement.executeUpdate();
             }
-            EconomyPersistence.postLedger(connection, tax.townId(), tax.source() + "_TAX",
+            LedgerMutation result = EconomyPersistence.postLedger(connection, tax.townId(), tax.source() + "_TAX",
                     tax.taxMinor(), tax.receiverId(), tax.receiverName(), tax.businessKey(),
                     tax.source() + " 收入税", false);
-            return EconomyPersistence.postLedger(connection, tax.townId(), "SERVER_TAX_SUBSIDY", tax.taxMinor(),
-                    null, "SERVER", subsidyKey, tax.source() + " 税收等额服务器补贴", false);
+            if (subsidy.grantedMinor() > 0) {
+                result = EconomyPersistence.postLedger(connection, tax.townId(), "SERVER_TAX_SUBSIDY",
+                        subsidy.grantedMinor(), null, "SERVER", subsidyKey,
+                        tax.source() + " 税收限额内服务器补贴", false);
+            }
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE quickshop_subsidy_reservations
+                       SET status = 'APPLIED', last_error = NULL
+                     WHERE business_key = ? AND status = 'RESERVED'
+                    """)) {
+                statement.setString(1, tax.businessKey());
+                EconomyPersistence.requireUpdated(statement, "税收补贴预留已失效");
+            }
+            return result;
         });
     }
 
@@ -353,46 +373,7 @@ final class EconomyTaxStore {
                                                                   String businessKey)
             throws SQLException {
         return findSubsidyReservation(connection, businessKey)
-                .orElseThrow(() -> new ConflictException("QuickShop 税款缺少补贴额度预留"));
-    }
-
-    private static SubsidyReservation legacySubsidyReservation(Connection connection,
-                                                                 QuickShopTax tax) {
-        try {
-            Instant now = Instant.now();
-            ZoneId zoneId = org.allivlisey.tianjitown.core.time.TownTime.ZONE;
-            Periods periods = periods(now, zoneId);
-            long weeklyUsed = subsidyUsed(connection, tax.townId(), "week_start",
-                    periods.weekStart().toEpochMilli());
-            long twelveHourUsed = subsidyUsed(connection, tax.townId(), "period_12h_start",
-                    periods.twelveHourStart().toEpochMilli());
-            long weeklyRemaining = Math.max(0L,
-                    LEGACY_WEEKLY_SUBSIDY_LIMIT_MINOR - weeklyUsed);
-            long twelveHourRemaining = Math.max(0L,
-                    LEGACY_TWELVE_HOUR_SUBSIDY_LIMIT_MINOR - twelveHourUsed);
-            long granted = Math.min(tax.taxMinor(), Math.min(weeklyRemaining,
-                    twelveHourRemaining));
-            UUID reservationId = UUID.randomUUID();
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    INSERT INTO quickshop_subsidy_reservations
-                        (reservation_id, town_id, business_key, requested_minor, granted_minor,
-                         period_12h_start, week_start, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'RESERVED', ?)
-                    """)) {
-                statement.setBytes(1, EconomyPersistence.uuid(reservationId));
-                statement.setBytes(2, EconomyPersistence.uuid(tax.townId()));
-                statement.setString(3, tax.businessKey());
-                statement.setLong(4, tax.taxMinor());
-                statement.setLong(5, granted);
-                statement.setLong(6, periods.twelveHourStart().toEpochMilli());
-                statement.setLong(7, periods.weekStart().toEpochMilli());
-                statement.setLong(8, now.toEpochMilli());
-                statement.executeUpdate();
-            }
-            return requireSubsidyReservation(connection, tax.businessKey());
-        } catch (SQLException exception) {
-            throw new StorageUnavailableException("无法创建兼容补贴预留", exception);
-        }
+                .orElseThrow(() -> new ConflictException("税款缺少补贴额度预留"));
     }
 
     private static SubsidyReservation readSubsidyReservation(ResultSet result)

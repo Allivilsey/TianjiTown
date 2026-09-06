@@ -32,6 +32,12 @@ class EconomyRepositorySqliteTest {
     @TempDir
     Path temporaryDirectory;
 
+    private static void reserveFullSubsidy(EconomyRepository repository, UUID townId,
+                                           String businessKey, long taxMinor) {
+        repository.reserveTaxSubsidy(townId, businessKey, taxMinor, 5_000_000, 500_000,
+                Instant.parse("2026-08-01T00:00:00Z"), ZoneId.of("Asia/Shanghai"));
+    }
+
     @Test
     void keepsTaxLedgerSettlementAndExpansionIdempotent() throws Exception {
         String url = "jdbc:sqlite:" + temporaryDirectory.resolve("economy-repository.db");
@@ -56,6 +62,7 @@ class EconomyRepositorySqliteTest {
             EconomyRepository.QuickShopTax tax = new EconomyRepository.QuickShopTax(
                     townId, "qs:test:1", 42, "SELLING", mayorId, UUID.randomUUID(),
                     10_000, 500, 500, "world");
+            reserveFullSubsidy(repository, townId, tax.businessKey(), tax.taxMinor());
             assertEquals(1_000, repository.recordQuickShopTax(tax).balanceAfterMinor());
             assertEquals(1_000, repository.recordQuickShopTax(tax).balanceAfterMinor());
             try (Connection connection = gate.dataSource().getConnection();
@@ -181,6 +188,7 @@ class EconomyRepositorySqliteTest {
             EconomyRepository.ExternalIncomeTax jobsTax =
                     new EconomyRepository.ExternalIncomeTax(townId, "jobs:test:1", "JOBS",
                             mayorId, "Mayor", 2_000, 1_000, 200);
+            reserveFullSubsidy(repository, townId, jobsTax.businessKey(), jobsTax.taxMinor());
             assertEquals(2_400, repository.recordExternalIncomeTax(jobsTax).balanceAfterMinor());
             assertEquals(2_400, repository.recordExternalIncomeTax(jobsTax).balanceAfterMinor());
             List<String> recentEntryTypes = repository.ledger(townId, 0, 45).stream()
@@ -220,18 +228,20 @@ class EconomyRepositorySqliteTest {
             for (int i = 1; i <= 3; i++) {
                 var tax = new EconomyRepository.ExternalIncomeTax(townId, "daily:jobs:" + i,
                         "JOBS", mayorId, "Mayor", 1000, 1000, 100);
+                reserveFullSubsidy(repository, townId, tax.businessKey(), tax.taxMinor());
                 repository.recordExternalIncomeTax(tax);
                 repository.recordExternalIncomeTax(tax); // Retries must not inflate the daily count.
                 setLedgerTime(gate, tax.businessKey(), i == 3 ? boundary : boundary.minusMillis(i));
                 // A linked subsidy crossing 04:00 must stay with the original tax.
                 setLedgerTime(gate, tax.businessKey() + ":subsidy", boundary.plusMillis(1));
             }
+            reserveFullSubsidy(repository, townId, "daily:gmp", 100);
             repository.recordExternalIncomeTax(new EconomyRepository.ExternalIncomeTax(
                     townId, "daily:gmp", "GLOBALMARKETPLUS", mayorId, "Mayor", 1000, 1000, 100));
             setLedgerTime(gate, "daily:gmp", boundary.minusSeconds(10));
             for (int i = 1; i <= 2; i++) {
                 String key = "daily:qs:" + i;
-                repository.reserveQuickShopSubsidy(townId, key, 500, 1000, 300,
+                repository.reserveTaxSubsidy(townId, key, 500, 1000, 300,
                         boundary.minusSeconds(10), ZoneId.of("Asia/Shanghai"));
                 repository.recordQuickShopTax(new EconomyRepository.QuickShopTax(
                         townId, key, i, "SELLING", mayorId, "Mayor", UUID.randomUUID(),
@@ -243,6 +253,7 @@ class EconomyRepositorySqliteTest {
             repository.markOperationExternalApplied(donation.operationId());
             repository.completeOperation(donation.operationId());
             setLedgerTime(gate, "daily:donation", boundary.minusSeconds(5));
+            reserveFullSubsidy(repository, otherTown, "daily:other", 900);
             repository.recordExternalIncomeTax(new EconomyRepository.ExternalIncomeTax(
                     otherTown, "daily:other", "JOBS", otherMayor, "Other", 9000, 1000, 900));
             setLedgerTime(gate, "daily:other", boundary);
@@ -304,6 +315,80 @@ class EconomyRepositorySqliteTest {
     }
 
     @Test
+    void allIncomeSourcesShareQuotaWithPartialAndZeroSubsidies() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("shared-subsidy.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID town = UUID.randomUUID();
+            UUID mayor = UUID.randomUUID();
+            insertTown(gate, town, mayor, UUID.randomUUID());
+            EconomyRepository repository = new EconomyRepository(gate.dataSource(), () -> false);
+            repository.initializeAccounts();
+            Instant now = Instant.parse("2026-09-01T00:00:00Z");
+            ZoneId zone = ZoneId.of("Asia/Shanghai");
+            String[] sources = {"QUICKSHOP", "JOBS", "GLOBALMARKETPLUS", "JOBS", "GLOBALMARKETPLUS"};
+            long[] grants = {200, 200, 100, 0, 0};
+            long balance = 0;
+            long used = 0;
+            for (int index = 0; index < sources.length; index++) {
+                String key = "shared:" + index;
+                var reservation = repository.reserveTaxSubsidy(town, key, 200, 700, 500, now, zone);
+                assertEquals(grants[index], reservation.grantedMinor());
+                // Reservation retries crossing the next 12-hour window keep their original grant.
+                assertEquals(reservation, repository.reserveTaxSubsidy(town, key, 200,
+                        700, 500, now.plusSeconds(43200), zone));
+                used += grants[index];
+                assertEquals(500 - used, repository.taxSubsidyQuota(town, 700, 500, now, zone)
+                        .twelveHourRemainingMinor());
+                balance += 200 + grants[index];
+                EconomyRepository.LedgerMutation posted;
+                EconomyRepository.LedgerMutation retried;
+                if (sources[index].equals("QUICKSHOP")) {
+                    var tax = new EconomyRepository.QuickShopTax(town, key, 1, "SELLING",
+                            mayor, "Mayor", UUID.randomUUID(), 4000, 500, 200, "world");
+                    posted = repository.recordQuickShopTax(tax);
+                    retried = repository.recordQuickShopTax(tax);
+                } else {
+                    var tax = new EconomyRepository.ExternalIncomeTax(town, key, sources[index],
+                            mayor, "Mayor", 4000, 500, 200);
+                    posted = repository.recordExternalIncomeTax(tax);
+                    retried = repository.recordExternalIncomeTax(tax);
+                }
+                assertEquals(balance, posted.balanceAfterMinor());
+                assertEquals(posted, retried);
+            }
+            assertEquals(1500, repository.findFinanceByTown(town).orElseThrow().balanceMinor());
+            assertEquals(8, repository.ledger(town, 0, 45).size());
+            assertEquals(500, repository.displayLedger(town, 0, 45).stream()
+                    .mapToLong(entry -> entry.summary().subsidyMinor()).sum());
+            assertEquals(5, scalar(gate, "SELECT COUNT(*) FROM quickshop_subsidy_reservations "
+                    + "WHERE status = 'APPLIED'"));
+            Instant nextPeriod = now.plusSeconds(43200);
+            var weeklyRemainder = repository.reserveTaxSubsidy(town, "shared:next", 300,
+                    700, 500, nextPeriod, zone);
+            assertEquals(200, weeklyRemainder.grantedMinor());
+            assertEquals(0, repository.reserveTaxSubsidy(town, "shared:weekly-full", 200,
+                    700, 500, nextPeriod, zone).grantedMinor());
+            repository.cancelTaxSubsidy("shared:next", "payment cancelled");
+            assertEquals(200, repository.taxSubsidyQuota(town, 700, 500, nextPeriod, zone)
+                    .weeklyRemainingMinor());
+            assertEquals(700, repository.taxSubsidyQuota(town, 700, 500,
+                    Instant.parse("2026-09-06T20:00:00Z"), zone).weeklyRemainingMinor());
+            assertEquals(700, repository.taxSubsidyQuota(UUID.randomUUID(), 700, 500, now, zone)
+                    .weeklyRemainingMinor());
+            var missing = new EconomyRepository.ExternalIncomeTax(town, "missing", "JOBS",
+                    mayor, "Mayor", 4000, 500, 200);
+            assertThrows(EconomyRepository.ConflictException.class,
+                    () -> repository.recordExternalIncomeTax(missing));
+            var cancelled = new EconomyRepository.ExternalIncomeTax(town, "shared:next", "JOBS",
+                    mayor, "Mayor", 6000, 500, 300);
+            assertThrows(EconomyRepository.ConflictException.class,
+                    () -> repository.recordExternalIncomeTax(cancelled));
+        }
+    }
+
+    @Test
     void reservesQuickShopSubsidyAgainstBothLimitsAndResetsByPeriod() throws Exception {
         String url = "jdbc:sqlite:" + temporaryDirectory.resolve("quickshop-subsidy.db");
         try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
@@ -318,7 +403,7 @@ class EconomyRepositorySqliteTest {
             ZoneId zone = ZoneId.of("Asia/Shanghai");
             Instant firstPeriod = Instant.parse("2026-08-31T03:15:00Z");
 
-            EconomyRepository.SubsidyReservation first = repository.reserveQuickShopSubsidy(
+            EconomyRepository.SubsidyReservation first = repository.reserveTaxSubsidy(
                     townId, "qs:quota:1", 500, 1_000, 300, firstPeriod, zone);
             assertEquals(300, first.grantedMinor());
             EconomyRepository.QuickShopTax firstTax = new EconomyRepository.QuickShopTax(
@@ -326,7 +411,7 @@ class EconomyRepositorySqliteTest {
                     10_000, 500, 500, "world");
             assertEquals(800, repository.recordQuickShopTax(firstTax).balanceAfterMinor());
 
-            EconomyRepository.SubsidyReservation second = repository.reserveQuickShopSubsidy(
+            EconomyRepository.SubsidyReservation second = repository.reserveTaxSubsidy(
                     townId, "qs:quota:2", 500, 1_000, 300, firstPeriod, zone);
             assertEquals(0, second.grantedMinor());
             EconomyRepository.QuickShopTax secondTax = new EconomyRepository.QuickShopTax(
@@ -334,12 +419,12 @@ class EconomyRepositorySqliteTest {
                     10_000, 500, 500, "world");
             assertEquals(1_300, repository.recordQuickShopTax(secondTax).balanceAfterMinor());
 
-            EconomyRepository.SubsidyQuota beforeReset = repository.quickShopSubsidyQuota(
+            EconomyRepository.SubsidyQuota beforeReset = repository.taxSubsidyQuota(
                     townId, 1_000, 300, firstPeriod, zone);
             assertEquals(700, beforeReset.weeklyRemainingMinor());
             assertEquals(0, beforeReset.twelveHourRemainingMinor());
 
-            EconomyRepository.SubsidyQuota afterTwelveHours = repository.quickShopSubsidyQuota(
+            EconomyRepository.SubsidyQuota afterTwelveHours = repository.taxSubsidyQuota(
                     townId, 1_000, 300, firstPeriod.plusSeconds(13 * 60 * 60), zone);
             assertEquals(700, afterTwelveHours.weeklyRemainingMinor());
             assertEquals(300, afterTwelveHours.twelveHourRemainingMinor());
@@ -451,6 +536,7 @@ class EconomyRepositorySqliteTest {
                     """);
             EconomyRepository.ExternalIncomeTax tax = new EconomyRepository.ExternalIncomeTax(
                     townId, "rollback:tax", "JOBS", mayorId, "Mayor", 10_000, 500, 500);
+            reserveFullSubsidy(repository, townId, tax.businessKey(), tax.taxMinor());
             assertThrows(EconomyRepository.ConflictException.class,
                     () -> repository.recordExternalIncomeTax(tax));
             assertEquals(1_000, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
@@ -647,13 +733,13 @@ class EconomyRepositorySqliteTest {
                 {"2026-12-31T20:00:00Z", "2027-01-01T08:00:00Z", "2027-01-03T20:00:00Z"}
             };
             for (String[] boundary : cases) {
-                var quota = repository.quickShopSubsidyQuota(town, 1000, 300, Instant.parse(boundary[0]), ZoneId.of("UTC"));
+                var quota = repository.taxSubsidyQuota(town, 1000, 300, Instant.parse(boundary[0]), ZoneId.of("UTC"));
                 assertEquals(Instant.parse(boundary[1]), quota.twelveHourRefreshAt(), boundary[0]);
                 assertEquals(Instant.parse(boundary[2]), quota.weeklyRefreshAt(), boundary[0]);
             }
-            var original = repository.reserveQuickShopSubsidy(town, "retry-period", 100, 1000, 300,
+            var original = repository.reserveTaxSubsidy(town, "retry-period", 100, 1000, 300,
                     Instant.parse(cases[0][0]), ZoneId.of("UTC"));
-            var retry = repository.reserveQuickShopSubsidy(town, "retry-period", 100, 1000, 300,
+            var retry = repository.reserveTaxSubsidy(town, "retry-period", 100, 1000, 300,
                     Instant.parse(cases[1][0]), ZoneId.of("UTC"));
             assertEquals(original, retry);
         }

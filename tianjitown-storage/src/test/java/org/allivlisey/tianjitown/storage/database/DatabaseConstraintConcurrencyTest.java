@@ -102,6 +102,8 @@ class DatabaseConstraintConcurrencyTest {
             EconomyRepository.ExternalIncomeTax tax = new EconomyRepository.ExternalIncomeTax(
                     firstTown, "concurrent:tax", "JOBS", firstMayor, "Mayor",
                     1_000, 500, 50);
+            firstEconomy.reserveTaxSubsidy(firstTown, tax.businessKey(), tax.taxMinor(),
+                    1000, 1000, java.time.Instant.now(), java.time.ZoneId.of("Asia/Shanghai"));
             List<Attempt> taxAttempts = runConcurrently(
                     () -> firstEconomy.recordExternalIncomeTax(tax),
                     () -> secondEconomy.recordExternalIncomeTax(tax));

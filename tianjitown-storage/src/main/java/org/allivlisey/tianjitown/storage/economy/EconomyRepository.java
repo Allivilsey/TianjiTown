@@ -107,23 +107,23 @@ public final class EconomyRepository {
         economyTaxStore.acknowledgeTaxRevision(playerId, revision);
     }
 
-    public SubsidyReservation reserveQuickShopSubsidy(UUID townId, String businessKey,
+    public SubsidyReservation reserveTaxSubsidy(UUID townId, String businessKey,
                                                        long requestedMinor,
                                                        long weeklyLimitMinor,
                                                        long twelveHourLimitMinor,
                                                        Instant now, ZoneId zoneId) {
-        return economyTaxStore.reserveQuickShopSubsidy(townId, businessKey, requestedMinor, weeklyLimitMinor,
+        return economyTaxStore.reserveTaxSubsidy(townId, businessKey, requestedMinor, weeklyLimitMinor,
                 twelveHourLimitMinor, now, zoneId);
     }
 
-    public void cancelQuickShopSubsidy(String businessKey, String error) {
-        economyTaxStore.cancelQuickShopSubsidy(businessKey, error);
+    public void cancelTaxSubsidy(String businessKey, String error) {
+        economyTaxStore.cancelTaxSubsidy(businessKey, error);
     }
 
-    public SubsidyQuota quickShopSubsidyQuota(UUID townId, long weeklyLimitMinor,
+    public SubsidyQuota taxSubsidyQuota(UUID townId, long weeklyLimitMinor,
                                                long twelveHourLimitMinor, Instant now,
                                                ZoneId zoneId) {
-        return economyTaxStore.quickShopSubsidyQuota(townId, weeklyLimitMinor, twelveHourLimitMinor, now, zoneId);
+        return economyTaxStore.taxSubsidyQuota(townId, weeklyLimitMinor, twelveHourLimitMinor, now, zoneId);
     }
 
     public LedgerMutation recordQuickShopTax(QuickShopTax tax) {

@@ -381,8 +381,8 @@ public final class TownRuntime {
         taxes.flushPendingTaxes();
     }
 
-    public EconomyRepository.SubsidyQuota quickShopSubsidyQuota(UUID townId) {
-        return taxes.quickShopSubsidyQuota(townId);
+    public EconomyRepository.SubsidyQuota taxSubsidyQuota(UUID townId) {
+        return taxes.taxSubsidyQuota(townId);
     }
 
     public JobsIncomeTaxAdapter.TaxResult acceptJobsIncomeTax(

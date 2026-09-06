@@ -815,6 +815,8 @@ log:
     income-tax-settlement-failure: 'Jobs 收入税转入清算账户失败，已保留玩家原始收入: {detail}'
   # 外部收入税账本写入重试日志；{source}=稳定来源标识，{businessKey}=业务键，{detail}=异常详情
   external-income-tax:
+    subsidy-settlement-failure: '收入税补贴清算失败，已保留额度并等待重试。业务号 {businessKey}: {detail}'
+    subsidy-settlement-ambiguous: '收入税补贴清算结果不明，已保留额度并停止该笔付款与入账，需人工核查。业务号 {businessKey}: {detail}'
     ledger-write-failure: '{source} 税款 {businessKey} 已进入清算账户但账本暂未写入，将自动重试: {detail}'
   # QuickShop 税务事件和 TownRuntime 入账日志；{detail}=异常详情，{businessKey}=交易业务键
   quick-shop:

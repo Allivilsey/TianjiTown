@@ -52,7 +52,7 @@ public final class TownFinanceDialogs {
                     .findFinanceByPlayer(player.getUniqueId())
                     .orElseThrow(() -> new IllegalArgumentException(
                             plugin.messages().plainText("chat.runtime.town-required")));
-            return new FinanceView(account, runtime.quickShopSubsidyQuota(account.townId()));
+            return new FinanceView(account, runtime.taxSubsidyQuota(account.townId()));
         }, view -> renderFinance(player, view));
     }
 
