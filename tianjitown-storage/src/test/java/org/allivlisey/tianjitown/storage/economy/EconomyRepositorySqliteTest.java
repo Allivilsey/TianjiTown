@@ -188,15 +188,118 @@ class EconomyRepositorySqliteTest {
                     .toList();
             assertTrue(recentEntryTypes.contains("JOBS_TAX"));
             assertTrue(recentEntryTypes.contains("SERVER_TAX_SUBSIDY"));
-            EconomyRepository.LedgerEntry displayedTax = repository.displayLedger(
+            EconomyRepository.DisplayLedgerEntry displayedTax = repository.displayLedger(
                             townId, 0, 45).stream()
-                    .filter(entry -> entry.businessKey().equals(jobsTax.businessKey()))
+                    .filter(entry -> entry.entryType().equals("JOBS_INCOME"))
                     .findFirst().orElseThrow();
-            assertEquals("JOBS_TAX", displayedTax.entryType());
+            assertEquals("JOBS_INCOME", displayedTax.entryType());
             assertEquals(400, displayedTax.amountMinor());
-            assertTrue(displayedTax.note().contains("服务器等额补贴"));
+            assertEquals(200, displayedTax.summary().subsidyMinor());
+            assertEquals(1, displayedTax.summary().transactionCount());
             assertFalse(repository.displayLedger(townId, 0, 45).stream()
                     .anyMatch(entry -> entry.entryType().equals("SERVER_TAX_SUBSIDY")));
+        }
+    }
+
+    @Test
+    void summarizesIncomeByShanghaiFourAmBeforePaginationWithoutChangingFunds() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("daily-ledger.db");
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID townId = UUID.randomUUID();
+            UUID mayorId = UUID.randomUUID();
+            insertTown(gate, townId, mayorId, UUID.randomUUID());
+            UUID otherTown = UUID.randomUUID();
+            UUID otherMayor = UUID.randomUUID();
+            insertTown(gate, otherTown, otherMayor, UUID.randomUUID(), "其他镇", "他", "OTHER", 50, 50);
+            EconomyRepository repository = new EconomyRepository(gate.dataSource(), () -> false);
+            repository.initializeAccounts();
+            Instant boundary = Instant.parse("2026-09-05T20:00:00Z"); // September 6, 04:00 Shanghai
+            assertTrue(repository.displayLedger(townId, 0, 45).isEmpty());
+            for (int i = 1; i <= 3; i++) {
+                var tax = new EconomyRepository.ExternalIncomeTax(townId, "daily:jobs:" + i,
+                        "JOBS", mayorId, "Mayor", 1000, 1000, 100);
+                repository.recordExternalIncomeTax(tax);
+                repository.recordExternalIncomeTax(tax); // Retries must not inflate the daily count.
+                setLedgerTime(gate, tax.businessKey(), i == 3 ? boundary : boundary.minusMillis(i));
+                // A linked subsidy crossing 04:00 must stay with the original tax.
+                setLedgerTime(gate, tax.businessKey() + ":subsidy", boundary.plusMillis(1));
+            }
+            repository.recordExternalIncomeTax(new EconomyRepository.ExternalIncomeTax(
+                    townId, "daily:gmp", "GLOBALMARKETPLUS", mayorId, "Mayor", 1000, 1000, 100));
+            setLedgerTime(gate, "daily:gmp", boundary.minusSeconds(10));
+            for (int i = 1; i <= 2; i++) {
+                String key = "daily:qs:" + i;
+                repository.reserveQuickShopSubsidy(townId, key, 500, 1000, 300,
+                        boundary.minusSeconds(10), ZoneId.of("Asia/Shanghai"));
+                repository.recordQuickShopTax(new EconomyRepository.QuickShopTax(
+                        townId, key, i, "SELLING", mayorId, "Mayor", UUID.randomUUID(),
+                        10000, 500, 500, "world"));
+                setLedgerTime(gate, key, boundary.minusSeconds(10));
+            }
+            var donation = repository.prepareOperation(townId, "DONATION", 50, mayorId,
+                    "Mayor", "daily:donation", "逐笔保留");
+            repository.markOperationExternalApplied(donation.operationId());
+            repository.completeOperation(donation.operationId());
+            setLedgerTime(gate, "daily:donation", boundary.minusSeconds(5));
+            repository.recordExternalIncomeTax(new EconomyRepository.ExternalIncomeTax(
+                    otherTown, "daily:other", "JOBS", otherMayor, "Other", 9000, 1000, 900));
+            setLedgerTime(gate, "daily:other", boundary);
+
+            var rawBefore = repository.ledger(townId, 0, 45);
+            long balanceBefore = repository.findFinanceByTown(townId).orElseThrow().balanceMinor();
+            var displayed = repository.displayLedger(townId, 0, 45);
+            assertEquals(4, displayed.size());
+            var nextDay = displayed.get(0);
+            assertEquals("JOBS_INCOME", nextDay.entryType());
+            assertEquals(boundary, nextDay.summary().periodStart());
+            assertEquals(boundary.plusSeconds(86400), nextDay.summary().periodEnd());
+            assertEquals(200, nextDay.amountMinor());
+            var jobs = displayed.get(1);
+            assertEquals("JOBS_INCOME", jobs.entryType());
+            assertEquals(boundary.minusSeconds(86400), jobs.summary().periodStart());
+            assertEquals(boundary, jobs.summary().periodEnd());
+            assertEquals(400, jobs.amountMinor());
+            assertEquals(2, jobs.summary().transactionCount());
+            assertEquals(null, jobs.balanceAfterMinor());
+            assertEquals(null, jobs.actorId());
+            var shop = displayed.get(2);
+            assertEquals("SHOP_INCOME", shop.entryType());
+            assertEquals(1100, shop.summary().taxMinor());
+            assertEquals(400, shop.summary().subsidyMinor()); // GMP 100 + QuickShop 300 + 0
+            assertEquals(1500, shop.amountMinor());
+            assertEquals(3, shop.summary().transactionCount());
+            assertEquals("DONATION", displayed.get(3).entryType());
+            assertEquals("逐笔保留", displayed.get(3).note());
+            assertEquals(null, displayed.get(3).summary());
+            assertEquals(balanceBefore, displayed.get(3).balanceAfterMinor().longValue());
+            assertEquals(balanceBefore, displayed.stream().mapToLong(
+                    EconomyRepository.DisplayLedgerEntry::amountMinor).sum());
+            var paged = new java.util.ArrayList<EconomyRepository.DisplayLedgerEntry>();
+            for (int page = 0; page < 4; page++) {
+                paged.addAll(repository.displayLedger(townId, page, 1));
+            }
+            assertEquals(displayed, paged);
+            assertTrue(repository.displayLedger(townId, 4, 1).isEmpty());
+            assertThrows(IllegalArgumentException.class, () -> repository.displayLedger(townId, -1, 6));
+            assertThrows(IllegalArgumentException.class, () -> repository.displayLedger(townId, 0, 46));
+            assertEquals(rawBefore, repository.ledger(townId, 0, 45));
+            assertEquals(balanceBefore, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
+            // Summaries are derived from persistent entries and do not depend on an in-memory timer.
+            EconomyRepository reopened = new EconomyRepository(gate.dataSource(), () -> false);
+            assertEquals(displayed, reopened.displayLedger(townId, 0, 45));
+            assertEquals(1, reopened.displayLedger(otherTown, 0, 45).size());
+        }
+    }
+
+    private static void setLedgerTime(DatabaseGate gate, String businessKey, Instant time) throws Exception {
+        try (Connection connection = gate.dataSource().getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "UPDATE ledger_entries SET created_at = ? WHERE business_key = ?")) {
+            statement.setLong(1, time.toEpochMilli());
+            statement.setString(2, businessKey);
+            assertEquals(1, statement.executeUpdate());
         }
     }
 

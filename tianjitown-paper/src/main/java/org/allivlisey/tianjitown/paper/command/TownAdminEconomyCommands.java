@@ -153,10 +153,24 @@ public final class TownAdminEconomyCommands {
         String townName = input.strip();
         runtime.read(sender, () -> {
             TownSnapshot town = facade.requireTown(runtime, townName);
-            return runtime.finance().ledger(town.id(), 0, 45);
+            return runtime.finance().displayLedger(town.id(), 0, 45);
         }, entries -> {
             facade.send(sender, "chat.admin.ledger-title", Map.of("count", entries.size()));
-            for (org.allivlisey.tianjitown.storage.economy.EconomyRepository.LedgerEntry entry : entries) {
+            for (org.allivlisey.tianjitown.storage.economy.EconomyRepository.DisplayLedgerEntry entry : entries) {
+                if (entry.summary() != null) {
+                    var summary = entry.summary();
+                    facade.send(sender, "chat.admin.ledger-summary", Map.of(
+                            "start", summary.periodStart(), "end", summary.periodEnd(),
+                            "type", plugin.messages().plainText("dialog.ledger.type."
+                                    + (entry.entryType().equals("JOBS_INCOME") ? "jobs-income" : "shop-income")),
+                            "amount", runtime.money(entry.amountMinor()),
+                            "tax", runtime.money(summary.taxMinor()),
+                            "subsidy", runtime.money(summary.subsidyMinor()),
+                            "count", summary.transactionCount(),
+                            "status", plugin.messages().plainText(java.time.Instant.now().isBefore(summary.periodEnd())
+                                    ? "dialog.ledger.summary-current" : "dialog.ledger.summary-completed")));
+                    continue;
+                }
                 facade.send(sender, "chat.admin.ledger-record", Map.of("created", entry.createdAt(),
                         "type", entry.entryType(), "amount", runtime.money(entry.amountMinor()),
                         "balance", runtime.money(entry.balanceAfterMinor()),

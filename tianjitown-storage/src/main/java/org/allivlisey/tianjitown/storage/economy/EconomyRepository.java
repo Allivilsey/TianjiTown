@@ -177,7 +177,7 @@ public final class EconomyRepository {
         return economyLedgerStore.ledger(townId, page, pageSize);
     }
 
-    public List<LedgerEntry> displayLedger(UUID townId, int page, int pageSize) {
+    public List<DisplayLedgerEntry> displayLedger(UUID townId, int page, int pageSize) {
         return economyLedgerStore.displayLedger(townId, page, pageSize);
     }
 
@@ -306,6 +306,17 @@ public final class EconomyRepository {
     public record LedgerEntry(UUID entryId, UUID townId, String entryType, long amountMinor,
                               long balanceAfterMinor, UUID actorId, String actorName,
                               String businessKey, String note, Instant createdAt) {
+    }
+
+    /** Read-only ledger presentation; daily summaries have no single actor or balance after. */
+    public record DisplayLedgerEntry(String entryType, long amountMinor, Long balanceAfterMinor,
+                                     UUID actorId, String actorName, String note, Instant createdAt,
+                                     TaxIncomeSummary summary) {
+    }
+
+    /** Groups posted tax entries by the Shanghai 04:00 accounting day, including actual subsidies. */
+    public record TaxIncomeSummary(Instant periodStart, Instant periodEnd, long taxMinor,
+                                   long subsidyMinor, long transactionCount) {
     }
 
     public record EconomyOperation(UUID operationId, UUID townId, String operationType,

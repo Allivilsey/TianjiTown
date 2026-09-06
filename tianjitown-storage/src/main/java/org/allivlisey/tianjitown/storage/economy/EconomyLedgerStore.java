@@ -3,11 +3,14 @@ package org.allivlisey.tianjitown.storage.economy;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository.LedgerEntry;
+import org.allivlisey.tianjitown.storage.economy.EconomyRepository.DisplayLedgerEntry;
+import org.allivlisey.tianjitown.storage.economy.EconomyRepository.TaxIncomeSummary;
 
 /** Ledger pagination and confirmed actor-name maintenance. */
 final class EconomyLedgerStore {
@@ -42,30 +45,53 @@ final class EconomyLedgerStore {
         });
     }
 
-    List<LedgerEntry> displayLedger(UUID townId, int page, int pageSize) {
+    List<DisplayLedgerEntry> displayLedger(UUID townId, int page, int pageSize) {
         database.requireWorkerThread();
         if (page < 0 || pageSize < 1 || pageSize > 45) {
             throw new IllegalArgumentException("账本分页参数无效");
         }
         return database.query(connection -> {
-            List<LedgerEntry> result = new ArrayList<>();
+            List<DisplayLedgerEntry> result = new ArrayList<>();
+            // Shanghai 04:00 is UTC 20:00 on the preceding date. Group by tax posting time;
+            // its linked subsidy belongs to the same period even if its timestamp crosses 04:00.
+            // Aggregate before pagination, leaving the immutable financial ledger untouched.
             try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT e.entry_id, e.town_id, e.entry_type,
-                           e.amount_minor + COALESCE(s.amount_minor, 0) AS amount_minor,
-                           COALESCE(s.balance_after_minor, e.balance_after_minor)
-                               AS balance_after_minor,
-                           e.actor_uuid, e.actor_name, e.business_key,
-                           CASE WHEN s.entry_id IS NULL THEN e.note
-                                ELSE e.note || '；含服务器等额补贴' END AS note,
-                           COALESCE(s.created_at, e.created_at) AS created_at
-                      FROM ledger_entries e
-                      LEFT JOIN ledger_entries s
-                        ON s.town_id = e.town_id
-                       AND s.entry_type = 'SERVER_TAX_SUBSIDY'
-                       AND s.business_key = e.business_key || ':subsidy'
-                     WHERE e.town_id = ?
-                       AND e.entry_type <> 'SERVER_TAX_SUBSIDY'
-                     ORDER BY COALESCE(s.created_at, e.created_at) DESC, e.entry_id
+                    WITH town_ledger AS (
+                        SELECT * FROM ledger_entries WHERE town_id = ?
+                    ), taxes AS (
+                        SELECT CASE WHEN e.entry_type = 'JOBS_TAX' THEN 'JOBS_INCOME'
+                                    ELSE 'SHOP_INCOME' END AS entry_type,
+                               unixepoch(date(e.created_at / 1000.0, 'unixepoch', '+4 hours'),
+                                         '-4 hours') * 1000 AS period_start,
+                               e.amount_minor AS tax_minor,
+                               COALESCE(s.amount_minor, 0) AS subsidy_minor
+                          FROM town_ledger e
+                          LEFT JOIN ledger_entries s
+                            ON s.town_id = e.town_id
+                           AND s.entry_type = 'SERVER_TAX_SUBSIDY'
+                           AND s.business_key = e.business_key || ':subsidy'
+                         WHERE e.entry_type IN ('JOBS_TAX', 'QUICKSHOP_TAX', 'GLOBALMARKETPLUS_TAX')
+                    ), displayed AS (
+                        SELECT entry_type, SUM(tax_minor) + SUM(subsidy_minor) AS amount_minor,
+                               NULL AS balance_after_minor, NULL AS actor_uuid,
+                               NULL AS actor_name, NULL AS note,
+                               period_start + 86400000 AS created_at, period_start,
+                               SUM(tax_minor) AS tax_minor, SUM(subsidy_minor) AS subsidy_minor,
+                               COUNT(*) AS transaction_count, entry_type AS sort_key
+                          FROM taxes GROUP BY entry_type, period_start
+                        UNION ALL
+                        SELECT e.entry_type, e.amount_minor, e.balance_after_minor,
+                               e.actor_uuid, e.actor_name, e.note, e.created_at,
+                               NULL, NULL, NULL, NULL, hex(e.entry_id)
+                          FROM town_ledger e
+                         WHERE e.entry_type NOT IN ('JOBS_TAX', 'QUICKSHOP_TAX', 'GLOBALMARKETPLUS_TAX')
+                           AND (e.entry_type <> 'SERVER_TAX_SUBSIDY' OR NOT EXISTS (
+                               SELECT 1 FROM town_ledger t
+                                WHERE t.entry_type IN ('JOBS_TAX', 'QUICKSHOP_TAX', 'GLOBALMARKETPLUS_TAX')
+                                  AND e.business_key = t.business_key || ':subsidy'
+                           ))
+                    )
+                    SELECT * FROM displayed ORDER BY created_at DESC, sort_key
                      LIMIT ? OFFSET ?
                     """)) {
                 statement.setBytes(1, EconomyPersistence.uuid(townId));
@@ -73,7 +99,18 @@ final class EconomyLedgerStore {
                 statement.setInt(3, Math.multiplyExact(page, pageSize));
                 try (ResultSet rows = statement.executeQuery()) {
                     while (rows.next()) {
-                        result.add(readLedger(rows));
+                        long periodStart = rows.getLong("period_start");
+                        TaxIncomeSummary summary = rows.wasNull() ? null : new TaxIncomeSummary(
+                                Instant.ofEpochMilli(periodStart), Instant.ofEpochMilli(periodStart + 86400000L),
+                                rows.getLong("tax_minor"), rows.getLong("subsidy_minor"),
+                                rows.getLong("transaction_count"));
+                        byte[] actor = rows.getBytes("actor_uuid");
+                        result.add(new DisplayLedgerEntry(rows.getString("entry_type"),
+                                rows.getLong("amount_minor"),
+                                summary == null ? rows.getLong("balance_after_minor") : null,
+                                actor == null ? null : EconomyPersistence.uuid(actor),
+                                rows.getString("actor_name"), rows.getString("note"),
+                                EconomyPersistence.instant(rows, "created_at"), summary));
                     }
                 }
             }

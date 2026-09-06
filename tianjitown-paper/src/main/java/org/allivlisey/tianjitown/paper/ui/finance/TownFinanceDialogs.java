@@ -193,7 +193,7 @@ public final class TownFinanceDialogs {
                     .findFinanceByPlayer(player.getUniqueId())
                     .orElseThrow(() -> new IllegalArgumentException(
                             plugin.messages().plainText("chat.runtime.town-required")));
-            List<EconomyRepository.LedgerEntry> entries = runtime.finance()
+            List<EconomyRepository.DisplayLedgerEntry> entries = runtime.finance()
                     .displayLedger(account.townId(), page, 6);
             return new LedgerPage(account, entries, page);
         }, ledger -> renderLedger(player, ledger));
@@ -214,27 +214,43 @@ public final class TownFinanceDialogs {
                     List.of(presentation.dialogText("ledger.empty-hint")), null, null)));
         }
         int slot = 1;
-        for (EconomyRepository.LedgerEntry entry : ledger.entries()) {
+        for (EconomyRepository.DisplayLedgerEntry entry : ledger.entries()) {
             boolean income = entry.amountMinor() > 0;
             String amount = presentation.dialogText(income ? "ledger.income-amount" : "ledger.expense-amount",
                     Map.of("amount", TownUiLegacyFacade.safeText(runtime.money(Math.abs(entry.amountMinor())))));
-            String actor = displayActorName(entry);
-            if (actor == null) {
-                String actorId = entry.actorId() == null ? "" : entry.actorId().toString()
-                        .replace("-", "");
-                String suffix = actorId.length() > 24 ? actorId.substring(24) : actorId;
-                actor = presentation.dialogText("common.unknown-player", Map.of("playerId", suffix));
+            List<String> details = new ArrayList<>();
+            if (entry.summary() != null) {
+                EconomyRepository.TaxIncomeSummary summary = entry.summary();
+                details.add(presentation.dialogText("ledger.summary-period", Map.of(
+                        "start", TownUiLegacyFacade.safeText(summary.periodStart()),
+                        "end", TownUiLegacyFacade.safeText(summary.periodEnd()))));
+                details.add(presentation.dialogText(java.time.Instant.now().isBefore(summary.periodEnd())
+                        ? "ledger.summary-current" : "ledger.summary-completed"));
+                details.add(presentation.dialogText("ledger.summary-tax", Map.of(
+                        "amount", runtime.money(summary.taxMinor()))));
+                details.add(presentation.dialogText("ledger.summary-subsidy", Map.of(
+                        "amount", runtime.money(summary.subsidyMinor()))));
+                details.add(presentation.dialogText("ledger.summary-count", Map.of(
+                        "count", summary.transactionCount())));
+            } else {
+                String actor = displayActorName(entry);
+                if (actor == null) {
+                    String actorId = entry.actorId() == null ? "" : entry.actorId().toString()
+                            .replace("-", "");
+                    String suffix = actorId.length() > 24 ? actorId.substring(24) : actorId;
+                    actor = presentation.dialogText("common.unknown-player", Map.of("playerId", suffix));
+                }
+                details.add(presentation.dialogText("ledger.entry-balance", Map.of("balance",
+                        TownUiLegacyFacade.safeText(runtime.money(entry.balanceAfterMinor())))));
+                details.add(presentation.dialogText("ledger.entry-actor", Map.of("actor", actor)));
+                details.add(presentation.dialogText("ledger.entry-time", Map.of("time",
+                        TownUiLegacyFacade.safeText(entry.createdAt()))));
+                details.add(presentation.dialogText("ledger.entry-note", Map.of("note",
+                        TownUiLegacyFacade.safeText(entry.note()))));
             }
             items.add(new MenuItem(slot++, presentation.button(income ? Material.LIME_DYE : Material.RED_DYE,
                     presentation.dialogText("ledger.entry-title", Map.of("amount", amount,
-                            "type", ledgerLabel(entry.entryType()))),
-                    List.of(presentation.dialogText("ledger.entry-balance", Map.of("balance",
-                                    TownUiLegacyFacade.safeText(runtime.money(entry.balanceAfterMinor())))),
-                            presentation.dialogText("ledger.entry-actor", Map.of("actor", actor)),
-                            presentation.dialogText("ledger.entry-time", Map.of("time",
-                                    TownUiLegacyFacade.safeText(entry.createdAt()))),
-                            presentation.dialogText("ledger.entry-note", Map.of("note",
-                                    TownUiLegacyFacade.safeText(entry.note())))), null, null)));
+                            "type", ledgerLabel(entry.entryType()))), details, null, null)));
         }
         if (ledger.page() > 0) {
             items.add(new MenuItem(20, presentation.button(Material.ARROW, presentation.dialogText("common.previous"),
@@ -251,6 +267,8 @@ public final class TownFinanceDialogs {
     private String ledgerLabel(String type) {
         String stableType = String.valueOf(type);
         String key = switch (stableType) {
+            case "JOBS_INCOME" -> "ledger.type.jobs-income";
+            case "SHOP_INCOME" -> "ledger.type.shop-income";
             case "QUICKSHOP_TAX" -> "ledger.type.quickshop-tax";
             case "JOBS_TAX" -> "ledger.type.jobs-tax";
             case "GLOBALMARKETPLUS_TAX" -> "ledger.type.global-market-plus-tax";
@@ -271,7 +289,7 @@ public final class TownFinanceDialogs {
                 : presentation.dialogText(key);
     }
 
-    private static String displayActorName(EconomyRepository.LedgerEntry entry) {
+    private static String displayActorName(EconomyRepository.DisplayLedgerEntry entry) {
         if (entry.actorId() == null) {
             return TownUiLegacyFacade.safeText(entry.actorName());
         }
@@ -383,6 +401,6 @@ public final class TownFinanceDialogs {
     }
 
     private record LedgerPage(EconomyRepository.TownFinance account,
-                              List<EconomyRepository.LedgerEntry> entries, int page) {
+                              List<EconomyRepository.DisplayLedgerEntry> entries, int page) {
     }
 }
