@@ -36,8 +36,8 @@ class PlayerChangeDeliveryTest {
             "MEMBER, MAYOR, 你已成为“测试镇”小镇的镇长",
             "DEPUTY_MAYOR, MAYOR, 你已成为“测试镇”小镇的镇长",
             "MEMBER, DEPUTY_MAYOR, 你已成为“测试镇”小镇的副镇长",
-            "MAYOR, MEMBER, 你现在是“测试镇”小镇的普通成员",
-            "DEPUTY_MAYOR, MEMBER, 你现在是“测试镇”小镇的普通成员",
+            "MAYOR, MEMBER, 你已被降职为普通成员",
+            "DEPUTY_MAYOR, MEMBER, 你已被降职为普通成员",
             "MEMBER, NONE, 你已离开“测试镇”小镇",
             "DEPUTY_MAYOR, NONE, 你已离开“测试镇”小镇",
             "MAYOR, NONE, 你已离开“测试镇”小镇",
@@ -92,7 +92,7 @@ class PlayerChangeDeliveryTest {
             verify(repository, never()).acknowledgePlayerChanges(any(), any());
             bukkit.when(() -> Bukkit.getPlayer(target)).thenReturn(player);
             delivery.deliver(target);
-            verify(player).sendMessage(contains("你现在是“测试镇”小镇的普通成员"));
+            verify(player).sendMessage(contains("你已被降职为普通成员"));
             verify(repository).acknowledgePlayerChanges(target, List.of(1L));
         }
     }

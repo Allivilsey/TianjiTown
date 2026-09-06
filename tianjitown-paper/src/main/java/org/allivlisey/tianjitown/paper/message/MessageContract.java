@@ -149,12 +149,12 @@ public final class MessageContract {
         text(entries, "dialog.confirmation.submit-application-consequence", "amount");
         text(entries, "dialog.tooltip.town.territory-center", "x", "z");
         text(entries, "log.notification.vote-result-delivery-failed", "detail");
-        text(entries, "chat.notification.vote-result", "town", "id", "type", "status", "yes", "no", "required");
+        text(entries, "chat.notification.vote-result", "type", "status");
         text(entries, "chat.notification.member-joined", "town");
         text(entries, "chat.notification.member-left", "town");
         text(entries, "chat.notification.became-mayor", "town");
         text(entries, "chat.notification.became-deputy-mayor", "town");
-        text(entries, "chat.notification.became-member", "town");
+        text(entries, "chat.notification.became-member");
         text(entries, "chat.notification.member-removed", "town");
         text(entries, "chat.notification.visitor-added", "town");
         text(entries, "chat.notification.visitor-removed", "town");
