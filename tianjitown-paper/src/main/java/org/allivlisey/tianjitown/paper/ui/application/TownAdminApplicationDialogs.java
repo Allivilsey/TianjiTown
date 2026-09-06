@@ -7,6 +7,7 @@ import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.ui.DialogRoute;
 import org.allivlisey.tianjitown.paper.ui.TownUiLegacyFacade;
+import org.allivlisey.tianjitown.paper.ui.home.ReadOnlyRulesDialogRenderer;
 
 import org.allivlisey.tianjitown.core.application.ApplicationStatus;
 import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
@@ -107,8 +108,6 @@ public final class TownAdminApplicationDialogs {
                         plugin.messages().plainText("chat.application.not-found"))), application -> {
             String submittedAt = application.submittedAt() == null
                     ? presentation.dialogText("admin.not-submitted") : TownUiLegacyFacade.safeText(application.submittedAt());
-            String rules = application.text().rules().stream().map(TownUiLegacyFacade::safeText)
-                    .collect(java.util.stream.Collectors.joining(" | "));
             List<String> summary = new ArrayList<>(List.of(
                     presentation.dialogText("common.applicant", Map.of(
                             "applicant", TownUiLegacyFacade.safeText(facade.displayName(application.applicantId())))),
@@ -120,8 +119,7 @@ public final class TownAdminApplicationDialogs {
                     presentation.dialogText("common.residence-name", Map.of(
                             "residence", TownUiLegacyFacade.safeText(application.text().normalizedResidenceName()))),
                     presentation.dialogText("common.town-description", Map.of(
-                            "description", TownUiLegacyFacade.safeText(application.text().description()))),
-                    presentation.dialogText("common.rules", Map.of("rules", rules))));
+                            "description", TownUiLegacyFacade.safeText(application.text().description())))));
             if (application.territory() != null) {
                 summary.add(presentation.dialogText("admin.territory", Map.of(
                         "world", TownUiLegacyFacade.safeText(application.territory().center().worldName()),
@@ -133,8 +131,6 @@ public final class TownAdminApplicationDialogs {
                         "error", TownUiLegacyFacade.safeText(application.lastError()))));
             }
             List<MenuItem> items = new ArrayList<>();
-            items.add(new MenuItem(4, presentation.button(Material.PAPER,
-                    presentation.dialogText("admin.summary-title"), summary, null, null)));
             if (application.status() == ApplicationStatus.SUBMITTED
                     || application.status() == ApplicationStatus.UNDER_REVIEW) {
                 items.add(new MenuItem(10, presentation.button(Material.LIME_CONCRETE,
@@ -175,9 +171,25 @@ public final class TownAdminApplicationDialogs {
                         List.of(presentation.dialogText("common.preview-site")), "ADMIN_PREVIEW_SITE",
                         application.id().toString())));
             }
-            presentation.openMenu(admin, 27, presentation.dialogText("admin.detail-title", Map.of(
+            DialogRoute parent = new DialogRoute("ADMIN_APPLICATIONS", null);
+            ReadOnlyRulesDialogRenderer.Layout rulesLayout = ReadOnlyRulesDialogRenderer.layout(
+                    application.text().name(), application.text().rules(), parent);
+            presentation.openDialogPage(admin, presentation.dialogText("admin.detail-title", Map.of(
                             "town", TownUiLegacyFacade.safeText(application.text().name()))),
-                    new DialogRoute("ADMIN_APPLICATIONS", null), items);
+                    List.of(presentation.dialogTextBody(presentation.button(Material.PAPER,
+                                    presentation.dialogText("admin.summary-title"), summary, null, null)),
+                            DialogBody.plainMessage(ReadOnlyRulesDialogRenderer.content(
+                                    plugin.messages(), rulesLayout), ReadOnlyRulesDialogRenderer.CONTENT_WIDTH)),
+                    List.of(), DialogBase.DialogAfterAction.NONE, session -> {
+                        ActionButton exit = presentation.returnButton(admin, session, parent);
+                        if (items.isEmpty()) {
+                            return DialogType.notice(exit);
+                        }
+                        return DialogType.multiAction(items.stream()
+                                        .map(item -> presentation.dialogButton(admin, item.item(), session))
+                                        .toList())
+                                .exitAction(exit).columns(items.size() == 1 ? 1 : 2).build();
+                    }, parent);
         });
     }
 

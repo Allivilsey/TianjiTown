@@ -74,6 +74,11 @@ public final class TownUiPresentation {
 
     public UUID openMenu(Player player, int size, String title, DialogRoute parent,
                           List<MenuItem> items) {
+        return openMenu(player, size, title, parent, items, 2);
+    }
+
+    public UUID openMenu(Player player, int size, String title, DialogRoute parent,
+                         List<MenuItem> items, int columns) {
         List<MenuItem> ordered = items.stream()
                 .sorted(java.util.Comparator.comparingInt(MenuItem::slot))
                 .toList();
@@ -97,7 +102,7 @@ public final class TownUiPresentation {
                             .toList();
                     return DialogType.multiAction(buttons)
                             .exitAction(exit)
-                            .columns(buttons.size() == 1 ? 1 : 2)
+                            .columns(Math.min(buttons.size(), columns))
                             .build();
                 }, parent);
     }

@@ -13,6 +13,8 @@ system:
 
 # 建镇申请资料校验消息；{minimum}/{maximum} 为边界，{index} 为规则序号
 validation:
+  application:
+    fee-invalid: '&c{path} 必须大于 0，且符合货币精度和次级货币单位范围'
   common:
     value-required: '&c{path} 不能为空'
     range: '&c{path} 必须在 {minimum}~{maximum} 范围内'

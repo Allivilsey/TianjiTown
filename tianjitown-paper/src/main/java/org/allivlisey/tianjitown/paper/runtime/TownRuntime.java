@@ -2,7 +2,6 @@ package org.allivlisey.tianjitown.paper.runtime;
 import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
 import org.allivlisey.tianjitown.paper.land.TerritoryPreviewService;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -21,6 +20,7 @@ import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.bonus.TownBonusRuntime;
 import org.allivlisey.tianjitown.paper.buff.BuffRuntime;
 import org.allivlisey.tianjitown.paper.config.BuffSettings;
+import org.allivlisey.tianjitown.paper.config.ApplicationSettings;
 import org.allivlisey.tianjitown.paper.config.EconomySettings;
 import org.allivlisey.tianjitown.paper.config.TownBonusSettings;
 import org.allivlisey.tianjitown.paper.land.ProvisionResult;
@@ -42,7 +42,6 @@ import static org.allivlisey.tianjitown.paper.runtime.RuntimeText.safeMessage;
 import static org.allivlisey.tianjitown.paper.runtime.RuntimeText.safeText;
 
 public final class TownRuntime {
-    private static final BigDecimal APPLICATION_FEE = new BigDecimal("2000.00");
 
     private static final String QUICK_SHOP_TAX_REFRESH_FAILURE =
             "log.scheduler.quick-shop-tax-refresh-failure";
@@ -108,6 +107,7 @@ public final class TownRuntime {
         this.settlement = new VaultSettlementService(plugin.getServer(),
                 economySettings.settlementAccount(), economySettings.fallbackScale(),
                 plugin.messages()::plainText);
+        applicationFeeMinor();
         TerritoryService territories = new TerritoryService(finance, sitePolicy, plugin.messages(),
                 economySettings, settlement.scale());
         this.tasks = new TownRuntimeTasks(plugin, databaseAvailable);
@@ -160,11 +160,12 @@ public final class TownRuntime {
     }
 
     /**
-     * Returns the default application fee in the settlement provider's minor units. The approval
+     * Returns the configured application fee in the settlement provider's minor units. The approval
      * flow and the submission confirmation use this same conversion.
      */
     public long applicationFeeMinor() {
-        return APPLICATION_FEE.movePointRight(settlement.scale()).longValueExact();
+        return ApplicationSettings.feeMinor(plugin.getConfig(), settlement.scale(),
+                plugin.messages()::plainText);
     }
 
     public BuffRuntime buffs() {

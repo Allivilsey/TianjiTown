@@ -81,7 +81,7 @@ public final class TownBuffShopDialogs {
                         purchasable ? "BUFF_DURATIONS" : null, definition.key())));
             }
             presentation.openMenu(player, 54, presentation.dialogText("buff.shop-title"),
-                    new DialogRoute("FINANCE", "0"), items);
+                    new DialogRoute("FINANCE", "0"), items, 1);
         });
     }
 

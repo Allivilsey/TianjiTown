@@ -44,7 +44,8 @@ public final class RuntimeConfigurationValidator {
         ConfigurationValues.bool(config, "town.maintenance-mode", false, messageResolver);
         ConfigurationValues.list(config, "town.service-stations", messageResolver);
         validateTown(config, messageResolver);
-        EconomySettings.load(config, messageResolver);
+        EconomySettings economy = EconomySettings.load(config, messageResolver);
+        ApplicationSettings.feeMinor(config, economy.fallbackScale(), messageResolver);
         BuffSettings.load(config, messageResolver,
                 requiredMessageResolver);
         TownBonusSettings.load(config, messageResolver);

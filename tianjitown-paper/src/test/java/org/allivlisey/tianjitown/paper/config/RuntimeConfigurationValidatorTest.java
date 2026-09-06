@@ -32,6 +32,33 @@ class RuntimeConfigurationValidatorTest {
     }
 
     @Test
+    void applicationFeeUsesConfiguredAmountAndSettlementScale() {
+        YamlConfiguration config = configuration();
+        assertEquals(500_000, ApplicationSettings.feeMinor(config, 2,
+                ConfigurationValues::fallbackMessage));
+        config.set("town.application.fee", "7500.25");
+        assertDoesNotThrow(() -> RuntimeConfigurationValidator.validate(config));
+        assertEquals(750_025, ApplicationSettings.feeMinor(config, 2,
+                ConfigurationValues::fallbackMessage));
+        assertThrows(IllegalArgumentException.class, () -> ApplicationSettings.feeMinor(
+                config, 0, ConfigurationValues::fallbackMessage));
+        config.set("town.application.fee", null);
+        assertEquals(500_000, ApplicationSettings.feeMinor(config, 2,
+                ConfigurationValues::fallbackMessage));
+    }
+
+    @Test
+    void rejectsInvalidApplicationFees() {
+        for (Object fee : List.of("0", "-1", "0.001", "1E100", "invalid", 5000)) {
+            YamlConfiguration config = configuration();
+            config.set("town.application.fee", fee);
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                    () -> RuntimeConfigurationValidator.validate(config));
+            assertTrue(exception.getMessage().contains("town.application.fee"));
+        }
+    }
+
+    @Test
     void rejectsWrongScalarTypesInsteadOfUsingBukkitFallbacks() {
         for (Setting setting : List.of(
                 new Setting("database.connection-timeout-ms", "5000"),
