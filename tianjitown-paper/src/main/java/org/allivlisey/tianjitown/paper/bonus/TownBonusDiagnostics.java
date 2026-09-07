@@ -122,7 +122,7 @@ final class TownBonusDiagnostics {
         String schemaVersion = host.database().schemaVersion();
         EconomyRepository.Reconciliation settlement = capturedExternal < 0 ? null
                 : host.finance().inspectSettlement(capturedExternal);
-        QuickShopHistoryProbe.Result history = quickShopHistory.inspect(since);
+        QuickShopHistoryProbe.Result history = quickShopHistory.inspect(since, database.purchases());
         return new DiagnosticData(days, database, schemaVersion, settlement, history);
     }
 
@@ -207,7 +207,7 @@ final class TownBonusDiagnostics {
                     + ", required=" + settlement.requiredMinor()
                     + ", healthy=" + settlement.healthy());
         }
-        lines.add("QuickShop history available=" + history.available()
+        lines.add("QuickShop purchase history available=" + history.available()
                 + ", records=" + history.successfulTaxRecords()
                 + ", taxMinor=" + history.taxMinor() + ", truncated=" + history.truncated()
                 + ", detail=" + history.detail());
@@ -219,7 +219,7 @@ final class TownBonusDiagnostics {
                 && history.taxMinor() == database.internalTaxMinor();
         if (comparable) {
             healthy &= historyMatches;
-            lines.add("QuickShop reconciliation=" + (historyMatches ? "MATCH" : "DIFFERENCE"));
+            lines.add("QuickShop purchase reconciliation=" + (historyMatches ? "MATCH" : "DIFFERENCE"));
         } else {
             healthy = false;
             lines.add(plugin.messages().plainText(QUICKSHOP_HISTORY_INCOMPLETE));

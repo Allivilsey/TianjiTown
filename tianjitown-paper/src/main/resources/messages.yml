@@ -644,7 +644,7 @@ diagnostic:
     history-result-type-invalid: 'QuickShop 交易历史返回类型异常'
     history-read-failure: 'QuickShop 交易历史读取失败: {detail}'
     api-target-type-mismatch: '目标对象未实现 QuickShop API: {type}'
-    history-success: '已读取 QuickShop transaction metric 历史'
+    history-success: '已核对 QuickShop log_purchase 中的本地税收对应记录；允许入账延迟 2 分钟；不覆盖其他交易漏记，历史清算账户未验证'
     # QuickShop 税务能力检查；{minimum}/{version}=版本，{detail}=技术异常详情
     tax-version-unsupported: 'QuickShop-Hikari 版本至少为 {minimum}，当前为 {version}；动态税已保持关闭'
     tax-capability-success: 'QuickShop {version} 税率、交易账户、精确事件分流和成功事件签名已通过能力检查'
@@ -693,7 +693,7 @@ diagnostic:
   # TownBonusRuntime 统一诊断报告中的固定行；无占位符
   bonus:
     settlement-account-unavailable: 'Vault ERROR 清算账户不可读取'
-    quick-shop-reconciliation-incomplete: 'QuickShop reconciliation=INCOMPLETE（历史不可用或超过 1000 条上限）'
+    quick-shop-reconciliation-incomplete: 'QuickShop purchase reconciliation=INCOMPLETE（历史不可用或达到 1000 条上限）'
   # WorldBorder 反射适配器诊断；这些文本可能作为选址失败详情或启动门禁详情显示
   world-border:
     main-thread-required: 'WorldBorder API 必须在 Paper 主线程调用'

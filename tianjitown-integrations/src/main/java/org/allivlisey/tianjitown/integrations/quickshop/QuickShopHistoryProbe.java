@@ -3,13 +3,16 @@ package org.allivlisey.tianjitown.integrations.quickshop;
 import org.allivlisey.tianjitown.core.economy.MoneyAmount;
 import org.bukkit.plugin.Plugin;
 
-import java.lang.reflect.Constructor;
+import org.allivlisey.tianjitown.core.economy.QuickShopPurchase;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.time.Duration;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -18,24 +21,23 @@ import java.util.function.BiFunction;
 
 public final class QuickShopHistoryProbe {
     private final Plugin quickShop;
-    private final UUID settlementAccountId;
+    private static final int HISTORY_LIMIT = 1_000;
+    private static final Duration WRITE_DELAY = Duration.ofMinutes(2);
     private final int moneyScale;
     private final BiFunction<String, Map<String, ?>, String> messageResolver;
 
-    public QuickShopHistoryProbe(Plugin quickShop, UUID settlementAccountId, int moneyScale) {
-        this(quickShop, settlementAccountId, moneyScale, (key, placeholders) -> key);
+    public QuickShopHistoryProbe(Plugin quickShop, int moneyScale) {
+        this(quickShop, moneyScale, (key, placeholders) -> key);
     }
 
-    public QuickShopHistoryProbe(Plugin quickShop, UUID settlementAccountId, int moneyScale,
+    public QuickShopHistoryProbe(Plugin quickShop, int moneyScale,
                                  BiFunction<String, Map<String, ?>, String> messageResolver) {
         this.quickShop = Objects.requireNonNull(quickShop, "quickShop");
-        this.settlementAccountId = Objects.requireNonNull(settlementAccountId,
-                "settlementAccountId");
         this.moneyScale = moneyScale;
         this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
     }
 
-    public Result inspect(Instant since) {
+    public Result inspect(Instant since, List<QuickShopPurchase> expected) {
         Objects.requireNonNull(since, "since");
         try {
             if (!QuickShopTaxAdapter.isAtLeastMinimum(
@@ -50,29 +52,18 @@ public final class QuickShopHistoryProbe {
             Class<?> apiType = Class.forName("com.ghostchu.quickshop.api.QuickShopAPI",
                     false, loader);
             Object database = callApi(quickShopCore, apiType, "getDatabaseHelper");
-            Class<?> queryType = Class.forName("com.ghostchu.quickshop.database.MetricQuery",
-                    true, loader);
-            Constructor<?> constructor = java.util.Arrays.stream(queryType.getConstructors())
-                    .filter(value -> value.getParameterCount() == 2)
-                    .filter(value -> value.getParameterTypes()[0].isInstance(quickShopCore))
-                    .filter(value -> value.getParameterTypes()[1].isInstance(database))
-                    .findFirst()
-                    .orElseThrow(MetricQueryConstructorMissingException::new);
-            Object query = constructor.newInstance(quickShopCore, database);
-            Method queryTransactions = queryType.getMethod("queryTransactions", Date.class,
-                    long.class, boolean.class);
-            Object raw = queryTransactions.invoke(query, Date.from(since), 0L, true);
-            if (!(raw instanceof List<?> records)) {
-                return Result.unavailable(resolveMessage(
-                        "diagnostic.quick-shop.history-result-type-invalid", Map.of()));
+            // MetricQuery swallows SQL failures and reads log_transaction. Purchase logs
+            // are independent; use a bounded SELECT so failures cannot look like empty history.
+            Object manager = call(database, "getManager");
+            Class<?> managerApi = database.getClass().getMethod("getManager").getReturnType();
+            String prefix = (String) call(database, "getPrefix");
+            try (Connection connection = (Connection) callApi(manager, managerApi, "getConnection")) {
+                return inspectPurchases(connection, prefix, since, expected);
             }
-            return summarize(records, settlementAccountId, moneyScale, messageResolver);
-        } catch (ReflectiveOperationException | LinkageError | RuntimeException exception) {
+        } catch (ReflectiveOperationException | SQLException | LinkageError | RuntimeException exception) {
             Throwable cause = exception instanceof InvocationTargetException invocation
                     && invocation.getCause() != null ? invocation.getCause() : exception;
             String detail = switch (cause) {
-                case MetricQueryConstructorMissingException ignored -> resolveMessage(
-                        "diagnostic.quick-shop.history-query-constructor-missing", Map.of());
                 case ApiTargetTypeMismatchException mismatch -> resolveMessage(
                         "diagnostic.quick-shop.api-target-type-mismatch",
                         Map.of("type", mismatch.apiTypeName()));
@@ -94,36 +85,71 @@ public final class QuickShopHistoryProbe {
         return apiType.getMethod(name).invoke(target);
     }
 
-    static Result summarize(List<?> records, UUID settlementAccountId, int moneyScale)
-            throws ReflectiveOperationException {
-        return summarize(records, settlementAccountId, moneyScale, (key, placeholders) -> key);
+    Result inspectPurchases(Connection connection, String prefix, Instant since,
+                            List<QuickShopPurchase> expected) throws SQLException {
+        if (prefix == null || !prefix.matches("[A-Za-z0-9_]*")) {
+            throw new IllegalArgumentException("Invalid QuickShop table prefix");
+        }
+        List<QuickShopPurchase> purchases = new ArrayList<>();
+        int scanned = 0;
+        try (var statement = connection.prepareStatement(
+                "SELECT shop, type, buyer, money, tax, time FROM " + prefix
+                        + "log_purchase WHERE time >= ? ORDER BY id DESC LIMIT " + HISTORY_LIMIT)) {
+            statement.setTimestamp(1, Timestamp.from(since.minus(WRITE_DELAY)));
+            try (var rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    scanned++;
+                    String type = rows.getString("type");
+                    if (!"PURCHASE_SELLING_SHOP".equals(type)
+                            && !"PURCHASE_BUYING_SHOP".equals(type)) {
+                        continue;
+                    }
+                    BigDecimal tax = rows.getBigDecimal("tax");
+                    if (tax == null || tax.signum() <= 0) {
+                        continue;
+                    }
+                    purchases.add(new QuickShopPurchase(rows.getLong("shop"),
+                            type.equals("PURCHASE_SELLING_SHOP") ? "SELLING" : "BUYING",
+                            UUID.fromString(rows.getString("buyer")),
+                            MoneyAmount.rounded(rows.getBigDecimal("money"), moneyScale,
+                                    RoundingMode.HALF_UP).minorUnits(),
+                            MoneyAmount.rounded(tax, moneyScale, RoundingMode.HALF_UP).minorUnits(),
+                            rows.getTimestamp("time").toInstant()));
+                }
+            }
+        }
+        return matchPurchases(purchases, expected, scanned >= HISTORY_LIMIT,
+                resolveMessage("diagnostic.quick-shop.history-success", Map.of()));
     }
 
-    static Result summarize(List<?> records, UUID settlementAccountId, int moneyScale,
-                            BiFunction<String, Map<String, ?>, String> messageResolver)
-            throws ReflectiveOperationException {
-        Objects.requireNonNull(records, "records");
-        Objects.requireNonNull(settlementAccountId, "settlementAccountId");
-        Objects.requireNonNull(messageResolver, "messageResolver");
-        long successfulTaxRecords = 0;
+    static Result matchPurchases(List<QuickShopPurchase> purchases,
+                                 List<QuickShopPurchase> expected, boolean truncated,
+                                 String detail) {
+        // Match multiplicities, not just totals. A purchase cannot prove two local entries.
+        // Scope is the local tax records: unrelated purchases cannot be attributed to this
+        // settlement account because log_purchase does not persist the dynamic taxer.
+        List<QuickShopPurchase> remaining = new ArrayList<>(purchases);
+        long count = 0;
         long taxMinor = 0;
-        for (Object record : records) {
-            UUID taxAccount = (UUID) call(record, "getTaxAccount");
-            String error = (String) call(record, "getError");
-            if (!settlementAccountId.equals(taxAccount)
-                    || error != null && !error.isBlank()) {
-                continue;
+        for (QuickShopPurchase local : expected.stream()
+                .sorted(java.util.Comparator.comparing(QuickShopPurchase::createdAt)).toList()) {
+            QuickShopPurchase match = remaining.stream()
+                    .filter(row -> row.shopId() == local.shopId()
+                            && row.shopType().equals(local.shopType())
+                            && row.interactingId().equals(local.interactingId())
+                            && row.grossMinor() == local.grossMinor()
+                            && row.taxMinor() == local.taxMinor()
+                            && Duration.between(row.createdAt(), local.createdAt()).abs()
+                                    .compareTo(WRITE_DELAY) <= 0)
+                    .min(java.util.Comparator.comparing(QuickShopPurchase::createdAt))
+                    .orElse(null);
+            if (match != null) {
+                remaining.remove(match);
+                count++;
+                taxMinor = Math.addExact(taxMinor, match.taxMinor());
             }
-            double value = ((Number) call(record, "getTaxAmount")).doubleValue();
-            if (!Double.isFinite(value) || value <= 0) {
-                continue;
-            }
-            successfulTaxRecords++;
-            taxMinor = Math.addExact(taxMinor, MoneyAmount.rounded(BigDecimal.valueOf(value),
-                    moneyScale, RoundingMode.HALF_UP).minorUnits());
         }
-        return Result.available(successfulTaxRecords, taxMinor, records.size() >= 1_000,
-                resolveMessage(messageResolver, "diagnostic.quick-shop.history-success", Map.of()));
+        return Result.available(count, taxMinor, truncated, detail);
     }
 
     private static Object call(Object target, String name) throws ReflectiveOperationException {
@@ -149,10 +175,6 @@ public final class QuickShopHistoryProbe {
         } catch (RuntimeException | LinkageError exception) {
             return key + " " + placeholders;
         }
-    }
-
-    private static final class MetricQueryConstructorMissingException
-            extends ReflectiveOperationException {
     }
 
     private static final class ApiTargetTypeMismatchException extends IllegalArgumentException {

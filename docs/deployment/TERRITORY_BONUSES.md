@@ -27,7 +27,7 @@
 - SQLite `quick_check`、外键违规、关键对象计数、失败投影、锁定账户、待补偿操作和账户/末笔流水一致性；
 - 每个 ACTIVE 小镇的 Residence 边界、区域数量和成员权限；
 - Vault 清算账户外部余额、内部余额、待完成金额和应有余额；
-- QuickShop transaction metric 历史与 `quickshop_tax_records` 的记录数/税额比较。
+- QuickShop `log_purchase` 与 `quickshop_tax_records` 的逐笔匹配，报告匹配数量和税额。
 
 QuickShop 查询最多读取 1000 条时报告标记 `INCOMPLETE`，不得误报为完全一致。报告写入 `plugins/TianjiTown/diagnostics`，只保留最近 30 份。
 
@@ -42,3 +42,5 @@ QuickShop 查询最多读取 1000 条时报告标记 `INCOMPLETE`，不得误报
 5. 人工决定如何补录 `1.0.0-SNAPSHOT` 运行期间发生的真实经济交易，不直接编辑 QuickShop 数据库或 Flyway history。
 
 故障注入和最终验收矩阵见 [ALERTS_AND_FAULT_INJECTION.md](../operations/ALERTS_AND_FAULT_INJECTION.md)。
+
+购买历史核对仅覆盖本地已入账税收，不能发现其他交易的漏记，也不证明历史税款到账账户；商店当前税款账户不代表交易时动态指定的账户。Vault 清算余额仍单独检查。查询异常或扫描达到 1000 条时标记 INCOMPLETE。

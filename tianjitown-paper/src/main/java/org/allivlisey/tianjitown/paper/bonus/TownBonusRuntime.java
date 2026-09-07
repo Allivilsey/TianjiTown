@@ -49,7 +49,7 @@ public final class TownBonusRuntime implements Listener {
         this.beaconEffects = new TownBeaconEffects(plugin, host, repository,
                 settings.beacon(), index::get, this::refreshIndex);
         this.diagnostics = new TownBonusDiagnostics(plugin, host, diagnosticRepository, settings.operations(),
-                new QuickShopHistoryProbe(quickShop, host.settlement().accountId(),
+                new QuickShopHistoryProbe(quickShop,
                         host.settlement().scale(), plugin.messages()::plainText));
     }
 

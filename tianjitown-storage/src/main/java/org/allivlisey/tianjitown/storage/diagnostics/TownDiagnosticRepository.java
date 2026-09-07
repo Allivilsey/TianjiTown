@@ -1,6 +1,7 @@
 package org.allivlisey.tianjitown.storage.diagnostics;
 
 import org.allivlisey.tianjitown.core.land.ChunkPosition;
+import org.allivlisey.tianjitown.core.economy.QuickShopPurchase;
 import org.allivlisey.tianjitown.core.land.InitialTerritory;
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
 
@@ -75,21 +76,25 @@ public final class TownDiagnosticRepository {
                           ORDER BY l.created_at DESC, l.rowid DESC LIMIT 1
                      ), 0)
                     """));
-            long internalTaxCount;
-            long internalTaxMinor;
+            List<QuickShopPurchase> purchases = new ArrayList<>();
             try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT COUNT(*) AS records, COALESCE(SUM(tax_minor), 0) AS total
+                    SELECT shop_id, shop_type, interacting_uuid, gross_minor, tax_minor, created_at
                       FROM quickshop_tax_records WHERE created_at >= ?
+                     ORDER BY created_at
                     """)) {
                 statement.setLong(1, quickShopSince.toEpochMilli());
-                try (ResultSet row = statement.executeQuery()) {
-                    row.next();
-                    internalTaxCount = row.getLong("records");
-                    internalTaxMinor = row.getLong("total");
+                try (ResultSet rows = statement.executeQuery()) {
+                    while (rows.next()) {
+                        purchases.add(new QuickShopPurchase(rows.getLong("shop_id"),
+                                rows.getString("shop_type"), readUuid(rows, "interacting_uuid"),
+                                rows.getLong("gross_minor"), rows.getLong("tax_minor"),
+                                Instant.ofEpochMilli(rows.getLong("created_at"))));
+                    }
                 }
             }
             return new DiagnosticSnapshot(quickCheck, foreignKeyViolations, counts,
-                    internalTaxCount, internalTaxMinor, loadLandStates(connection));
+                    purchases.size(), purchases.stream().mapToLong(QuickShopPurchase::taxMinor)
+                            .reduce(0, Math::addExact), loadLandStates(connection), purchases);
         });
     }
 
@@ -174,10 +179,12 @@ public final class TownDiagnosticRepository {
 
     public record DiagnosticSnapshot(String quickCheck, int foreignKeyViolations,
                                      Map<String, Long> counts, long internalTaxCount,
-                                     long internalTaxMinor, List<LandState> landStates) {
+                                     long internalTaxMinor, List<LandState> landStates,
+                                     List<QuickShopPurchase> purchases) {
         public DiagnosticSnapshot {
             counts = Map.copyOf(counts);
             landStates = List.copyOf(landStates);
+            purchases = List.copyOf(purchases);
         }
     }
 

@@ -66,8 +66,8 @@ class TownBonusDiagnosticsTest {
         when(reconciliation.healthy()).thenReturn(true);
         when(finance.inspectSettlement(100)).thenReturn(reconciliation);
         when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
-                "ok", 0, Map.of(), 2, 50, List.of()));
-        when(history.inspect(any())).thenReturn(QuickShopHistoryProbe.Result.available(2, 50, false, "ok"));
+                "ok", 0, Map.of(), 2, 50, List.of(), List.of()));
+        when(history.inspect(any(), any())).thenReturn(QuickShopHistoryProbe.Result.available(2, 50, false, "ok"));
         diagnostics = new TownBonusDiagnostics(plugin, host, repository,
                 new TownBonusSettings.Operations(7), history);
     }
@@ -77,7 +77,7 @@ class TownBonusDiagnosticsTest {
         var state = new TownDiagnosticRepository.LandState(UUID.randomUUID(), "town", "res",
                 List.of(), List.of());
         when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
-                "ok", 0, Map.of(), 2, 50, List.of(state)));
+                "ok", 0, Map.of(), 2, 50, List.of(state), List.of()));
         LandProtectionService.Inspection inspection = mock(LandProtectionService.Inspection.class);
         when(inspection.state()).thenReturn(LandProtectionService.ProjectionState.HEALTHY);
         when(land.inspect("res", List.of(), List.of())).thenReturn(inspection);
@@ -97,7 +97,7 @@ class TownBonusDiagnosticsTest {
         async.getLast().run();
         Path report = diagnostics.lastDiagnostic().report();
         assertTrue(Files.isRegularFile(report));
-        assertTrue(Files.readString(report).contains("QuickShop reconciliation=MATCH"));
+        assertTrue(Files.readString(report).contains("QuickShop purchase reconciliation=MATCH"));
     }
 
     @Test
@@ -151,7 +151,7 @@ class TownBonusDiagnosticsTest {
     @Test
     void unavailableSettlementOrIncompleteHistoryCannotReportHealthy() {
         when(settlement.balanceMinor()).thenThrow(new IllegalStateException("offline"));
-        when(history.inspect(any())).thenReturn(QuickShopHistoryProbe.Result.available(2, 50, true, "limit"));
+        when(history.inspect(any(), any())).thenReturn(QuickShopHistoryProbe.Result.available(2, 50, true, "limit"));
         diagnostics.diagnose(sender, 7);
         async.getFirst().run();
         main.getFirst().run();
