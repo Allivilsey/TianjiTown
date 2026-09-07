@@ -60,7 +60,6 @@ buffs:
       operation: ADD_SCALAR
       base-price: '6720.00'
       maximum-level: 5
-      stacking: LEVEL_UP
       amount-per-level: 0.2
     health:
       effect-kind: ATTRIBUTE
@@ -68,7 +67,6 @@ buffs:
       operation: ADD_NUMBER
       base-price: '10080.00'
       maximum-level: 5
-      stacking: LEVEL_UP
       amount-per-level: 4.0
     night_vision:
       effect-kind: POTION
@@ -76,7 +74,6 @@ buffs:
       operation: AMPLIFIER
       base-price: '2688.00'
       maximum-level: 1
-      stacking: REFRESH
       amount-per-level: 1
     water_breathing:
       effect-kind: POTION
@@ -84,7 +81,6 @@ buffs:
       operation: AMPLIFIER
       base-price: '4032.00'
       maximum-level: 1
-      stacking: REFRESH
       amount-per-level: 1
     safe_fall:
       effect-kind: ATTRIBUTE
@@ -92,7 +88,6 @@ buffs:
       operation: ADD_NUMBER
       base-price: '4032.00'
       maximum-level: 3
-      stacking: REFRESH
       amount-per-level: 2
     mining:
       effect-kind: ATTRIBUTE
@@ -100,7 +95,6 @@ buffs:
       operation: ADD_SCALAR
       base-price: '6720.00'
       maximum-level: 3
-      stacking: REFRESH
       amount-per-level: 0.1
     fire_resistance:
       effect-kind: POTION
@@ -108,7 +102,6 @@ buffs:
       operation: AMPLIFIER
       base-price: '8064.00'
       maximum-level: 1
-      stacking: REFRESH
       amount-per-level: 1
 
 territory:

@@ -2,7 +2,6 @@ package org.allivlisey.tianjitown.paper.config;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 
 import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
-import org.allivlisey.tianjitown.core.consumption.BuffStackingRule;
 import org.bukkit.configuration.ConfigurationSection;
 
 import java.util.LinkedHashMap;
@@ -114,8 +113,6 @@ public record BuffSettings(boolean buffShopEnabled, Map<String, BuffDefinition> 
                     ConfigurationValues.text(section, "operation", "AMPLIFIER", messageResolver),
                     ConfigurationValues.decimalText(section, "base-price", messageResolver),
                     ConfigurationValues.integer(section, "maximum-level", messageResolver),
-                    enumValue(BuffStackingRule.class, text(section, "stacking", messageResolver),
-                    section.getCurrentPath() + ".stacking", messageResolver),
                     ConfigurationValues.decimalNumber(section, "amount-per-level", messageResolver));
             if (result.putIfAbsent(key, definition) != null) {
                 throw new IllegalArgumentException(resolveMessage(messageResolver, DUPLICATE_KEY,

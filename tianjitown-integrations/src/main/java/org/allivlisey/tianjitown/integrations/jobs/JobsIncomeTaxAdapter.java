@@ -86,8 +86,9 @@ public final class JobsIncomeTaxAdapter {
         }
         try {
             // Jobs 的付款事件固定为异步事件，Vault 操作必须切回服务器主线程。
-            return owner.getServer().getScheduler().callSyncMethod(owner,
-                    () -> processor.apply(earning)).get(10, TimeUnit.SECONDS);
+            JobsTaxCall payment = new JobsTaxCall(() -> processor.apply(earning));
+            owner.getServer().getScheduler().callSyncMethod(owner, payment);
+            return payment.await(10, TimeUnit.SECONDS);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(resolveMessage("log.jobs.await-interrupted", Map.of()),

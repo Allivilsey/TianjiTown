@@ -280,8 +280,6 @@ public final class TownFinanceDialogs {
             case "ADMIN_ADJUSTMENT" -> "ledger.type.admin-adjustment";
             case "BUFF_PURCHASE" -> "ledger.type.buff-purchase";
             case "BUFF_REFUND" -> "ledger.type.buff-refund";
-            case "RESOURCE_PURCHASE" -> "ledger.type.resource-purchase";
-            case "RESOURCE_REFUND" -> "ledger.type.resource-refund";
             default -> null;
         };
         return key == null

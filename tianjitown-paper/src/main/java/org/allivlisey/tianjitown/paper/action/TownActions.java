@@ -3,7 +3,6 @@ import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 
 import org.allivlisey.tianjitown.core.application.ApplicationText;
-import org.allivlisey.tianjitown.core.consumption.BuffDurationOption;
 import org.allivlisey.tianjitown.core.governance.VoteType;
 import org.allivlisey.tianjitown.core.land.ExpansionDirection;
 import org.allivlisey.tianjitown.core.town.MemberRole;
@@ -189,11 +188,6 @@ public final class TownActions {
     public void expandTown(Player actor, int gridX, int gridZ,
                     Consumer<TownActionOutcome<EconomyRepository.ExpansionOperation>> completion) {
         expansion.expandTown(actor, gridX, gridZ, completion);
-    }
-
-    public void buyBuff(Player actor, String buffKey, BuffDurationOption duration,
-                 Consumer<TownActionOutcome<CommerceRepository.BuffPurchase>> completion) {
-        buff.buyBuff(actor, buffKey, duration, completion);
     }
 
     public void buyBuff(Player actor, String buffKey, int weeks, int level,

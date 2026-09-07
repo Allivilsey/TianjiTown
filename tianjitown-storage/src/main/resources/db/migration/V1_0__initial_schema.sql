@@ -6,9 +6,7 @@ CREATE TABLE active_buffs (
     effect_key TEXT NOT NULL,
     effect_operation TEXT NOT NULL,
     level INTEGER NOT NULL CHECK (level >= 1),
-    stack_count INTEGER NOT NULL CHECK (stack_count >= 1),
     amount_per_level REAL NOT NULL,
-    allowed_worlds TEXT NOT NULL,
     price_minor INTEGER NOT NULL CHECK (price_minor > 0),
     purchased_by BLOB,
     purchased_by_name TEXT NOT NULL,
@@ -146,8 +144,7 @@ CREATE TABLE ledger_entries (
     entry_type TEXT NOT NULL CHECK (entry_type IN (
         'QUICKSHOP_TAX', 'JOBS_TAX', 'GLOBALMARKETPLUS_TAX', 'SERVER_TAX_SUBSIDY',
         'APPLICATION_FEE', 'DONATION', 'EXPANSION', 'EXPANSION_REFUND',
-        'ADMIN_ADJUSTMENT', 'BUFF_PURCHASE', 'BUFF_REFUND',
-        'RESOURCE_PURCHASE', 'RESOURCE_REFUND'
+        'ADMIN_ADJUSTMENT', 'BUFF_PURCHASE', 'BUFF_REFUND'
     )),
     amount_minor INTEGER NOT NULL CHECK (amount_minor <> 0),
     balance_after_minor INTEGER NOT NULL CHECK (balance_after_minor >= 0),
@@ -190,29 +187,6 @@ CREATE TABLE quickshop_tax_records (
     created_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)),
     CONSTRAINT uq_quickshop_tax_business_key UNIQUE (business_key),
     CONSTRAINT fk_quickshop_tax_town FOREIGN KEY (town_id) REFERENCES towns (town_id)
-);
-CREATE TABLE resource_orders (
-    order_id BLOB NOT NULL PRIMARY KEY,
-    town_id BLOB NOT NULL,
-    buyer_uuid BLOB NOT NULL,
-    buyer_name TEXT NOT NULL,
-    resource_key TEXT NOT NULL,
-    resource_name TEXT NOT NULL,
-    material_key TEXT NOT NULL,
-    quantity INTEGER NOT NULL CHECK (quantity > 0),
-    total_minor INTEGER NOT NULL CHECK (total_minor > 0),
-    business_key TEXT NOT NULL,
-    status TEXT NOT NULL CHECK (status IN (
-        'PENDING', 'CLAIMING', 'CLAIMED', 'REFUND_REQUIRED', 'REFUNDED'
-    )),
-    claim_token BLOB,
-    claim_started_at INTEGER,
-    claimed_at INTEGER,
-    last_error TEXT,
-    created_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)),
-    updated_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)),
-    CONSTRAINT uq_resource_order_business_key UNIQUE (business_key),
-    CONSTRAINT fk_resource_order_town FOREIGN KEY (town_id) REFERENCES towns (town_id)
 );
 CREATE TABLE site_reservations (
     reservation_id BLOB NOT NULL PRIMARY KEY,
@@ -497,12 +471,6 @@ CREATE INDEX ix_quickshop_tax_town_time
 CREATE INDEX ix_reservations_overlap ON site_reservations (
     world_uuid, released_at, expires_at, min_chunk_x, max_chunk_x, min_chunk_z, max_chunk_z
 );
-CREATE INDEX ix_resource_orders_daily
-    ON resource_orders (town_id, resource_key, created_at, status);
-CREATE INDEX ix_resource_orders_player_status
-    ON resource_orders (buyer_uuid, status, created_at DESC);
-CREATE INDEX ix_resource_orders_recovery
-    ON resource_orders (status, claim_started_at);
 CREATE INDEX ix_reviews_application ON application_reviews (application_id, created_at);
 CREATE INDEX ix_territory_chunks_unit ON territory_chunks (unit_id);
 CREATE INDEX ix_territory_expansions_recovery
@@ -591,15 +559,6 @@ BEGIN
     UPDATE town_profile_sync
        SET updated_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
      WHERE town_id = NEW.town_id;
-END;
-CREATE TRIGGER tr_resource_orders_updated_at
-AFTER UPDATE ON resource_orders
-FOR EACH ROW
-WHEN NEW.updated_at = OLD.updated_at
-BEGIN
-    UPDATE resource_orders
-       SET updated_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
-     WHERE order_id = NEW.order_id;
 END;
 CREATE TRIGGER tr_territory_expansions_updated_at
 AFTER UPDATE ON territory_expansions

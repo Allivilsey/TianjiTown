@@ -745,6 +745,61 @@ class EconomyRepositorySqliteTest {
         }
     }
 
+    @Test void reconciliationPreservesUnresolvedCompensationLock() throws Exception {
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig("jdbc:sqlite:" + temporaryDirectory.resolve("audit.db"), Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID town = UUID.randomUUID(), mayor = UUID.randomUUID();
+            insertTown(gate, town, mayor, UUID.randomUUID());
+            var repo = new EconomyRepository(gate.dataSource(), () -> false);
+            repo.initializeAccounts();
+            var funding = repo.prepareOperation(town, "DONATION", 1000, mayor, "Mayor", "audit:fund", "audit");
+            repo.markOperationExternalApplied(funding.operationId());
+            repo.completeOperation(funding.operationId());
+            var unresolved = repo.prepareOperation(town, "DONATION", 100, mayor, "Mayor", "audit:pending", "audit");
+            repo.requireCompensation(unresolved.operationId(), "ambiguous payment");
+            assertTrue(repo.findFinanceByTown(town).orElseThrow().lockReason().startsWith("ECONOMY_COMPENSATION:"));
+            assertFalse(repo.reconcileSettlement(999).healthy());
+            assertTrue(repo.reconcileSettlement(1000).healthy());
+            assertEquals("COMPENSATION_REQUIRED", repo.pendingOperations().getFirst().status());
+            assertTrue(repo.findFinanceByTown(town).orElseThrow().locked());
+            assertTrue(repo.findFinanceByTown(town).orElseThrow().lockReason().startsWith("ECONOMY_COMPENSATION:"));
+            repo.resolveCompensation(unresolved.operationId(), "refund confirmed");
+            assertTrue(repo.reconcileSettlement(1000).healthy());
+            assertFalse(repo.findFinanceByTown(town).orElseThrow().locked());
+        }
+    }
+    @Test void pendingAdminDebitsReserveBalanceUntilCancellationOrCompletion() throws Exception {
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig("jdbc:sqlite:" + temporaryDirectory.resolve("debits.db"), Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID town = UUID.randomUUID(), mayor = UUID.randomUUID();
+            insertTown(gate, town, mayor, UUID.randomUUID());
+            var repo = new EconomyRepository(gate.dataSource(), () -> false);
+            repo.initializeAccounts();
+            var funding = repo.prepareOperation(town, "DONATION", 1000, mayor, "Mayor", "audit:fund", "audit");
+            repo.markOperationExternalApplied(funding.operationId());
+            repo.completeOperation(funding.operationId());
+            var first = repo.prepareOperation(town, "ADMIN_ADJUSTMENT", -700, mayor, "Mayor", "audit:debit1", "audit");
+            assertThrows(EconomyRepository.ConflictException.class, () -> repo.prepareOperation(
+                    town, "ADMIN_ADJUSTMENT", -700, mayor, "Mayor", "audit:debit2", "audit"));
+            var commerce = new org.allivlisey.tianjitown.storage.commerce.CommerceRepository(gate.dataSource(), () -> false);
+            var buff = new org.allivlisey.tianjitown.core.consumption.BuffDefinition("speed", "Speed",
+                    org.allivlisey.tianjitown.core.consumption.BuffDefinition.EffectKind.ATTRIBUTE,
+                    "minecraft:movement_speed", "ADD_SCALAR", new java.math.BigDecimal("4"), 1, 0.2);
+            assertThrows(org.allivlisey.tianjitown.storage.commerce.CommerceRepository.ConflictException.class,
+                    () -> commerce.purchaseBuff(mayor, "Mayor", buff, 1, 1, 2, "audit:buff", Instant.now()));
+            TerritoryUnit origin = repo.territoryUnits(town).getFirst().unit();
+            assertThrows(EconomyRepository.ConflictException.class, () -> repo.prepareExpansion(
+                    new EconomyRepository.ExpansionRequest(town,
+                            TerritoryRules.target(List.of(origin), 1, 0), "SKY", "unit_p1_p0",
+                            400, mayor, "Mayor", "audit:expansion")));
+            repo.cancelOperation(first.operationId(), "not executed");
+            var second = repo.prepareOperation(town, "ADMIN_ADJUSTMENT", -700, mayor, "Mayor", "audit:debit2", "audit");
+            repo.markOperationExternalApplied(second.operationId());
+            assertEquals(300, repo.completeOperation(second.operationId()).balanceAfterMinor());
+            assertEquals(300, repo.completeOperation(second.operationId()).balanceAfterMinor());
+            assertTrue(repo.pendingOperations().isEmpty());
+        }
+    }
     private static void insertTown(DatabaseGate gate, UUID townId, UUID mayorId, UUID worldId)
             throws Exception {
         insertTown(gate, townId, mayorId, worldId,

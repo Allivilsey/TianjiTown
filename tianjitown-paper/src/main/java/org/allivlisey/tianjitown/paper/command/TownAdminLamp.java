@@ -15,7 +15,6 @@ import revxrsal.commands.node.LiteralNode;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /** Configures Lamp's context injection, permissions, suggestions and localized errors. */
 public final class TownAdminLamp {

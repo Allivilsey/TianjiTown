@@ -319,7 +319,6 @@ final class TownProvisioningStore {
                 "DELETE FROM mayor_transfer_requests WHERE town_id = ?",
                 "DELETE FROM quickshop_tax_records WHERE town_id = ?",
                 "DELETE FROM quickshop_subsidy_reservations WHERE town_id = ?",
-                "DELETE FROM resource_orders WHERE town_id = ?",
                 "DELETE FROM town_archived_members WHERE town_id = ?",
                 "DELETE FROM town_beacon_effects WHERE town_id = ?",
                 "DELETE FROM town_member_departures WHERE town_id = ?",

@@ -93,7 +93,7 @@ class RuntimeConfigurationValidatorTest {
         assertEquals("database.file 不能为空",
                 messages.plainText("validation.runtime-configuration.database-file-required"));
         assertEquals("town.application.reservation-minutes 必须在 1~1440 范围内",
-                messages.plainText("validation.runtime-configuration.range", Map.of(
+                messages.plainText("validation.common.range", Map.of(
                         "path", "town.application.reservation-minutes", "minimum", 1,
                         "maximum", 1_440)));
 
@@ -101,7 +101,7 @@ class RuntimeConfigurationValidatorTest {
                 "path", "town.application.reservation-minutes", "minimum", 1, "maximum", 2);
         for (String key : List.of(
                 "validation.runtime-configuration.database-file-required",
-                "validation.runtime-configuration.range")) {
+                "validation.common.range")) {
             String rendered = messages.plainText(key, placeholders);
             assertFalse(rendered.isBlank());
             assertFalse(rendered.contains("缺少消息配置"));
@@ -133,7 +133,7 @@ class RuntimeConfigurationValidatorTest {
                 validationFailure(config, messages).getMessage());
 
         YamlConfiguration override = new YamlConfiguration();
-        override.set("validation.runtime-configuration.range",
+        override.set("validation.common.range",
                 "自定义配置范围错误: {path} [{minimum}-{maximum}]");
         override.save(temporaryDirectory.resolve("messages.yml").toFile());
         messages.reload();

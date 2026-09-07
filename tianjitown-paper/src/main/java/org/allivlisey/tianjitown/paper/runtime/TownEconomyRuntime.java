@@ -9,6 +9,7 @@ import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.config.EconomySettings;
 import org.allivlisey.tianjitown.paper.economy.DonationRefundCoordinator;
+import org.allivlisey.tianjitown.paper.task.RetryingWorkQueue;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -62,6 +63,7 @@ final class TownEconomyRuntime {
     private final TownTaxRuntime taxes;
     private final java.util.function.BooleanSupplier consumptionEnabled;
     private final DonationRefundCoordinator donationRefunds;
+    private final RetryingWorkQueue<Finalization> finalizations;
     private Consumer<Player> taxChangeNotifier = player -> { };
 
     TownEconomyRuntime(TianjiTownPlugin plugin,
@@ -81,6 +83,32 @@ final class TownEconomyRuntime {
         this.taxes = taxes;
         this.consumptionEnabled = consumptionEnabled;
         this.donationRefunds = createDonationRefundCoordinator();
+        this.finalizations = new RetryingWorkQueue<>(new RetryingWorkQueue.Scheduler() {
+            @Override
+            public void executeAsync(Runnable task) {
+                if (!plugin.runAsync(task)) throw new java.util.concurrent.RejectedExecutionException();
+            }
+
+            @Override
+            public void schedule(Runnable task, long delayTicks) {
+                if (!plugin.runMainLater(task, delayTicks)) {
+                    throw new java.util.concurrent.RejectedExecutionException();
+                }
+            }
+        }, 20L * 5, 20L * 30, pending -> {
+            EconomyRepository.LedgerMutation mutation = finance.completeOperation(pending.operationId);
+            databaseAvailable.set(true);
+            plugin.runMain(() -> pending.success.accept(mutation));
+        }, (pending, exception) -> {
+            tasks.markStorageFailure(exception);
+            plugin.getLogger().severe(plugin.messages().plainText(
+                    "log.external-operation.finalization-retry", Map.of(
+                            "operation", pending.operationId, "detail", safeText(safeMessage(exception)))));
+            if (pending.notified.compareAndSet(false, true)) {
+                plugin.runMain(() -> plugin.messages().send(pending.sender,
+                        "chat.lifecycle.external-finalization-pending"));
+            }
+        });
     }
 
     private DonationRefundCoordinator createDonationRefundCoordinator() {
@@ -353,15 +381,22 @@ final class TownEconomyRuntime {
             finishFailedExternalOperation(sender, operation, result, failure);
             return;
         }
-        plugin.runAsync(() -> {
-            try {
-                EconomyRepository.LedgerMutation mutation =
-                        finance.completeOperation(operation.operationId());
-                plugin.runMain(() -> success.accept(mutation));
-            } catch (RuntimeException exception) {
-                tasks.reportActionFailure(exception, failure);
-            }
-        });
+        // Vault succeeded: retries must only post the idempotent database ledger, never debit again.
+        finalizations.submit(new Finalization(operation.operationId(), sender, success));
+    }
+
+    private static final class Finalization {
+        private final UUID operationId;
+        private final CommandSender sender;
+        private final Consumer<EconomyRepository.LedgerMutation> success;
+        private final AtomicBoolean notified = new AtomicBoolean();
+
+        private Finalization(UUID operationId, CommandSender sender,
+                             Consumer<EconomyRepository.LedgerMutation> success) {
+            this.operationId = operationId;
+            this.sender = sender;
+            this.success = success;
+        }
     }
 
     private void finishFailedExternalOperation(CommandSender sender,

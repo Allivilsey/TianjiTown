@@ -54,8 +54,6 @@ final class TownProvisionRuntime {
             "dialog.provision.lifecycle-recovery-action";
     private static final String PROVISION_REFRESH_APPLICATION_ACTION =
             "dialog.provision.refresh-application-action";
-    private static final String PROVISION_SITE_VALIDATION_DETAIL =
-            "dialog.provision.site-validation-failed-detail";
     private static final String PROVISION_SITE_VALIDATION_ACTION =
             "dialog.provision.site-validation-recovery-action";
     private static final String PROVISION_RESIDENCE_NAME_CONFLICT_DETAIL =
@@ -80,18 +78,6 @@ final class TownProvisionRuntime {
             "dialog.provision.projection-result-recovery-action";
     private static final String PROVISION_RESIDENCE_RETRY_ACTION =
             "dialog.provision.residence-retry-action";
-    private static final String PROVISION_DEFAULT_TELEPORT_WORLD_DETAIL =
-            "dialog.provision.default-teleport-world-unloaded-detail";
-    private static final String PROVISION_DEFAULT_TELEPORT_HEIGHT_DETAIL =
-            "dialog.provision.default-teleport-height-invalid-detail";
-    private static final String PROVISION_DEFAULT_TELEPORT_SPACE_DETAIL =
-            "dialog.provision.default-teleport-space-invalid-detail";
-    private static final String PROVISION_DEFAULT_TELEPORT_ROLLED_BACK_DETAIL =
-            "dialog.provision.default-teleport-failed-rolled-back-detail";
-    private static final String PROVISION_DEFAULT_TELEPORT_ROLLBACK_FAILED_DETAIL =
-            "dialog.provision.default-teleport-failed-rollback-failed-detail";
-    private static final String PROVISION_LAND_WITH_TELEPORT_DETAIL =
-            "dialog.provision.land-created-with-default-teleport-detail";
     private static final String PROVISION_RETRY_APPROVAL_ACTION =
             "dialog.provision.retry-approval-action";
     private static final String PROVISION_REFRESH_STATE_ACTION =
@@ -209,7 +195,7 @@ final class TownProvisionRuntime {
         if (!environment.valid()) {
             provisions.finish(application.id());
             completion.accept(ProvisionResult.failure(application,
-                    ProvisionResult.MessageRef.configured(PROVISION_SITE_VALIDATION_DETAIL,
+                        ProvisionResult.MessageRef.configured("dialog.provision.site-validation-failed-detail",
                             Map.of("detail", safeText(environment.error()))),
                     ProvisionResult.MessageRef.configured(PROVISION_SITE_VALIDATION_ACTION)));
             return;
@@ -226,7 +212,7 @@ final class TownProvisionRuntime {
         }
         if (nameCollision.occupied()) {
             LandProtectionService.Inspection inspection = application.townId() == null
-                    ? LandProtectionService.Inspection.invalid("MISSING_TEMPORARY_TOWN")
+                    ? LandProtectionService.Inspection.invalidCode(LandProtectionService.ResultCode.PROJECTION_MISSING)
                     : landProtection.inspect(application.text().normalizedResidenceName(),
                     application.territory(), expectedMembers);
             if (inspection.state() != LandProtectionService.ProjectionState.HEALTHY) {
@@ -334,9 +320,8 @@ final class TownProvisionRuntime {
                     ? landProtection.create(provisioning.town().residenceName(),
                     provisioning.town().territory(),
                     provisioning.members())
-                    : LandProtectionService.Result.failure(plugin.messages().plainText(
-                            PROVISION_SITE_VALIDATION_DETAIL,
-                            Map.of("detail", safeText(validation.error()))));
+                    : LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROVISION_SITE_VALIDATION_DETAIL,
+                            Map.of("detail", safeText(validation.error())));
             LandProtectionService.Result completedLand = land.success()
                     ? setDefaultTeleportPoint(provisioning.town(), land) : land;
             if (!plugin.runAsync(() -> finishProvision(sender, applicationId, completedLand,
@@ -354,7 +339,7 @@ final class TownProvisionRuntime {
             String detail = safeText(safeMessage(exception));
             plugin.getLogger().severe(plugin.messages().plainText(PROVISION_PROJECTION_EXCEPTION,
                     Map.of("application", applicationId, "detail", detail)));
-            LandProtectionService.Result failed = LandProtectionService.Result.failure(detail);
+            LandProtectionService.Result failed = LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROVISION_OPERATION_FAILED, Map.of("detail", detail));
             if (!plugin.runAsync(() -> finishProvision(sender, applicationId, failed, completion))) {
                 provisions.finish(applicationId);
                 completion.accept(ProvisionResult.failure(null,
@@ -372,22 +357,19 @@ final class TownProvisionRuntime {
             world = plugin.getServer().getWorld(center.worldName());
         }
         if (world == null) {
-            return LandProtectionService.Result.failure(plugin.messages().plainText(
-                    PROVISION_DEFAULT_TELEPORT_WORLD_DETAIL));
+            return LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROVISION_DEFAULT_TELEPORT_WORLD_DETAIL);
         }
         int blockX = Math.addExact(Math.multiplyExact(center.x(), 16), 8);
         int blockZ = Math.addExact(Math.multiplyExact(center.z(), 16), 8);
         int blockY = world.getHighestBlockYAt(blockX, blockZ) + 1;
         if (blockY <= world.getMinHeight() || blockY + 1 >= world.getMaxHeight()) {
-            return LandProtectionService.Result.failure(plugin.messages().plainText(
-                    PROVISION_DEFAULT_TELEPORT_HEIGHT_DETAIL));
+            return LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROVISION_DEFAULT_TELEPORT_HEIGHT_DETAIL);
         }
         Location location = new Location(world, blockX + 0.5D, blockY, blockZ + 0.5D);
         if (!location.getBlock().isPassable()
                 || !location.getBlock().getRelative(0, 1, 0).isPassable()
                 || !location.getBlock().getRelative(0, -1, 0).getType().isSolid()) {
-            return LandProtectionService.Result.failure(plugin.messages().plainText(
-                    PROVISION_DEFAULT_TELEPORT_SPACE_DETAIL));
+            return LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROVISION_DEFAULT_TELEPORT_SPACE_DETAIL);
         }
         LandProtectionService.Result teleport = landProtection.setTeleportPoint(
                 town.residenceName(), world.getUID(), world.getName(), location.getX(),
@@ -397,19 +379,16 @@ final class TownProvisionRuntime {
                     town.territory());
             String teleportDetail = safeText(LandProtectionMessages.detail(plugin.messages(), teleport));
             if (cleanup.success()) {
-                return LandProtectionService.Result.failure(plugin.messages().plainText(
-                        PROVISION_DEFAULT_TELEPORT_ROLLED_BACK_DETAIL,
-                        Map.of("detail", teleportDetail)));
+                return LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROVISION_DEFAULT_TELEPORT_ROLLED_BACK_DETAIL,
+                        Map.of("detail", teleportDetail));
             }
-            return LandProtectionService.Result.failure(plugin.messages().plainText(
-                    PROVISION_DEFAULT_TELEPORT_ROLLBACK_FAILED_DETAIL,
+            return LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROVISION_DEFAULT_TELEPORT_ROLLBACK_FAILED_DETAIL,
                     Map.of("detail", teleportDetail,
                             "cleanup", safeText(LandProtectionMessages.detail(
-                                    plugin.messages(), cleanup)))));
+                                    plugin.messages(), cleanup))));
         }
-        return LandProtectionService.Result.ok(plugin.messages().plainText(
-                PROVISION_LAND_WITH_TELEPORT_DETAIL,
-                Map.of("detail", safeText(LandProtectionMessages.detail(plugin.messages(), land)))));
+        return LandProtectionService.Result.successCode(LandProtectionService.ResultCode.PROVISION_LAND_WITH_TELEPORT_DETAIL,
+                Map.of("detail", safeText(LandProtectionMessages.detail(plugin.messages(), land))));
     }
 
     private void finishProvision(CommandSender sender, UUID applicationId,

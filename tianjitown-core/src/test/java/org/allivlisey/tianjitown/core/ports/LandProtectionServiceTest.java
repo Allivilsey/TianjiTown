@@ -33,7 +33,7 @@ class LandProtectionServiceTest {
         assertFalse(teleport.success());
         assertEquals(LandProtectionService.ResultCode.UNSUPPORTED_TELEPORT_POINT,
                 teleport.code());
-        assertEquals("UNSUPPORTED_TELEPORT_POINT", teleport.message());
+        assertEquals("UNSUPPORTED_TELEPORT_POINT", teleport.code().name());
         assertEquals(LandProtectionService.ResultCode.UNSUPPORTED_ADD_AREA, addArea.code());
         assertEquals(LandProtectionService.ResultCode.UNSUPPORTED_REMOVE_AREA,
                 removeArea.code());
@@ -48,7 +48,7 @@ class LandProtectionServiceTest {
         assertEquals(LandProtectionService.ProjectionState.INVALID, inspection.state());
         assertEquals(LandProtectionService.ResultCode.UNSUPPORTED_MULTI_AREA,
                 inspection.code());
-        assertEquals("UNSUPPORTED_MULTI_AREA", inspection.message());
+        assertEquals("UNSUPPORTED_MULTI_AREA", inspection.code().name());
         assertTrue(inspection.parameters().isEmpty());
     }
 
@@ -62,24 +62,24 @@ class LandProtectionServiceTest {
             @Override
             public Inspection inspect(String residenceName, InitialTerritory territory,
                                       Collection<UUID> members) {
-                return Inspection.healthy("unused");
+                return Inspection.healthyCode(LandProtectionService.ResultCode.PROJECTION_HEALTHY);
             }
 
             @Override
             public Result create(String residenceName, InitialTerritory territory,
                                  Collection<UUID> members) {
-                return Result.ok("unused");
+                return Result.successCode(LandProtectionService.ResultCode.PROJECTION_HEALTHY);
             }
 
             @Override
             public Result remove(String residenceName, InitialTerritory territory) {
-                return Result.ok("unused");
+                return Result.successCode(LandProtectionService.ResultCode.PROJECTION_HEALTHY);
             }
 
             @Override
             public Result reconcile(String residenceName, InitialTerritory territory,
                                     Collection<UUID> members, boolean repair) {
-                return Result.ok("unused");
+                return Result.successCode(LandProtectionService.ResultCode.PROJECTION_HEALTHY);
             }
         };
     }

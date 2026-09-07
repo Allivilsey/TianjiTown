@@ -24,7 +24,9 @@ final class EconomyPersistence {
             requireUnlocked(account);
         }
         long after = Math.addExact(account.balanceMinor(), amountMinor);
-        if (after < 0) {
+        if (after < 0 || (amountMinor < 0 && Math.addExact(
+                AccountReservations.available(connection, townId, account.balanceMinor()),
+                amountMinor) < 0)) {
             throw new ConflictException("小镇余额不足");
         }
         try (PreparedStatement statement = connection.prepareStatement("""

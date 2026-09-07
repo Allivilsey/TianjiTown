@@ -1,7 +1,6 @@
 package org.allivlisey.tianjitown.paper.buff;
 
 import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
-import org.allivlisey.tianjitown.core.consumption.BuffStackingRule;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.config.BuffSettings;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
@@ -44,8 +43,7 @@ class BuffRuntimeTest {
     private final List<Runnable> main = new ArrayList<>();
     private final BuffSettings settings = new BuffSettings(true, Map.of("speed",
             new BuffDefinition("speed", "速度", BuffDefinition.EffectKind.ATTRIBUTE,
-                    "minecraft:movement_speed", "ADD_SCALAR", BigDecimal.TEN, 1,
-                    BuffStackingRule.LEVEL_UP, 0.2)));
+                    "minecraft:movement_speed", "ADD_SCALAR", BigDecimal.TEN, 1, 0.2)));
 
     BuffRuntimeTest() {
         Server server = mock(Server.class);

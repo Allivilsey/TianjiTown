@@ -49,7 +49,8 @@ final class EconomyOperationStore {
             AccountState account = EconomyPersistence.requireAccount(connection, townId);
             if (amountMinor < 0) {
                 EconomyPersistence.requireUnlocked(account);
-                if (Math.addExact(account.balanceMinor(), amountMinor) < 0) {
+                if (Math.addExact(AccountReservations.available(connection, townId,
+                        account.balanceMinor()), amountMinor) < 0) {
                     throw new ConflictException("小镇余额不足");
                 }
             }
@@ -92,11 +93,13 @@ final class EconomyOperationStore {
             if (!operation.status().equals("EXTERNAL_APPLIED")) {
                 throw new ConflictException("外部资金尚未完成，不能写入账本");
             }
+            // Release this operation's reservation in the same transaction as its ledger debit.
+            // If posting fails, rollback restores both the reservation and the operation status.
+            setOperationStatus(connection, operationId, "COMPLETED", null);
             LedgerMutation mutation = EconomyPersistence.postLedger(connection, operation.townId(),
                     operation.operationType(), operation.amountMinor(), operation.actorId(),
                     operation.actorName(), operation.businessKey(), operation.note(),
                     operation.operationType().equals("ADMIN_ADJUSTMENT"));
-            setOperationStatus(connection, operationId, "COMPLETED", null);
             return mutation;
         });
     }
@@ -210,8 +213,12 @@ final class EconomyOperationStore {
             try (PreparedStatement statement = connection.prepareStatement(healthy ? """
                     UPDATE town_accounts SET locked = 0, lock_reason = NULL, version = version + 1
                      WHERE locked = 1 AND lock_reason LIKE 'SETTLEMENT_RECONCILIATION:%'
+                       AND NOT EXISTS (SELECT 1 FROM economy_operations o
+                           WHERE o.town_id = town_accounts.town_id
+                             AND o.status = 'COMPENSATION_REQUIRED')
                     """ : """
                     UPDATE town_accounts SET locked = 1, lock_reason = ?, version = version + 1
+                     WHERE locked = 0 OR lock_reason LIKE 'SETTLEMENT_RECONCILIATION:%'
                     """)) {
                 if (!healthy) {
                     statement.setString(1, reason);

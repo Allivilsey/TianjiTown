@@ -2,7 +2,6 @@ package org.allivlisey.tianjitown.paper.config;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 
 import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
-import org.allivlisey.tianjitown.core.consumption.BuffStackingRule;
 import org.allivlisey.tianjitown.core.town.MemberRole;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
@@ -47,7 +46,7 @@ class BuffSettingsTest {
 
     @Test
     void loadsConfiguredBuffCatalog() throws Exception {
-        YamlConfiguration config = configuration("speed", "100.00", "LEVEL_UP");
+        YamlConfiguration config = configuration("speed", "100.00");
         PluginMessages messages = messages();
 
         BuffSettings settings = BuffSettings.load(config, messages);
@@ -64,34 +63,23 @@ class BuffSettingsTest {
         assertEquals("minecraft:movement_speed", settings.requireBuff("speed").effectKey());
         assertEquals("ADD_SCALAR", settings.requireBuff("speed").effectOperation());
         assertEquals(0.2D, settings.requireBuff("speed").amountPerLevel());
-        assertEquals(BuffStackingRule.LEVEL_UP,
-                settings.requireBuff("speed").stackingRule());
         assertTrue(settings.requireBuff("speed").allowsRole(MemberRole.MAYOR));
         assertTrue(settings.requireBuff("speed").allowsRole(MemberRole.DEPUTY_MAYOR));
         assertFalse(settings.requireBuff("speed").allowsRole(MemberRole.MEMBER));
-        assertEquals(BuffStackingRule.EXTEND,
-                BuffSettings.load(configuration("speed", "100.00", "EXTEND"),
-                                messages)
-                        .requireBuff("speed").stackingRule());
-        assertEquals(BuffStackingRule.REFRESH,
-                BuffSettings.load(configuration("speed", "100.00", "REFRESH"),
-                                messages)
-                        .requireBuff("speed").stackingRule());
     }
 
     @Test
     void rejectsInvalidCatalogValues() throws Exception {
         PluginMessages messages = messages();
         assertThrows(IllegalArgumentException.class,
-                () -> BuffSettings.load(configuration("speed", "0", "LEVEL_UP"),
+                () -> BuffSettings.load(configuration("speed", "0"),
                         messages));
         assertThrows(IllegalArgumentException.class,
                 () -> new BuffDefinition("negative", "负数效果",
                         BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:movement_speed",
-                        "ADD_SCALAR", new java.math.BigDecimal("10.00"), 1,
-                        BuffStackingRule.LEVEL_UP, -0.2D));
+                        "ADD_SCALAR", new java.math.BigDecimal("10.00"), 1, -0.2D));
         BuffSettings hugePrice = BuffSettings.load(
-                configuration("speed", "1E1000000", "LEVEL_UP"), messages);
+                configuration("speed", "1E1000000"), messages);
         assertEquals(0, hugePrice.requireBuff("speed").basePrice()
                 .compareTo(new java.math.BigDecimal("1E1000000")));
     }
@@ -121,7 +109,7 @@ class BuffSettingsTest {
     void resolvesUnknownBuffUsingCurrentMessagesAfterReload() throws Exception {
         PluginMessages messages = messages();
         BuffSettings settings = BuffSettings.load(
-                configuration("speed", "100.00", "LEVEL_UP"), messages);
+                configuration("speed", "100.00"), messages);
 
         IllegalArgumentException initial = assertThrows(IllegalArgumentException.class,
                 () -> settings.requireBuff("missing"));
@@ -141,7 +129,7 @@ class BuffSettingsTest {
     void resolvesBuffLabelUsingCurrentMessagesAfterReload() throws Exception {
         PluginMessages messages = messages();
         BuffSettings settings = BuffSettings.load(
-                configuration("speed", "100.00", "LEVEL_UP"), messages);
+                configuration("speed", "100.00"), messages);
 
         assertEquals("速度", settings.label("speed"));
 
@@ -158,7 +146,7 @@ class BuffSettingsTest {
         PluginMessages messages = messages();
 
         IllegalArgumentException missing = assertThrows(IllegalArgumentException.class,
-                () -> BuffSettings.load(configuration("custom", "100.00", "LEVEL_UP"),
+                () -> BuffSettings.load(configuration("custom", "100.00"),
                         messages));
         assertEquals("Buff custom 缺少显示标签，请在 messages.yml 添加 dialog.buff.labels.custom",
                 missing.getMessage());
@@ -170,7 +158,7 @@ class BuffSettingsTest {
         messages.reload();
 
         BuffSettings settings = BuffSettings.load(
-                configuration("custom", "100.00", "LEVEL_UP"), messages);
+                configuration("custom", "100.00"), messages);
         assertEquals("自定义增益", settings.label("custom"));
         assertEquals("dialog.buff.labels.custom", BuffSettings.labelMessageKey("custom"));
     }
@@ -179,8 +167,7 @@ class BuffSettingsTest {
         return new PluginMessages(temporaryDirectory.toFile());
     }
 
-    private static YamlConfiguration configuration(String buffKey, String basePrice,
-                                                    String stacking) throws Exception {
+    private static YamlConfiguration configuration(String buffKey, String basePrice) throws Exception {
         YamlConfiguration config = new YamlConfiguration();
         config.loadFromString("""
                 buffs:
@@ -192,9 +179,8 @@ class BuffSettingsTest {
                       operation: ADD_SCALAR
                       base-price: '%s'
                       maximum-level: 2
-                      stacking: %s
                       amount-per-level: 0.2
-                """.formatted(buffKey, basePrice, stacking));
+                """.formatted(buffKey, basePrice));
         return config;
     }
 }

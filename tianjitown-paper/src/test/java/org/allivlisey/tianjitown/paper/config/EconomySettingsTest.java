@@ -58,11 +58,11 @@ class EconomySettingsTest {
     void rendersAllEconomyValidationMessagesAndUsesReloadedOverrides() throws Exception {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
         for (String key : List.of(
-                "validation.economy.settlement-account-required",
+                "validation.common.value-required",
                 "validation.economy.money-scale-range",
                 "validation.economy.expansion-cost-positive",
-                "validation.economy.weekly-subsidy-limit-negative",
-                "validation.economy.twelve-hour-subsidy-limit-negative",
+                "validation.common.non-negative",
+                "validation.common.non-negative",
                 "validation.economy.twelve-hour-limit-exceeds-weekly",
                 "validation.economy.expansion-cost-overflow",
                 "validation.economy.expansion-cost-range")) {
@@ -98,7 +98,7 @@ class EconomySettingsTest {
         assertEquals("economy.expansion 价格超出次级货币单位范围", overflow.getMessage());
         assertEquals("金额超过上限", overflow.getCause().getMessage());
 
-        String key = "validation.economy.settlement-account-required";
+        String key = "validation.common.value-required";
         YamlConfiguration override = new YamlConfiguration();
         override.set(key, "自定义经济配置错误: {path}");
         override.save(temporaryDirectory.resolve("messages.yml").toFile());

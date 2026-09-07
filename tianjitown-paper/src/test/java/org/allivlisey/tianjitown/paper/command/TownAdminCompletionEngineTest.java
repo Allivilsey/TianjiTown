@@ -1,7 +1,6 @@
 package org.allivlisey.tianjitown.paper.command;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 
-import org.allivlisey.tianjitown.core.application.ApplicationStatus;
 import org.allivlisey.tianjitown.core.town.TownStatus;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.BeforeEach;

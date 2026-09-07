@@ -5,7 +5,6 @@ import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 
 import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
-import org.allivlisey.tianjitown.core.consumption.BuffDurationOption;
 import org.allivlisey.tianjitown.storage.commerce.CommerceRepository;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -82,26 +81,6 @@ public final class BuffRuntime implements Listener {
     public boolean buffShopEnabled() {
         return plugin.getConfig().getBoolean("buffs.shop-enabled",
                 settings.buffShopEnabled());
-    }
-
-    public void buyBuffAction(Player player, String key, BuffDurationOption duration,
-                       Consumer<CommerceRepository.BuffPurchase> success,
-                       Consumer<RuntimeException> failure) {
-        if (!buffShopEnabled() || !host.consumptionEnabled()) {
-            failure.accept(new IllegalStateException(plugin.messages().plainText(BUFF_SHOP_PAUSED)));
-            return;
-        }
-        try {
-            BuffDefinition definition = settings.requireBuff(key);
-            host.writeAction(player, () -> repository.purchaseBuff(player.getUniqueId(),
-                            player.getName(), definition, settings.label(key), duration,
-                            host.settlement().scale(),
-                            "buff-purchase:" + UUID.randomUUID(), Instant.now()),
-                    purchase -> verifyBuffPurchase(player, purchase, success, failure),
-                    failure);
-        } catch (RuntimeException exception) {
-            failure.accept(exception);
-        }
     }
 
     public void buyBuffAction(Player player, String key, int weeks, int level,
@@ -215,6 +194,11 @@ public final class BuffRuntime implements Listener {
     @EventHandler
     public void onWorldChange(PlayerChangedWorldEvent event) {
         refreshPlayer(event.getPlayer());
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPotionChange(org.bukkit.event.entity.EntityPotionEffectEvent event) {
+        effects.onPotionChange(event);
     }
 
     @EventHandler

@@ -4,7 +4,6 @@ import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 
 import org.allivlisey.tianjitown.core.economy.MoneyAmount;
 import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
-import org.allivlisey.tianjitown.core.consumption.BuffDurationOption;
 import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.bukkit.command.CommandSender;
 
@@ -75,7 +74,7 @@ public final class TownAdminEconomyCommands {
             facade.send(sender, "chat.admin.buff-title", Map.of("count", buffs.size()));
             buffs.forEach(value -> facade.send(sender, "chat.admin.buff-record", Map.of(
                     "id", value.buffId(), "key", value.buffKey(), "level", value.level(),
-                    "stacks", value.stackCount(), "expires", value.expiresAt())));
+                    "expires", value.expiresAt())));
         });
     }
 
@@ -110,7 +109,7 @@ public final class TownAdminEconomyCommands {
                                         runtime.buffs().settings().label(
                                                 request.definition().key()),
                                         runtime.settlement().scale(),
-                                        BuffDurationOption.ONE_WEEK,
+                                        1, 1,
                         "admin-buff-purchase:" + UUID.randomUUID(),
                         java.time.Instant.now(), request.reason()),
                         purchase -> {

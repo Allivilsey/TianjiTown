@@ -350,7 +350,7 @@ chat:
     usage-buff-list: '用法: /tianjitown buff list <小镇代码>'
     buff-purchase-paused: '公共 Buff 新购买已由功能开关暂停'
     usage-buff-grant: '用法: /tianjitown buff grant <小镇代码> <buffKey> <原因>'
-    buff-purchase-confirmation: '为小镇“{town}”代购 Buff “{buff}”并扣除公共资金'
+    buff-purchase-confirmation: '为小镇“{town}”代购 Buff “{buff}”：一周、一级，覆盖同类效果并扣除公共资金'
     buff-action-unsupported: 'buff 只支持 list 或 grant；公共 Buff 不接受退款'
     town-archived: '小镇“{town}”已归档，请重新发起操作'
     no-operable-town: '没有可操作的小镇'
@@ -362,7 +362,7 @@ chat:
     ledger-summary: '&7{start} 至 {end}（北京时间） &f{type} &e{amount} &7税款={tax} 补贴={subsidy} 共{count}笔 {status}'
     ledger-record: '&7{created} &f{type} &e{amount} &8余额={balance} {note}'
     buff-title: '&6生效中的公共 Buff: {count}'
-    buff-record: '&7{id} &d{key} &f等级={level} 层数={stacks} 到期={expires}'
+    buff-record: '&7{id} &d{key} &f等级={level} 到期={expires}'
     buff-purchase-complete: '&aBuff 代购完成，公共余额: {balance}'
     land-rebuild-success: '&a{town}: {detail}'
     land-rebuild-failure: '&c{town}: {detail}'
@@ -471,6 +471,7 @@ chat:
   # 占位符：{world}=世界名，{residence}=领地名，{area}=区域名，{owner}=所有者，
   # {member}=玩家 UUID，{flag}=权限标记，{detail}/{cleanup}=技术详情
   land-protection:
+    provision-operation-failed: '领地创建失败: {detail}'
     world-unloaded: '目标世界未加载: {world}'
     api-unavailable: 'Residence API 不可用: {detail}'
     projection-missing: '缺少 Residence 投影 {residence}'
@@ -562,6 +563,7 @@ chat:
 
   # 启动门禁和外部服务失败时可复用的详细描述
   lifecycle:
+    external-finalization-pending: '资金已执行，账本入账正在重试，请勿重复提交。'
     storage-unavailable: '小镇资金服务暂时不可用'
     storage-write-locked: 'SQLite 当前不可用，写操作已锁定'
     residence-unavailable: '领地服务暂时不可用：{detail}'
@@ -709,9 +711,6 @@ log:
     interrupted-provision-reason: '服务器在 Residence 投影完成前停止，启动时已转为可重试失败状态'
     interrupted-provisions-recovered: '已恢复 {count} 个中断的建镇流程；申请进入 PROVISION_FAILED，等待管理员重试'
     interrupted-provision-recovery-failure: '恢复中断建镇流程失败: {detail}'
-    # 账本历史操作人回填；{playerId}=玩家 UUID，{detail}=异常详情
-    ledger-actor-name-backfill-failure: '回填账本玩家名失败 {playerId}: {detail}'
-    ledger-actor-scan-failure: '扫描历史 UUID 操作人失败: {detail}'
   # 建镇审批和领地投影过程日志；{application}=申请 UUID，{time}=事件时间，
   # {detail}=技术详情，{success}=流程是否完成
   provision:
@@ -745,6 +744,7 @@ log:
     batch-recovery-failed: '恢复批量领地扩张失败 {batch}: {detail}'
   # TownRuntime 外部资金操作退款/人工核对日志；{operation}/{town}=稳定 ID，{detail}=结算详情
   external-operation:
+    finalization-retry: '外部资金已执行，重试账本入账 {operation}: {detail}'
     refund-auto: '捐款退款暂时失败，已锁定小镇消费并启动自动退款: operation={operation}, town={town}, error={detail}'
     manual-review: '资金操作需要人工核对，已锁定小镇消费: operation={operation}, town={town}, error={detail}'
   # 管理员确认操作日志；{detail}=操作启动异常详情
@@ -1549,8 +1549,6 @@ dialog:
       admin-adjustment: '管理员调整'
       buff-purchase: 'Buff 购买'
       buff-refund: 'Buff 退款'
-      resource-purchase: '资源采购'
-      resource-refund: '资源退款'
       unknown: '{type}'
 
   # 5×5 领地地图和格子悬浮提示

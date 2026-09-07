@@ -6,13 +6,12 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository.LedgerEntry;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository.DisplayLedgerEntry;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository.TaxIncomeSummary;
 
-/** Ledger pagination and confirmed actor-name maintenance. */
+/** Ledger pagination and display queries. */
 final class EconomyLedgerStore {
     private final EconomyDatabase database;
 
@@ -115,58 +114,6 @@ final class EconomyLedgerStore {
                 }
             }
             return List.copyOf(result);
-        });
-    }
-
-    List<UUID> unresolvedLedgerActorIds() {
-        database.requireWorkerThread();
-        return database.query(connection -> {
-            List<UUID> ids = new ArrayList<>();
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT DISTINCT actor_uuid, actor_name FROM ledger_entries
-                     WHERE actor_uuid IS NOT NULL
-                    """); ResultSet result = statement.executeQuery()) {
-                while (result.next()) {
-                    UUID actorId = EconomyPersistence.readUuid(result, "actor_uuid");
-                    try {
-                        if (UUID.fromString(result.getString("actor_name")).equals(actorId)) {
-                            ids.add(actorId);
-                        }
-                    } catch (IllegalArgumentException ignored) {
-                        // 已经是历史玩家名，不覆盖。
-                    }
-                }
-            }
-            return ids.stream().distinct().toList();
-        });
-    }
-
-    int backfillLedgerActorName(UUID actorId, String confirmedName) {
-        database.requireWorkerThread();
-        Objects.requireNonNull(actorId, "actorId");
-        if (confirmedName == null || confirmedName.isBlank()) {
-            return 0;
-        }
-        return database.transaction(connection -> {
-            int updated;
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE ledger_entries SET actor_name = ?
-                     WHERE actor_uuid = ? AND actor_name = ?
-                    """)) {
-                statement.setString(1, confirmedName);
-                statement.setBytes(2, EconomyPersistence.uuid(actorId));
-                statement.setString(3, actorId.toString());
-                updated = statement.executeUpdate();
-            }
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE quickshop_tax_records SET receiver_name = ?
-                     WHERE receiver_uuid = ? AND receiver_name = ''
-                    """)) {
-                statement.setString(1, confirmedName);
-                statement.setBytes(2, EconomyPersistence.uuid(actorId));
-                updated += statement.executeUpdate();
-            }
-            return updated;
         });
     }
 

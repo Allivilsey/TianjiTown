@@ -163,25 +163,23 @@ public interface LandProtectionService {
         MEMBER_PADD_PERMISSION_WRITE_FAILED,
         MEMBER_IGNITE_PERMISSION_WRITE_FAILED,
         MEMBER_VEHICLE_DESTROY_PERMISSION_WRITE_FAILED,
-        PROJECTION_HEALTHY
+        PROJECTION_HEALTHY,
+        PROVISION_SITE_VALIDATION_DETAIL,
+        PROVISION_OPERATION_FAILED,
+        PROVISION_DEFAULT_TELEPORT_WORLD_DETAIL,
+        PROVISION_DEFAULT_TELEPORT_HEIGHT_DETAIL,
+        PROVISION_DEFAULT_TELEPORT_SPACE_DETAIL,
+        PROVISION_DEFAULT_TELEPORT_ROLLED_BACK_DETAIL,
+        PROVISION_DEFAULT_TELEPORT_ROLLBACK_FAILED_DETAIL,
+        PROVISION_LAND_WITH_TELEPORT_DETAIL
     }
 
     record Inspection(ProjectionState state, ResultCode code,
-                      Map<String, String> parameters, String legacyMessage) {
+                      Map<String, String> parameters) {
         public Inspection {
             state = Objects.requireNonNull(state, "state");
             parameters = Map.copyOf(Objects.requireNonNull(parameters, "parameters"));
-            if ((code == null) == (legacyMessage == null)) {
-                throw new IllegalArgumentException("exactly one of code or legacyMessage is required");
-            }
-        }
-
-        public Inspection(ProjectionState state, String message) {
-            this(state, null, Map.of(), Objects.requireNonNull(message, "message"));
-        }
-
-        public static Inspection healthy(String message) {
-            return new Inspection(ProjectionState.HEALTHY, message);
+            code = Objects.requireNonNull(code, "code");
         }
 
         public static Inspection healthyCode(ResultCode code) {
@@ -190,11 +188,7 @@ public interface LandProtectionService {
 
         public static Inspection healthyCode(ResultCode code, Map<String, ?> parameters) {
             return new Inspection(ProjectionState.HEALTHY, Objects.requireNonNull(code, "code"),
-                    stringParameters(parameters), null);
-        }
-
-        public static Inspection missing(String message) {
-            return new Inspection(ProjectionState.MISSING, message);
+                    stringParameters(parameters));
         }
 
         public static Inspection missingCode(ResultCode code) {
@@ -203,11 +197,7 @@ public interface LandProtectionService {
 
         public static Inspection missingCode(ResultCode code, Map<String, ?> parameters) {
             return new Inspection(ProjectionState.MISSING, Objects.requireNonNull(code, "code"),
-                    stringParameters(parameters), null);
-        }
-
-        public static Inspection invalid(String message) {
-            return new Inspection(ProjectionState.INVALID, message);
+                    stringParameters(parameters));
         }
 
         public static Inspection invalidCode(ResultCode code) {
@@ -216,33 +206,16 @@ public interface LandProtectionService {
 
         public static Inspection invalidCode(ResultCode code, Map<String, ?> parameters) {
             return new Inspection(ProjectionState.INVALID, Objects.requireNonNull(code, "code"),
-                    stringParameters(parameters), null);
+                    stringParameters(parameters));
         }
 
-        /**
-         * Compatibility accessor for integrations that still return a rendered detail.
-         * Structured results expose {@link #code()} and {@link #parameters()} instead.
-         */
-        public String message() {
-            return code == null ? legacyMessage : code.name();
-        }
     }
 
     record Result(boolean success, ResultCode code,
-                  Map<String, String> parameters, String legacyMessage) {
+                  Map<String, String> parameters) {
         public Result {
             parameters = Map.copyOf(Objects.requireNonNull(parameters, "parameters"));
-            if ((code == null) == (legacyMessage == null)) {
-                throw new IllegalArgumentException("exactly one of code or legacyMessage is required");
-            }
-        }
-
-        public Result(boolean success, String message) {
-            this(success, null, Map.of(), Objects.requireNonNull(message, "message"));
-        }
-
-        public static Result ok(String message) {
-            return new Result(true, message);
+            code = Objects.requireNonNull(code, "code");
         }
 
         public static Result successCode(ResultCode code) {
@@ -251,7 +224,7 @@ public interface LandProtectionService {
 
         public static Result successCode(ResultCode code, Map<String, ?> parameters) {
             return new Result(true, Objects.requireNonNull(code, "code"),
-                    stringParameters(parameters), null);
+                    stringParameters(parameters));
         }
 
         public static Result fromHealthyInspection(Inspection inspection) {
@@ -259,12 +232,7 @@ public interface LandProtectionService {
             if (inspection.state() != ProjectionState.HEALTHY) {
                 throw new IllegalArgumentException("inspection must be healthy");
             }
-            return new Result(true, inspection.code(), inspection.parameters(),
-                    inspection.legacyMessage());
-        }
-
-        public static Result failure(String message) {
-            return new Result(false, message);
+            return new Result(true, inspection.code(), inspection.parameters());
         }
 
         public static Result failureCode(ResultCode code) {
@@ -273,16 +241,9 @@ public interface LandProtectionService {
 
         public static Result failureCode(ResultCode code, Map<String, ?> parameters) {
             return new Result(false, Objects.requireNonNull(code, "code"),
-                    stringParameters(parameters), null);
+                    stringParameters(parameters));
         }
 
-        /**
-         * Compatibility accessor for integrations that still return a rendered detail.
-         * Structured results expose {@link #code()} and {@link #parameters()} instead.
-         */
-        public String message() {
-            return code == null ? legacyMessage : code.name();
-        }
     }
 
     private static Map<String, String> stringParameters(Map<String, ?> parameters) {

@@ -25,8 +25,8 @@ class AutomaticLandReconcilerTest {
     @Test
     void keepsHealthyProjectionReadOnly() {
         FakeProtection protection = new FakeProtection(
-                LandProtectionService.Inspection.healthy("正常"),
-                LandProtectionService.Result.failure("不应调用修复"));
+                LandProtectionService.Inspection.healthyCode(LandProtectionService.ResultCode.PROJECTION_HEALTHY),
+                LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROJECTION_CREATE_REJECTED));
 
         AutomaticLandReconciler.Outcome outcome = AutomaticLandReconciler.reconcile(
                 protection, "TOWN", AREAS, List.of(MEMBER_ID));
@@ -38,9 +38,9 @@ class AutomaticLandReconcilerTest {
 
     @Test
     void repairsMissingProjectionFromDatabaseSnapshot() {
-        LandProtectionService.Result repaired = LandProtectionService.Result.ok("已重建");
+        LandProtectionService.Result repaired = LandProtectionService.Result.successCode(LandProtectionService.ResultCode.PROJECTION_HEALTHY);
         FakeProtection protection = new FakeProtection(
-                LandProtectionService.Inspection.missing("投影缺失"), repaired);
+                LandProtectionService.Inspection.missingCode(LandProtectionService.ResultCode.PROJECTION_MISSING), repaired);
 
         AutomaticLandReconciler.Outcome outcome = AutomaticLandReconciler.reconcile(
                 protection, "TOWN", AREAS, List.of(MEMBER_ID));
@@ -52,9 +52,9 @@ class AutomaticLandReconcilerTest {
 
     @Test
     void repairsInvalidProjectionFromDatabaseSnapshot() {
-        LandProtectionService.Result failure = LandProtectionService.Result.failure("边界冲突");
+        LandProtectionService.Result failure = LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROJECTION_CREATE_REJECTED);
         FakeProtection protection = new FakeProtection(
-                LandProtectionService.Inspection.invalid("边界不一致"), failure);
+                LandProtectionService.Inspection.invalidCode(LandProtectionService.ResultCode.PROJECTION_CREATE_REJECTED), failure);
 
         AutomaticLandReconciler.Outcome outcome = AutomaticLandReconciler.reconcile(
                 protection, "TOWN", AREAS, List.of(MEMBER_ID));

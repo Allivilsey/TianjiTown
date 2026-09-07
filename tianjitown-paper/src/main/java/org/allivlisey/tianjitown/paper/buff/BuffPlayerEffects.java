@@ -40,6 +40,7 @@ final class BuffPlayerEffects {
     private final BuffSettings settings;
     private final NamespacedKey potionKeysKey;
     private final Map<UUID, AppliedEffects> appliedEffects = new HashMap<>();
+    private boolean changingPotions;
     private final AtomicBoolean cleanupFailureLogged = new AtomicBoolean();
 
     BuffPlayerEffects(TianjiTownPlugin plugin, BuffSettings settings) {
@@ -113,14 +114,12 @@ final class BuffPlayerEffects {
 
             reconcileAttributes(player, desiredAttributes);
             reconcilePotions(player, desiredPotions);
-            appliedEffects.put(player.getUniqueId(), new AppliedEffects(
-                    desiredPotions.keySet(), desiredAttributes.keySet()));
-            updatePersistedPotions(player, desiredPotions.keySet());
+            appliedEffects.put(player.getUniqueId(), new AppliedEffects(desiredAttributes.keySet()));
             normalizeHealth(player, previousHealth, normalizeRespawnHealth);
         } catch (RuntimeException | LinkageError exception) {
             Set<AttributeKey> attemptedAttributes = new HashSet<>(activeAttributeKeys);
             attemptedAttributes.addAll(desiredAttributes.keySet());
-            rollbackFailedApply(player, attemptedAttributes, desiredPotions.keySet(), exception);
+            rollbackFailedApply(player, attemptedAttributes, exception);
             throw exception;
         }
     }
@@ -137,9 +136,6 @@ final class BuffPlayerEffects {
         }
         if (buff.level() < 1 || buff.level() > 255) {
             throw new IllegalStateException("Buff 等级无效: " + buff.buffKey());
-        }
-        if (buff.stackCount() < 1) {
-            throw new IllegalStateException("Buff 层数无效: " + buff.buffKey());
         }
         if (buff.effectKind() == null || buff.effectKey() == null
                 || buff.effectKey().isBlank() || buff.effectOperation() == null
@@ -180,18 +176,11 @@ final class BuffPlayerEffects {
     }
 
     private void rollbackFailedApply(Player player, Set<AttributeKey> attributes,
-                                     Set<PotionEffectType> potions, Throwable failure) {
+                                     Throwable failure) {
         try {
             removeAttributeModifiers(player, attributes);
         } catch (RuntimeException | LinkageError rollbackFailure) {
             failure.addSuppressed(rollbackFailure);
-        }
-        for (PotionEffectType potion : potions) {
-            try {
-                player.removePotionEffect(potion);
-            } catch (RuntimeException | LinkageError rollbackFailure) {
-                failure.addSuppressed(rollbackFailure);
-            }
         }
         try {
             clearManagedEffects(player);
@@ -274,39 +263,89 @@ final class BuffPlayerEffects {
     }
 
     private void reconcilePotions(Player player, Map<PotionEffectType, PotionEffect> desired) {
-        Set<PotionEffectType> managed = managedPotionTypes(player);
-        managed.removeAll(desired.keySet());
-        managed.forEach(player::removePotionEffect);
-        desired.values().forEach(effect -> player.addPotionEffect(effect, true));
+        Map<String, PotionOwnership> expected = new HashMap<>();
+        desired.forEach((type, effect) -> expected.put(type.getKey().toString(), signature(effect)));
+        PotionEffectTracker.reconcile(readPotionOwnership(player), expected,
+                new PotionEffectTracker.Effects() {
+                    public PotionOwnership current(String key) {
+                        PotionEffectType type = resolvePotion(key);
+                        return type == null ? null : signature(player.getPotionEffect(type));
+                    }
+
+                    public boolean apply(String key, PotionOwnership effect) {
+                        changingPotions = true;
+                        try {
+                            return player.addPotionEffect(new PotionEffect(requirePotion(key),
+                                    effect.maximumTicks(), effect.amplifier(), effect.ambient(),
+                                    effect.particles(), effect.icon()));
+                        } finally {
+                            changingPotions = false;
+                        }
+                    }
+
+                    public void remove(String key) {
+                        removeOwnedPotion(player, key, readPotionOwnership(player).get(key));
+                    }
+                }, owned -> writePotionOwnership(player, owned));
     }
 
-    private Set<PotionEffectType> managedPotionTypes(Player player) {
-        Set<PotionEffectType> result = new HashSet<>();
-        AppliedEffects previous = appliedEffects.get(player.getUniqueId());
-        if (previous != null) {
-            result.addAll(previous.potions());
-        }
-        String persistedPotions = player.getPersistentDataContainer().get(potionKeysKey,
-                PersistentDataType.STRING);
-        if (persistedPotions != null) {
-            persistedPotions.lines().filter(value -> !value.isBlank())
-                    .map(this::resolvePotion).filter(Objects::nonNull).forEach(result::add);
-        }
-        for (BuffDefinition definition : settings.buffs().values()) {
-            if (definition.effectKind() == BuffDefinition.EffectKind.POTION) {
-                result.add(requirePotion(definition.effectKey()));
+    private static PotionOwnership signature(PotionEffect effect) {
+        return effect == null ? null : new PotionOwnership(effect.getAmplifier(), effect.getDuration(),
+                effect.isAmbient(), effect.hasParticles(), effect.hasIcon());
+    }
+
+    void onPotionChange(org.bukkit.event.entity.EntityPotionEffectEvent event) {
+        if (changingPotions || !(event.getEntity() instanceof Player player)) return;
+        if (event.getAction() == org.bukkit.event.entity.EntityPotionEffectEvent.Action.CHANGED
+                && !event.isOverride()) return;
+        PotionEffect old = event.getOldEffect();
+        if (old == null) return;
+        Map<String, PotionOwnership> owned = readPotionOwnership(player);
+        owned.remove(old.getType().getKey().toString());
+        writePotionOwnership(player, owned);
+    }
+
+    private Map<String, PotionOwnership> readPotionOwnership(Player player) {
+        Map<String, PotionOwnership> result = new HashMap<>();
+        String value = player.getPersistentDataContainer().get(potionKeysKey, PersistentDataType.STRING);
+        if (value != null) {
+            for (String line : value.lines().toList()) {
+                int separator = line.indexOf('=');
+                if (separator < 1) continue;
+                try {
+                    result.put(line.substring(0, separator), PotionOwnership.decode(line.substring(separator + 1)));
+                } catch (IllegalArgumentException ignored) {
+                    // Invalid ownership data never authorizes removal of a player's effect.
+                }
             }
         }
         return result;
     }
 
-    private void updatePersistedPotions(Player player, Set<PotionEffectType> potions) {
-        if (potions.isEmpty()) {
+    private void writePotionOwnership(Player player, Map<String, PotionOwnership> owned) {
+        if (owned.isEmpty()) {
             player.getPersistentDataContainer().remove(potionKeysKey);
         } else {
             player.getPersistentDataContainer().set(potionKeysKey, PersistentDataType.STRING,
-                    potions.stream().map(type -> type.getKey().toString()).sorted()
+                    owned.entrySet().stream().sorted(Map.Entry.comparingByKey())
+                            .map(entry -> entry.getKey() + "=" + entry.getValue().encode())
                             .collect(java.util.stream.Collectors.joining("\n")));
+        }
+    }
+
+    private static boolean matches(PotionOwnership owner, PotionEffect effect) {
+        return owner != null && effect != null && owner.matches(effect.getAmplifier(),
+                effect.getDuration(), effect.isAmbient(), effect.hasParticles(), effect.hasIcon());
+    }
+
+    private void removeOwnedPotion(Player player, String key, PotionOwnership owner) {
+        PotionEffectType type = resolvePotion(key);
+        if (type == null || !matches(owner, player.getPotionEffect(type))) return;
+        changingPotions = true;
+        try {
+            player.removePotionEffect(type);
+        } finally {
+            changingPotions = false;
         }
     }
 
@@ -341,7 +380,7 @@ final class BuffPlayerEffects {
         }
         removeAttributeModifiers(player, attributes);
 
-        managedPotionTypes(player).forEach(player::removePotionEffect);
+        readPotionOwnership(player).forEach((key, owner) -> removeOwnedPotion(player, key, owner));
         player.getPersistentDataContainer().remove(potionKeysKey);
         clampCurrentHealth(player);
     }
@@ -461,9 +500,8 @@ final class BuffPlayerEffects {
                                        AttributeModifier.Operation operation) {
     }
 
-    private record AppliedEffects(Set<PotionEffectType> potions, Set<AttributeKey> attributes) {
+    private record AppliedEffects(Set<AttributeKey> attributes) {
         AppliedEffects {
-            potions = Set.copyOf(potions);
             attributes = Set.copyOf(attributes);
         }
     }

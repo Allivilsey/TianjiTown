@@ -14,7 +14,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.allivlisey.tianjitown.storage.commerce.CommerceSqlValues.instant;
@@ -157,7 +156,9 @@ final class CommercePersistence {
             throw new ConflictException("小镇资金已锁定: " + account.lockReason());
         }
         long after = Math.addExact(account.balanceMinor(), amountMinor);
-        if (after < 0) {
+        if (after < 0 || (amountMinor < 0 && Math.addExact(
+                org.allivlisey.tianjitown.storage.economy.AccountReservations.available(
+                        connection, townId, account.balanceMinor()), amountMinor) < 0)) {
             throw new ConflictException("小镇公共余额不足");
         }
         try (PreparedStatement statement = connection.prepareStatement("""
@@ -210,15 +211,11 @@ final class CommercePersistence {
 
     static ActiveBuff readBuff(ResultSet row) throws SQLException {
         byte[] purchaser = row.getBytes("purchased_by");
-        String worlds = row.getString("allowed_worlds");
-        Set<String> allowed = worlds == null || worlds.isBlank() ? Set.of()
-                : java.util.Arrays.stream(worlds.split("\\n"))
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
         return new ActiveBuff(readUuid(row, "buff_id"), readUuid(row, "town_id"),
                 row.getString("buff_key"), BuffDefinition.EffectKind.valueOf(
                 row.getString("effect_kind")), row.getString("effect_key"),
                 row.getString("effect_operation"), row.getInt("level"),
-                row.getInt("stack_count"), row.getDouble("amount_per_level"), allowed,
+                row.getDouble("amount_per_level"),
                 row.getLong("price_minor"), purchaser == null ? null : uuid(purchaser),
                 row.getString("purchased_by_name"), row.getString("business_key"),
                 instant(row, "starts_at"), instant(row, "expires_at"), row.getString("status"),

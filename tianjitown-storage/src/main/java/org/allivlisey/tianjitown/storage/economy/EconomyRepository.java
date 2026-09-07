@@ -181,14 +181,6 @@ public final class EconomyRepository {
         return economyLedgerStore.displayLedger(townId, page, pageSize);
     }
 
-    public List<UUID> unresolvedLedgerActorIds() {
-        return economyLedgerStore.unresolvedLedgerActorIds();
-    }
-
-    public int backfillLedgerActorName(UUID actorId, String confirmedName) {
-        return economyLedgerStore.backfillLedgerActorName(actorId, confirmedName);
-    }
-
     public List<TerritoryUnitSnapshot> territoryUnits(UUID townId) {
         return territoryExpansionStore.territoryUnits(townId);
     }

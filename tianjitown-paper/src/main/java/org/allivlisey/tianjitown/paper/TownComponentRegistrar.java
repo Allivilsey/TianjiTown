@@ -90,7 +90,6 @@ final class TownComponentRegistrar {
             }
         });
         runtime.recoverStartupState();
-        runtime.backfillKnownPlayerNames();
         runtime.buffs().refreshAllPlayers();
         runtime.bonuses().recoverTaggedBeacons();
         runtime.bonuses().refreshIndex();

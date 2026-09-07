@@ -48,10 +48,6 @@ public final class TownRuntime {
     private static final String QUICK_SHOP_TAX_REFRESH_FAILURE =
             "log.scheduler.quick-shop-tax-refresh-failure";
 
-    private static final String LEDGER_ACTOR_NAME_BACKFILL_FAILURE =
-            "log.lifecycle.ledger-actor-name-backfill-failure";
-    private static final String LEDGER_ACTOR_SCAN_FAILURE =
-            "log.lifecycle.ledger-actor-scan-failure";
 
     private static final String SQLITE_RECOVERED = "log.lifecycle.sqlite-recovered";
     private static final String SQLITE_INTERRUPTED = "log.lifecycle.sqlite-interrupted";
@@ -493,37 +489,5 @@ public final class TownRuntime {
         taxes.refreshTaxPolicies();
     }
 
-    public void backfillKnownPlayerNames() {
-        plugin.runAsync(() -> {
-            try {
-                List<UUID> unresolved = finance.unresolvedLedgerActorIds();
-                plugin.runMain(() -> {
-                    Map<UUID, String> confirmed = new java.util.HashMap<>();
-                    for (UUID playerId : unresolved) {
-                        org.bukkit.OfflinePlayer player = plugin.getServer()
-                                .getOfflinePlayer(playerId);
-                        if ((player.hasPlayedBefore() || player.isOnline())
-                                && player.getName() != null && !player.getName().isBlank()) {
-                            confirmed.put(playerId, player.getName());
-                        }
-                    }
-                    plugin.runAsync(() -> confirmed.forEach((playerId, name) -> {
-                        try {
-                            finance.backfillLedgerActorName(playerId, name);
-                        } catch (RuntimeException exception) {
-                            plugin.getLogger().warning(plugin.messages().plainText(
-                                    LEDGER_ACTOR_NAME_BACKFILL_FAILURE,
-                                    Map.of("playerId", safeText(playerId),
-                                            "detail", safeText(safeMessage(exception)))));
-                        }
-                    }));
-                });
-            } catch (RuntimeException exception) {
-                plugin.getLogger().warning(plugin.messages().plainText(
-                        LEDGER_ACTOR_SCAN_FAILURE,
-                        Map.of("detail", safeText(safeMessage(exception)))));
-            }
-        });
-    }
 
 }

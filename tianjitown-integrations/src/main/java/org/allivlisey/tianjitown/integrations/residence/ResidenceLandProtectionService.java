@@ -95,8 +95,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             }
             Result verification = verifyAndApply(name, residence, bounds, members, false);
             return new Inspection(verification.success() ? ProjectionState.HEALTHY
-                    : ProjectionState.INVALID, verification.code(), verification.parameters(),
-                    verification.legacyMessage());
+                    : ProjectionState.INVALID, verification.code(), verification.parameters());
         } catch (RuntimeException | LinkageError exception) {
             return Inspection.invalidCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
                     Map.of("detail", dependencyDetail(exception)));
@@ -282,8 +281,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             }
             Result result = verifyAndApply(name, residence, areas, members, false);
             return new Inspection(result.success() ? ProjectionState.HEALTHY
-                    : ProjectionState.INVALID, result.code(), result.parameters(),
-                    result.legacyMessage());
+                    : ProjectionState.INVALID, result.code(), result.parameters());
         } catch (RuntimeException | LinkageError exception) {
             return Inspection.invalidCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
                     Map.of("detail", dependencyDetail(exception)));

@@ -6,15 +6,15 @@ import java.math.BigDecimal;
 
 public record BuffDefinition(String key, String displayName, EffectKind effectKind,
                              String effectKey, String effectOperation, BigDecimal basePrice,
-                             int maximumLevel, BuffStackingRule stackingRule,
+                             int maximumLevel,
                              double amountPerLevel) {
     public BuffDefinition {
         key = requireKey(key);
         if (displayName == null || displayName.isBlank()) {
             throw new IllegalArgumentException("Buff 显示名称不能为空");
         }
-        if (effectKind == null || stackingRule == null) {
-            throw new IllegalArgumentException("Buff 类型和叠加规则不能为空");
+        if (effectKind == null) {
+            throw new IllegalArgumentException("Buff 类型不能为空");
         }
         if (effectKey == null || effectKey.isBlank()) {
             throw new IllegalArgumentException("Buff 效果键不能为空");

@@ -4,13 +4,7 @@ import org.allivlisey.tianjitown.core.ports.LandProtectionService;
 
 import java.util.Objects;
 
-/**
- * Resolves structured land-protection results at the Paper boundary.
- *
- * <p>Legacy integrations may still provide a rendered detail through
- * {@code message()}; those details are returned unchanged until their adapter
- * task migrates them to a result code.</p>
- */
+/** Resolves structured land-protection results at the Paper boundary. */
 public final class LandProtectionMessages {
     private LandProtectionMessages() {
     }
@@ -18,17 +12,13 @@ public final class LandProtectionMessages {
     public static String text(PluginMessages messages, LandProtectionService.Result result) {
         Objects.requireNonNull(messages, "messages");
         Objects.requireNonNull(result, "result");
-        return result.code() == null
-                ? result.message()
-                : messages.text(key(result.code()), result.parameters());
+        return messages.text(key(result.code()), result.parameters());
     }
 
     public static String text(PluginMessages messages, LandProtectionService.Inspection inspection) {
         Objects.requireNonNull(messages, "messages");
         Objects.requireNonNull(inspection, "inspection");
-        return inspection.code() == null
-                ? inspection.message()
-                : messages.text(key(inspection.code()), inspection.parameters());
+        return messages.text(key(inspection.code()), inspection.parameters());
     }
 
     /**
@@ -38,17 +28,13 @@ public final class LandProtectionMessages {
     public static String detail(PluginMessages messages, LandProtectionService.Result result) {
         Objects.requireNonNull(messages, "messages");
         Objects.requireNonNull(result, "result");
-        return result.code() == null
-                ? result.message()
-                : messages.plainText(key(result.code()), result.parameters());
+        return messages.plainText(key(result.code()), result.parameters());
     }
 
     public static String detail(PluginMessages messages, LandProtectionService.Inspection inspection) {
         Objects.requireNonNull(messages, "messages");
         Objects.requireNonNull(inspection, "inspection");
-        return inspection.code() == null
-                ? inspection.message()
-                : messages.plainText(key(inspection.code()), inspection.parameters());
+        return messages.plainText(key(inspection.code()), inspection.parameters());
     }
 
     public static String detail(PluginMessages messages, LandProtectionService.Collision collision) {
@@ -62,6 +48,15 @@ public final class LandProtectionMessages {
 
     public static String key(LandProtectionService.ResultCode code) {
         return switch (Objects.requireNonNull(code, "code")) {
+            case PROVISION_SITE_VALIDATION_DETAIL -> "dialog.provision.site-validation-failed-detail";
+            case PROVISION_OPERATION_FAILED -> "chat.land-protection.provision-operation-failed";
+            case PROVISION_DEFAULT_TELEPORT_WORLD_DETAIL -> "dialog.provision.default-teleport-world-unloaded-detail";
+            case PROVISION_DEFAULT_TELEPORT_HEIGHT_DETAIL -> "dialog.provision.default-teleport-height-invalid-detail";
+            case PROVISION_DEFAULT_TELEPORT_SPACE_DETAIL -> "dialog.provision.default-teleport-space-invalid-detail";
+            case PROVISION_DEFAULT_TELEPORT_ROLLED_BACK_DETAIL -> "dialog.provision.default-teleport-failed-rolled-back-detail";
+            case PROVISION_DEFAULT_TELEPORT_ROLLBACK_FAILED_DETAIL -> "dialog.provision.default-teleport-failed-rollback-failed-detail";
+            case PROVISION_LAND_WITH_TELEPORT_DETAIL -> "dialog.provision.land-created-with-default-teleport-detail";
+
             case UNSUPPORTED_TELEPORT_POINT ->
                     "chat.land-protection.unsupported-teleport-point";
             case UNSUPPORTED_MULTI_AREA -> "chat.land-protection.unsupported-multi-area";

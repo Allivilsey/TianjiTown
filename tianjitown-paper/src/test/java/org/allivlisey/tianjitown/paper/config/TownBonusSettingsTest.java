@@ -66,12 +66,12 @@ class TownBonusSettingsTest {
         List<String> keys = List.of(
                 "validation.bonus.building-refund-chance-range",
                 "validation.bonus.integer-range",
-                "validation.bonus.building-refund-weekly-limit-range",
-                "validation.bonus.building-refund-retention-range",
+                "validation.common.range",
+                "validation.common.range",
                 "validation.bonus.building-refund-reset-zone-invalid",
                 "validation.bonus.building-refund-blacklist-required",
                 "validation.bonus.building-refund-blacklist-material-invalid",
-                "validation.bonus.beacon-refresh-interval-range",
+                "validation.common.range",
                 "validation.bonus.diagnostic-days-range");
 
         for (String key : keys) {
@@ -88,11 +88,11 @@ class TownBonusSettingsTest {
                 messages.plainText("validation.bonus.integer-range",
                         Map.of("path", "territory.building-refund.weekly-limit")));
         assertEquals("territory.building-refund.weekly-limit 必须在 1~100000 范围内",
-                messages.plainText("validation.bonus.building-refund-weekly-limit-range",
+                messages.plainText("validation.common.range",
                         Map.of("path", "territory.building-refund.weekly-limit", "minimum", 1,
                                 "maximum", 100_000)));
         assertEquals("territory.building-refund.counter-retention-weeks 必须在 2~260 范围内",
-                messages.plainText("validation.bonus.building-refund-retention-range",
+                messages.plainText("validation.common.range",
                         Map.of("path", "territory.building-refund.counter-retention-weeks",
                                 "minimum", 2, "maximum", 260)));
         assertEquals("territory.building-refund.reset-zone 不是有效时区",
@@ -105,7 +105,7 @@ class TownBonusSettingsTest {
                 messages.plainText("validation.bonus.building-refund-blacklist-material-invalid",
                         Map.of("value", "NOT_A_MATERIAL")));
         assertEquals("territory.beacon.refresh-interval-ticks 必须在 20~1200 范围内",
-                messages.plainText("validation.bonus.beacon-refresh-interval-range",
+                messages.plainText("validation.common.range",
                         Map.of("path", "territory.beacon.refresh-interval-ticks", "minimum", 20,
                                 "maximum", 1_200)));
         assertEquals("operations.quickshop-diagnostic-days 必须在 1~180 天之间",

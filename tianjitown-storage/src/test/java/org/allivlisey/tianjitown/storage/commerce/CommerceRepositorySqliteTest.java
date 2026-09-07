@@ -1,8 +1,6 @@
 package org.allivlisey.tianjitown.storage.commerce;
 
 import org.allivlisey.tianjitown.core.consumption.BuffDefinition;
-import org.allivlisey.tianjitown.core.consumption.BuffDurationOption;
-import org.allivlisey.tianjitown.core.consumption.BuffStackingRule;
 import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
 import org.allivlisey.tianjitown.storage.database.DatabaseGate;
 import org.allivlisey.tianjitown.storage.governance.GovernanceRepository;
@@ -54,9 +52,9 @@ class CommerceRepositorySqliteTest {
             Instant now = Instant.now();
             BuffDefinition definition = new BuffDefinition("speed", "公共迅捷",
                     BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
-                    BigDecimal.ONE, 1, BuffStackingRule.LEVEL_UP, 1);
+                    BigDecimal.ONE, 1, 1);
             var buff = commerce.purchaseBuff(mayorId, "Mayor", definition,
-                    BuffDurationOption.ONE_HOUR, 2, "departure:buff", now).buff();
+                    1, 1, 2, "departure:buff", now).buff();
             assertEquals(List.of(buff), commerce.activeBuffsForPlayer(memberId, now));
 
             if (voluntary) {
@@ -83,22 +81,22 @@ class CommerceRepositorySqliteTest {
         Instant now = Instant.now();
         BuffDefinition buff = new BuffDefinition("speed", "迅捷",
                 BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
-                BigDecimal.ONE, 2, BuffStackingRule.LEVEL_UP, 1);
+                BigDecimal.ONE, 2, 1);
         List<Executable> operations = List.of(
-                () -> repository.quoteBuff(playerId, buff, BuffDurationOption.ONE_HOUR, 2, now),
+                () -> repository.quoteBuff(playerId, buff, 1, 1, 2, now),
                 () -> repository.quoteBuff(playerId, buff, 1, 1, 2, now),
                 () -> repository.purchaseBuff(playerId, "Mayor", buff,
-                        BuffDurationOption.ONE_HOUR, 2, "purchase", now),
+                        1, 1, 2, "purchase", now),
                 () -> repository.purchaseBuff(playerId, "Mayor", buff, "迅捷",
-                        BuffDurationOption.ONE_HOUR, 2, "purchase", now),
+                        1, 1, 2, "purchase", now),
                 () -> repository.purchaseBuff(playerId, "Mayor", buff,
                         1, 1, 2, "purchase", now),
                 () -> repository.purchaseBuff(playerId, "Mayor", buff, "迅捷",
                         1, 1, 2, "purchase", now),
                 () -> repository.purchaseBuffForTown(townId, playerId, "Admin", buff,
-                        2, BuffDurationOption.ONE_HOUR, "purchase", now, "管理员购买"),
+                        2, 1, 1, "purchase", now, "管理员购买"),
                 () -> repository.purchaseBuffForTown(townId, playerId, "Admin", buff, "迅捷",
-                        2, BuffDurationOption.ONE_HOUR, "purchase", now, "管理员购买"),
+                        2, 1, 1, "purchase", now, "管理员购买"),
                 () -> repository.activeBuffsForPlayer(playerId, now),
                 () -> repository.activeBuffsForTown(townId, now),
                 () -> repository.expireBuffs(now),
@@ -123,7 +121,7 @@ class CommerceRepositorySqliteTest {
             CommerceRepository repository = new CommerceRepository(gate.dataSource(), () -> false);
             BuffDefinition buff = new BuffDefinition("health", "生命",
                     BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:max_health", "ADD_NUMBER",
-                    BigDecimal.ONE, 5, BuffStackingRule.LEVEL_UP, 4);
+                    BigDecimal.ONE, 5, 4);
             Instant now = Instant.now();
             CommerceRepository.BuffPurchase first = repository.purchaseBuff(mayorId, "Mayor",
                     buff, "公共生命", 1, 1, 2, "selected:first", now);
@@ -179,7 +177,7 @@ class CommerceRepositorySqliteTest {
             CommerceRepository repository = new CommerceRepository(gate.dataSource(), () -> false);
             BuffDefinition buff = new BuffDefinition("health", "生命",
                     BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:max_health", "ADD_NUMBER",
-                    new BigDecimal("1.00"), 5, BuffStackingRule.LEVEL_UP, 4);
+                    new BigDecimal("1.00"), 5, 4);
             Instant now = Instant.parse("2026-08-27T00:00:00Z");
 
             CommerceRepository.SelectedBuffQuote quote = repository.quoteBuff(mayorId, buff,
@@ -190,7 +188,6 @@ class CommerceRepositorySqliteTest {
             CommerceRepository.BuffPurchase purchase = repository.purchaseBuff(mayorId, "Mayor",
                     buff, 2, 3, 2, "buff:selected", now);
             assertEquals(3, purchase.buff().level());
-            assertEquals(3, purchase.buff().stackCount());
             assertEquals(99_430, purchase.balanceAfterMinor());
             assertEquals(4, purchase.buff().amountPerLevel());
             assertThrows(IllegalArgumentException.class,
@@ -215,26 +212,26 @@ class CommerceRepositorySqliteTest {
             Instant now = Instant.now();
             BuffDefinition buff = new BuffDefinition("speed", "公共迅捷",
                     BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
-                    new BigDecimal("16800.00"), 2, BuffStackingRule.LEVEL_UP, 1);
+                    new BigDecimal("100.00"), 2, 1);
 
             CommerceRepository.BuffPurchase first = repository.purchaseBuff(mayorId, "Mayor",
-                    buff, BuffDurationOption.ONE_HOUR, 2, "buff:test:1", now);
+                    buff, 1, 1, 2, "buff:test:1", now);
             assertEquals(1, first.buff().level());
             assertEquals(90_000, first.balanceAfterMinor());
             assertEquals(first.buff().buffId(), repository.purchaseBuff(mayorId, "Mayor", buff,
-                    BuffDurationOption.ONE_HOUR, 2, "buff:test:1", now).buff().buffId());
+                    1, 1, 2, "buff:test:1", now).buff().buffId());
             assertThrows(CommerceRepository.ConflictException.class,
                     () -> repository.purchaseBuff(memberId, "Member", buff,
-                            BuffDurationOption.ONE_HOUR, 2,
+                            1, 1, 2,
                             "buff:denied", now));
 
             CommerceRepository.BuffPurchase second = repository.purchaseBuff(mayorId, "Mayor",
-                    buff, BuffDurationOption.ONE_HOUR, 2, "buff:test:2", now.plusSeconds(1));
+                    buff, 1, 2, 2, "buff:test:2", now.plusSeconds(1));
             assertEquals(2, second.buff().level());
             assertEquals(70_000, second.balanceAfterMinor());
             assertThrows(IllegalArgumentException.class,
                     () -> repository.purchaseBuff(mayorId, "Mayor", buff,
-                            BuffDurationOption.ONE_HOUR, 2,
+                            1, 3, 2,
                             "buff:test:3", now.plusSeconds(2)));
             assertEquals(1, repository.activeBuffsForPlayer(memberId, now.plusSeconds(1)).size());
 
@@ -249,37 +246,18 @@ class CommerceRepositorySqliteTest {
             assertEquals(1, ledgerCount(gate, townId, "BUFF_REFUND"));
             assertEquals(1, repository.activeBuffsForPlayer(memberId, now).getFirst().level());
 
-            BuffDefinition extend = new BuffDefinition("extend", "延长测试",
-                    BuffDefinition.EffectKind.POTION, "minecraft:haste", "AMPLIFIER",
-                    new BigDecimal("1680.00"), 2, BuffStackingRule.EXTEND, 1);
-            CommerceRepository.BuffPurchase extendFirst = repository.purchaseBuff(mayorId,
-                    "Mayor", extend, BuffDurationOption.ONE_HOUR, 2, "buff:extend:1", now);
-            CommerceRepository.BuffPurchase extendSecond = repository.purchaseBuff(mayorId,
-                    "Mayor", extend, BuffDurationOption.ONE_HOUR, 2, "buff:extend:2",
-                    now.plusSeconds(60));
-            assertEquals(1, extendSecond.buff().level());
-            assertEquals(2, extendSecond.buff().stackCount());
-            assertEquals(1_000, extendSecond.buff().priceMinor());
-            assertEquals(extendFirst.buff().expiresAt().plusSeconds(3_600).toEpochMilli(),
-                    extendSecond.buff().expiresAt().toEpochMilli());
-            assertThrows(IllegalArgumentException.class,
-                    () -> repository.purchaseBuff(mayorId, "Mayor", extend,
-                            BuffDurationOption.ONE_HOUR, 2, "buff:extend:3",
-                            now.plusSeconds(120)));
-
             BuffDefinition refresh = new BuffDefinition("refresh", "刷新测试",
                     BuffDefinition.EffectKind.POTION, "minecraft:luck", "AMPLIFIER",
-                    new BigDecimal("1680.00"), 2, BuffStackingRule.REFRESH, 1);
+                    new BigDecimal("10.00"), 2, 1);
             CommerceRepository.BuffPurchase refreshFirst = repository.purchaseBuff(mayorId,
-                    "Mayor", refresh, BuffDurationOption.ONE_HOUR, 2, "buff:refresh:1", now);
+                    "Mayor", refresh, 1, 1, 2, "buff:refresh:1", now);
             Instant refreshAt = now.plusSeconds(60);
             CommerceRepository.BuffPurchase refreshSecond = repository.purchaseBuff(mayorId,
-                    "Mayor", refresh, BuffDurationOption.ONE_HOUR, 2, "buff:refresh:2",
+                    "Mayor", refresh, 1, 1, 2, "buff:refresh:2",
                     refreshAt);
             assertEquals(1, refreshSecond.buff().level());
-            assertEquals(1, refreshSecond.buff().stackCount());
             assertEquals(1_000, refreshSecond.buff().priceMinor());
-            assertEquals(refreshAt.plusSeconds(3_600).toEpochMilli(),
+            assertEquals(refreshAt.plusSeconds(7 * 24 * 3_600).toEpochMilli(),
                     refreshSecond.buff().expiresAt().toEpochMilli());
             assertTrue(refreshSecond.buff().expiresAt().isAfter(refreshFirst.buff().expiresAt()));
         }
@@ -299,13 +277,13 @@ class CommerceRepositorySqliteTest {
                     () -> false);
             BuffDefinition buff = new BuffDefinition("rollback", "事务测试",
                     BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
-                    new BigDecimal("16800.00"), 2, BuffStackingRule.LEVEL_UP, 1);
+                    new BigDecimal("100.00"), 2, 1);
             Instant now = Instant.now();
 
             installAuditFailure(gate, "fail_buff_purchase", "BUFF_PURCHASE");
             assertThrows(CommerceRepository.ConflictException.class,
                     () -> repository.purchaseBuff(mayorId, "Mayor", buff,
-                            BuffDurationOption.ONE_HOUR, 2, "buff:rollback:purchase", now));
+                            1, 1, 2, "buff:rollback:purchase", now));
             assertEquals(100_000, accountBalance(gate, townId));
             assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM ledger_entries "
                     + "WHERE business_key = 'buff:rollback:purchase'"));
@@ -314,7 +292,7 @@ class CommerceRepositorySqliteTest {
             execute(gate, "DROP TRIGGER fail_buff_purchase");
 
             CommerceRepository.BuffPurchase purchased = repository.purchaseBuff(mayorId,
-                    "Mayor", buff, BuffDurationOption.ONE_HOUR, 2,
+                    "Mayor", buff, 1, 1, 2,
                     "buff:rollback:success", now);
             installAuditFailure(gate, "fail_buff_refund", "BUFF_REFUND");
             assertThrows(CommerceRepository.ConflictException.class,
@@ -345,9 +323,9 @@ class CommerceRepositorySqliteTest {
                     () -> false);
             BuffDefinition buff = new BuffDefinition("restart", "重启测试",
                     BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
-                    new BigDecimal("1680.00"), 2, BuffStackingRule.LEVEL_UP, 1);
+                    new BigDecimal("10.00"), 2, 1);
             expiresAt = repository.purchaseBuff(mayorId, "Mayor", buff,
-                    BuffDurationOption.ONE_HOUR, 2, "buff:restart:once", purchasedAt)
+                    1, 1, 2, "buff:restart:once", purchasedAt)
                     .buff().expiresAt();
         }
 
@@ -382,16 +360,16 @@ class CommerceRepositorySqliteTest {
                     () -> false);
             BuffDefinition firstBuff = new BuffDefinition("expiration-one", "第一项到期测试",
                     BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
-                    new BigDecimal("1680.00"), 1, BuffStackingRule.LEVEL_UP, 1);
+                    new BigDecimal("10.00"), 1, 1);
             BuffDefinition secondBuff = new BuffDefinition("expiration-two", "第二项到期测试",
                     BuffDefinition.EffectKind.POTION, "minecraft:jump_boost", "AMPLIFIER",
-                    new BigDecimal("1680.00"), 1, BuffStackingRule.LEVEL_UP, 1);
+                    new BigDecimal("10.00"), 1, 1);
             Instant now = Instant.parse("2026-08-27T00:00:00Z");
             CommerceRepository.BuffPurchase firstPurchase = repository.purchaseBuff(mayorId,
-                    "Mayor", firstBuff, BuffDurationOption.ONE_HOUR, 2,
+                    "Mayor", firstBuff, 1, 1, 2,
                     "buff:expiration:one", now);
             CommerceRepository.BuffPurchase secondPurchase = repository.purchaseBuff(mayorId,
-                    "Mayor", secondBuff, BuffDurationOption.ONE_HOUR, 2,
+                    "Mayor", secondBuff, 1, 1, 2,
                     "buff:expiration:two", now.plus(Duration.ofMinutes(30)));
 
             assertEquals(1, repository.expireBuffsForPlayer(memberId,
