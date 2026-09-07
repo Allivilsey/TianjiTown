@@ -75,6 +75,9 @@ class TownRepositorySqliteTest {
             assertEquals(provisioning.town().id(), repeatedProvisioning.town().id());
             ApplicationSnapshot active = repository.finishProvision(submitted.id(), true, "ok");
             assertEquals(ApplicationStatus.ACTIVE, active.status());
+            assertEquals(provisioning.town().id(), repository.findTownByCode("sKy").orElseThrow().id());
+            assertTrue(repository.findTownByCode("天际镇").isEmpty());
+            assertTrue(repository.findTownByCode("missing").isEmpty());
             assertEquals(active, repository.finishProvision(submitted.id(), true, "重复完成"));
 
             JoinApplicationSnapshot joinApplication = repository.applyToTown(

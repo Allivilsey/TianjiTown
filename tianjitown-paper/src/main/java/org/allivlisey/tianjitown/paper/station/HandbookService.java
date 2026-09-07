@@ -30,12 +30,20 @@ final class HandbookService {
     }
 
     public boolean giveHandbook(Player player, boolean notifyPlayer) {
+        return giveHandbook(player, notifyPlayer, false);
+    }
+
+    public void giveHandbookByAdmin(Player player) {
+        giveHandbook(player, true, true);
+    }
+
+    private boolean giveHandbook(Player player, boolean notifyPlayer, boolean bypassCooldown) {
         long now = Instant.now().toEpochMilli();
         Long lastReceived = player.getPersistentDataContainer().get(handbookCooldownKey,
                 PersistentDataType.LONG);
         long cooldownMillis = Duration.ofMinutes(Math.max(1, plugin.getConfig().getLong(
                 "town.handbook-cooldown-minutes", 60))).toMillis();
-        if (lastReceived != null && now - lastReceived < cooldownMillis) {
+        if (!bypassCooldown && lastReceived != null && now - lastReceived < cooldownMillis) {
             long remainingMinutes = Math.max(1,
                     (cooldownMillis - (now - lastReceived) + 59_999L) / 60_000L);
             if (notifyPlayer) {
@@ -54,7 +62,9 @@ final class HandbookService {
         book.setItemMeta(meta);
         Map<Integer, ItemStack> leftovers = player.getInventory().addItem(book);
         leftovers.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
-        player.getPersistentDataContainer().set(handbookCooldownKey, PersistentDataType.LONG, now);
+        if (!bypassCooldown) {
+            player.getPersistentDataContainer().set(handbookCooldownKey, PersistentDataType.LONG, now);
+        }
         if (notifyPlayer) {
             plugin.messages().send(player, "handbook.received");
         }

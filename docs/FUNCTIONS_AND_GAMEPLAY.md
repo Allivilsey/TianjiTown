@@ -12,7 +12,7 @@ TianjiTown 是面向单个 Paper 服务器的小镇治理与统一经济插件�
 - 入镇申请、成员角色、规则确认、镇长转让和成员管理投票；
 - 公共资金、成员捐款、统一收入税和永久公共账本；
 - 固定网格领地扩张和 Residence 权限同步；
-- 使用公共资金购买和叠加公共 Buff；
+- 使用公共资金购买公共 Buff；
 - 领地内建筑方块概率返还和小镇信标效果覆盖；
 - 审计、领地对账、清算账户对账和统一诊断。
 
@@ -45,12 +45,12 @@ TianjiTown 是面向单个 Paper 服务器的小镇治理与统一经济插件�
 | 发起双方确认的镇长转让 | 是 | 否 | 否 |
 | 修改统一收入税率 | 是 | 否 | 否 |
 | 使用公共资金扩张领地 | 是 | 否 | 否 |
-| 购买公共 Buff | 默认是 | 默认是 | 默认否 |
+| 购买公共 Buff | 是 | 是 | 否 |
 | 编辑本镇领地内的信标效果 | 是 | 是 | 否 |
 | 解散小镇 | 是，仅剩自己时 | 否 | 否 |
 | 主动退出小镇 | 否，需先转让或解散 | 是 | 是 |
 
-公共 Buff 的购买角色由每个商品单独配置，并不固定等于上表的默认值。
+玩家购买公共 Buff 固定要求镇长或副镇长身份，当前配置没有每商品购买角色字段。
 
 Residence 领地中的成员权限由 TianjiTown 统一投影。所有成员都会获得 Residence `/res padd` 当前配置的完整 `trusted` 权限组，并额外获得 `ignite` 点火权限和 `vehicledestroy` 载具破坏权限；离镇后这些玩家权限会被清除。系统领地不能由玩家使用 `/res` 或 `/residence` 命令直接修改。
 
@@ -255,7 +255,7 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 - 目标通过北、东、南、西方向从现有领地相邻扩展；
 - 所有单元必须保持四方向连通，不能出现飞地；
 - 目标仍在原点周围 5×5 单元网格内；
-- 目标不与其他 Residence 或地图黑名单冲突，且连同缓冲范围完整位于 WorldBorder 内；扩张复用同一套环境校验，但允许与本镇已有 Residence 相接；
+- 目标不与其他 Residence 或有效区块占位冲突，且连同缓冲范围完整位于 WorldBorder 内；扩张复用同一套环境校验，但允许与本镇已有 Residence 相接；
 - 公共账户未锁定且余额足够。
 
 菜单以 5×5 Sprite 按钮地图显示小镇中心、已占领、可扩张、不可扩张和其他小镇区域。选择可扩张格子后，系统会显示目标区域的三维边界但不会传送玩家，再进入扣款确认页。
@@ -274,7 +274,7 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 
 ## 10. 公共 Buff
 
-公共 Buff 使用小镇公共资金购买，并跨世界作用于全体在线成员。商品操作按钮不显示冗余悬浮说明；进入购买页后用滑块选择 1～4 周和 I～V 级，并在确认前显示效果与精确价格。
+公共 Buff 使用小镇公共资金购买，并跨世界作用于全体在线成员。商品操作按钮不显示冗余悬浮说明；进入购买页后选择 1～4 周和商品允许的等级（最高 V，单等级商品不显示强度滑块），并在确认前显示效果与精确价格。
 
 当前默认目录：
 
@@ -292,7 +292,7 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 
 效果会在玩家登录、重生、跨世界、成员变化和到期时重新计算；玩家登录时会重新检查并恢复或清理效果。关闭 Buff 商店只禁止新购买，不会提前结束已购买效果。
 
-管理员可以查看生效 Buff 或代购 Buff；公共 Buff 购买后不接受玩家或管理员退款。
+管理员可以查看生效 Buff 或付费代购。`buff grant` 固定一周，按配置的 `stacking` 计算下一档，与玩家自选覆盖流程不同；详见 [命令手册](ADMIN_COMMANDS.md)。公共 Buff 没有玩家或管理员主动退款入口，系统效果应用失败的补偿另行处理。
 
 ## 11. 建筑返还
 
@@ -304,7 +304,7 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 - 同种方块优先加入背包，背包满时掉落在玩家当前位置；
 - 只向玩家播放物品拾取音效，不显示返还文字或内部额度。
 
-系统仍通过内部计数防止异常超发，但不会向玩家展示额度信息。
+系统按小镇、玩家和周保存内部计数，默认每组每周 3000 次，按配置时区周一 00:00 切换；不会向玩家展示额度信息。
 
 下列情况不会返还：
 
@@ -330,7 +330,7 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 - 只有本镇镇长和副镇长能右键信标编辑效果；普通镇员、访客和他镇管理者会被阻止；
 - 离开小镇有效领地、领地归档、功能关闭或插件停用后，托管效果会被清理。
 
-信标增强不按世界限制。信标仍必须满足原版金字塔和天空等生效条件。
+记录时信标须满足原版生效条件。记录保存后不再依赖来源信标持续存在，拆除或金字塔失效不会撤销已记录效果；效果只覆盖数据库登记且 Residence 校验有效的小镇领地。
 
 ## 13. 默认配置速查
 
@@ -360,85 +360,11 @@ SQLite 暂时不可用时，新的业务写入会暂停；已经存在的 Reside
 
 ## 14. 管理功能与命令
 
-普通玩家不需要也不能使用以下命令。管理员可执行 `/tianjitown help <分类>` 查看游戏内帮助，命令支持 Tab 补全；`<原因>` 等尖括号文本只是占位提示，必须替换为实际内容。
-
-### 14.1 系统、服务台与审核
-
-```text
-/tianjitown status
-/tianjitown reload
-/tianjitown maintenance <on|off|status>
-/tianjitown audit [1~200]
-/tianjitown diagnose [1~180天]
-
-/tianjitown station create|remove|info
-/tianjitown station list
-/tianjitown handbook [player]
-
-/tianjitown application list
-/tianjitown application approve|reject|change <小镇全名> <原因>
-```
-
-- `reload` 会热重读税收/消费开关、Buff 商店开关、建筑返还/信标开关以及 `messages.yml`；数据库位置、清算账户、金额精度和商品定义仍需重启。
-- 维护模式会暂停服务台、手册、玩家菜单和表单，不影响管理员命令及现有 Residence 保护。
-- `station create|remove|info` 要求游戏内管理员看向 6 格内的讲台。管理员还可潜行左键拆除服务台；管理员或镇长将小镇手册摆上空讲台后，摆放完成即可创建服务台，手册会保留在讲台上，镇长服务台绑定本镇且每镇限一个。
-- 危险命令会发送仅属于发起者的确认按钮，60 秒后失效；目标版本变化时不会继续执行旧确认。
-
-### 14.2 小镇、成员、投票与领地
-
-```text
-/tianjitown town view <小镇全名>
-/tianjitown town delete <小镇全名> <原因>
-
-/tianjitown member add|remove <小镇全名> <玩家> <原因>
-/tianjitown member role <小镇全名> <玩家> <DEPUTY_MAYOR|MEMBER>
-/tianjitown mayor transfer <小镇全名> <玩家> <原因>
-
-/tianjitown vote create-kick <小镇全名> <目标玩家>
-/tianjitown vote create-mayor <小镇全名> <候选玩家>
-/tianjitown vote settle <voteId>
-/tianjitown vote cancel <voteId> <原因>
-
-/tianjitown land preview <小镇全名>
-/tianjitown land reconcile <小镇全名|all> [repair]
-/tianjitown land rebuild <小镇全名|all>
-```
-
-管理员成员添加、移除、角色调整、紧急镇长转移和投票创建属于运营代办入口，可以绕过部分正常玩家流程，但都会留下审计记录。`land reconcile` 默认只检查，显式填写 `repair` 才修改 Residence；`land rebuild` 需二次确认。
-
-### 14.3 经济、扩张与 Buff
-
-```text
-/tianjitown money view <小镇全名>
-/tianjitown money adjust <小镇全名> <带符号金额> <原因>
-/tianjitown money reconcile
-/tianjitown tax set <小镇全名> <百分比> <原因>
-/tianjitown ledger view <小镇全名>
-/tianjitown expand view|preview <小镇全名> [north|east|south|west]
-
-/tianjitown buff list <小镇全名>
-/tianjitown buff grant <小镇全名> <buffKey> <原因>
-```
-
-`ledger view` 在聊天中展示最新 45 条汇总后的账本项目，玩家 Dialog 使用相同日汇总口径并可继续翻页查看完整历史。管理员代购 Buff 会从目标小镇公共资金扣款，购买后不接受退款。
-
-### 14.4 权限节点
-
-| 权限 | 作用 |
-|---|---|
-| `tianjitown.admin` | 全部管理功能，默认 OP |
-| `tianjitown.admin.money` | 公共资金查询、调账和对账 |
-| `tianjitown.admin.tax` | 强制设置税率 |
-| `tianjitown.admin.ledger` | 查询公共账本 |
-| `tianjitown.admin.expand` | 扩张查询和预览 |
-| `tianjitown.admin.buff` | Buff 查询和代购 |
-| `tianjitown.admin.operations` | 状态和统一诊断 |
-
-小镇生命周期、成员、投票、领地重建、服务台、重载、维护和审计等命令要求完整的 `tianjitown.admin` 权限。
+完整语法、用途、默认参数、权限、示例和操作后果统一见 [管理员命令手册](ADMIN_COMMANDS.md)。管理员可以审核建镇、调整成员和镇长、发起或取消投票、管理服务台、查询和调整资金、检查修复领地、代购 Buff 及执行诊断。玩家日常操作仍通过 Dialog 完成。
 
 ## 15. 诊断、备份与故障保护
 
-插件启动时会检查配置 schema、SQLite/Flyway、Residence、Vault、XConomy、WorldBorder、QuickShop-Hikari、Jobs 和 GlobalMarketPlus。必需依赖缺失、未启用，WorldBorder API 不兼容，或 Vault 没有可用 Economy provider 时，写功能保持锁定。
+插件启动时会检查配置内容、SQLite/Flyway、Residence、Vault、XConomy、WorldBorder、QuickShop-Hikari、Jobs 和 GlobalMarketPlus。必需依赖缺失、未启用，WorldBorder API 不兼容，或 Vault 没有可用 Economy provider 时，写功能保持锁定。
 
 `/tianjitown diagnose` 会汇总：
 

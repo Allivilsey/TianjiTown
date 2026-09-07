@@ -89,7 +89,6 @@ public final class TownAdminLamp {
                         String prefix = tail.substring(0, tail.lastIndexOf(' ') + 1);
                         return suggestions.stream().map(suggestion -> prefix + suggestion).toList();
                     });
-                    providers.addProvider(UUID.class, context -> List.of("<voteId>"));
                 })
                 .exceptionHandler((error, context) -> handleException(plugin, error, context));
     }

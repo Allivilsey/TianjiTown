@@ -44,6 +44,25 @@ final class TownQueryStore {
         });
     }
 
+    public Optional<TownSnapshot> findTownByCode(String townCode) {
+        database.requireWorkerThread();
+        String normalizedName = townCode.strip().toLowerCase(java.util.Locale.ROOT);
+        return database.query(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT t.town_id FROM towns t
+                      JOIN territory_units u ON u.town_id = t.town_id AND u.grid_x = 0 AND u.grid_z = 0
+                     WHERE lower(u.residence_name) = ?
+                     ORDER BY (t.status = 'ARCHIVED'), t.reuse_blocked DESC, t.created_at DESC LIMIT 1
+                    """)) {
+                statement.setString(1, normalizedName);
+                try (ResultSet result = statement.executeQuery()) {
+                    return result.next()
+                            ? TownPersistence.findTown(connection, readUuid(result, "town_id")) : Optional.empty();
+                }
+            }
+        });
+    }
+
     public Optional<TownSnapshot> findTownByMember(UUID playerId) {
         database.requireWorkerThread();
         return database.query(connection -> {

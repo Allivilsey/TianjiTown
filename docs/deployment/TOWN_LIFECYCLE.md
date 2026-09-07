@@ -1,74 +1,33 @@
-# 建镇与成员流程发布验收
+# 建镇与成员部署验收
 
-版本：`1.0.0`
+适用于 `1.0.0-SNAPSHOT`。当前使用初始 5×5 区块领地、两名初始成员确认和后续入镇申请制。完整语法见 [管理员命令](../ADMIN_COMMANDS.md)，字段限制见 [功能说明](../FUNCTIONS_AND_GAMEPLAY.md)。
 
-`1.0.0` 开放申请、3×3 选址、管理员审批、SQLite 基本资料、初始 Residence 投影、邀请加入/拒绝和普通成员主动退出；该版本尚未开放治理、经济和公共 Buff 等功能。
+## 准备
 
-## 发布前检查
+按 [安装检查](../setup/PREFLIGHT.md) 准备依赖、WorldBorder 和独立测试数据库。使用一名申请人、两名无镇籍初始成员、一名后续入镇玩家及管理员；普通流程应使用无管理员权限的账号验证。
 
-1. 使用 JDK 25 和 Maven 3.9+ 执行 `mvn -B clean verify`，确认生成 `tianjitown-paper/target/TianjiTown-1.0.0.jar`。
-2. 在生产所用 Leaf/Paper 与 Java 组合上验证 Paper API 编译产物；插件不再执行固定版本匹配。
-3. 确认 Vault 已注册可用的 XConomy `Economy` 服务，Residence、Vault、XConomy 和 QuickShop-Hikari 均已启用。
-4. 确认 `database.file` 指向 TianjiTown 专用的空 SQLite 文件，其父目录对服务器进程可写。
-5. 使用 `/wb` 为各世界配置 WorldBorder，并按实际地图设置 `minimum-buffer-chunks`。选址要求目标世界已加载且配置了 WorldBorder，5×5 区块及其缓冲范围必须位于边界内。
-6. 在停服时间点归档 Residence、QuickShop H2、XConomy/清算账户，并用 `scripts/backup_sqlite.sh` 备份 TianjiTown SQLite，完成一次隔离恢复演练。
+## 申请和创建
 
-## 安装或升级
+1. 从讲台领取手册，分别验证两种入口；重复领取应受默认 60 分钟冷却限制。
+2. 填写名称、3～9 位英文字母代码、简介和规则；更换/清空初始成员并保存草稿，确认此时不发邀请。
+3. 完成资料并发送邀请，两名成员分别测试接受、拒绝和重新提醒；只有最终两人都接受且仍无镇籍时才能提交。
+4. 选择区块，验证初始 25 个区块、全高度保护、火焰边界及中心预览传送。WorldBorder 未配置、越界或重叠选址应拒绝；默认预留 60 分钟。
+5. 在 GUI 中使用不同测试申请分别验证退回修改、拒绝和批准，每次填写明确原因。退回修改可重新编辑，拒绝/撤回后再申请有冷却。
+6. 批准后核对申请人扣款、镇长和两名普通成员、公共初始余额、25 个区块占位和 Residence。默认申请费 `5000.00`，代码 `SKY` 对应 Residence `sky`。
 
-1. 关闭新建镇入口并停止服务器。
-2. 备份插件目录和数据库；不要删除已有 Flyway history。
-3. 替换插件 JAR，保留并人工合并现有 `config.yml`，然后启动服务器。
-4. Flyway 会保留安装门禁记录，再创建 `1.x` 建镇与成员业务表。禁止手工修改 Flyway history。
-5. 执行 `/tianjitown status`。只有状态为 `READY` 时才开放服务台。
-6. 在隔离环境批准一个测试小镇，确认 Residence 创建、边界读取和成员 `build` 权限正确，再通过管理员删除流程验证投影清理。
-7. 用 `/tianjitown station create|info|list|remove` 创建、核对并移除服务台；用 `/tianjitown handbook <player>` 做手册发放测试。
+## 入镇与领地访问
 
-从早期含 YAML 镜像的版本升级时，原 `plugins/TianjiTown/towns` 文件不会再被读取或改写。确认 SQLite 资料完整并保留一次备份后，可由管理员另行归档这些旧文件。`town_profile_sync` 表为停用遗留表，运行代码不再访问；不要手工改写 Flyway history。旧 MySQL 数据不会自动导入，必须在隔离环境另行转换。
+- 建镇后的新成员通过入镇申请加入，镇长/副镇长审批；测试最多 3 份、48 小时有效、同镇拒绝 24 小时及主动离镇 24 小时冷却。
+- 验证成员与访客获得 Residence trusted 权限及额外点火/载具破坏权限，离镇或移出访客名单后撤销。
+- 验证小镇 `monsters=false`、`nomobs=true`；怪物进入保护需要 Residence 开启 `AutoMobRemoval`。
+- 镇长将手册放上空讲台，确认建立绑定本镇的服务台且每镇限一个，数据库和讲台标识重启后保持一致。
 
-## 玩家验收
+## 并发、恢复与删除
 
-使用两个无管理员权限的测试玩家和一个管理员，在专用预发区域完成：
+- 同一申请并发批准，只能收取一次成功建镇费用并创建一套小镇数据；重叠选址不能同时占用。
+- Residence 创建失败时检查失败状态、补偿和重试，不得出现静默成功的无保护小镇。
+- 执行 `land reconcile <小镇代码>` 只读检查，显式加 `repair` 后修复；系统自动对账应按 SQLite 最新记录恢复，不覆盖同名外部领地。
+- 执行 `town delete <小镇代码> <原因>` 并确认：先归档，Residence 清理成功后才释放名称、代码和区块。清理失败保持占位，排障后可重新发起删除完成释放。
+- 重启后核对申请、预留、成员、访客、服务台和领地恢复；测试确认按钮过期、重复点击及目标版本变化时不能误执行。
 
-1. 玩家从服务台领取手册，分别通过服务台和手册打开相同主菜单。
-2. 玩家在三步 Dialog 表单中填写小镇名称、小镇代码、简介、规则和两名初始成员；验证保存草稿、默认成员按钮与 5 分钟冷却的重新提醒，再选择当前区块，看到 5×5 三维粒子边界并确认提交。
-3. 管理员依次验证 `application list/approve/reject/change <小镇全名>`，并验证管理员主菜单中的审核按钮会随待办状态改变外观。
-4. 批准后同时核对 SQLite、镇长成员记录和 Residence；小镇代码只允许 `3..9` 个英文字母并直接按小写生成 Residence 名称，例如 `SKY` 生成 `sky`。建议使用三个字母，不添加任何前后缀，也不接受小镇 UUID 或旧格式。
-5. 验证两名初始成员会收到带音效的 Dialog 提醒，再分别完成接受与拒绝；建镇后另行验证入镇申请和主动退出。
-6. 检查成员列表分页入口、镇长修改简介/规则，以及 `/tianjitown audit` 审计记录。
-7. 确认玩家没有 `/town` 等命令，菜单和 `/tianjitown help` 中也没有 money、tax、buff、order、vote 或 expand。
-
-## 并发与故障验收
-
-1. 两名管理员同时批准同一申请，最终只能有一个小镇、一个镇长记录、一个领地单元和二十五个区块占位。
-2. 两名玩家同时预留重叠选址，只能有一人成功。
-3. 快速重复点击提交、接受邀请和批准按钮，不能产生重复数据。
-4. 在预发副本中注入 SQLite 磁盘 I/O 或权限故障：新申请、审批和成员变更必须被锁定，已有 Residence 继续保护。恢复文件可写后最多等待 30 秒，写操作应自动恢复。
-5. 临时移除测试镇 Residence 并等待自动对账，或执行 `/tianjitown land reconcile <小镇全名> repair`；投影应按数据库边界和成员权限重建，小镇不得被归档。
-6. 重启服务器，核对申请、预留、小镇、成员和 Residence 恢复，并确认启动后的自动修复没有触碰 SQLite 未登记的外部领地。
-
-## 维护模式
-
-- 开启：`/tianjitown maintenance on`
-- 查询：`/tianjitown maintenance status` 或 `/tianjitown status`
-- 关闭：`/tianjitown maintenance off`
-
-开启维护模式会暂停服务台、手册、玩家界面和表单提交，但不会停用管理员命令或现有 Residence 保护。状态会写回 `config.yml`，重启后保持不变。
-
-## 管理员常用操作
-
-- 审批：`/tianjitown application list|approve|reject|change <小镇全名> <原因>`
-- 查看：`/tianjitown town view <小镇全名>`
-- 删除：`/tianjitown town delete <小镇全名> <原因>`，随后点击聊天栏确认按钮
-- 成员：`/tianjitown member invite|add|remove <小镇全名> <玩家> <原因>`
-- 镇长：`/tianjitown mayor transfer <小镇全名> <玩家> <原因>`
-- 领地检查/修复：`/tianjitown land reconcile <小镇全名|all> [repair]`
-- 领地重建：`/tianjitown land rebuild <小镇全名|all>`，随后点击聊天栏确认按钮
-
-Tab 补全中的 `<原因>` 是位置提示，必须替换为实际内容。危险操作的聊天确认仅限发起者使用，60 秒后失效；确认前若目标版本变化，操作会安全中止。删除操作先安全归档并保持名称、小镇代码和区块锁定；只有对应 Residence 确认移除后才释放这些占位，同时保留小镇历史记录与审计记录。升级前已经归档的小镇默认继续锁定，可重新执行删除命令并点击确认完成安全释放。若 `ACTIVE` 小镇的 Residence 被外部删除，系统会阻止删除、通知删除来源，并立即触发投影对账恢复。
-
-## 回滚
-
-1. 开启维护模式或停止服务器，备份当前 SQLite、配置和 Residence。
-2. 回退 JAR 与配置；不要删除 `1.x` 业务表或 Residence。
-3. 若旧版本无法读取向前迁移后的 schema，保持插件停用并恢复整套预发备份，不得只回滚部分表。
-4. 生产回滚前必须先在隔离环境验证。该版本已创建的小镇继续依赖 Residence 保护，禁止手工批量删除 SQLite 中登记的小镇领地。
+首次建库只执行 `V1_0__initial_schema.sql`，没有旧版本安装门禁表升级流程、YAML 小镇镜像导入或 MySQL 自动转换。已有数据库必须先保留副本，不能为通过校验而删除或重建。数据恢复见 [SQLite 手册](../operations/SQLITE_AND_BACKUP.md)。

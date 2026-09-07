@@ -4,7 +4,6 @@ import org.allivlisey.tianjitown.paper.runtime.GateStatus;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 
-import org.allivlisey.tianjitown.core.application.ApplicationText;
 import org.allivlisey.tianjitown.storage.town.AuditSnapshot;
 import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import net.kyori.adventure.text.Component;
@@ -24,7 +23,6 @@ import revxrsal.commands.annotation.Range;
 import revxrsal.commands.annotation.Suggest;
 import revxrsal.commands.bukkit.actor.BukkitCommandActor;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -280,8 +278,10 @@ public final class TownAdminCommand {
     }
 
     private void stationHelp(CommandSender sender) {
+        send(sender, "chat.admin.help-station-title");
         send(sender, "chat.admin.station-help-create");
         send(sender, "chat.admin.station-help-list");
+        send(sender, "chat.admin.help-station-handbook");
     }
 
     @Command("tianjitown handbook")
@@ -295,11 +295,9 @@ public final class TownAdminCommand {
             send(sender, "chat.admin.handbook-target");
             return;
         }
-        boolean delivered = plugin.townUi().giveHandbook(target, true);
-        if (!sender.equals(target) && delivered) {
+        plugin.townUi().giveHandbookByAdmin(target);
+        if (!sender.equals(target)) {
             send(sender, "chat.admin.handbook-delivered", Map.of("player", target.getName()));
-        } else if (!sender.equals(target)) {
-            send(sender, "chat.admin.handbook-cooldown", Map.of("player", target.getName()));
         }
     }
 
@@ -309,7 +307,7 @@ public final class TownAdminCommand {
     }
 
     public TownSnapshot requireTown(TownRuntime runtime, String townName) {
-        return runtime.repository().findTownByName(townName)
+        return runtime.repository().findTownByCode(townName)
                 .orElseThrow(() -> messageArgument("chat.admin.town-not-found",
                         Map.of("town", safeText(townName))));
     }
@@ -338,13 +336,12 @@ public final class TownAdminCommand {
         }
     }
 
-    public static boolean sameName(String first, String second) {
-        return ApplicationText.normalizeNameKey(first)
-                .equals(ApplicationText.normalizeNameKey(second));
+    public static boolean sameCode(String first, String second) {
+        return first.equalsIgnoreCase(second);
     }
 
-    public static List<String> townNames(List<TownSnapshot> towns) {
-        return towns.stream().map(town -> town.profile().name()).toList();
+    public static List<String> townCodes(List<TownSnapshot> towns) {
+        return towns.stream().map(town -> town.profile().residenceName()).toList();
     }
 
     public void requireVersion(TownSnapshot town, long expectedVersion) {
@@ -369,8 +366,8 @@ public final class TownAdminCommand {
     }
 
     public void applicationHelp(CommandSender sender) {
+        send(sender, "chat.admin.help-application-title");
         send(sender, "chat.admin.help-application-list");
-        send(sender, "chat.admin.help-application-review");
     }
 
     private void help(CommandSender sender, String topic) {
@@ -378,15 +375,25 @@ public final class TownAdminCommand {
             send(sender, "chat.admin.help-title", Map.of(
                     "version", plugin.getPluginMeta().getVersion()));
             send(sender, "chat.admin.help-usage");
-            configuredRootHelpEntries(sender::hasPermission).forEach(sender::sendMessage);
+            visibleHelpTopics(sender::hasPermission).forEach(category -> sender.sendMessage(
+                    plugin.messages().component("chat.admin.help-entry-" + category)
+                            .clickEvent(ClickEvent.runCommand("/tianjitown help " + category))
+                            .hoverEvent(HoverEvent.showText(plugin.messages().component(
+                                    "chat.admin.help-topic-tooltip", Map.of("topic", category))))));
             send(sender, "chat.admin.help-placeholder-hint");
+            return;
+        }
+        topic = topic.toLowerCase(Locale.ROOT);
+        if (!TownAdminPermissions.HELP_TOPICS.contains(topic)) {
+            send(sender, "chat.admin.help-unknown", Map.of("topic", safeText(topic)));
+            help(sender, null);
             return;
         }
         if (!TownAdminPermissions.canViewHelpTopic(sender::hasPermission, topic)) {
             send(sender, "chat.admin.help-forbidden");
             return;
         }
-        switch (topic.toLowerCase(Locale.ROOT)) {
+        switch (topic) {
             case "system" -> systemHelp(sender);
             case "station" -> stationHelp(sender);
             case "application" -> applicationHelp(sender);
@@ -394,57 +401,34 @@ public final class TownAdminCommand {
             case "member" -> memberHelp(sender);
             case "vote" -> voteHelp(sender);
             case "land" -> landHelp(sender);
-            case "money", "tax", "ledger", "expand" -> economyHelp(sender, topic);
+            case "money", "tax", "ledger" -> economyHelp(sender, topic);
             case "buff" -> buffsHelp(sender);
-            default -> {
-                send(sender, "chat.admin.help-unknown", Map.of("topic", topic));
-                help(sender, null);
-            }
+            default -> throw new IllegalStateException("Unhandled help topic: " + topic);
         }
+        send(sender, "chat.admin.help-placeholder-hint");
+        sender.sendMessage(plugin.messages().component("chat.admin.help-back")
+                .clickEvent(ClickEvent.runCommand("/tianjitown help")));
     }
 
-    private List<String> configuredRootHelpEntries(Predicate<String> hasPermission) {
-        return rootHelpEntries(hasPermission, plugin.messages()::text);
+    private static List<String> visibleHelpTopics(Predicate<String> hasPermission) {
+        return TownAdminPermissions.HELP_TOPICS.stream()
+                .filter(topic -> TownAdminPermissions.canViewHelpTopic(hasPermission, topic)).toList();
     }
 
     public static List<String> rootHelpEntries(Predicate<String> hasPermission,
                                         Function<String, String> messageResolver) {
-        List<String> entries = new ArrayList<>();
-        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.OPERATIONS)) {
-            entries.add(messageResolver.apply("chat.admin.help-entry-system"));
-        }
-        if (hasPermission.test(TownAdminPermissions.ROOT)) {
-            entries.add(messageResolver.apply("chat.admin.help-entry-station"));
-            entries.add(messageResolver.apply("chat.admin.help-entry-application"));
-            entries.add(messageResolver.apply("chat.admin.help-entry-town"));
-            entries.add(messageResolver.apply("chat.admin.help-entry-member"));
-            entries.add(messageResolver.apply("chat.admin.help-entry-vote"));
-            entries.add(messageResolver.apply("chat.admin.help-entry-land"));
-        }
-        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.MONEY)) {
-            entries.add(messageResolver.apply("chat.admin.help-entry-money"));
-        }
-        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.TAX)) {
-            entries.add(messageResolver.apply("chat.admin.help-entry-tax"));
-        }
-        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.LEDGER)) {
-            entries.add(messageResolver.apply("chat.admin.help-entry-ledger"));
-        }
-        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.EXPAND)) {
-            entries.add(messageResolver.apply("chat.admin.help-entry-expand"));
-        }
-        if (TownAdminPermissions.has(hasPermission, TownAdminPermissions.BUFF)) {
-            entries.add(messageResolver.apply("chat.admin.help-entry-buff"));
-        }
-        return List.copyOf(entries);
+        return visibleHelpTopics(hasPermission).stream()
+                .map(topic -> messageResolver.apply("chat.admin.help-entry-" + topic)).toList();
     }
 
     private void systemHelp(CommandSender sender) {
         send(sender, "chat.admin.help-system-title");
         send(sender, "chat.admin.help-system-status");
-        send(sender, "chat.admin.help-system-reload");
-        send(sender, "chat.admin.help-system-maintenance");
-        send(sender, "chat.admin.help-system-audit");
+        if (sender.hasPermission(TownAdminPermissions.ROOT)) {
+            send(sender, "chat.admin.help-system-reload");
+            send(sender, "chat.admin.help-system-maintenance");
+            send(sender, "chat.admin.help-system-audit");
+        }
         send(sender, "chat.admin.help-system-diagnose");
     }
 
@@ -454,11 +438,9 @@ public final class TownAdminCommand {
             case "money" -> {
                 send(sender, "chat.admin.help-economy-money-view");
                 send(sender, "chat.admin.help-economy-money-adjust");
-                send(sender, "chat.admin.help-economy-money-reconcile");
             }
             case "tax" -> send(sender, "chat.admin.help-economy-tax");
             case "ledger" -> send(sender, "chat.admin.help-economy-ledger");
-            case "expand" -> send(sender, "chat.admin.help-economy-expand");
             default -> throw messageArgument("chat.admin.help-unknown", Map.of("topic", topic));
         }
     }
@@ -487,9 +469,6 @@ public final class TownAdminCommand {
 
     private void voteHelp(CommandSender sender) {
         send(sender, "chat.admin.help-vote-title");
-        send(sender, "chat.admin.help-vote-kick");
-        send(sender, "chat.admin.help-vote-mayor");
-        send(sender, "chat.admin.help-vote-settle");
         send(sender, "chat.admin.help-vote-cancel");
     }
 

@@ -6,11 +6,12 @@ import java.util.Map;
 import java.util.function.Predicate;
 
 public final class TownAdminPermissions {
+    static final List<String> HELP_TOPICS = List.of("system", "station", "application", "town",
+            "member", "vote", "land", "money", "tax", "ledger", "buff");
     static final String ROOT = "tianjitown.admin";
     static final String MONEY = "tianjitown.admin.money";
     static final String TAX = "tianjitown.admin.tax";
     static final String LEDGER = "tianjitown.admin.ledger";
-    static final String EXPAND = "tianjitown.admin.expand";
     static final String BUFF = "tianjitown.admin.buff";
     static final String OPERATIONS = "tianjitown.admin.operations";
 
@@ -18,7 +19,6 @@ public final class TownAdminPermissions {
             Map.entry("money", MONEY),
             Map.entry("tax", TAX),
             Map.entry("ledger", LEDGER),
-            Map.entry("expand", EXPAND),
             Map.entry("buff", BUFF),
             Map.entry("status", OPERATIONS),
             Map.entry("diagnose", OPERATIONS),

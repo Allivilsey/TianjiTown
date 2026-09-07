@@ -3,9 +3,6 @@ import org.allivlisey.tianjitown.paper.message.LandProtectionMessages;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 
-import org.allivlisey.tianjitown.core.land.ExpansionDirection;
-import org.allivlisey.tianjitown.core.land.ExpansionPricing;
-import org.allivlisey.tianjitown.core.land.TerritoryRules;
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
 import org.allivlisey.tianjitown.core.town.TownStatus;
 import org.allivlisey.tianjitown.storage.town.TownSnapshot;
@@ -31,7 +28,7 @@ public final class TownAdminLandCommands {
     }
 
     @Command("tianjitown land preview")
-    @Usage("/tianjitown land preview <小镇全名>")
+    @Usage("/tianjitown land preview <小镇代码>")
     @AdminAccess(value = TownAdminPermissions.ROOT, playerOnly = true)
     public void previewLand(Player player, TownRuntime runtime, String input) {
         String townName = input.strip();
@@ -40,12 +37,12 @@ public final class TownAdminLandCommands {
     }
 
     @Command("tianjitown land reconcile")
-    @Usage("/tianjitown land reconcile <小镇全名|all> [repair]")
+    @Usage("/tianjitown land reconcile <小镇代码|all> [repair]")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void reconcileLand(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {
             List<TownSnapshot> candidates = runtime.repository().listTowns(false);
-            List<String> names = new ArrayList<>(TownAdminCommand.townNames(candidates));
+            List<String> names = new ArrayList<>(TownAdminCommand.townCodes(candidates));
             names.add("all");
             TownCommandParser.NamedAction parsed = TownCommandParser.namedAction(input.split(" "), 0,
                     names, List.of("repair"));
@@ -57,12 +54,12 @@ public final class TownAdminLandCommands {
     }
 
     @Command("tianjitown land rebuild")
-    @Usage("/tianjitown land rebuild <小镇全名|all>")
+    @Usage("/tianjitown land rebuild <小镇代码|all>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void rebuildLandCommand(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {
             List<TownSnapshot> candidates = runtime.repository().listTowns(false);
-            List<String> names = new ArrayList<>(TownAdminCommand.townNames(candidates));
+            List<String> names = new ArrayList<>(TownAdminCommand.townCodes(candidates));
             names.add("all");
             String targetName = TownCommandParser.exactName(input.split(" "), 0, names);
             List<TownSnapshot> targets = selectLandTargets(candidates, targetName);
@@ -79,64 +76,6 @@ public final class TownAdminLandCommands {
                     () -> rebuildLand(sender, runtime, request));
         });
     }
-
-    @Command("tianjitown expand view")
-    @Usage("/tianjitown expand view <小镇全名>")
-    @AdminAccess(TownAdminPermissions.EXPAND)
-    public void viewExpansion(CommandSender sender, TownRuntime runtime, String input) {
-        showExpansion(sender, runtime, input, false);
-    }
-
-    @Command("tianjitown expand preview")
-    @Usage("/tianjitown expand preview <小镇全名> <north|east|south|west>")
-    @AdminAccess(value = TownAdminPermissions.EXPAND, playerOnly = true)
-    public void previewExpansion(Player player, TownRuntime runtime, String input) {
-        showExpansion(player, runtime, input, true);
-    }
-
-    private void showExpansion(CommandSender sender, TownRuntime runtime, String input, boolean preview) {
-        runtime.read(sender, () -> {
-            List<TownSnapshot> towns = runtime.repository().listTowns(true);
-            if (!preview) {
-                String name = TownCommandParser.exactName(input.split(" "), 0, TownAdminCommand.townNames(towns));
-                TownSnapshot town = towns.stream().filter(candidate -> TownAdminCommand.sameName(
-                                candidate.profile().name(), name)).findFirst().orElseThrow();
-                return new AdminExpansion(town, runtime.finance().territoryUnits(town.id()), null);
-            }
-            if (preview) {
-                TownCommandParser.NamedAction parsed = TownCommandParser.namedAction(input.split(" "), 0,
-                        TownAdminCommand.townNames(towns), List.of("north", "east", "south", "west"));
-                if (parsed.action() == null) {
-                    throw facade.messageArgument("chat.admin.expand-direction-required");
-                }
-                TownSnapshot town = towns.stream().filter(candidate -> TownAdminCommand.sameName(
-                                candidate.profile().name(), parsed.townName())).findFirst().orElseThrow();
-                var units = runtime.finance().territoryUnits(town.id());
-                var candidate = TerritoryRules.next(units.stream().map(
-                                org.allivlisey.tianjitown.storage.economy.EconomyRepository
-                                        .TerritoryUnitSnapshot::unit).toList(),
-                        ExpansionDirection.parse(parsed.action()));
-                return new AdminExpansion(town, units, candidate);
-            }
-            throw facade.messageArgument("chat.admin.expand-action-unsupported");
-        }, view -> {
-            facade.send(sender, "chat.admin.expand-title", Map.of("town", view.town().profile().name(),
-                    "current", view.units().size(),
-                    "maximum", runtime.economySettings().maximumUnits()));
-            view.units().forEach(unit -> facade.send(sender, "chat.admin.expand-unit", Map.of(
-                    "x", unit.unit().gridX(), "z", unit.unit().gridZ(),
-                    "area", unit.residenceAreaName(), "projection", unit.projectionStatus())));
-            if (view.preview() != null) {
-                Player player = (Player) sender;
-                long price = ExpansionPricing.price(runtime.economySettings().expansionCost(),
-                        view.units().size() - 1,
-                        runtime.settlement().scale()).minorUnits();
-                runtime.territoryPreviews().preview(player, view.preview().territory());
-                facade.send(player, "chat.admin.expand-price", Map.of("price", runtime.money(price)));
-            }
-        });
-        return;
-        }
 
     private void rebuildLand(CommandSender sender, TownRuntime runtime,
                              LandRebuildRequest request) {
@@ -168,7 +107,7 @@ public final class TownAdminLandCommands {
                                                   String targetName) {
         List<TownSnapshot> targets = targetName.equalsIgnoreCase("all")
                 ? candidates
-                : candidates.stream().filter(town -> TownAdminCommand.sameName(town.profile().name(), targetName))
+                : candidates.stream().filter(town -> TownAdminCommand.sameCode(town.profile().residenceName(), targetName))
                 .toList();
         if (targets.isEmpty()) {
             throw facade.messageArgument("chat.admin.no-operable-town");
@@ -201,9 +140,5 @@ public final class TownAdminLandCommands {
     private record TownReference(UUID townId, String townName, long version) {
     }
 
-    private record AdminExpansion(TownSnapshot town,
-                                  List<org.allivlisey.tianjitown.storage.economy.EconomyRepository
-                                          .TerritoryUnitSnapshot> units,
-                                  org.allivlisey.tianjitown.core.land.TerritoryUnit preview) {
-    }
+
 }

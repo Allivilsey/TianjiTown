@@ -27,16 +27,8 @@ public final class TownAdminEconomyCommands {
         this.plugin = plugin;
     }
 
-    @Command("tianjitown money reconcile")
-    @Usage("/tianjitown money reconcile")
-    @AdminAccess(TownAdminPermissions.MONEY)
-    public void reconcileMoney(CommandSender sender, TownRuntime runtime) {
-        runtime.reconcileSettlement();
-        facade.send(sender, "chat.admin.settlement-reconcile-submitted");
-    }
-
     @Command("tianjitown money view")
-    @Usage("/tianjitown money view <小镇全名>")
+    @Usage("/tianjitown money view <小镇代码>")
     @AdminAccess(TownAdminPermissions.MONEY)
     public void viewMoney(CommandSender sender, TownRuntime runtime, String input) {
         String townName = input.strip();
@@ -50,15 +42,15 @@ public final class TownAdminEconomyCommands {
     }
 
     @Command("tianjitown money adjust")
-    @Usage("/tianjitown money adjust <小镇全名> <带符号金额> <原因>")
+    @Usage("/tianjitown money adjust <小镇代码> <带符号金额> <原因>")
     @AdminAccess(TownAdminPermissions.MONEY)
     public void adjustMoney(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {
             List<TownSnapshot> towns = runtime.repository().listTowns(true);
             TownCommandParser.NamedAmountReason parsed = TownCommandParser.namedAmountReason(
-                    input.split(" "), 0, TownAdminCommand.townNames(towns), plugin.messages()::plainText);
-            TownSnapshot town = towns.stream().filter(candidate -> TownAdminCommand.sameName(
-                            candidate.profile().name(), parsed.townName())).findFirst()
+                    input.split(" "), 0, TownAdminCommand.townCodes(towns), plugin.messages()::plainText);
+            TownSnapshot town = towns.stream().filter(candidate -> TownAdminCommand.sameCode(
+                            candidate.profile().residenceName(), parsed.townName())).findFirst()
                     .orElseThrow(() -> facade.messageArgument("chat.admin.town-not-found-generic"));
             long amount = MoneyAmount.from(new BigDecimal(parsed.amount()),
                     runtime.settlement().scale()).minorUnits();
@@ -71,7 +63,7 @@ public final class TownAdminEconomyCommands {
     }
 
     @Command("tianjitown buff list")
-    @Usage("/tianjitown buff list <小镇全名>")
+    @Usage("/tianjitown buff list <小镇代码>")
     @AdminAccess(TownAdminPermissions.BUFF)
     public void listBuffs(CommandSender sender, TownRuntime runtime, String input) {
         String townName = input.strip();
@@ -88,7 +80,7 @@ public final class TownAdminEconomyCommands {
     }
 
     @Command("tianjitown buff grant")
-    @Usage("/tianjitown buff grant <小镇全名> <buffKey> <原因>")
+    @Usage("/tianjitown buff grant <小镇代码> <buffKey> <原因>")
     @AdminAccess(TownAdminPermissions.BUFF)
     public void grantBuff(CommandSender sender, TownRuntime runtime, String input) {
         if (!runtime.buffs().buffShopEnabled() || !runtime.consumptionEnabled()) {
@@ -97,11 +89,11 @@ public final class TownAdminEconomyCommands {
         runtime.read(sender, () -> {
             List<TownSnapshot> towns = runtime.repository().listTowns(true);
             TownCommandParser.NamedActionReason parsed = TownCommandParser.namedActionReason(
-                    input.split(" "), 0, TownAdminCommand.townNames(towns),
+                    input.split(" "), 0, TownAdminCommand.townCodes(towns),
                     runtime.buffs().settings().buffs().keySet(),
                     plugin.messages()::plainText);
-            TownSnapshot town = towns.stream().filter(candidate -> TownAdminCommand.sameName(
-                            candidate.profile().name(), parsed.townName())).findFirst()
+            TownSnapshot town = towns.stream().filter(candidate -> TownAdminCommand.sameCode(
+                            candidate.profile().residenceName(), parsed.townName())).findFirst()
                     .orElseThrow(() -> facade.messageArgument("chat.admin.town-not-found-generic"));
             BuffDefinition definition = runtime.buffs().settings().requireBuff(
                     parsed.action().toLowerCase(Locale.ROOT));
@@ -129,15 +121,15 @@ public final class TownAdminEconomyCommands {
     }
 
     @Command("tianjitown tax set")
-    @Usage("/tianjitown tax set <小镇全名> <百分比> <原因>")
+    @Usage("/tianjitown tax set <小镇代码> <百分比> <原因>")
     @AdminAccess(TownAdminPermissions.TAX)
     public void tax(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {
             List<TownSnapshot> towns = runtime.repository().listTowns(true);
             TownCommandParser.NamedAmountReason parsed = TownCommandParser.namedAmountReason(
-                    input.split(" "), 0, TownAdminCommand.townNames(towns), plugin.messages()::plainText);
-            TownSnapshot town = towns.stream().filter(candidate -> TownAdminCommand.sameName(
-                            candidate.profile().name(), parsed.townName())).findFirst()
+                    input.split(" "), 0, TownAdminCommand.townCodes(towns), plugin.messages()::plainText);
+            TownSnapshot town = towns.stream().filter(candidate -> TownAdminCommand.sameCode(
+                            candidate.profile().residenceName(), parsed.townName())).findFirst()
                     .orElseThrow(() -> facade.messageArgument("chat.admin.town-not-found-generic"));
             BigDecimal percent = new BigDecimal(parsed.amount().replace("%", ""));
             int bps = percent.movePointRight(2).intValueExact();
@@ -147,7 +139,7 @@ public final class TownAdminEconomyCommands {
     }
 
     @Command("tianjitown ledger view")
-    @Usage("/tianjitown ledger view <小镇全名>")
+    @Usage("/tianjitown ledger view <小镇代码>")
     @AdminAccess(TownAdminPermissions.LEDGER)
     public void ledger(CommandSender sender, TownRuntime runtime, String input) {
         String townName = input.strip();

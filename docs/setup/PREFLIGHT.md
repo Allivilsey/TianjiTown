@@ -1,21 +1,46 @@
-# 安装门禁与预发验证
+# 安装与预发检查
 
-## 当前结论
+当前构建为 `1.0.0-SNAPSHOT`。配置不设版本号，Flyway 只执行初始建表和完整性校验；不提供旧开发数据库迁移链。
 
-安装门禁包括四模块 Maven 工程、可重现单 JAR、单元测试、依赖/Vault Economy 可用性检查，以及初始化阶段的 SQLite/Flyway 与统一诊断。早期 YAML 镜像已移除，不参与启动或运行。
+## 环境和依赖
 
-插件不再匹配固定的 Minecraft、Java 或依赖版本。启动时仅确认 Residence、Vault、XConomy 和 QuickShop-Hikari 已安装并启用，Vault 已注册可用的 `Economy` provider，SQLite 可读写且 Flyway 迁移/校验成功；随后执行 SQLite、Residence、Vault 清算和 QuickShop 历史统一诊断。任一必要检查失败时状态为 `LOCKED`，不注册业务运行时或开放业务写入。
+构建要求 Maven 3.9+、JDK 25+，执行 `mvn -B clean verify`，产物为 `tianjitown-paper/target/TianjiTown-1.0.0-SNAPSHOT.jar`。当前 `plugin.yml` 声明 API `26.2`；实际 Paper/Leaf 和 Java 组合必须支持该 API 与 Dialog，不能把“插件不写死版本匹配”理解为支持任意旧服务端。
 
-本项目按新周目空数据启动设计。首次安装使用专用空 SQLite 文件，所有小镇、成员、名称和领地关系由 TianjiTown 重新建立。如需承接旧 MySQL 数据，必须在隔离环境单独转换，不得复制 MySQL Flyway history。
+| 依赖 | 用途与启动检查 |
+|---|---|
+| Residence | 领地创建、边界、成员及访客权限、保护对账 |
+| Vault、XConomy | 玩家经济与公共资金清算；Vault 必须已注册可用 Economy provider |
+| WorldBorder | 验证选址和扩张边界；需通过公开 API 能力检查 |
+| QuickShop-Hikari | 商店收入税和历史诊断；税务适配要求至少 `6.3.0.0`，并检查事件及交易账户 API |
+| Jobs | 职业收入税 |
+| GlobalMarketPlus | 市场成交收入税 |
+| HuskSync（可选） | 回服后在同步完成时校正公共 Buff |
 
-## 上线前闭环
+除 HuskSync 外，上表中的插件都要安装并启用。必需插件以 `softdepend` 声明，便于 TianjiTown 在缺失时仍能显示诊断，不代表业务上可选。税务适配器还会单独检查版本/API 并报告接入状态；必需插件存在不等于其全部接口已通过。
 
-- 执行 `/tianjitown status`，保留当前运行环境与门禁结果。
-- 首次启动后确认业务表为空，安装门禁记录为 1 行。
-- 在隔离环境通过正常建镇与删除流程验证 Residence 创建、成员权限、边界读取和清理；不在管理员命令中暴露独立测试入口。
-- 使用 [`SQLITE_AND_BACKUP.md`](../operations/SQLITE_AND_BACKUP.md) 中的方法完成一次 SQLite 备份，并按停服流程完成隔离恢复。
-- 可用下列命令生成 JAR 哈希和启动日志事实报告；该报告只读，不参与启动判定：
+## 首次安装
 
-```bash
-scripts/inspect_runtime.py /path/to/server --output reports/runtime-report.json
-```
+1. 准备独立预发服务器及空数据库路径，安装上述依赖，确认服务器进程对插件目录可写。
+2. 用 WorldBorder `/wb` 为开放选址的世界配置边界；初始 5×5 区块与默认一圈区块缓冲须完整位于边界内。
+3. 放入 TianjiTown JAR 并启动，生成 `config.yml`、`messages.yml` 和默认 `tianjitown.db`。Paper 首次需下载 `libraries` 声明的存储依赖；离线环境提前准备缓存。
+4. 按 [配置说明](CONFIGURATION.md) 调整清算账户、价格和开关。数据库路径、经济参数和商品定义等修改后重启。
+5. 执行 `/tianjitown status`，检查启动状态和所有诊断细节。初始化阶段的 SQLite、Residence、Vault 与 QuickShop 历史统一诊断通过后才注册业务运行时并进入 `READY`。
+6. 在游戏内看向讲台执行 `/tianjitown station create`，测试服务台、手册及玩家 Dialog。
+
+## LOCKED 时如何处理
+
+先读取 `status` 和控制台中的具体失败项：依赖缺失/未启用、Vault 服务不可用、WorldBorder API 不可用、配置值非法、SQLite 不可访问、Flyway 校验失败或启动诊断异常。
+
+启动失败时业务运行时尚未注册，不能依赖 `/tianjitown diagnose` 或 `/tianjitown reload` 重新启动初始化。修正原因后重启服务器。运行期间的 SQLite 写锁有恢复探测，见 [运维手册](../operations/OPERATIONS.md)。
+
+不要通过清空已有数据库、删除 Flyway history 或修改校验记录绕过错误。已有开发数据库与当前初始结构不一致时，保留原文件及备份，在独立路径的新库或副本中验证；没有自动升级、自动回填或 MySQL 导入功能。
+
+## 开放前验收
+
+- 使用申请人、两名初始成员和管理员，完成成员确认、5×5 选址、审核和 Residence 创建。
+- 验证入镇申请、退出、访客权限、投票、捐款、三种收入税、扩张与 Buff；检查失败操作没有重复扣款。
+- 执行 `/tianjitown land reconcile all` 和 `/tianjitown diagnose 7`，保存结果。
+- 按 [SQLite 备份手册](../operations/SQLITE_AND_BACKUP.md) 完成一次同时间点备份与隔离恢复。
+- 运行环境事实报告可用 `python scripts/inspect_runtime.py /path/to/server --output reports/runtime-report.json` 生成；它只读，不参与启动判定。
+
+人工流程和结果记录见 [测试入口](../../test/README.md)。文档中的验收步骤不是已经通过的测试报告。

@@ -1,6 +1,5 @@
 package org.allivlisey.tianjitown.paper.command;
 
-import org.allivlisey.tianjitown.core.application.ApplicationText;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -170,7 +169,7 @@ public final class TownCommandParser {
     }
 
     public static String townName(String[] args, int nameStart) {
-        return join(args, nameStart, args.length, "chat.parser.town-full-name");
+        return join(args, nameStart, args.length, "chat.parser.town-code");
     }
 
     public static String reason(String[] args, int start,
@@ -183,21 +182,12 @@ public final class TownCommandParser {
 
     private static NameMatch requireNameMatch(String[] args, int nameStart,
                                               Collection<String> townNames) {
-        NameMatch best = null;
-        for (String candidate : townNames) {
-            String normalizedCandidate = ApplicationText.normalizeNameKey(candidate);
-            for (int end = nameStart + 1; end <= args.length; end++) {
-                String entered = String.join(" ", Arrays.copyOfRange(args, nameStart, end));
-                if (ApplicationText.normalizeNameKey(entered).equals(normalizedCandidate)
-                        && (best == null || end > best.end())) {
-                    best = new NameMatch(candidate, end);
-                }
-            }
+        if (nameStart < 0 || nameStart >= args.length) {
+            throw error("chat.parser.town-code");
         }
-        if (best == null) {
-            throw error("chat.parser.town-not-found");
-        }
-        return best;
+        return townNames.stream().filter(candidate -> candidate.equalsIgnoreCase(args[nameStart]))
+                .findFirst().map(candidate -> new NameMatch(candidate, nameStart + 1))
+                .orElseThrow(() -> error("chat.parser.town-not-found"));
     }
 
     private static void rejectPlaceholder(String value, String... placeholders) {

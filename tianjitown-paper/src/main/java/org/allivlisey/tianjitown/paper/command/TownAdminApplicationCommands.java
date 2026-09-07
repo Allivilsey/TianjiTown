@@ -4,7 +4,6 @@ import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
-import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
 import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.bukkit.command.CommandSender;
 
@@ -33,69 +32,6 @@ public final class TownAdminApplicationCommands {
                 applications -> plugin.townUi().showAdminApplicationList(sender, applications));
     }
 
-    @Command("tianjitown application approve")
-    @Usage("/tianjitown application approve <小镇全名> <原因>")
-    @AdminAccess(TownAdminPermissions.ROOT)
-    public void approveApplication(CommandSender sender, TownRuntime runtime, String input) {
-        readApplication(sender, runtime, input, request -> {
-            ApplicationSnapshot application = request.application();
-            String key = application.status() == org.allivlisey.tianjitown.core.application.ApplicationStatus.PROVISION_FAILED
-                    ? "town:retry:" + application.id() + ":" + application.version()
-                    : "town:approve:" + application.id();
-            runtime.provision(sender, application.id(), TownAdminCommand.actorId(sender), sender.getName(),
-                    request.reason(), key, result -> {
-                        if (result.application() != null) {
-                            plugin.townUi().notifyApplicationDecision(result.application());
-                        }
-                    });
-        });
-    }
-
-    @Command("tianjitown application reject")
-    @Usage("/tianjitown application reject <小镇全名> <原因>")
-    @AdminAccess(TownAdminPermissions.ROOT)
-    public void rejectApplication(CommandSender sender, TownRuntime runtime, String input) {
-        readApplication(sender, runtime, input, request -> {
-            ApplicationSnapshot application = request.application();
-            runtime.write(sender, () -> runtime.repository().reject(application.id(), TownAdminCommand.actorId(sender),
-                    sender.getName(), request.reason()), updated -> {
-                facade.send(sender, "chat.admin.application-rejected");
-                plugin.townUi().notifyApplicationDecision(updated);
-            });
-        });
-    }
-
-    @Command("tianjitown application change")
-    @Usage("/tianjitown application change <小镇全名> <原因>")
-    @AdminAccess(TownAdminPermissions.ROOT)
-    public void changeApplication(CommandSender sender, TownRuntime runtime, String input) {
-        readApplication(sender, runtime, input, request -> {
-            ApplicationSnapshot application = request.application();
-            runtime.write(sender, () -> runtime.repository().requestChanges(application.id(),
-                    TownAdminCommand.actorId(sender), sender.getName(), request.reason()), updated -> {
-                facade.send(sender, "chat.admin.application-change-sent");
-                plugin.townUi().notifyApplicationDecision(updated);
-            });
-        });
-    }
-
-    private void readApplication(CommandSender sender, TownRuntime runtime, String input,
-                                 java.util.function.Consumer<ApplicationRequest> success) {
-        runtime.read(sender, () -> {
-            List<ApplicationSnapshot> candidates = runtime.repository()
-                    .listApplicationsForCompletion(500);
-            TownCommandParser.NamedReason parsed = TownCommandParser.namedReason(input.split(" "), 0,
-                    candidates.stream().map(candidate -> candidate.text().name()).toList(),
-                    plugin.messages()::plainText);
-            ApplicationSnapshot application = candidates.stream()
-                    .filter(candidate -> TownAdminCommand.sameName(candidate.text().name(), parsed.townName()))
-                    .findFirst().orElseThrow(() -> facade.messageArgument(
-                            "chat.admin.application-not-found",
-                            Map.of("town", TownAdminCommand.safeText(parsed.townName()))));
-            return new ApplicationRequest(application, parsed.reason());
-        }, success);
-    }
-
     @Command("tianjitown town list")
     @Usage("/tianjitown town list")
     @AdminAccess(TownAdminPermissions.ROOT)
@@ -116,7 +52,7 @@ public final class TownAdminApplicationCommands {
     }
 
     @Command("tianjitown town view")
-    @Usage("/tianjitown town view <小镇全名>")
+    @Usage("/tianjitown town view <小镇代码>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void viewTown(CommandSender sender, TownRuntime runtime, String input) {
         String townName = input.strip();
@@ -137,15 +73,15 @@ public final class TownAdminApplicationCommands {
     }
 
     @Command("tianjitown town delete")
-    @Usage("/tianjitown town delete <小镇全名> <原因>")
+    @Usage("/tianjitown town delete <小镇代码> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void deleteTownCommand(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {
             List<TownSnapshot> candidates = runtime.repository().listTowns(true);
             TownCommandParser.NamedReason parsed = TownCommandParser.namedReason(input.split(" "), 0,
-                    TownAdminCommand.townNames(candidates), plugin.messages()::plainText);
+                    TownAdminCommand.townCodes(candidates), plugin.messages()::plainText);
             TownSnapshot target = candidates.stream()
-                    .filter(candidate -> TownAdminCommand.sameName(candidate.profile().name(), parsed.townName()))
+                    .filter(candidate -> TownAdminCommand.sameCode(candidate.profile().residenceName(), parsed.townName()))
                     .findFirst().orElseThrow(() -> facade.messageArgument(
                             "chat.admin.town-not-found",
                             Map.of("town", TownAdminCommand.safeText(parsed.townName()))));
@@ -187,9 +123,6 @@ public final class TownAdminApplicationCommands {
                                         plugin.messages(), result)))));
             }
         });
-    }
-
-    private record ApplicationRequest(ApplicationSnapshot application, String reason) {
     }
 
     private record TownDeleteRequest(UUID townId, String townName, long version, String reason) {

@@ -2,7 +2,6 @@ package org.allivlisey.tianjitown.paper.command;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 
-import org.allivlisey.tianjitown.storage.town.ApplicationSnapshot;
 import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -87,17 +86,11 @@ public final class TownAdminTabCompleter {
     private void refreshClaimed() {
         TownRuntime currentRuntime = runtime;
         try {
-            List<ApplicationSnapshot> applications = currentRuntime.repository()
-                    .listApplicationsForCompletion(500);
             List<TownSnapshot> towns = currentRuntime.repository().listTowns(true);
             Map<UUID, List<UUID>> members = currentRuntime.repository().listMemberIdsByTown();
             snapshot.set(new TownAdminCompletionEngine.Snapshot(
-                    applications.stream().map(application ->
-                            new TownAdminCompletionEngine.ApplicationCandidate(application.id(),
-                                    application.text().name(),
-                                    application.status())).toList(),
                     towns.stream().map(town -> new TownAdminCompletionEngine.TownCandidate(
-                            town.id(), town.profile().name(), town.status())).toList(), members));
+                            town.id(), town.profile().residenceName(), town.status())).toList(), members));
             refreshedAt.set(System.nanoTime());
             if (refreshFailureLogged.compareAndSet(true, false)) {
                 plugin.getLogger().info(plugin.messages().plainText(COMPLETION_CACHE_RESTORED));

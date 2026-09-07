@@ -1,6 +1,5 @@
 package org.allivlisey.tianjitown.paper.command;
 
-import org.allivlisey.tianjitown.core.application.ApplicationStatus;
 import org.allivlisey.tianjitown.core.application.ApplicationText;
 import org.allivlisey.tianjitown.core.town.TownStatus;
 
@@ -30,51 +29,21 @@ public final class TownAdminCompletionEngine {
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(dynamic, "dynamic");
         if (args.length == 2 && args[0].equalsIgnoreCase("help")) {
-            return filter(helpTopics(), args[1]);
+            return filter(TownAdminPermissions.HELP_TOPICS, args[1]);
         }
         if (args.length < 3) {
             return List.of();
         }
         return switch (args[0].toLowerCase(Locale.ROOT)) {
-            case "application" -> application(args, snapshot);
             case "town" -> town(args, snapshot);
             case "member" -> member(args, snapshot, dynamic);
             case "mayor" -> mayor(args, snapshot, dynamic);
-            case "vote" -> vote(args, snapshot, dynamic);
+            case "vote" -> vote(args, snapshot);
             case "land" -> land(args, snapshot, dynamic);
-            case "money", "tax", "ledger", "expand" -> economyCommands(args, snapshot);
+            case "money", "tax", "ledger" -> economyCommands(args, snapshot);
             case "buff" -> buffs(args, snapshot);
             default -> List.of();
         };
-    }
-
-    private List<String> helpTopics() {
-        List<String> topics = new ArrayList<>(List.of(
-                "application", "land", "member", "station", "system", "town"));
-        topics.add("vote");
-        topics.addAll(List.of("money", "tax", "ledger", "expand"));
-        topics.add("buff");
-        return topics;
-    }
-
-    private List<String> application(String[] args, Snapshot snapshot) {
-
-        String action = args[1].toLowerCase(Locale.ROOT);
-        if (action.equals("list")) {
-            return List.of();
-        }
-        if (!Set.of("approve", "reject", "change").contains(action)) {
-            return List.of();
-        }
-        Predicate<ApplicationCandidate> predicate = action.equals("approve")
-                ? candidate -> candidate.status() == ApplicationStatus.SUBMITTED
-                || candidate.status() == ApplicationStatus.UNDER_REVIEW
-                || candidate.status() == ApplicationStatus.PROVISION_FAILED
-                : candidate -> candidate.status() == ApplicationStatus.SUBMITTED
-                || candidate.status() == ApplicationStatus.UNDER_REVIEW;
-        List<String> names = snapshot.applications().stream().filter(predicate)
-                .map(ApplicationCandidate::name).toList();
-        return nameThenHint(args, 2, names, reasonHint());
     }
 
     private List<String> town(String[] args, Snapshot snapshot) {
@@ -124,35 +93,10 @@ public final class TownAdminCompletionEngine {
         return tailLength == 2 ? reasonHint(current(args)) : List.of();
     }
 
-    private List<String> vote(String[] args, Snapshot snapshot, Dynamic dynamic) {
-
-        String action = args[1].toLowerCase(Locale.ROOT);
-        if (action.equals("settle")) {
-            return args.length == 3 ? filter(List.of("<voteId>"), args[2]) : List.of();
-        }
-        if (action.equals("cancel")) {
-            return switch (args.length) {
-                case 3 -> filter(List.of("<voteId>"), args[2]);
-                case 4 -> reasonHint(current(args));
-                default -> List.of();
-            };
-        }
-        if (!Set.of("create-kick", "create-mayor").contains(action)) {
-            return List.of();
-        }
-        List<String> names = townNames(snapshot, town -> town.status() == TownStatus.ACTIVE);
-        NameMatch match = exactNamePrefix(args, 2, names);
-        List<String> phraseSuggestions = completePhrase(args, 2, names);
-        if (match == null || args.length <= match.end()) {
-            return phraseSuggestions;
-        }
-        if (args.length - match.end() == 1) {
-            List<String> players = memberLabels(snapshot, dynamic,
-                    townIdByName(snapshot, match.name()));
-            return merge(phraseSuggestions, filter(
-                    players.isEmpty() ? List.of(playerHint()) : players, current(args)));
-        }
-        return List.of();
+    private List<String> vote(String[] args, Snapshot snapshot) {
+        return args[1].equalsIgnoreCase("cancel")
+                ? nameThenHint(args, 2, townNames(snapshot, town -> town.status() != TownStatus.ARCHIVED), reasonHint())
+                : List.of();
     }
 
     private List<String> mayor(String[] args, Snapshot snapshot, Dynamic dynamic) {
@@ -209,10 +153,6 @@ public final class TownAdminCompletionEngine {
             return phraseSuggestions;
         }
         int tail = args.length - match.end();
-        if (root.equals("expand") && args[1].equalsIgnoreCase("preview") && tail == 1) {
-            return merge(phraseSuggestions,
-                    filter(List.of("north", "east", "south", "west"), current(args)));
-        }
         if ((root.equals("money") && args[1].equalsIgnoreCase("adjust")
                 || root.equals("tax")) && tail == 1) {
             return merge(phraseSuggestions, amountHint(current(args)));
@@ -290,30 +230,23 @@ public final class TownAdminCompletionEngine {
 
     private List<String> townNames(Snapshot snapshot, Predicate<TownCandidate> predicate) {
         return snapshot.towns().stream().filter(predicate)
-                .map(TownCandidate::name).toList();
+                .map(TownCandidate::code).toList();
     }
 
     private UUID townIdByName(Snapshot snapshot, String name) {
         String normalized = ApplicationText.normalizeNameKey(name);
         return snapshot.towns().stream()
-                .filter(candidate -> ApplicationText.normalizeNameKey(candidate.name())
+                .filter(candidate -> ApplicationText.normalizeNameKey(candidate.code())
                         .equals(normalized))
                 .map(TownCandidate::id).findFirst().orElse(null);
     }
 
     private NameMatch exactNamePrefix(String[] args, int start, List<String> names) {
-        int limit = args.length - (current(args).isEmpty() ? 1 : 0);
-        NameMatch best = null;
-        for (String name : names) {
-            String normalized = ApplicationText.normalizeNameKey(name);
-            for (int end = start + 1; end <= limit; end++) {
-                if (ApplicationText.normalizeNameKey(join(args, start, end)).equals(normalized)
-                        && (best == null || end > best.end())) {
-                    best = new NameMatch(name, end);
-                }
-            }
+        if (start >= args.length) {
+            return null;
         }
-        return best;
+        return names.stream().filter(name -> name.equalsIgnoreCase(args[start]))
+                .findFirst().map(name -> new NameMatch(name, start + 1)).orElse(null);
     }
 
     private List<String> completePhrase(String[] args, int start, List<String> phrases) {
@@ -364,23 +297,19 @@ public final class TownAdminCompletionEngine {
     private record NameMatch(String name, int end) {
     }
 
-    public record Snapshot(List<ApplicationCandidate> applications, List<TownCandidate> towns,
+    public record Snapshot(List<TownCandidate> towns,
                     Map<UUID, List<UUID>> membersByTown) {
         public Snapshot {
-            applications = List.copyOf(applications);
             towns = List.copyOf(towns);
             membersByTown = Map.copyOf(membersByTown);
         }
 
         static Snapshot empty() {
-            return new Snapshot(List.of(), List.of(), Map.of());
+            return new Snapshot(List.of(), Map.of());
         }
     }
 
-    public record ApplicationCandidate(UUID id, String name, ApplicationStatus status) {
-    }
-
-    public record TownCandidate(UUID id, String name, TownStatus status) {
+    public record TownCandidate(UUID id, String code, TownStatus status) {
     }
 
     public record PlayerCandidate(UUID id, String name, boolean online) {

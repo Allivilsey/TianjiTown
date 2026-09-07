@@ -235,6 +235,10 @@ public final class TownRepository {
         return queryStore.findTownByName(townName);
     }
 
+    public Optional<TownSnapshot> findTownByCode(String townCode) {
+        return queryStore.findTownByCode(townCode);
+    }
+
     public Optional<TownSnapshot> findTownByMember(UUID playerId) {
         return queryStore.findTownByMember(playerId);
     }

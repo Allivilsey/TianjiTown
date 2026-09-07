@@ -1,9 +1,7 @@
 package org.allivlisey.tianjitown.paper.command;
-import org.allivlisey.tianjitown.paper.config.GovernanceSettings;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 
-import org.allivlisey.tianjitown.core.governance.VoteType;
 import org.allivlisey.tianjitown.core.town.MemberRole;
 import org.allivlisey.tianjitown.core.town.TownStatus;
 import org.allivlisey.tianjitown.storage.town.TownSnapshot;
@@ -30,7 +28,7 @@ public final class TownAdminGovernanceCommands {
     }
 
     @Command("tianjitown member add")
-    @Usage("/tianjitown member add <小镇全名> <玩家> <原因>")
+    @Usage("/tianjitown member add <小镇代码> <玩家> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void addMember(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> memberRequest(runtime, input), request -> {
@@ -52,7 +50,7 @@ public final class TownAdminGovernanceCommands {
     }
 
     @Command("tianjitown member remove")
-    @Usage("/tianjitown member remove <小镇全名> <玩家> <原因>")
+    @Usage("/tianjitown member remove <小镇代码> <玩家> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void removeMember(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> memberRequest(runtime, input), request -> {
@@ -74,7 +72,7 @@ public final class TownAdminGovernanceCommands {
     }
 
     @Command("tianjitown member role")
-    @Usage("/tianjitown member role <小镇全名> <玩家> <角色>")
+    @Usage("/tianjitown member role <小镇代码> <玩家> <角色>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void roleMember(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> memberRequest(runtime, input), request -> {
@@ -99,69 +97,24 @@ public final class TownAdminGovernanceCommands {
         });
     }
 
-    @Command("tianjitown vote settle")
-    @Usage("/tianjitown vote settle <voteId>")
-    @AdminAccess(TownAdminPermissions.ROOT)
-    public void settleVote(CommandSender sender, TownRuntime runtime, UUID voteId) {
-        runtime.write(sender, () -> runtime.governance().settleVote(voteId,
-                TownAdminCommand.actorId(sender), sender.getName(), false), vote -> {
-            facade.send(sender, "chat.admin.vote-status", Map.of("status", vote.status(),
-                    "yes", vote.yesVotes(), "required", vote.requiredYes()));
-            if (vote.passed() && vote.type() == VoteType.KICK_MEMBER) {
-                facade.reconcileOne(sender, runtime, vote.townId(), true);
-            }
-        });
-    }
-
     @Command("tianjitown vote cancel")
-    @Usage("/tianjitown vote cancel <voteId> <原因>")
+    @Usage("/tianjitown vote cancel <小镇代码> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
-    public void cancelVote(CommandSender sender, TownRuntime runtime, UUID voteId, String inputReason) {
+    public void cancelVote(CommandSender sender, TownRuntime runtime,
+                           @revxrsal.commands.annotation.Single String townCode, String inputReason) {
         String reason = TownCommandParser.reason(inputReason.split(" "), 0, plugin.messages()::plainText);
-        runtime.write(sender, () -> runtime.governance().cancelVote(voteId,
-                TownAdminCommand.actorId(sender), sender.getName(), reason), vote ->
-                facade.send(sender, "chat.admin.vote-cancelled", Map.of("id", vote.id())));
-    }
-
-    @Command("tianjitown vote create-kick")
-    @Usage("/tianjitown vote create-kick <小镇全名> <玩家>")
-    @AdminAccess(TownAdminPermissions.ROOT)
-    public void createKickVote(CommandSender sender, TownRuntime runtime, String input) {
-        createVote(sender, runtime, input, VoteType.KICK_MEMBER);
-    }
-
-    @Command("tianjitown vote create-mayor")
-    @Usage("/tianjitown vote create-mayor <小镇全名> <玩家>")
-    @AdminAccess(TownAdminPermissions.ROOT)
-    public void createMayorVote(CommandSender sender, TownRuntime runtime, String input) {
-        createVote(sender, runtime, input, VoteType.REPLACE_MAYOR);
-    }
-
-    private void createVote(CommandSender sender, TownRuntime runtime, String input, VoteType type) {
-        GovernanceSettings settings = GovernanceSettings.fixed();
-        runtime.read(sender, () -> {
-            List<TownSnapshot> towns = runtime.repository().listTowns(false).stream()
-                    .filter(town -> town.status() == TownStatus.ACTIVE).toList();
-            TownCommandParser.NamedPlayer parsed = TownCommandParser.namedPlayer(input.split(" "), 0,
-                    TownAdminCommand.townNames(towns), plugin.messages()::plainText);
-            TownSnapshot town = towns.stream()
-                    .filter(candidate -> TownAdminCommand.sameName(candidate.profile().name(), parsed.townName()))
-                    .findFirst().orElseThrow(() -> facade.messageArgument(
-                            "chat.admin.vote-town-not-found"));
-            return new VoteCreateRequest(town.id(), TownAdminCommand.playerId(parsed.player()),
-                    type);
-        }, request -> {
-            runtime.write(sender, () -> runtime.governance().createVote(request.townId(),
-                    request.type(), request.targetId(), TownAdminCommand.actorId(sender),
-                    settings.activeMemberWindow(), settings.minimumMembership(),
-                    settings.voteDuration(), true), vote -> facade.send(sender, "chat.admin.vote-created",
-                    Map.of("id", vote.id(), "voters", vote.eligibleVoters(),
-                            "required", vote.requiredYes())));
-        });
+        runtime.write(sender, () -> {
+            TownSnapshot town = facade.requireTown(runtime, townCode);
+            var vote = runtime.governance().listTownVotes(town.id(), TownAdminCommand.actorId(sender), true)
+                    .stream().findFirst().orElseThrow(() -> facade.messageArgument(
+                            "chat.admin.vote-no-open", Map.of("town", townCode)));
+            return runtime.governance().cancelVote(vote.id(), TownAdminCommand.actorId(sender),
+                    sender.getName(), reason);
+        }, vote -> facade.send(sender, "chat.admin.vote-cancelled", Map.of("id", vote.id())));
     }
 
     @Command("tianjitown mayor transfer")
-    @Usage("/tianjitown mayor transfer <小镇全名> <玩家> <原因>")
+    @Usage("/tianjitown mayor transfer <小镇代码> <玩家> <原因>")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void transferMayor(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> memberRequest(runtime, input), request -> {
@@ -182,9 +135,9 @@ public final class TownAdminGovernanceCommands {
         List<TownSnapshot> candidates = runtime.repository().listTowns(false).stream()
                 .filter(town -> town.status() == TownStatus.ACTIVE).toList();
         TownCommandParser.NamedPlayerReason parsed = TownCommandParser.namedPlayerReason(input.split(" "), 0,
-                TownAdminCommand.townNames(candidates), plugin.messages()::plainText);
+                TownAdminCommand.townCodes(candidates), plugin.messages()::plainText);
         TownSnapshot town = candidates.stream()
-                .filter(candidate -> TownAdminCommand.sameName(candidate.profile().name(), parsed.townName()))
+                .filter(candidate -> TownAdminCommand.sameCode(candidate.profile().residenceName(), parsed.townName()))
                 .findFirst().orElseThrow(() -> facade.messageArgument(
                         "chat.admin.member-town-not-found",
                         Map.of("town", TownAdminCommand.safeText(parsed.townName()))));
@@ -194,6 +147,4 @@ public final class TownAdminGovernanceCommands {
     private record MemberRequest(UUID townId, String player, String reason) {
     }
 
-    private record VoteCreateRequest(UUID townId, UUID targetId, VoteType type) {
-    }
 }

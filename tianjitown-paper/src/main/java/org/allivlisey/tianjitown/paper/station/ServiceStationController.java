@@ -62,6 +62,10 @@ public final class ServiceStationController implements Listener {
         return protection;
     }
 
+    public void giveHandbookByAdmin(Player player) {
+        handbooks.giveHandbookByAdmin(player);
+    }
+
     public boolean giveHandbook(Player player, boolean notifyPlayer) {
         return handbooks.giveHandbook(player, notifyPlayer);
     }

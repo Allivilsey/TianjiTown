@@ -146,6 +146,10 @@ public final class TownUiController implements Listener {
         serviceStations.list(sender);
     }
 
+    public void giveHandbookByAdmin(Player player) {
+        serviceStations.giveHandbookByAdmin(player);
+    }
+
     public boolean giveHandbook(Player player, boolean notifyPlayer) {
         return serviceStations.giveHandbook(player, notifyPlayer);
     }
