@@ -6,104 +6,184 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 class RetryingWorkQueueTest {
-    @Test
-    void retriesFailedWorkWithoutAnotherSubmission() {
-        TestScheduler scheduler = new TestScheduler();
-        AtomicInteger attempts = new AtomicInteger();
-        AtomicInteger failures = new AtomicInteger();
-        List<String> completed = new ArrayList<>();
-        RetryingWorkQueue<String> queue = new RetryingWorkQueue<>(scheduler, 5, 30,
-                item -> {
-                    if (attempts.incrementAndGet() < 3) {
-                        throw new IllegalStateException("SQLITE_BUSY");
-                    }
-                    completed.add(item);
-                }, (item, exception) -> failures.incrementAndGet());
-
-        queue.submit("tax-1030");
-
-        assertEquals(1, queue.pendingCount());
-        assertEquals(1, failures.get());
-        scheduler.runNextDelayed();
-        assertEquals(1, queue.pendingCount());
-        scheduler.runNextDelayed();
-
-        assertEquals(List.of("tax-1030"), completed);
-        assertEquals(3, attempts.get());
-        assertEquals(2, failures.get());
-        assertEquals(0, queue.pendingCount());
-        assertEquals(List.of(5L, 10L), scheduler.scheduledDelays);
-    }
+    private final TestScheduler scheduler = new TestScheduler();
+    private final List<String> completed = new ArrayList<>();
+    private final List<String> failures = new ArrayList<>();
 
     @Test
-    void keepsSingleDrainWhenWorkArrivesDuringProcessing() {
-        TestScheduler scheduler = new TestScheduler();
-        List<String> completed = new ArrayList<>();
-        @SuppressWarnings("unchecked")
-        RetryingWorkQueue<String>[] reference = new RetryingWorkQueue[1];
-        reference[0] = new RetryingWorkQueue<>(scheduler, 5, 30, item -> {
-            completed.add(item);
-            if (item.equals("first")) {
-                reference[0].submit("second");
-            }
-        }, (item, exception) -> {
-        });
+    void submissionsBeforeWorkerStartsAreProcessedInOrderWithoutDuplicateDrains() {
+        var queue = queue(completed::add);
+        queue.submit("first");
+        queue.submit("second");
+        queue.flush();
+        assertTrue(completed.isEmpty());
+        assertEquals(2, queue.pendingCount());
+        assertEquals(1, scheduler.workers.size());
 
-        reference[0].submit("first");
+        scheduler.runWorker();
 
         assertEquals(List.of("first", "second"), completed);
-        assertEquals(1, scheduler.asyncExecutions);
-        assertEquals(0, reference[0].pendingCount());
+        assertEquals(0, queue.pendingCount());
+        assertTrue(scheduler.workers.isEmpty());
+        assertTrue(scheduler.delayed.isEmpty());
     }
 
     @Test
-    void requeuesWorkAfterLinkageError() {
-        TestScheduler scheduler = new TestScheduler();
+    void failedHeadIsRetriedBeforeLaterItemsWithoutAnotherSubmission() {
         AtomicInteger attempts = new AtomicInteger();
-        AtomicInteger failures = new AtomicInteger();
-        List<String> completed = new ArrayList<>();
-        RetryingWorkQueue<String> queue = new RetryingWorkQueue<>(scheduler, 5, 30,
-                item -> {
-                    if (attempts.incrementAndGet() == 1) {
-                        throw new NoSuchMethodError("INJECTED");
-                    }
-                    completed.add(item);
-                }, (item, exception) -> failures.incrementAndGet());
+        var queue = queue(item -> {
+            if (attempts.incrementAndGet() <= 2) {
+                throw new IllegalStateException("database busy");
+            }
+            completed.add(item);
+        });
+        queue.submit("first");
+        queue.submit("second");
+        scheduler.runWorker();
+        assertEquals(2, queue.pendingCount());
+        assertTrue(completed.isEmpty());
+        assertTrue(scheduler.workers.isEmpty());
 
-        queue.submit("jobs-income-1");
-        assertEquals(1, queue.pendingCount());
-        scheduler.runNextDelayed();
+        scheduler.runRetry();
+        scheduler.runWorker();
+        assertEquals(2, queue.pendingCount());
+        scheduler.runRetry();
+        scheduler.runWorker();
 
-        assertEquals(List.of("jobs-income-1"), completed);
-        assertEquals(2, attempts.get());
-        assertEquals(1, failures.get());
+        assertEquals(List.of("first", "second"), completed);
+        assertEquals(List.of("first", "first"), failures);
+        assertEquals(List.of(5L, 10L), scheduler.delays);
+        assertEquals(0, queue.pendingCount());
+        assertTrue(scheduler.delayed.isEmpty());
+    }
+
+    @Test
+    void retryDelayIsCappedAndResetsAfterRecovery() {
+        AtomicBoolean unavailable = new AtomicBoolean(true);
+        var queue = queue(item -> {
+            if (unavailable.get()) throw new IllegalStateException("offline");
+            completed.add(item);
+        });
+        queue.submit("first");
+        scheduler.runWorker();
+        for (int retry = 0; retry < 4; retry++) {
+            scheduler.runRetry();
+            scheduler.runWorker();
+        }
+        assertEquals(List.of(5L, 10L, 20L, 30L, 30L), scheduler.delays);
+        unavailable.set(false);
+        scheduler.runRetry();
+        scheduler.runWorker();
+        assertEquals(List.of("first"), completed);
+
+        unavailable.set(true);
+        queue.submit("second");
+        scheduler.runWorker();
+        assertEquals(List.of(5L, 10L, 20L, 30L, 30L, 5L), scheduler.delays);
+        unavailable.set(false);
+        scheduler.runRetry();
+        scheduler.runWorker();
+        assertEquals(List.of("first", "second"), completed);
         assertEquals(0, queue.pendingCount());
     }
 
+    @Test
+    void workSubmittedDuringProcessingIsNotLostOrScheduledTwice() {
+        var reference = new java.util.concurrent.atomic.AtomicReference<RetryingWorkQueue<String>>();
+        reference.set(queue(item -> {
+            completed.add(item);
+            if (item.equals("first")) reference.get().submit("second");
+        }));
+        reference.get().submit("first");
+        scheduler.runWorker();
+        assertEquals(List.of("first", "second"), completed);
+        assertEquals(0, reference.get().pendingCount());
+        assertTrue(scheduler.workers.isEmpty());
+    }
+
+    @Test
+    void rejectedWorkerSubmissionKeepsWorkAvailableForExplicitFlush() {
+        var queue = queue(completed::add);
+        scheduler.rejectWorker = true;
+        assertThrows(java.util.concurrent.RejectedExecutionException.class, () -> queue.submit("first"));
+        assertEquals(1, queue.pendingCount());
+        assertTrue(completed.isEmpty());
+
+        scheduler.rejectWorker = false;
+        queue.flush();
+        scheduler.runWorker();
+        assertEquals(List.of("first"), completed);
+        assertEquals(0, queue.pendingCount());
+    }
+
+    @Test
+    void failingNotificationDoesNotPreventRetryingTheOriginalWork() {
+        AtomicInteger attempts = new AtomicInteger();
+        var notificationFailure = new IllegalArgumentException("notification failed");
+        var queue = new RetryingWorkQueue<String>(scheduler, 5, 30, item -> {
+            if (attempts.incrementAndGet() == 1) throw new IllegalStateException("offline");
+            completed.add(item);
+        }, (item, error) -> { throw notificationFailure; });
+        queue.submit("first");
+        assertSame(notificationFailure, assertThrows(IllegalArgumentException.class, scheduler::runWorker));
+        assertEquals(1, queue.pendingCount());
+        scheduler.runRetry();
+        scheduler.runWorker();
+        assertEquals(List.of("first"), completed);
+        assertEquals(0, queue.pendingCount());
+    }
+
+    @Test
+    void optionalDependencyLinkageFailureIsReportedAndRetried() {
+        var linkageFailure = new NoSuchMethodError("optional dependency");
+        var reported = new ArrayList<RuntimeException>();
+        AtomicInteger attempts = new AtomicInteger();
+        var queue = new RetryingWorkQueue<String>(scheduler, 5, 30, item -> {
+            if (attempts.incrementAndGet() == 1) throw linkageFailure;
+            completed.add(item);
+        }, (item, error) -> reported.add(error));
+        queue.submit("first");
+        scheduler.runWorker();
+        assertEquals(1, reported.size());
+        assertSame(linkageFailure, reported.getFirst().getCause());
+        assertEquals(1, queue.pendingCount());
+        scheduler.runRetry();
+        scheduler.runWorker();
+        assertEquals(List.of("first"), completed);
+        assertEquals(0, queue.pendingCount());
+    }
+
+    private RetryingWorkQueue<String> queue(java.util.function.Consumer<String> worker) {
+        return new RetryingWorkQueue<>(scheduler, 5, 30, worker,
+                (item, error) -> failures.add(item));
+    }
+
+    // Separate worker and timer queues model scheduling without wall-clock sleeps.
     private static final class TestScheduler implements RetryingWorkQueue.Scheduler {
+        private final Queue<Runnable> workers = new ArrayDeque<>();
         private final Queue<Runnable> delayed = new ArrayDeque<>();
-        private final List<Long> scheduledDelays = new ArrayList<>();
-        private int asyncExecutions;
+        private final List<Long> delays = new ArrayList<>();
+        private boolean rejectWorker;
 
         @Override
         public void executeAsync(Runnable task) {
-            asyncExecutions++;
-            task.run();
+            if (rejectWorker) throw new java.util.concurrent.RejectedExecutionException();
+            workers.add(task);
         }
 
         @Override
         public void schedule(Runnable task, long delayTicks) {
-            scheduledDelays.add(delayTicks);
+            delays.add(delayTicks);
             delayed.add(task);
         }
 
-        private void runNextDelayed() {
-            delayed.remove().run();
-        }
+        private void runWorker() { workers.remove().run(); }
+        private void runRetry() { delayed.remove().run(); }
     }
 }

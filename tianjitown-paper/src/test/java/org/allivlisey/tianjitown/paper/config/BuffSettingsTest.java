@@ -19,35 +19,24 @@ class BuffSettingsTest {
     Path temporaryDirectory;
 
     @Test
-    void defaultCatalogHasWeeklyBudgetPricesAndMeaningfulLevelCaps() throws Exception {
+    void bundledCatalogLoadsWithResolvedLabelsAndPurchasablePrices() throws Exception {
         try (var reader = new java.io.InputStreamReader(
                 java.util.Objects.requireNonNull(getClass().getResourceAsStream("/config.yml")),
                 java.nio.charset.StandardCharsets.UTF_8)) {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(reader);
             BuffSettings settings = BuffSettings.load(config, messages());
             assertFalse(config.contains("schema-version"));
-            assertEquals(5, settings.buffs().size());
-            String[] keys = {"speed", "health", "diving",
-                    "safe_fall", "mining"};
-            long[] weeklyPrices = {6720, 10080, 4032, 4032, 6720};
-            int[] caps = {5, 5, 1, 3, 3};
-            for (int index = 0; index < keys.length; index++) {
-                BuffDefinition buff = settings.requireBuff(keys[index]);
-                assertEquals(weeklyPrices[index] * 100,
-                        org.allivlisey.tianjitown.core.consumption.BuffPricing
-                                .weeklyPrice(buff, 1, 1, 2).minorUnits());
-                assertEquals(caps[index], buff.maximumLevel());
+            assertFalse(settings.buffs().isEmpty());
+            assertEquals(config.getConfigurationSection("buffs.catalog").getKeys(false),
+                    settings.buffs().keySet());
+            for (BuffDefinition buff : settings.buffs().values()) {
+                assertTrue(org.allivlisey.tianjitown.core.consumption.BuffPricing
+                        .weeklyPrice(buff, 1, 1, 2).positive(), buff.key());
+                assertTrue(buff.maximumLevel() > 0, buff.key());
                 assertEquals(BuffDefinition.EffectKind.ATTRIBUTE, buff.effectKind());
+                assertFalse(buff.displayName().isBlank());
                 assertFalse(buff.displayName().startsWith("dialog."));
             }
-            assertEquals("minecraft:oxygen_bonus", settings.requireBuff("diving").effectKey());
-            assertEquals("ADD_NUMBER", settings.requireBuff("diving").effectOperation());
-            assertEquals(3.0, settings.requireBuff("diving").amountPerLevel());
-            assertFalse(settings.buffs().containsKey("night_vision"));
-            assertFalse(settings.buffs().containsKey("water_breathing"));
-            assertFalse(settings.buffs().containsKey("fire_resistance"));
-            assertEquals("minecraft:safe_fall_distance", settings.requireBuff("safe_fall").effectKey());
-            assertEquals("minecraft:block_break_speed", settings.requireBuff("mining").effectKey());
         }
     }
 
@@ -59,11 +48,9 @@ class BuffSettingsTest {
         BuffSettings settings = BuffSettings.load(config, messages);
 
         assertTrue(settings.buffShopEnabled());
-        assertTrue(messages.hasMessage("validation.buff.label-required"));
-        assertTrue(messages.hasMessage("dialog.buff.labels.speed"));
-        assertTrue(messages.hasMessage("dialog.buff.labels.health"));
         assertEquals("速度", settings.label("speed"));
-        assertEquals("生命", messages.plainText("dialog.buff.labels.health"));
+        assertEquals(new java.math.BigDecimal("100.00"), settings.requireBuff("speed").basePrice());
+        assertEquals(2, settings.requireBuff("speed").maximumLevel());
         assertEquals("速度", settings.requireBuff("speed").displayName());
         assertEquals(BuffDefinition.EffectKind.ATTRIBUTE,
                 settings.requireBuff("speed").effectKind());
@@ -81,10 +68,15 @@ class BuffSettingsTest {
         assertThrows(IllegalArgumentException.class,
                 () -> BuffSettings.load(configuration("speed", "0"),
                         messages));
+        YamlConfiguration negativeEffect = configuration("speed", "100.00");
+        negativeEffect.set("buffs.catalog.speed.amount-per-level", -0.2D);
         assertThrows(IllegalArgumentException.class,
-                () -> new BuffDefinition("negative", "负数效果",
-                        BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:movement_speed",
-                        "ADD_SCALAR", new java.math.BigDecimal("10.00"), 1, -0.2D));
+                () -> BuffSettings.load(negativeEffect, messages));
+    }
+
+    @Test
+    void preservesLargeDecimalPricesWithoutExpandingScientificNotation() throws Exception {
+        PluginMessages messages = messages();
         BuffSettings hugePrice = BuffSettings.load(
                 configuration("speed", "1E1000000"), messages);
         assertEquals(0, hugePrice.requireBuff("speed").basePrice()

@@ -1,62 +1,79 @@
 package org.allivlisey.tianjitown.paper.ui;
 
+import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.*;
 
 class TownUiRouteCatalogTest {
-    @Test
-    void routesRegisteredActionsToTheirSingleOwner() {
-        List<String> calls = new ArrayList<>();
-        TownUiActionRouter router = TownUiActionRouter.builder(
-                        (player, action) -> false, player -> calls.add("unknown"))
-                .register("MAIN", (player, target) -> calls.add("home:" + target))
-                .build();
+    private final Player player = mock(Player.class);
+    private final TownUiActionRouter.ModeGate gate = mock(TownUiActionRouter.ModeGate.class);
+    private final TownUiActionRouter.UnknownActionOwner expired = mock(TownUiActionRouter.UnknownActionOwner.class);
+    private final TownUiActionRouter.FeatureOwner membership = mock(TownUiActionRouter.FeatureOwner.class);
+    private final TownUiActionRouter.ActionOwner home = mock(TownUiActionRouter.ActionOwner.class);
 
-        router.route(null, "MAIN", null);
-
-        assertEquals(List.of("home:null"), calls);
+    @ParameterizedTest
+    @ValueSource(strings = {"MEMBERS", "MEMBER_DETAILS"})
+    void registeredFeatureReceivesTheOriginalPlayerActionAndTarget(String action) {
+        var router = TownUiActionRouter.builder(gate, expired)
+                .register("MAIN", home)
+                .registerAll(membership, "MEMBERS", "MEMBER_DETAILS").build();
+        router.route(player, action, "town:member");
+        var order = inOrder(gate, membership);
+        order.verify(gate).blocked(player, action);
+        order.verify(membership).route(player, action, "town:member");
+        verifyNoMoreInteractions(membership);
+        verifyNoInteractions(home, expired);
     }
 
     @Test
-    void unknownActionsUseTheSafeExpiredPageOwner() {
-        List<String> calls = new ArrayList<>();
-        TownUiActionRouter router = TownUiActionRouter.builder(
-                        (player, action) -> false, player -> calls.add("unknown"))
-                .build();
-
-        router.route(null, "MEMBERS", "not-a-uuid");
-
-        assertEquals(List.of("unknown"), calls);
+    void targetlessActionIsDeliveredOnce() {
+        var router = TownUiActionRouter.builder(gate, expired).register("MAIN", home).build();
+        router.route(player, "MAIN", null);
+        verify(home).handle(player, null);
+        verifyNoMoreInteractions(home);
+        verifyNoInteractions(expired);
     }
 
     @Test
-    void duplicateActionOwnersFailWhileTheRouteCatalogIsBuilt() {
-        TownUiActionRouter.Builder builder = TownUiActionRouter.builder(
-                (player, action) -> false, player -> { });
-        builder.register("MAIN", (player, target) -> { });
+    void unknownActionOpensExpiredPageForTheSamePlayer() {
+        var router = TownUiActionRouter.builder(gate, expired).register("MAIN", home).build();
+        router.route(player, "REMOVED_ACTION", "old-target");
+        verify(expired).handle(player);
+        verifyNoMoreInteractions(expired);
+        verifyNoInteractions(home);
+    }
 
-        IllegalStateException error = assertThrows(IllegalStateException.class,
-                () -> builder.register("MAIN", (player, target) -> { }));
-
-        assertEquals("duplicate UI action owner: MAIN", error.getMessage());
+    @ParameterizedTest
+    @ValueSource(strings = {"MAIN", "UNKNOWN"})
+    void maintenanceGateBlocksRegisteredAndUnknownActions(String action) {
+        when(gate.blocked(player, action)).thenReturn(true);
+        var router = TownUiActionRouter.builder(gate, expired).register("MAIN", home).build();
+        router.route(player, action, null);
+        verify(gate).blocked(player, action);
+        verifyNoInteractions(home, expired);
     }
 
     @Test
-    void maintenanceGatePreventsBothOwnedAndLegacyActions() {
-        List<String> calls = new ArrayList<>();
-        TownUiActionRouter router = TownUiActionRouter.builder(
-                        (player, action) -> true, player -> calls.add("unknown"))
-                .register("MAIN", (player, target) -> calls.add("home"))
-                .build();
+    void duplicateRegistrationCannotReplaceTheOriginalOwner() {
+        var builder = TownUiActionRouter.builder(gate, expired).register("MAIN", home);
+        assertThrows(IllegalStateException.class,
+                () -> builder.registerAll(membership, "MAIN"));
+        builder.build().route(player, "MAIN", "target");
+        verify(home).handle(player, "target");
+        verifyNoInteractions(membership, expired);
+    }
 
-        router.route(null, "MAIN", null);
-        router.route(null, "UNKNOWN", null);
-
-        assertEquals(List.of(), calls);
+    @Test
+    void builtRouterIsUnaffectedByLaterRegistrations() {
+        var builder = TownUiActionRouter.builder(gate, expired).register("MAIN", home);
+        var router = builder.build();
+        builder.registerAll(membership, "MEMBERS");
+        router.route(player, "MEMBERS", null);
+        verify(expired).handle(player);
+        verifyNoInteractions(membership, home);
     }
 }

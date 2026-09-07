@@ -6,6 +6,9 @@ import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.allivlisey.tianjitown.storage.governance.GovernanceRepository;
 import org.allivlisey.tianjitown.storage.town.TownRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.ByteBuffer;
@@ -24,98 +27,131 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(30)
 class DatabaseConstraintConcurrencyTest {
     @TempDir
     Path temporaryDirectory;
 
-    @Test
-    void serializesCrossRepositoryUniquenessAndKeepsLedgerIdempotent() throws Exception {
+    private DatabaseGate firstGate;
+    private DatabaseGate secondGate;
+    private TownRepository firstTowns;
+    private TownRepository secondTowns;
+    private GovernanceRepository firstGovernance;
+    private GovernanceRepository secondGovernance;
+    private UUID firstTown;
+    private UUID firstMayor;
+    private UUID secondTown;
+    private UUID secondMayor;
+
+    @BeforeEach
+    void openIndependentConnectionsToAFreshDatabase() throws Exception {
         DatabaseConfig config = new DatabaseConfig(
-                "jdbc:sqlite:" + temporaryDirectory.resolve("constraint-concurrency.db"),
+                "jdbc:sqlite:" + temporaryDirectory.resolve("constraints.db"),
                 Duration.ofSeconds(5), Duration.ofSeconds(5));
-        try (DatabaseGate firstGate = new DatabaseGate(config);
-             DatabaseGate secondGate = new DatabaseGate(config)) {
-            assertTrue(firstGate.verifyAndMigrate().healthy());
-            assertTrue(secondGate.verifyAndMigrate().healthy());
-            UUID firstTown = UUID.randomUUID();
-            UUID firstMayor = UUID.randomUUID();
-            UUID secondTown = UUID.randomUUID();
-            UUID secondMayor = UUID.randomUUID();
-            insertTown(firstGate, firstTown, firstMayor, "约束甲镇", "约甲", "DBA");
-            insertTown(firstGate, secondTown, secondMayor, "约束乙镇", "约乙", "DBB");
+        firstGate = new DatabaseGate(config);
+        secondGate = new DatabaseGate(config);
+        assertTrue(firstGate.verifyAndMigrate().healthy());
+        assertTrue(secondGate.verifyAndMigrate().healthy());
+        firstTown = UUID.randomUUID();
+        firstMayor = UUID.randomUUID();
+        secondTown = UUID.randomUUID();
+        secondMayor = UUID.randomUUID();
+        insertTown(firstGate, firstTown, firstMayor, "约束甲镇", "约甲", "DBA");
+        insertTown(firstGate, secondTown, secondMayor, "约束乙镇", "约乙", "DBB");
+        firstTowns = new TownRepository(firstGate.dataSource(), () -> false);
+        secondTowns = new TownRepository(secondGate.dataSource(), () -> false);
+        firstGovernance = new GovernanceRepository(firstGate.dataSource(), () -> false);
+        secondGovernance = new GovernanceRepository(secondGate.dataSource(), () -> false);
+    }
 
-            TownRepository firstTowns = new TownRepository(firstGate.dataSource(), () -> false);
-            TownRepository secondTowns = new TownRepository(secondGate.dataSource(), () -> false);
-            UUID sharedPlayer = UUID.randomUUID();
-            List<Attempt> membershipAttempts = runConcurrently(
-                    () -> addMember(firstTowns, firstTown, sharedPlayer, firstMayor),
-                    () -> addMember(secondTowns, secondTown, sharedPlayer, secondMayor));
-            assertSingleWinner(membershipAttempts, TownRepository.ConflictException.class);
-            assertEquals(1, scalar(firstGate, "SELECT COUNT(*) FROM town_members "
-                    + "WHERE player_uuid = x'" + hex(sharedPlayer) + "'"));
-
-            UUID mayorCandidate = UUID.randomUUID();
-            firstTowns.addMember(firstTown, mayorCandidate, firstMayor, "Admin", "唯一镇长测试");
-            assertThrows(SQLException.class, () -> execute(firstGate,
-                    "UPDATE town_members SET role = 'MAYOR' WHERE player_uuid = x'"
-                            + hex(mayorCandidate) + "'"));
-            assertEquals(1, scalar(firstGate, "SELECT COUNT(*) FROM town_members "
-                    + "WHERE town_id = x'" + hex(firstTown) + "' AND role = 'MAYOR'"));
-
-            GovernanceRepository firstGovernance = new GovernanceRepository(
-                    firstGate.dataSource(), () -> false);
-            GovernanceRepository secondGovernance = new GovernanceRepository(
-                    secondGate.dataSource(), () -> false);
-            UUID firstDeputy = addMember(firstTowns, firstTown, UUID.randomUUID(), firstMayor);
-            UUID secondDeputy = addMember(firstTowns, firstTown, UUID.randomUUID(), firstMayor);
-            UUID thirdCandidate = addMember(firstTowns, firstTown, UUID.randomUUID(), firstMayor);
-            UUID fourthCandidate = addMember(firstTowns, firstTown, UUID.randomUUID(), firstMayor);
-            firstGovernance.changeRoleByMayor(firstTown, firstDeputy,
-                    MemberRole.DEPUTY_MAYOR, firstMayor, "Mayor");
-            firstGovernance.changeRoleByMayor(firstTown, secondDeputy,
-                    MemberRole.DEPUTY_MAYOR, firstMayor, "Mayor");
-            List<Attempt> deputyAttempts = runConcurrently(
-                    () -> changeRole(firstGovernance, firstTown, thirdCandidate, firstMayor),
-                    () -> changeRole(secondGovernance, firstTown, fourthCandidate, firstMayor));
-            assertSingleWinner(deputyAttempts, GovernanceRepository.ConflictException.class);
-            assertEquals(3, scalar(firstGate, "SELECT COUNT(*) FROM town_members "
-                    + "WHERE town_id = x'" + hex(firstTown)
-                    + "' AND role = 'DEPUTY_MAYOR'"));
-
-            UUID firstTarget = addMember(firstTowns, firstTown, UUID.randomUUID(), firstMayor);
-            UUID secondTarget = addMember(firstTowns, firstTown, UUID.randomUUID(), firstMayor);
-            for (UUID playerId : firstTowns.listMemberIds(firstTown)) {
-                firstGovernance.recordActivity(playerId);
-            }
-            List<Attempt> voteAttempts = runConcurrently(
-                    () -> createVote(firstGovernance, firstTown, firstTarget, firstMayor),
-                    () -> createVote(secondGovernance, firstTown, secondTarget, firstMayor));
-            assertSingleWinner(voteAttempts, GovernanceRepository.ConflictException.class);
-            assertEquals(1, scalar(firstGate, "SELECT COUNT(*) FROM governance_votes "
-                    + "WHERE town_id = x'" + hex(firstTown) + "' AND status = 'OPEN'"));
-
-            EconomyRepository firstEconomy = new EconomyRepository(firstGate.dataSource(),
-                    () -> false);
-            EconomyRepository secondEconomy = new EconomyRepository(secondGate.dataSource(),
-                    () -> false);
-            firstEconomy.initializeAccounts();
-            EconomyRepository.ExternalIncomeTax tax = new EconomyRepository.ExternalIncomeTax(
-                    firstTown, "concurrent:tax", "JOBS", firstMayor, "Mayor",
-                    1_000, 500, 50);
-            firstEconomy.reserveTaxSubsidy(firstTown, tax.businessKey(), tax.taxMinor(),
-                    1000, 1000, java.time.Instant.now(), java.time.ZoneId.of("Asia/Shanghai"));
-            List<Attempt> taxAttempts = runConcurrently(
-                    () -> firstEconomy.recordExternalIncomeTax(tax),
-                    () -> secondEconomy.recordExternalIncomeTax(tax));
-            assertEquals(2, taxAttempts.stream().filter(Attempt::succeeded).count());
-            assertEquals(taxAttempts.get(0).result(), taxAttempts.get(1).result());
-            assertEquals(1, scalar(firstGate, "SELECT COUNT(*) FROM "
-                    + "external_income_tax_records WHERE business_key = 'concurrent:tax'"));
-            assertEquals(2, scalar(firstGate, "SELECT COUNT(*) FROM ledger_entries "
-                    + "WHERE business_key LIKE 'concurrent:tax%'"));
-            assertEquals(100, firstEconomy.findFinanceByTown(firstTown).orElseThrow()
-                    .balanceMinor());
+    @AfterEach
+    void closeConnections() {
+        try {
+            if (secondGate != null) secondGate.close();
+        } finally {
+            if (firstGate != null) firstGate.close();
         }
+    }
+
+    @Test
+    void aPlayerCanJoinOnlyOneTownUnderConcurrentRequests() throws Exception {
+        UUID sharedPlayer = UUID.randomUUID();
+        List<Attempt> membershipAttempts = runConcurrently(
+                () -> addMember(firstTowns, firstTown, sharedPlayer, firstMayor),
+                () -> addMember(secondTowns, secondTown, sharedPlayer, secondMayor));
+        assertSingleWinner(membershipAttempts, TownRepository.ConflictException.class);
+        assertEquals(1, scalar(firstGate, "SELECT COUNT(*) FROM town_members "
+                + "WHERE player_uuid = x'" + hex(sharedPlayer) + "'"));
+    }
+
+    @Test
+    void databaseRejectsASecondMayor() throws Exception {
+        UUID mayorCandidate = UUID.randomUUID();
+        firstTowns.addMember(firstTown, mayorCandidate, firstMayor, "Admin", "唯一镇长测试");
+        assertThrows(SQLException.class, () -> execute(firstGate,
+                "UPDATE town_members SET role = 'MAYOR' WHERE player_uuid = x'"
+                        + hex(mayorCandidate) + "'"));
+        assertEquals(1, scalar(firstGate, "SELECT COUNT(*) FROM town_members "
+                + "WHERE town_id = x'" + hex(firstTown) + "' AND role = 'MAYOR'"));
+    }
+
+    @Test
+    void concurrentAppointmentsCannotExceedThreeDeputies() throws Exception {
+        UUID firstDeputy = addMember(firstTowns, firstTown, UUID.randomUUID(), firstMayor);
+        UUID secondDeputy = addMember(firstTowns, firstTown, UUID.randomUUID(), firstMayor);
+        UUID thirdCandidate = addMember(firstTowns, firstTown, UUID.randomUUID(), firstMayor);
+        UUID fourthCandidate = addMember(firstTowns, firstTown, UUID.randomUUID(), firstMayor);
+        firstGovernance.changeRoleByMayor(firstTown, firstDeputy,
+                MemberRole.DEPUTY_MAYOR, firstMayor, "Mayor");
+        firstGovernance.changeRoleByMayor(firstTown, secondDeputy,
+                MemberRole.DEPUTY_MAYOR, firstMayor, "Mayor");
+        List<Attempt> deputyAttempts = runConcurrently(
+                () -> changeRole(firstGovernance, firstTown, thirdCandidate, firstMayor),
+                () -> changeRole(secondGovernance, firstTown, fourthCandidate, firstMayor));
+        assertSingleWinner(deputyAttempts, GovernanceRepository.ConflictException.class);
+        assertEquals(3, scalar(firstGate, "SELECT COUNT(*) FROM town_members "
+                + "WHERE town_id = x'" + hex(firstTown)
+                + "' AND role = 'DEPUTY_MAYOR'"));
+    }
+
+    @Test
+    void concurrentVotesAllowOnlyOneOpenVote() throws Exception {
+        UUID firstTarget = addMember(firstTowns, firstTown, UUID.randomUUID(), firstMayor);
+        UUID secondTarget = addMember(firstTowns, firstTown, UUID.randomUUID(), firstMayor);
+        for (UUID playerId : firstTowns.listMemberIds(firstTown)) {
+            firstGovernance.recordActivity(playerId);
+        }
+        List<Attempt> voteAttempts = runConcurrently(
+                () -> createVote(firstGovernance, firstTown, firstTarget, firstMayor),
+                () -> createVote(secondGovernance, firstTown, secondTarget, firstMayor));
+        assertSingleWinner(voteAttempts, GovernanceRepository.ConflictException.class);
+        assertEquals(1, scalar(firstGate, "SELECT COUNT(*) FROM governance_votes "
+                + "WHERE town_id = x'" + hex(firstTown) + "' AND status = 'OPEN'"));
+    }
+
+    @Test
+    void duplicateConcurrentTaxRecordsCreditTheLedgerOnce() throws Exception {
+        EconomyRepository firstEconomy = new EconomyRepository(firstGate.dataSource(),
+                () -> false);
+        EconomyRepository secondEconomy = new EconomyRepository(secondGate.dataSource(),
+                () -> false);
+        firstEconomy.initializeAccounts();
+        EconomyRepository.ExternalIncomeTax tax = new EconomyRepository.ExternalIncomeTax(
+                firstTown, "concurrent:tax", "JOBS", firstMayor, "Mayor",
+                1_000, 500, 50);
+        firstEconomy.reserveTaxSubsidy(firstTown, tax.businessKey(), tax.taxMinor(),
+                1000, 1000, java.time.Instant.now(), java.time.ZoneId.of("Asia/Shanghai"));
+        List<Attempt> taxAttempts = runConcurrently(
+                () -> firstEconomy.recordExternalIncomeTax(tax),
+                () -> secondEconomy.recordExternalIncomeTax(tax));
+        assertEquals(2, taxAttempts.stream().filter(Attempt::succeeded).count());
+        assertEquals(taxAttempts.get(0).result(), taxAttempts.get(1).result());
+        assertEquals(1, scalar(firstGate, "SELECT COUNT(*) FROM "
+                + "external_income_tax_records WHERE business_key = 'concurrent:tax'"));
+        assertEquals(2, scalar(firstGate, "SELECT COUNT(*) FROM ledger_entries "
+                + "WHERE business_key LIKE 'concurrent:tax%'"));
+        assertEquals(100, firstEconomy.findFinanceByTown(firstTown).orElseThrow()
+                .balanceMinor());
     }
 
     private static UUID addMember(TownRepository repository, UUID townId, UUID playerId,
@@ -152,11 +188,14 @@ class DatabaseConstraintConcurrencyTest {
         try {
             var firstFuture = executor.submit(() -> attempt(first, ready, start));
             var secondFuture = executor.submit(() -> attempt(second, ready, start));
-            ready.await();
+            assertTrue(ready.await(5, java.util.concurrent.TimeUnit.SECONDS), "workers did not become ready");
             start.countDown();
-            return List.of(firstFuture.get(), secondFuture.get());
+            return List.of(firstFuture.get(15, java.util.concurrent.TimeUnit.SECONDS),
+                    secondFuture.get(15, java.util.concurrent.TimeUnit.SECONDS));
         } finally {
+            start.countDown();
             executor.shutdownNow();
+            assertTrue(executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS));
         }
     }
 
