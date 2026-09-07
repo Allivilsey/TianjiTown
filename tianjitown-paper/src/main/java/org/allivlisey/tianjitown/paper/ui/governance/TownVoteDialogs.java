@@ -36,17 +36,11 @@ public final class TownVoteDialogs {
     }
 
     public void openVotes(Player player, UUID townId) {
-        openVotes(player, townId, 0);
-    }
-
-    public void openVotes(Player player, UUID townId, int requestedPage) {
-        int page = Math.max(0, requestedPage);
         runtime.read(player, () -> runtime.governance().listTownVotes(townId,
                 player.getUniqueId(), true), votes -> {
             List<MenuItem> items = new ArrayList<>();
-            List<VoteSnapshot> visible = TownUiLegacyFacade.page(votes, page, 8);
-            for (int index = 0; index < visible.size(); index++) {
-                VoteSnapshot vote = visible.get(index);
+            for (int index = 0; index < votes.size(); index++) {
+                VoteSnapshot vote = votes.get(index);
                 String target = vote.type() == VoteType.KICK_MEMBER
                         ? facade.displayName(vote.subjectId()) : facade.displayName(vote.candidateId());
                 boolean pending = vote.viewerEligible() && !vote.viewerVoted();
@@ -67,15 +61,7 @@ public final class TownVoteDialogs {
                 items.add(new MenuItem(22, presentation.button(Material.PAPER, presentation.dialogText("votes.empty"),
                         List.of(presentation.dialogText("votes.empty-hint")), null, null)));
             }
-            if (page > 0) {
-                items.add(new MenuItem(45, presentation.button(Material.ARROW, presentation.dialogText("common.previous"), List.of(),
-                        "VOTES_PAGE", townId + ":" + (page - 1))));
-            }
-            if (TownUiLegacyFacade.hasNext(votes, page, 8)) {
-                items.add(new MenuItem(53, presentation.button(Material.ARROW, presentation.dialogText("common.next"), List.of(),
-                        "VOTES_PAGE", townId + ":" + (page + 1))));
-            }
-            presentation.openMenu(player, 54, presentation.dialogText("votes.list-title", Map.of("page", page + 1)),
+            presentation.openMenu(player, 54, presentation.dialogText("votes.list-title"),
                     new DialogRoute("GOVERNANCE_CENTER", null), items, 1, 400);
         });
     }

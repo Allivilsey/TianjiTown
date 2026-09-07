@@ -40,7 +40,7 @@ class TownMembershipAndGovernanceTargetTest {
                 PLAYER + ":yes"));
         assertThrows(IllegalArgumentException.class, () -> TownGovernanceUi.VoteCreation.parse(
                 TOWN + ":KICK_MEMBER:" + PLAYER));
-        assertThrows(IllegalArgumentException.class, () -> TownGovernanceUi.TownPage.parse(
-                TOWN + ":-1"));
+        assertThrows(IllegalArgumentException.class, () -> TownGovernanceUi.VoteCreation.parse(
+                TOWN + ":KICK_MEMBER:" + PLAYER + ":-1"));
     }
 }

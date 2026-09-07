@@ -136,10 +136,6 @@ public final class TownGovernanceDialogs {
         townVoteDialogs.openVotes(player, townId);
     }
 
-    public void openVotes(Player player, UUID townId, int requestedPage) {
-        townVoteDialogs.openVotes(player, townId, requestedPage);
-    }
-
     public void openVote(Player player, UUID voteId) {
         townVoteDialogs.openVote(player, voteId);
     }

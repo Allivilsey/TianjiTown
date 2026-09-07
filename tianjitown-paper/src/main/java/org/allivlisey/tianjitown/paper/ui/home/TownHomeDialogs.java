@@ -240,7 +240,7 @@ public final class TownHomeDialogs {
             }
             if (pendingVotes > 0) {
                 items.add(new MenuItem(12, presentation.button(Material.ENCHANTED_BOOK,
-                        presentation.dialogText("votes.pending-title", Map.of("count", pendingVotes)),
+                        presentation.dialogText("votes.pending-title"),
                         List.of(presentation.dialogText("tooltip.pending.votes")),
                         "VOTES", town.id().toString())));
             }

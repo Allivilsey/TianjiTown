@@ -273,10 +273,6 @@ public final class TownUiLegacyFacade implements Listener {
         townGovernanceDialogs.openVotes(player, townId);
     }
 
-    public void openVotes(Player player, UUID townId, int requestedPage) {
-        townGovernanceDialogs.openVotes(player, townId, requestedPage);
-    }
-
     public void openVote(Player player, UUID voteId) {
         townGovernanceDialogs.openVote(player, voteId);
     }

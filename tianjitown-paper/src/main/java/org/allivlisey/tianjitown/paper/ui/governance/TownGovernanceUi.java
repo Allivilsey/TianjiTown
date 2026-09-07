@@ -26,7 +26,6 @@ public final class TownGovernanceUi {
                 case "JOIN_TOWN_RULES" -> facade.openJoinTownRules(player, townId(target));
                 case "EDIT_TOWN_RULES" -> facade.openTownRuleEditor(player, townId(target));
                 case "VOTES" -> facade.openVotes(player, townId(target));
-                case "VOTES_PAGE" -> openVotes(player, target);
                 case "VOTE_DETAIL" -> facade.openVote(player, townId(target));
                 case "CONFIRM_CREATE_VOTE" -> confirmCreateVote(player, target);
                 case "CREATE_VOTE" -> createVote(player, target);
@@ -38,11 +37,6 @@ public final class TownGovernanceUi {
         } catch (IllegalArgumentException exception) {
             facade.openStaleMenu(player);
         }
-    }
-
-    private void openVotes(Player player, String target) {
-        TownPage page = TownPage.parse(target);
-        facade.openVotes(player, page.townId(), page.page());
     }
 
     private void confirmCreateVote(Player player, String target) {
@@ -76,17 +70,6 @@ public final class TownGovernanceUi {
             throw new IllegalArgumentException("invalid UUID route target");
         }
         return UUID.fromString(target);
-    }
-
-    public record TownPage(UUID townId, int page) {
-        public static TownPage parse(String target) {
-            String[] values = parts(target, 2);
-            int page = Integer.parseInt(values[1]);
-            if (page < 0) {
-                throw new IllegalArgumentException("negative page");
-            }
-            return new TownPage(UUID.fromString(values[0]), page);
-        }
     }
 
     public record VoteCreation(UUID townId, VoteType type, UUID subjectId, int memberPage) {

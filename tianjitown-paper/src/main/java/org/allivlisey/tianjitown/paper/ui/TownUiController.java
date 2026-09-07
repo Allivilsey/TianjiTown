@@ -97,7 +97,7 @@ public final class TownUiController implements Listener {
                         "CONFIRM_TRANSFER_MAYOR", "REQUEST_TRANSFER_MAYOR", "TRANSFER_REQUEST",
                         "CONFIRM_TRANSFER_DECISION", "TRANSFER_DECISION")
                 .registerAll(governanceUi::route, "GOVERNANCE_CENTER", "PENDING_CENTER", "TOWN_RULES",
-                        "JOIN_TOWN_RULES", "EDIT_TOWN_RULES", "VOTES", "VOTES_PAGE", "VOTE_DETAIL",
+                        "JOIN_TOWN_RULES", "EDIT_TOWN_RULES", "VOTES", "VOTE_DETAIL",
                         "CONFIRM_CREATE_VOTE", "CREATE_VOTE", "CAST_VOTE", "CONFIRM_CANCEL_VOTE",
                         "CANCEL_VOTE")
                 .registerAll(joinApplicationUi::route, "JOIN_TOWNS", "JOIN_TOWNS_PAGE", "JOIN_TOWN",

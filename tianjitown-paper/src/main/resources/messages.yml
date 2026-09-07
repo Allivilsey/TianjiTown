@@ -985,7 +985,7 @@ dialog:
     visitor-member-scope: '&7不计入成员、投票、税务或公共 Buff'
     pending-summary: '&7入镇 {joins} / 投票 {votes} / 转让 {transfers}'
     pending-empty-hint: '&7新的申请、投票或邀请会显示在这里'
-    pending-title: '&b治理投票 · {count}'
+    pending-title: '&b治理投票'
     action-kick-member: '&e发起投票移除'
     action-replace-mayor: '&e提名为新镇长'
     status-open: '&b进行中'
@@ -1016,7 +1016,7 @@ dialog:
     status-line: '&7状态: {status}'
     empty: '&7暂无进行中的投票'
     empty-hint: '&7从成员列表选择目标后可发起治理投票'
-    list-title: '&6小镇治理投票 · 第 {page} 页'
+    list-title: '&6小镇治理投票'
     detail-title: '&6治理投票详情'
 
   # 成员浏览菜单文本；{page}=从 1 开始的页码，{town}=已过滤小镇名，{name}=已过滤玩家名，
