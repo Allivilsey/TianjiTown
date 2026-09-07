@@ -10,11 +10,7 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.entity.Player;
-import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,15 +34,14 @@ final class BuffPlayerEffects {
 
     private final TianjiTownPlugin plugin;
     private final BuffSettings settings;
-    private final NamespacedKey potionKeysKey;
+    private final String modifierNamespace;
     private final Map<UUID, AppliedEffects> appliedEffects = new HashMap<>();
-    private boolean changingPotions;
     private final AtomicBoolean cleanupFailureLogged = new AtomicBoolean();
 
     BuffPlayerEffects(TianjiTownPlugin plugin, BuffSettings settings) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.settings = Objects.requireNonNull(settings, "settings");
-        this.potionKeysKey = new NamespacedKey(plugin, "buff_potion_keys");
+        this.modifierNamespace = new NamespacedKey(plugin, "buff").getNamespace();
         validateEffects();
     }
 
@@ -58,14 +53,13 @@ final class BuffPlayerEffects {
     }
 
     void forgetPlayer(Player player) {
-        // Keep transferable effects and their PDC markers; only release local bookkeeping.
+        // Keep transferable attribute modifiers; only release local bookkeeping.
         appliedEffects.remove(player.getUniqueId());
     }
 
     void applyBuffs(Player player, List<CommerceRepository.ActiveBuff> buffs,
                     boolean normalizeRespawnHealth) {
         double previousHealth = player.getHealth();
-        Map<PotionEffectType, PotionEffect> desiredPotions = new HashMap<>();
         Map<AttributeKey, AttributeExpectation> desiredAttributes = new HashMap<>();
         Set<Attribute> desiredAttributeTypes = new HashSet<>();
         Set<AttributeKey> activeAttributeKeys = collectAttributeKeys(buffs);
@@ -76,44 +70,27 @@ final class BuffPlayerEffects {
                 if (!buff.expiresAt().isAfter(now)) {
                     continue;
                 }
-                if (buff.effectKind() == BuffDefinition.EffectKind.POTION) {
-                    PotionEffectType type = requirePotion(buff.effectKey());
-                    long remainingTicks = Math.max(1, Duration.between(now,
-                            buff.expiresAt()).toMillis() / 50);
-                    int ticks = (int) Math.min(Integer.MAX_VALUE, remainingTicks);
-                    long roundedStrength = Math.round(buff.amountPerLevel() * buff.level());
-                    int amplifier = (int) Math.max(0L, Math.min(Integer.MAX_VALUE,
-                            roundedStrength - 1L));
-                    PotionEffect effect = new PotionEffect(type, ticks, amplifier,
-                            true, false, true);
-                    if (desiredPotions.put(type, effect) != null) {
-                        throw new IllegalStateException("多个 Buff 不能使用同一个 Potion Effect: "
-                                + buff.effectKey());
-                    }
-                } else {
-                    Attribute attribute = requireAttribute(buff.effectKey());
-                    if (!desiredAttributeTypes.add(attribute)) {
-                        throw new IllegalStateException("多个生效 Buff 使用同一个 Attribute: "
-                                + buff.effectKey());
-                    }
-                    AttributeModifier.Operation operation = AttributeModifier.Operation.valueOf(
-                            buff.effectOperation());
-                    double amount = buff.amountPerLevel() * buff.level();
-                    if (!Double.isFinite(amount) || amount <= 0) {
-                        throw new IllegalStateException("Buff Attribute 数值无效: "
-                                + buff.buffKey());
-                    }
-                    AttributeKey key = new AttributeKey(attribute, modifierKey(buff.buffKey()));
-                    if (desiredAttributes.put(key,
-                            new AttributeExpectation(key, amount, operation)) != null) {
-                        throw new IllegalStateException("重复的 Buff Attribute modifier: "
-                                + buff.buffKey());
-                    }
+                Attribute attribute = requireAttribute(buff.effectKey());
+                if (!desiredAttributeTypes.add(attribute)) {
+                    throw new IllegalStateException("多个生效 Buff 使用同一个 Attribute: "
+                            + buff.effectKey());
+                }
+                AttributeModifier.Operation operation = AttributeModifier.Operation.valueOf(
+                        buff.effectOperation());
+                double amount = buff.amountPerLevel() * buff.level();
+                if (!Double.isFinite(amount) || amount <= 0) {
+                    throw new IllegalStateException("Buff Attribute 数值无效: "
+                            + buff.buffKey());
+                }
+                AttributeKey key = new AttributeKey(attribute, modifierKey(buff.buffKey()));
+                if (desiredAttributes.put(key,
+                        new AttributeExpectation(key, amount, operation)) != null) {
+                    throw new IllegalStateException("重复的 Buff Attribute modifier: "
+                            + buff.buffKey());
                 }
             }
 
             reconcileAttributes(player, desiredAttributes);
-            reconcilePotions(player, desiredPotions);
             appliedEffects.put(player.getUniqueId(), new AppliedEffects(desiredAttributes.keySet()));
             normalizeHealth(player, previousHealth, normalizeRespawnHealth);
         } catch (RuntimeException | LinkageError exception) {
@@ -148,10 +125,6 @@ final class BuffPlayerEffects {
         double effectiveAmount = buff.amountPerLevel() * buff.level();
         if (!Double.isFinite(effectiveAmount) || effectiveAmount <= 0) {
             throw new IllegalStateException("Buff 生效效果值无效: " + buff.buffKey());
-        }
-        if (buff.effectKind() == BuffDefinition.EffectKind.POTION
-                && !"AMPLIFIER".equals(buff.effectOperation())) {
-            throw new IllegalStateException("Potion Buff 的 operation 无效: " + buff.buffKey());
         }
     }
 
@@ -209,7 +182,7 @@ final class BuffPlayerEffects {
             if (instance != null) {
                 for (AttributeModifier modifier : instance.getModifiers()) {
                     NamespacedKey key = modifier.getKey();
-                    if (key.getNamespace().equals(potionKeysKey.getNamespace())
+                    if (key.getNamespace().equals(modifierNamespace)
                             && key.getKey().startsWith("buff_")) {
                         managed.add(new AttributeKey(attribute, key));
                     }
@@ -262,93 +235,6 @@ final class BuffPlayerEffects {
         plugin.getLogger().warning(plugin.messages().plainText(key, placeholders));
     }
 
-    private void reconcilePotions(Player player, Map<PotionEffectType, PotionEffect> desired) {
-        Map<String, PotionOwnership> expected = new HashMap<>();
-        desired.forEach((type, effect) -> expected.put(type.getKey().toString(), signature(effect)));
-        PotionEffectTracker.reconcile(readPotionOwnership(player), expected,
-                new PotionEffectTracker.Effects() {
-                    public PotionOwnership current(String key) {
-                        PotionEffectType type = resolvePotion(key);
-                        return type == null ? null : signature(player.getPotionEffect(type));
-                    }
-
-                    public boolean apply(String key, PotionOwnership effect) {
-                        changingPotions = true;
-                        try {
-                            return player.addPotionEffect(new PotionEffect(requirePotion(key),
-                                    effect.maximumTicks(), effect.amplifier(), effect.ambient(),
-                                    effect.particles(), effect.icon()));
-                        } finally {
-                            changingPotions = false;
-                        }
-                    }
-
-                    public void remove(String key) {
-                        removeOwnedPotion(player, key, readPotionOwnership(player).get(key));
-                    }
-                }, owned -> writePotionOwnership(player, owned));
-    }
-
-    private static PotionOwnership signature(PotionEffect effect) {
-        return effect == null ? null : new PotionOwnership(effect.getAmplifier(), effect.getDuration(),
-                effect.isAmbient(), effect.hasParticles(), effect.hasIcon());
-    }
-
-    void onPotionChange(org.bukkit.event.entity.EntityPotionEffectEvent event) {
-        if (changingPotions || !(event.getEntity() instanceof Player player)) return;
-        if (event.getAction() == org.bukkit.event.entity.EntityPotionEffectEvent.Action.CHANGED
-                && !event.isOverride()) return;
-        PotionEffect old = event.getOldEffect();
-        if (old == null) return;
-        Map<String, PotionOwnership> owned = readPotionOwnership(player);
-        owned.remove(old.getType().getKey().toString());
-        writePotionOwnership(player, owned);
-    }
-
-    private Map<String, PotionOwnership> readPotionOwnership(Player player) {
-        Map<String, PotionOwnership> result = new HashMap<>();
-        String value = player.getPersistentDataContainer().get(potionKeysKey, PersistentDataType.STRING);
-        if (value != null) {
-            for (String line : value.lines().toList()) {
-                int separator = line.indexOf('=');
-                if (separator < 1) continue;
-                try {
-                    result.put(line.substring(0, separator), PotionOwnership.decode(line.substring(separator + 1)));
-                } catch (IllegalArgumentException ignored) {
-                    // Invalid ownership data never authorizes removal of a player's effect.
-                }
-            }
-        }
-        return result;
-    }
-
-    private void writePotionOwnership(Player player, Map<String, PotionOwnership> owned) {
-        if (owned.isEmpty()) {
-            player.getPersistentDataContainer().remove(potionKeysKey);
-        } else {
-            player.getPersistentDataContainer().set(potionKeysKey, PersistentDataType.STRING,
-                    owned.entrySet().stream().sorted(Map.Entry.comparingByKey())
-                            .map(entry -> entry.getKey() + "=" + entry.getValue().encode())
-                            .collect(java.util.stream.Collectors.joining("\n")));
-        }
-    }
-
-    private static boolean matches(PotionOwnership owner, PotionEffect effect) {
-        return owner != null && effect != null && owner.matches(effect.getAmplifier(),
-                effect.getDuration(), effect.isAmbient(), effect.hasParticles(), effect.hasIcon());
-    }
-
-    private void removeOwnedPotion(Player player, String key, PotionOwnership owner) {
-        PotionEffectType type = resolvePotion(key);
-        if (type == null || !matches(owner, player.getPotionEffect(type))) return;
-        changingPotions = true;
-        try {
-            player.removePotionEffect(type);
-        } finally {
-            changingPotions = false;
-        }
-    }
-
     private void normalizeHealth(Player player, double previousHealth,
                                  boolean normalizeRespawnHealth) {
         AttributeInstance instance = Objects.requireNonNull(
@@ -380,8 +266,6 @@ final class BuffPlayerEffects {
         }
         removeAttributeModifiers(player, attributes);
 
-        readPotionOwnership(player).forEach((key, owner) -> removeOwnedPotion(player, key, owner));
-        player.getPersistentDataContainer().remove(potionKeysKey);
         clampCurrentHealth(player);
     }
 
@@ -421,44 +305,14 @@ final class BuffPlayerEffects {
     }
 
     private void validateEffects() {
-        Set<String> potionKeys = new HashSet<>();
         Set<String> attributeKeys = new HashSet<>();
         for (BuffDefinition definition : settings.buffs().values()) {
-            if (definition.effectKind() == BuffDefinition.EffectKind.POTION) {
-                requirePotion(definition.effectKey());
-                if (!definition.effectOperation().equals("AMPLIFIER")) {
-                    throw new IllegalArgumentException("Potion Buff 的 operation 必须为 AMPLIFIER: "
-                            + definition.key());
-                }
-                if (!potionKeys.add(definition.effectKey())) {
-                    throw new IllegalArgumentException("多个 Buff 不能使用同一个 Potion Effect: "
-                            + definition.effectKey());
-                }
-            } else {
-                requireAttribute(definition.effectKey());
-                AttributeModifier.Operation.valueOf(definition.effectOperation());
-                if (!attributeKeys.add(definition.effectKey())) {
-                    throw new IllegalArgumentException("多个 Buff 不能使用同一个 Attribute: "
-                            + definition.effectKey());
-                }
+            requireAttribute(definition.effectKey());
+            AttributeModifier.Operation.valueOf(definition.effectOperation());
+            if (!attributeKeys.add(definition.effectKey())) {
+                throw new IllegalArgumentException("多个 Buff 不能使用同一个 Attribute: "
+                        + definition.effectKey());
             }
-        }
-    }
-
-    private PotionEffectType requirePotion(String key) {
-        PotionEffectType type = resolvePotion(key);
-        if (type == null) {
-            throw new IllegalArgumentException("无效 Potion Effect: " + key);
-        }
-        return type;
-    }
-
-    private PotionEffectType resolvePotion(String key) {
-        try {
-            NamespacedKey namespacedKey = NamespacedKey.fromString(key);
-            return namespacedKey == null ? null : Registry.MOB_EFFECT.get(namespacedKey);
-        } catch (RuntimeException exception) {
-            return null;
         }
     }
 

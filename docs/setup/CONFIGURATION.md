@@ -67,9 +67,9 @@
 
 | 字段 | 含义 |
 |---|---|
-| `effect-kind` | `ATTRIBUTE` 属性或 `POTION` 药水效果 |
+| `effect-kind` | 仅支持 `ATTRIBUTE` 属性 |
 | `effect-key` | 服务端支持的 namespaced key，如 `minecraft:movement_speed` |
-| `operation` | 效果操作，如属性 `ADD_SCALAR`、`ADD_NUMBER` 或药水 `AMPLIFIER`；需与效果类型匹配 |
+| `operation` | 属性运算，如 `ADD_SCALAR`、`ADD_NUMBER`；需为有效的属性运算 |
 | `base-price` | I 级一周基础价，使用带引号的金额文本 |
 | `maximum-level` | 商品等级上限，玩家选择最多显示到 V |
 | `amount-per-level` | 每级增加的效果数值 |

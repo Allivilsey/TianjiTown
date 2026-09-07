@@ -45,7 +45,6 @@ public record BuffDefinition(String key, String displayName, EffectKind effectKi
     }
 
     public enum EffectKind {
-        POTION,
         ATTRIBUTE
     }
 }

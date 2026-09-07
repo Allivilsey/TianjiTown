@@ -196,11 +196,6 @@ public final class BuffRuntime implements Listener {
         refreshPlayer(event.getPlayer());
     }
 
-    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPotionChange(org.bukkit.event.entity.EntityPotionEffectEvent event) {
-        effects.onPotionChange(event);
-    }
-
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         UUID playerId = event.getPlayer().getUniqueId();

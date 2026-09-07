@@ -26,19 +26,26 @@ class BuffSettingsTest {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(reader);
             BuffSettings settings = BuffSettings.load(config, messages());
             assertFalse(config.contains("schema-version"));
-            assertEquals(7, settings.buffs().size());
-            String[] keys = {"speed", "health", "night_vision", "water_breathing",
-                    "safe_fall", "mining", "fire_resistance"};
-            long[] weeklyPrices = {6720, 10080, 2688, 4032, 4032, 6720, 8064};
-            int[] caps = {5, 5, 1, 1, 3, 3, 1};
+            assertEquals(5, settings.buffs().size());
+            String[] keys = {"speed", "health", "diving",
+                    "safe_fall", "mining"};
+            long[] weeklyPrices = {6720, 10080, 4032, 4032, 6720};
+            int[] caps = {5, 5, 1, 3, 3};
             for (int index = 0; index < keys.length; index++) {
                 BuffDefinition buff = settings.requireBuff(keys[index]);
                 assertEquals(weeklyPrices[index] * 100,
                         org.allivlisey.tianjitown.core.consumption.BuffPricing
                                 .weeklyPrice(buff, 1, 1, 2).minorUnits());
                 assertEquals(caps[index], buff.maximumLevel());
+                assertEquals(BuffDefinition.EffectKind.ATTRIBUTE, buff.effectKind());
                 assertFalse(buff.displayName().startsWith("dialog."));
             }
+            assertEquals("minecraft:oxygen_bonus", settings.requireBuff("diving").effectKey());
+            assertEquals("ADD_NUMBER", settings.requireBuff("diving").effectOperation());
+            assertEquals(3.0, settings.requireBuff("diving").amountPerLevel());
+            assertFalse(settings.buffs().containsKey("night_vision"));
+            assertFalse(settings.buffs().containsKey("water_breathing"));
+            assertFalse(settings.buffs().containsKey("fire_resistance"));
             assertEquals("minecraft:safe_fall_distance", settings.requireBuff("safe_fall").effectKey());
             assertEquals("minecraft:block_break_speed", settings.requireBuff("mining").effectKey());
         }
@@ -82,6 +89,13 @@ class BuffSettingsTest {
                 configuration("speed", "1E1000000"), messages);
         assertEquals(0, hugePrice.requireBuff("speed").basePrice()
                 .compareTo(new java.math.BigDecimal("1E1000000")));
+    }
+
+    @Test
+    void rejectsPotionCatalog() throws Exception {
+        YamlConfiguration config = configuration("speed", "100.00");
+        config.set("buffs.catalog.speed.effect-kind", "POTION");
+        assertThrows(IllegalArgumentException.class, () -> BuffSettings.load(config, messages()));
     }
 
     @Test

@@ -177,8 +177,7 @@ public final class TownBuffShopDialogs {
     }
 
     private String buffEffectDescription(BuffDefinition definition) {
-        if (List.of("night_vision", "water_breathing", "safe_fall", "mining",
-                "fire_resistance").contains(definition.key())) {
+        if (List.of("diving", "safe_fall", "mining").contains(definition.key())) {
             return presentation.dialogText("buff." + definition.key() + "-effect");
         }
         if (definition.key().equals("health")) {

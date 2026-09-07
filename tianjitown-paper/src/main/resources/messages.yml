@@ -1598,11 +1598,9 @@ dialog:
     labels:
       speed: '速度'
       health: '生命'
-      night_vision: '夜视'
-      water_breathing: '水下呼吸'
+      diving: '潜水'
       safe_fall: '安全落地'
       mining: '矿工'
-      fire_resistance: '防火'
     shop-title: '&6公共 Buff 商店'
     shop-summary-title: '&d小镇公共 Buff'
     shop-enabled-hint: '&7使用公共资金购买，效果作用于全体成员'
@@ -1628,11 +1626,9 @@ dialog:
     success-message: "&f已购买 {name}\n等级: {level}\n到期: {expires}\n公共余额: {balance}"
     health-effect: '&7每级最大生命值 +4（2 颗心）'
     speed-effect: '&7每级移动速度 +20%'
-    night_vision-effect: '&7黑暗中保持清晰视野，仅 I 级'
-    water_breathing-effect: '&7水下呼吸，仅 I 级'
+    diving-effect: '&7氧气加成 +3，减少水下耗氧，仍需换气；仅 I 级'
     safe_fall-effect: '&7每级安全坠落距离 +2 格，最高 III 级'
     mining-effect: '&7每级方块破坏速度属性 +10%，最高 III 级'
-    fire_resistance-effect: '&7免受火焰与熔岩伤害，仅 I 级'
     generic-effect: '&7每级 {effect} {amount}'
 
   # 规则确认和规则查看

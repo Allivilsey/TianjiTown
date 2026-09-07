@@ -51,7 +51,7 @@ class CommerceRepositorySqliteTest {
             var governance = new GovernanceRepository(gate.dataSource(), () -> false);
             Instant now = Instant.now();
             BuffDefinition definition = new BuffDefinition("speed", "公共迅捷",
-                    BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                    BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:movement_speed", "ADD_NUMBER",
                     BigDecimal.ONE, 1, 1);
             var buff = commerce.purchaseBuff(mayorId, "Mayor", definition,
                     1, 1, 2, "departure:buff", now).buff();
@@ -80,7 +80,7 @@ class CommerceRepositorySqliteTest {
         UUID townId = UUID.randomUUID();
         Instant now = Instant.now();
         BuffDefinition buff = new BuffDefinition("speed", "迅捷",
-                BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:movement_speed", "ADD_NUMBER",
                 BigDecimal.ONE, 2, 1);
         List<Executable> operations = List.of(
                 () -> repository.quoteBuff(playerId, buff, 1, 1, 2, now),
@@ -211,7 +211,7 @@ class CommerceRepositorySqliteTest {
                     () -> false);
             Instant now = Instant.now();
             BuffDefinition buff = new BuffDefinition("speed", "公共迅捷",
-                    BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                    BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:movement_speed", "ADD_NUMBER",
                     new BigDecimal("100.00"), 2, 1);
 
             CommerceRepository.BuffPurchase first = repository.purchaseBuff(mayorId, "Mayor",
@@ -247,7 +247,7 @@ class CommerceRepositorySqliteTest {
             assertEquals(1, repository.activeBuffsForPlayer(memberId, now).getFirst().level());
 
             BuffDefinition refresh = new BuffDefinition("refresh", "刷新测试",
-                    BuffDefinition.EffectKind.POTION, "minecraft:luck", "AMPLIFIER",
+                    BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:luck", "ADD_NUMBER",
                     new BigDecimal("10.00"), 2, 1);
             CommerceRepository.BuffPurchase refreshFirst = repository.purchaseBuff(mayorId,
                     "Mayor", refresh, 1, 1, 2, "buff:refresh:1", now);
@@ -276,7 +276,7 @@ class CommerceRepositorySqliteTest {
             CommerceRepository repository = new CommerceRepository(gate.dataSource(),
                     () -> false);
             BuffDefinition buff = new BuffDefinition("rollback", "事务测试",
-                    BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                    BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:movement_speed", "ADD_NUMBER",
                     new BigDecimal("100.00"), 2, 1);
             Instant now = Instant.now();
 
@@ -322,7 +322,7 @@ class CommerceRepositorySqliteTest {
             CommerceRepository repository = new CommerceRepository(gate.dataSource(),
                     () -> false);
             BuffDefinition buff = new BuffDefinition("restart", "重启测试",
-                    BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                    BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:movement_speed", "ADD_NUMBER",
                     new BigDecimal("10.00"), 2, 1);
             expiresAt = repository.purchaseBuff(mayorId, "Mayor", buff,
                     1, 1, 2, "buff:restart:once", purchasedAt)
@@ -359,10 +359,10 @@ class CommerceRepositorySqliteTest {
             CommerceRepository repository = new CommerceRepository(gate.dataSource(),
                     () -> false);
             BuffDefinition firstBuff = new BuffDefinition("expiration-one", "第一项到期测试",
-                    BuffDefinition.EffectKind.POTION, "minecraft:speed", "AMPLIFIER",
+                    BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:movement_speed", "ADD_NUMBER",
                     new BigDecimal("10.00"), 1, 1);
             BuffDefinition secondBuff = new BuffDefinition("expiration-two", "第二项到期测试",
-                    BuffDefinition.EffectKind.POTION, "minecraft:jump_boost", "AMPLIFIER",
+                    BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:jump_strength", "ADD_NUMBER",
                     new BigDecimal("10.00"), 1, 1);
             Instant now = Instant.parse("2026-08-27T00:00:00Z");
             CommerceRepository.BuffPurchase firstPurchase = repository.purchaseBuff(mayorId,

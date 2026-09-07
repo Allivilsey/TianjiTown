@@ -58,7 +58,7 @@ buffs:
       effect-kind: ATTRIBUTE
       effect-key: 'minecraft:movement_speed'
       operation: ADD_SCALAR
-      base-price: '6720.00'
+      base-price: '6000.00'
       maximum-level: 5
       amount-per-level: 0.2
     health:
@@ -68,41 +68,27 @@ buffs:
       base-price: '10080.00'
       maximum-level: 5
       amount-per-level: 4.0
-    night_vision:
-      effect-kind: POTION
-      effect-key: 'minecraft:night_vision'
-      operation: AMPLIFIER
-      base-price: '2688.00'
+    diving:
+      effect-kind: ATTRIBUTE
+      effect-key: 'minecraft:oxygen_bonus'
+      operation: ADD_NUMBER
+      base-price: '1000.00'
       maximum-level: 1
-      amount-per-level: 1
-    water_breathing:
-      effect-kind: POTION
-      effect-key: 'minecraft:water_breathing'
-      operation: AMPLIFIER
-      base-price: '4032.00'
-      maximum-level: 1
-      amount-per-level: 1
+      amount-per-level: 19
     safe_fall:
       effect-kind: ATTRIBUTE
       effect-key: 'minecraft:safe_fall_distance'
       operation: ADD_NUMBER
-      base-price: '4032.00'
+      base-price: '4000.00'
       maximum-level: 3
       amount-per-level: 2
     mining:
       effect-kind: ATTRIBUTE
       effect-key: 'minecraft:block_break_speed'
       operation: ADD_SCALAR
-      base-price: '6720.00'
+      base-price: '6000.00'
       maximum-level: 3
       amount-per-level: 0.1
-    fire_resistance:
-      effect-kind: POTION
-      effect-key: 'minecraft:fire_resistance'
-      operation: AMPLIFIER
-      base-price: '8064.00'
-      maximum-level: 1
-      amount-per-level: 1
 
 territory:
   building-refund:

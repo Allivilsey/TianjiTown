@@ -2,7 +2,7 @@ CREATE TABLE active_buffs (
     buff_id BLOB NOT NULL PRIMARY KEY,
     town_id BLOB NOT NULL,
     buff_key TEXT NOT NULL,
-    effect_kind TEXT NOT NULL CHECK (effect_kind IN ('POTION', 'ATTRIBUTE')),
+    effect_kind TEXT NOT NULL CHECK (effect_kind = 'ATTRIBUTE'),
     effect_key TEXT NOT NULL,
     effect_operation TEXT NOT NULL,
     level INTEGER NOT NULL CHECK (level >= 1),

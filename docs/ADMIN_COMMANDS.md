@@ -120,7 +120,7 @@ Jobs 汇总为“职业收入”，QuickShop 与 GlobalMarketPlus 合并为“�
 | `/tianjitown buff list <小镇代码>` | 查看当前有效 Buff 的 UUID、商品键、等级、层数和到期时间；不是商店商品目录 | Buff |
 | `/tianjitown buff grant <小镇代码> <buffKey> <原因>` | 发起付费代购确认，从该镇公共资金扣款，每次购买一周、一级并覆盖同类效果，不提供等级或周数参数 | Buff |
 
-默认商品键：`speed`、`health`、`night_vision`、`water_breathing`、`safe_fall`、`mining`、`fire_resistance`。完整价格见 [定价说明](deployment/PRICING.md)。
+默认商品键：`speed`、`health`、`diving`、`safe_fall`、`mining`。完整价格见 [定价说明](deployment/PRICING.md)。
 
 `grant` 不是免费发放。管理员和玩家商店共用按周数、等级覆盖购买的规则；管理员入口固定一周、一级，从当前时间重新计算到期时间，不累加旧 Buff 等级或剩余时长。确认提示明确标注覆盖行为。商店关闭、消费关闭、余额不足或账户锁定时不能代购，购买后无主动退款入口。
 

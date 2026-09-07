@@ -22,8 +22,8 @@ class ConsumptionRulesTest {
         assertThrows(IllegalArgumentException.class, () -> BuffPricing.weeklyPrice(speed, 0, 1, 2));
         assertThrows(IllegalArgumentException.class, () -> BuffPricing.weeklyPrice(speed, 5, 1, 2));
         assertThrows(IllegalArgumentException.class, () -> BuffPricing.weeklyPrice(speed, 1, 6, 2));
-        BuffDefinition singleLevel = new BuffDefinition("night_vision", "夜视",
-                BuffDefinition.EffectKind.POTION, "minecraft:night_vision", "AMPLIFIER",
+        BuffDefinition singleLevel = new BuffDefinition("diving", "潜水",
+                BuffDefinition.EffectKind.ATTRIBUTE, "minecraft:oxygen_bonus", "ADD_NUMBER",
                 new BigDecimal("0.01"), 1, 1);
         assertEquals(2, BuffPricing.weeklyPrice(singleLevel, 2, 1, 2).minorUnits());
         assertThrows(IllegalArgumentException.class,
