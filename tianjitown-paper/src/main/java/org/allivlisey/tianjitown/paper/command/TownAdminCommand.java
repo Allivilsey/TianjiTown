@@ -284,6 +284,14 @@ public final class TownAdminCommand {
         send(sender, "chat.admin.help-station-handbook");
     }
 
+    @Command("tianjitown open")
+    @Usage("/tianjitown open <玩家>")
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void open(CommandSender sender, TownRuntime runtime,
+                     @revxrsal.commands.annotation.NotSender Player target) {
+        plugin.townUi().openMain(target);
+    }
+
     @Command("tianjitown handbook")
     @Usage("/tianjitown handbook [玩家]")
     @AdminAccess(TownAdminPermissions.ROOT)
@@ -426,6 +434,7 @@ public final class TownAdminCommand {
         send(sender, "chat.admin.help-system-status");
         if (sender.hasPermission(TownAdminPermissions.ROOT)) {
             send(sender, "chat.admin.help-system-reload");
+            send(sender, "chat.admin.help-system-open");
             send(sender, "chat.admin.help-system-maintenance");
             send(sender, "chat.admin.help-system-audit");
         }

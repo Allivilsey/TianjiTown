@@ -7,7 +7,7 @@
 - 所有命令以 `/tianjitown` 开头；控制台输入时省略 `/`。
 - `<参数>` 必填，`[参数]` 可选，`a|b` 表示二选一。这些符号和 Tab 中的 `<原因>` 提示不能原样输入。
 - `<小镇代码>` 使用建镇时填写的 3～9 个英文字母代码，不区分大小写；可用 `/tianjitown town list` 查询。
-- 成员、镇长、投票命令的 `<玩家>` 接受玩家名或 UUID；`handbook` 只接受在线玩家。离线身份优先使用已核对的 UUID，避免名称解析到错误身份。
+- 成员、镇长、投票命令的 `<玩家>` 接受玩家名或 UUID；`handbook`、`open` 只接受在线玩家。离线身份优先使用已核对的 UUID，避免名称解析到错误身份。
 - `<原因>` 填写具体操作缘由，可含空格，会用于审核通知或审计。`member role` 的最后一项是角色，不另收原因。
 - 除标为“仅游戏内”的命令外，均可由控制台执行。需要业务运行时的命令在初始化未完成或启动 `LOCKED` 时不可用；`status` 可用于查明原因。
 
@@ -31,6 +31,7 @@
 | `/tianjitown status` | 查看插件版本、启动检查、SQLite 写状态、功能开关、最近诊断和玩家入口状态；排障时先执行此命令 | 运维 |
 | `/tianjitown reload` | 重读 `config.yml` 和 `messages.yml`。仅运行时动态读取的设置立即生效，不能重新初始化数据库或解除启动失败 | 全部 |
 | `/tianjitown maintenance` | 查看维护状态，等同下方 `status` 子命令 | 全部 |
+| `/tianjitown open <在线玩家>` | 为指定玩家打开小镇主界面，需要 `tianjitown.admin` 权限；必须指定目标，沿用玩家界面的维护模式限制 | 全部 |
 | `/tianjitown maintenance status` | 查看玩家入口是否处于维护模式 | 全部 |
 | `/tianjitown maintenance on` | 暂停服务台、手册、玩家菜单和表单；写回配置并跨重启保留 | 全部 |
 | `/tianjitown maintenance off` | 关闭维护模式，恢复玩家入口；写回配置 | 全部 |

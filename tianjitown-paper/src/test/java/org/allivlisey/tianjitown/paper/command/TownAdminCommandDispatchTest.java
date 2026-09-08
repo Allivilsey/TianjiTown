@@ -117,6 +117,53 @@ class TownAdminCommandDispatchTest {
         verifyNoInteractions(runtime);
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void openTargetsSpecifiedPlayerForConsoleAndPlayerSenders(boolean playerSender) {
+        CommandSender executor = playerSender ? mock(Player.class) : sender;
+        when(actor.sender()).thenReturn(executor);
+        when(executor.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
+        TownUiController ui = mock(TownUiController.class);
+        when(plugin.townUi()).thenReturn(ui);
+
+        execute("open", "Steve");
+
+        verify(ui).openMain(targetPlayer);
+        verifyNoInteractions(runtime);
+    }
+
+    @Test
+    void openRequiresFullAdminPermission() {
+        when(sender.hasPermission(TownAdminPermissions.OPERATIONS)).thenReturn(true);
+
+        execute("open", "Steve");
+
+        verify(messages).send(sender, "chat.admin.no-permission");
+        verify(plugin, never()).townUi();
+    }
+
+    @Test
+    void openRequiresReadyRuntime() {
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
+        when(plugin.townRuntime()).thenReturn(null);
+
+        execute("open", "Steve");
+
+        verify(messages).send(sender, "chat.admin.runtime-not-ready");
+        verify(plugin, never()).townUi();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"open", "open Steve extra"})
+    void openRequiresExactlyOneTarget(String input) {
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
+
+        lamp.dispatch(actor, "tianjitown " + input);
+
+        verify(messages).send(eq(sender), eq("chat.admin.argument-error"), anyMap());
+        verify(plugin, never()).townUi();
+    }
+
     private void prepareHelp() {
         PluginMeta meta = mock(PluginMeta.class);
         when(plugin.getPluginMeta()).thenReturn(meta);

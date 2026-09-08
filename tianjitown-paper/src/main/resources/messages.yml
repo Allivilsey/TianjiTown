@@ -396,6 +396,7 @@ chat:
     help-system-title: '&6系统与运维'
     help-system-status: '&e/tianjitown status &7查看依赖、SQLite 和玩家入口状态'
     help-system-reload: '&e/tianjitown reload &7重载可热更新的配置'
+    help-system-open: '&e/tianjitown open <玩家> &7为指定在线玩家打开小镇主界面'
     help-system-maintenance: '&e/tianjitown maintenance <on|off|status> &7管理维护模式'
     help-system-audit: '&e/tianjitown audit [1~200] &7查看最近审计记录'
     help-system-diagnose: '&e/tianjitown diagnose [1~180天] &7生成统一对账诊断报告'

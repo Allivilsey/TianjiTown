@@ -177,6 +177,10 @@ public final class TownUiController implements Listener {
         adminApplicationUi.notifyDecision(application);
     }
 
+    public void openMain(Player player) {
+        facade.openMain(player);
+    }
+
     public void openFinance(Player player, int page) {
         facade.openFinance(player, page);
     }
