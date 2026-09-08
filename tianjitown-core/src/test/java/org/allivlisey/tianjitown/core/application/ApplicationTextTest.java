@@ -12,26 +12,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ApplicationTextTest {
     @Test
-    void enforcesNewCodeBoundsWithoutPreventingLegacyProfileEdits() {
+    void enforcesCodeBoundsForAllProfiles() {
         for (String code : List.of("abc", "Abcdefghi")) {
-            assertTrue(new ApplicationText("天际镇", "TJ", code, "简介", List.of("规则")).validate().isEmpty());
+            assertTrue(new ApplicationText("天际镇", code, "简介", List.of("规则")).validate().isEmpty());
         }
         for (String code : List.of("", "a", "ab", "abcdefghij", "ab1", "a b", " abc", "abc ", "中文镇", "ab_")) {
-            ApplicationText text = new ApplicationText("天际镇", "TJ", code, "简介", List.of("规则"));
+            ApplicationText text = new ApplicationText("天际镇", code, "简介", List.of("规则"));
             assertThrows(ApplicationText.ValidationException.class, text::requireValid, code);
         }
         for (String code : List.of("a", "ab", "abcdefghijkl")) {
-            ApplicationText text = new ApplicationText("天际镇", "TJ", code, "简介", List.of("规则"));
-            org.junit.jupiter.api.Assertions.assertDoesNotThrow(text::requireValidExistingProfile);
+            ApplicationText text = new ApplicationText("天际镇", code, "简介", List.of("规则"));
+            assertThrows(ApplicationText.ValidationException.class, text::requireValid);
         }
     }
 
     @Test
     void normalizesNamesForUniqueKeys() {
-        ApplicationText text = new ApplicationText("  天 际 镇  ", " TJ ", "SKY", "简介",
+        ApplicationText text = new ApplicationText("  天 际 镇  ", "SKY", "简介",
                 List.of("规则"));
         assertEquals("天际镇", text.normalizedName());
-        assertEquals("tj", text.normalizedShortName());
         assertEquals("sky", text.normalizedResidenceName());
         assertTrue(text.validate().isEmpty());
 
@@ -45,7 +44,7 @@ class ApplicationTextTest {
 
     @Test
     void rejectsFormattingAndUnsafeNameCharacters() {
-        ApplicationText text = new ApplicationText("<red>镇", "T/J", "S K", "§c简介",
+        ApplicationText text = new ApplicationText("<red>镇", "S K", "§c简介",
                 List.of("规则"));
         assertFalse(text.validate().isEmpty());
         assertTrue(text.validate().stream().anyMatch(issue ->
@@ -56,7 +55,7 @@ class ApplicationTextTest {
 
     @Test
     void requiresTownDescription() {
-        ApplicationText text = new ApplicationText("天际镇", "TJ", "SKY", "   ",
+        ApplicationText text = new ApplicationText("天际镇", "SKY", "   ",
                 List.of("规则"));
 
         assertEquals(List.of(new ApplicationText.ValidationIssue(
@@ -66,7 +65,7 @@ class ApplicationTextTest {
 
     @Test
     void describesRuleCountWithNaturalRangeNotation() {
-        ApplicationText text = new ApplicationText("天际镇", "TJ", "SKY", "简介", List.of());
+        ApplicationText text = new ApplicationText("天际镇", "SKY", "简介", List.of());
         assertEquals(List.of(new ApplicationText.ValidationIssue(
                         ApplicationText.ValidationIssue.Code.RULE_COUNT,
                         Map.of("minimum", "1", "maximum", "50"))), text.validate());
@@ -74,7 +73,7 @@ class ApplicationTextTest {
 
     @Test
     void exposesStructuredRuleDetailsWithoutRenderingPlayerTextInCore() {
-        ApplicationText text = new ApplicationText("天际镇", "TJ", "SKY", "简介",
+        ApplicationText text = new ApplicationText("天际镇", "SKY", "简介",
                 List.of("第一条".repeat(101)));
 
         assertEquals(List.of(new ApplicationText.ValidationIssue(

@@ -164,10 +164,8 @@ class TerritoryServiceTest {
         try (Connection connection = gate.dataSource().getConnection();
              PreparedStatement town = connection.prepareStatement("""
                      INSERT INTO towns
-                         (town_id, name, normalized_name, short_name, normalized_short_name,
-                          description, rules_text, status, mayor_uuid)
-                     VALUES (?, 'Test Town', 'test town', 'TT', 'tt', 'description', 'rules',
-                             'ACTIVE', ?)
+                         (town_id, name, normalized_name, description, rules_text, status, mayor_uuid)
+                     VALUES (?, 'Test Town', 'test town', 'description', 'rules', 'ACTIVE', ?)
                      """);
              PreparedStatement member = connection.prepareStatement("""
                      INSERT INTO town_members (town_id, player_uuid, role)

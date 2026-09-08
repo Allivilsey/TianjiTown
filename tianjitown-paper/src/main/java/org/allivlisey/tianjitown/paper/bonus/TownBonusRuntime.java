@@ -108,10 +108,6 @@ public final class TownBonusRuntime implements Listener {
         beaconEffects.clearAll();
     }
 
-    public void recoverTaggedBeacons() {
-        // 第七版不再修改或扫描信标方块，无需恢复方块持久化状态。
-    }
-
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent event) {
         buildingRefunds.onPlace(event, index.get());
@@ -125,6 +121,11 @@ public final class TownBonusRuntime implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onBeaconInventoryClose(InventoryCloseEvent event) {
         beaconEffects.onBeaconInventoryClose(event);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPotionEffectChange(org.bukkit.event.entity.EntityPotionEffectEvent event) {
+        beaconEffects.onPotionEffectChange(event);
     }
 
     private static String safeText(Object value) {

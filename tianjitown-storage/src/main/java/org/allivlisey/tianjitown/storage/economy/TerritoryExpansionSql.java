@@ -16,6 +16,34 @@ import org.allivlisey.tianjitown.storage.economy.EconomyRepository.ExpansionOper
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository.TerritoryUnitSnapshot;
 
 final class TerritoryExpansionSql {
+    static void requireNoPendingExpansion(Connection connection, UUID townId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT 1 FROM territory_expansions
+                 WHERE town_id = ? AND status IN ('PREPARED', 'COMPENSATION_REQUIRED')
+                UNION ALL
+                SELECT 1 FROM territory_expansion_batches
+                 WHERE town_id = ? AND status IN ('PREPARED', 'COMPENSATION_REQUIRED')
+                """)) {
+            statement.setBytes(1, EconomyPersistence.uuid(townId));
+            statement.setBytes(2, EconomyPersistence.uuid(townId));
+            try (ResultSet rows = statement.executeQuery()) {
+                if (rows.next()) throw new EconomyRepository.ConflictException("本镇有未完成扩张，请等待结算后重试");
+            }
+        }
+    }
+
+    static void requireStandaloneExpansion(Connection connection, UUID expansionId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT batch_id FROM territory_expansions WHERE expansion_id = ?")) {
+            statement.setBytes(1, EconomyPersistence.uuid(expansionId));
+            try (ResultSet rows = statement.executeQuery()) {
+                if (rows.next() && rows.getBytes("batch_id") != null) {
+                    throw new EconomyRepository.ConflictException("批量扩张子项必须通过批次结算");
+                }
+            }
+        }
+    }
+
     private TerritoryExpansionSql() {}
 
     static UUID insertTerritoryUnit(Connection connection, UUID townId, TerritoryUnit unit,

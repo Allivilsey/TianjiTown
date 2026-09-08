@@ -9,7 +9,8 @@ class TownResidenceNameTest {
     @Test
     void normalizesDedicatedEnglishName() {
         assertEquals("sky", TownResidenceName.initial(" SKY "));
-        assertEquals("a", TownResidenceName.initial("A"));
+        assertThrows(IllegalArgumentException.class, () -> TownResidenceName.initial("A"));
+        assertThrows(IllegalArgumentException.class, () -> TownResidenceName.initial("abcdefghij"));
         assertEquals("townland", TownResidenceName.initial("TownLand"));
         assertThrows(IllegalArgumentException.class, () -> TownResidenceName.initial("S K Y"));
         assertThrows(IllegalArgumentException.class, () -> TownResidenceName.initial("SKY-1"));

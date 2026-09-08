@@ -44,7 +44,7 @@ class TownRepositorySqliteTest {
             UUID initialMemberOne = UUID.randomUUID();
             UUID initialMemberTwo = UUID.randomUUID();
             ApplicationText text = new ApplicationText(
-                    "天际镇", "TJ", "SKY", "测试简介", List.of("友善交流"));
+                    "天际镇", "SKY", "测试简介", List.of("友善交流"));
             ApplicationSnapshot draft = repository.createDraft(
                     applicantId, text, List.of(initialMemberOne, initialMemberTwo),
                     Duration.ofMinutes(5));
@@ -106,7 +106,7 @@ class TownRepositorySqliteTest {
             UUID firstMember = UUID.randomUUID();
             UUID secondMember = UUID.randomUUID();
             UUID reviewerId = UUID.randomUUID();
-            ApplicationText text = applicationText("恢复测试镇", "恢复测", "RECOVER");
+            ApplicationText text = applicationText("恢复测试镇", "RECOVER");
             ApplicationSnapshot draft = repository.createDraft(applicantId, text,
                     List.of(firstMember, secondMember), Duration.ZERO);
             repository.respondInitialMember(draft.id(), firstMember, true);
@@ -183,10 +183,10 @@ class TownRepositorySqliteTest {
         try (DatabaseGate gate = new DatabaseGate(config)) {
             assertTrue(gate.verifyAndMigrate().healthy());
             TownRepository repository = new TownRepository(gate.dataSource(), () -> false);
-            CreatedTown first = createTown(repository, 1, "甲镇", "甲", "AAA");
-            CreatedTown second = createTown(repository, 2, "乙镇", "乙", "BBB");
-            CreatedTown third = createTown(repository, 3, "丙镇", "丙", "CCC");
-            CreatedTown fourth = createTown(repository, 4, "丁镇", "丁", "DDD");
+            CreatedTown first = createTown(repository, 1, "甲镇", "AAA");
+            CreatedTown second = createTown(repository, 2, "乙镇", "BBB");
+            CreatedTown third = createTown(repository, 3, "丙镇", "CCC");
+            CreatedTown fourth = createTown(repository, 4, "丁镇", "DDD");
             UUID playerId = UUID.randomUUID();
 
             JoinApplicationSnapshot rejected = apply(repository, first.town().id(), playerId);
@@ -216,7 +216,7 @@ class TownRepositorySqliteTest {
         try (DatabaseGate gate = new DatabaseGate(config)) {
             assertTrue(gate.verifyAndMigrate().healthy());
             TownRepository repository = new TownRepository(gate.dataSource(), () -> false);
-            CreatedTown deleted = createTown(repository, 1, "复用镇", "复", "OLD");
+            CreatedTown deleted = createTown(repository, 1, "复用镇", "OLD");
             UUID adminId = UUID.randomUUID();
             assertThrows(TownRepository.ConflictException.class,
                     () -> repository.disbandTown(deleted.town().id(), adminId,
@@ -229,7 +229,7 @@ class TownRepositorySqliteTest {
                     deleted.town().version());
             repository.completeTownDeletion(deleted.town().id(), adminId, "Admin", "测试删除");
 
-            CreatedTown active = createTown(repository, 2, "复用镇", "复", "OLD");
+            CreatedTown active = createTown(repository, 2, "复用镇", "OLD");
             assertEquals(active.town().id(), repository.findTownByName("复用镇").orElseThrow().id());
             assertEquals(active.town().id(), repository.listTowns(true).getFirst().id());
         }
@@ -243,7 +243,7 @@ class TownRepositorySqliteTest {
         try (DatabaseGate gate = new DatabaseGate(config)) {
             assertTrue(gate.verifyAndMigrate().healthy());
             TownRepository repository = new TownRepository(gate.dataSource(), () -> false);
-            CreatedTown created = createTown(repository, 1, "资料镇", "资料", "PROFILE");
+            CreatedTown created = createTown(repository, 1, "资料镇", "PROFILE");
             TownSnapshot original = created.town();
             try (var connection = gate.dataSource().getConnection();
                 var statement = connection.prepareStatement(
@@ -258,10 +258,9 @@ class TownRepositorySqliteTest {
             }
             UUID memberId = UUID.randomUUID();
             repository.addMember(original.id(), memberId, created.mayorId(), "Admin", "测试成员");
-            ApplicationText changed = new ApplicationText(original.profile().name(),
-                    original.profile().shortName(), original.profile().residenceName(),
+            ApplicationText changed = new ApplicationText(original.profile().name(), original.profile().residenceName(),
                     "更新后的简介", List.of("更新后的规则"));
-            ApplicationText lockedFieldsChanged = new ApplicationText("资料新镇", "新资料",
+            ApplicationText lockedFieldsChanged = new ApplicationText("资料新镇",
                     "renamed", "更新后的简介", List.of("更新后的规则"));
 
             assertThrows(TownRepository.ConflictException.class,
@@ -299,19 +298,19 @@ class TownRepositorySqliteTest {
 
             UUID cancelledApplicant = UUID.randomUUID();
             ApplicationSnapshot cancelled = repository.createDraft(cancelledApplicant,
-                    applicationText("撤回镇", "撤回", "CANCELLED"),
+                    applicationText("撤回镇", "CANCELLED"),
                     List.of(UUID.randomUUID(), UUID.randomUUID()), cooldown);
             repository.cancel(cancelled.id(), cancelledApplicant, "玩家撤回测试");
             assertThrows(TownRepository.ConflictException.class,
                     () -> repository.createDraft(cancelledApplicant,
-                            applicationText("撤回后", "撤后", "CANEXT"),
+                            applicationText("撤回后", "CANEXT"),
                             List.of(UUID.randomUUID(), UUID.randomUUID()), cooldown));
 
             UUID rejectedApplicant = UUID.randomUUID();
             UUID firstMember = UUID.randomUUID();
             UUID secondMember = UUID.randomUUID();
             ApplicationSnapshot rejected = repository.createDraft(rejectedApplicant,
-                    applicationText("拒绝镇", "拒绝", "REJECTED"),
+                    applicationText("拒绝镇", "REJECTED"),
                     List.of(firstMember, secondMember), cooldown);
             repository.respondInitialMember(rejected.id(), firstMember, true);
             repository.respondInitialMember(rejected.id(), secondMember, true);
@@ -322,7 +321,7 @@ class TownRepositorySqliteTest {
             repository.reject(rejected.id(), UUID.randomUUID(), "Admin", "管理员拒绝测试");
             assertThrows(TownRepository.ConflictException.class,
                     () -> repository.createDraft(rejectedApplicant,
-                            applicationText("拒绝后", "拒后", "REJNEXT"),
+                            applicationText("拒绝后", "REJNEXT"),
                             List.of(UUID.randomUUID(), UUID.randomUUID()), cooldown));
         }
     }
@@ -336,14 +335,14 @@ class TownRepositorySqliteTest {
             assertTrue(gate.verifyAndMigrate().healthy());
             TownRepository repository = new TownRepository(gate.dataSource(), () -> false);
             String payload = "'; DROP TABLE towns; --";
-            ApplicationText unsafeName = new ApplicationText(payload, "SQL", "SQLSAFE",
+            ApplicationText unsafeName = new ApplicationText(payload, "SQLSAFE",
                     "简介", List.of("规则"));
             assertThrows(IllegalArgumentException.class, unsafeName::requireValid);
 
             UUID applicantId = UUID.randomUUID();
             UUID firstMember = UUID.randomUUID();
             UUID secondMember = UUID.randomUUID();
-            ApplicationText text = new ApplicationText("注入测试镇", "注入", "SQLSAFE",
+            ApplicationText text = new ApplicationText("注入测试镇", "SQLSAFE",
                     payload, List.of(payload));
             text.requireValid();
             ApplicationSnapshot draft = repository.createDraft(applicantId, text,
@@ -397,21 +396,18 @@ class TownRepositorySqliteTest {
             TownRepository second = new TownRepository(secondGate.dataSource(), () -> false);
 
             assertSingleConcurrentWinner(
-                    () -> createDraft(first, applicationText("并 发 镇", "并发甲", "NORMONE")),
-                    () -> createDraft(second, applicationText(" 并发镇 ", "并发乙", "NORMTWO")));
+                    () -> createDraft(first, applicationText("并 发 镇", "NORMONE")),
+                    () -> createDraft(second, applicationText(" 并发镇 ", "NORMTWO")));
             assertSingleConcurrentWinner(
-                    () -> createDraft(first, applicationText("简称甲镇", "S P A C", "NORMTHREE")),
-                    () -> createDraft(second, applicationText("简称乙镇", " spac ", "NORMFOUR")));
+                    () -> createDraft(first, applicationText("领地甲镇", "MiXeD")),
+                    () -> createDraft(second, applicationText("领地乙镇", "mixed")));
             assertSingleConcurrentWinner(
-                    () -> createDraft(first, applicationText("领地甲镇", "领地甲", "MiXeD")),
-                    () -> createDraft(second, applicationText("领地乙镇", "领地乙", "mixed")));
-            assertSingleConcurrentWinner(
-                    () -> createDraft(first, applicationText("Å镇", "NFC甲", "NORMFIVE")),
-                    () -> createDraft(second, applicationText("A\u030A镇", "NFC乙", "NORMSIX")));
+                    () -> createDraft(first, applicationText("Å镇", "NORMFIVE")),
+                    () -> createDraft(second, applicationText("A\u030A镇", "NORMSIX")));
 
             List<Attempt> compatibilityAttempts = runConcurrently(
-                    () -> createDraft(first, applicationText("ATown", "半角", "HALFWIDTH")),
-                    () -> createDraft(second, applicationText("ＡTown", "全角", "FULLWIDTH")));
+                    () -> createDraft(first, applicationText("ATown", "HALFWIDTH")),
+                    () -> createDraft(second, applicationText("ＡTown", "FULLWIDTH")));
             assertEquals(2, compatibilityAttempts.stream().filter(Attempt::succeeded).count());
         }
     }
@@ -429,7 +425,7 @@ class TownRepositorySqliteTest {
             UUID firstMember = UUID.randomUUID();
             UUID secondMember = UUID.randomUUID();
             ApplicationSnapshot draft = repository.createDraft(applicantId,
-                    applicationText("事务申请镇", "事务申", "ROLLAPP"),
+                    applicationText("事务申请镇", "ROLLAPP"),
                     List.of(firstMember, secondMember), Duration.ZERO);
             repository.respondInitialMember(draft.id(), firstMember, true);
             repository.respondInitialMember(draft.id(), secondMember, true);
@@ -450,7 +446,7 @@ class TownRepositorySqliteTest {
                     + "WHERE business_key = 'rollback:application'"));
             dropTrigger(gate, "fail_application_approval");
 
-            CreatedTown joinTown = createTown(repository, 20, "事务入镇", "事务入", "ROLLJOIN");
+            CreatedTown joinTown = createTown(repository, 20, "事务入镇", "ROLLJOIN");
             UUID joiningPlayer = UUID.randomUUID();
             JoinApplicationSnapshot join = apply(repository, joinTown.town().id(), joiningPlayer);
             installAuditFailure(gate, "fail_join_approval", "MEMBER_APPLICATION_APPROVE");
@@ -461,7 +457,7 @@ class TownRepositorySqliteTest {
             assertFalse(repository.listMemberIds(joinTown.town().id()).contains(joiningPlayer));
             dropTrigger(gate, "fail_join_approval");
 
-            CreatedTown disbandTown = createTown(repository, 21, "事务解散", "事务散", "ROLLDIS");
+            CreatedTown disbandTown = createTown(repository, 21, "事务解散", "ROLLDIS");
             repository.listMemberIds(disbandTown.town().id()).stream()
                     .filter(playerId -> !playerId.equals(disbandTown.mayorId()))
                     .forEach(playerId -> repository.removeMember(disbandTown.town().id(), playerId,
@@ -491,7 +487,7 @@ class TownRepositorySqliteTest {
             UUID firstMember = UUID.randomUUID();
             UUID secondMember = UUID.randomUUID();
             ApplicationSnapshot draft = repository.createDraft(applicantId,
-                    applicationText("预留边界镇", "预留界", "RESTIME"),
+                    applicationText("预留边界镇", "RESTIME"),
                     List.of(firstMember, secondMember), Duration.ZERO);
             repository.respondInitialMember(draft.id(), firstMember, true);
             repository.respondInitialMember(draft.id(), secondMember, true);
@@ -505,7 +501,7 @@ class TownRepositorySqliteTest {
             UUID expiredFirst = UUID.randomUUID();
             UUID expiredSecond = UUID.randomUUID();
             ApplicationSnapshot expiredDraft = repository.createDraft(expiredApplicant,
-                    applicationText("过期预留镇", "过期界", "RESEXPIRE"),
+                    applicationText("过期预留镇", "RESEXPIRE"),
                     List.of(expiredFirst, expiredSecond), Duration.ZERO);
             repository.respondInitialMember(expiredDraft.id(), expiredFirst, true);
             repository.respondInitialMember(expiredDraft.id(), expiredSecond, true);
@@ -519,7 +515,7 @@ class TownRepositorySqliteTest {
                     () -> repository.submit(expiredDraft.id(), expiredApplicant));
 
             CreatedTown rejectionTown = createTown(repository, 30,
-                    "拒绝冷却镇", "拒却镇", "REJECTCD");
+                    "拒绝冷却镇", "REJECTCD");
             UUID rejectedPlayer = UUID.randomUUID();
             JoinApplicationSnapshot rejected = repository.applyToTown(rejectionTown.town().id(),
                     rejectedPlayer, Duration.ofHours(48), Duration.ofHours(24), Duration.ZERO, 3);
@@ -533,7 +529,7 @@ class TownRepositorySqliteTest {
                     .status().name());
 
             CreatedTown departureTown = createTown(repository, 31,
-                    "离镇冷却镇", "离却镇", "LEAVECD");
+                    "离镇冷却镇", "LEAVECD");
             UUID leavingPlayer = UUID.randomUUID();
             JoinApplicationSnapshot approved = repository.applyToTown(departureTown.town().id(),
                     leavingPlayer, Duration.ofHours(48), Duration.ZERO, Duration.ofHours(24), 3);
@@ -553,33 +549,6 @@ class TownRepositorySqliteTest {
     }
 
     @Test
-    void archivesMissingProjectionOnceAndKeepsReuseLocks() throws Exception {
-        DatabaseConfig config = new DatabaseConfig(
-                "jdbc:sqlite:" + temporaryDirectory.resolve("missing-projection.db"),
-                Duration.ofSeconds(5), Duration.ofSeconds(5));
-        try (DatabaseGate gate = new DatabaseGate(config)) {
-            assertTrue(gate.verifyAndMigrate().healthy());
-            TownRepository repository = new TownRepository(gate.dataSource(), () -> false);
-            CreatedTown created = createTown(repository, 32,
-                    "投影缺失镇", "缺失镇", "MISSPROJ");
-
-            assertTrue(repository.archiveTownForMissingProjection(created.town().id(),
-                    "Residence 不存在"));
-            assertFalse(repository.archiveTownForMissingProjection(created.town().id(),
-                    "重复对账"));
-            TownSnapshot archived = repository.findTown(created.town().id()).orElseThrow();
-            assertEquals(TownStatus.ARCHIVED, archived.status());
-            assertTrue(repository.listMemberIds(created.town().id()).isEmpty());
-            assertEquals(3, scalar(gate, "SELECT COUNT(*) FROM town_archived_members"));
-            assertEquals(1, scalar(gate, "SELECT COUNT(*) FROM territory_units WHERE town_id=x'"
-                    + created.town().id().toString().replace("-", "")
-                    + "' AND reuse_blocked=1"));
-            assertEquals(1, scalar(gate, "SELECT COUNT(*) FROM audit_logs "
-                    + "WHERE action='TOWN_SAFETY_ARCHIVE'"));
-        }
-    }
-
-    @Test
     void appliesConfiguredBufferAroundFiveByFiveTownUnits() {
         DatabaseConfig config = new DatabaseConfig(
                 "jdbc:sqlite:" + temporaryDirectory.resolve("site-buffer.db"),
@@ -588,9 +557,9 @@ class TownRepositorySqliteTest {
             assertTrue(gate.verifyAndMigrate().healthy());
             TownRepository repository = new TownRepository(gate.dataSource(), () -> false);
             CreatedTown existing = createTown(repository, 40,
-                    "缓冲基准镇", "基准镇", "BUFBASE");
+                    "缓冲基准镇", "BUFBASE");
             ApplicationSnapshot draft = createDraft(repository,
-                    applicationText("缓冲候选镇", "候选镇", "BUFCAND"));
+                    applicationText("缓冲候选镇", "BUFCAND"));
             ChunkPosition origin = existing.town().territory().center();
             InitialTerritory adjacent = new InitialTerritory(new ChunkPosition(
                     origin.worldId(), origin.worldName(), origin.x() + 5, origin.z()));
@@ -612,9 +581,9 @@ class TownRepositorySqliteTest {
             GovernanceRepository governance = new GovernanceRepository(
                     gate.dataSource(), () -> false);
             CreatedTown host = createTown(repository, 50,
-                    "访客接待镇", "接待镇", "VISITORS");
+                    "访客接待镇", "VISITORS");
             CreatedTown neighboring = createTown(repository, 51,
-                    "访客来源镇", "来源镇", "VISOURCE");
+                    "访客来源镇", "VISOURCE");
             String renamedTown = "改名后的访客接待镇";
             renameTown(gate, host.town().id(), renamedTown);
             List<UUID> hostMembers = repository.listMemberIds(host.town().id());
@@ -763,19 +732,18 @@ class TownRepositorySqliteTest {
         }
     }
 
-    private static ApplicationText applicationText(String name, String shortName,
+    private static ApplicationText applicationText(String name,
                                                    String residenceName) {
-        return new ApplicationText(name, shortName, residenceName,
+        return new ApplicationText(name, residenceName,
                 "测试简介", List.of("友善交流"));
     }
 
-    private static CreatedTown createTown(TownRepository repository, int index, String name,
-                                          String shortName, String residenceName) {
+    private static CreatedTown createTown(TownRepository repository, int index, String name, String residenceName) {
         UUID mayorId = UUID.randomUUID();
         UUID reviewerId = UUID.randomUUID();
         UUID initialMemberOne = UUID.randomUUID();
         UUID initialMemberTwo = UUID.randomUUID();
-        ApplicationText text = new ApplicationText(name, shortName, residenceName,
+        ApplicationText text = new ApplicationText(name, residenceName,
                 "测试简介", List.of("友善交流"));
         ApplicationSnapshot draft = repository.createDraft(mayorId, text,
                 List.of(initialMemberOne, initialMemberTwo), Duration.ZERO);

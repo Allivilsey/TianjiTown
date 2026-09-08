@@ -345,9 +345,8 @@ final class TownProvisioningStore {
             throws SQLException {
         ApplicationText text = application.text();
         try (PreparedStatement town = connection.prepareStatement("""
-                INSERT INTO towns (town_id, name, normalized_name, short_name, normalized_short_name,
-                                   description, rules_text, status, mayor_uuid)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'PROVISIONING', ?)
+                INSERT INTO towns (town_id, name, normalized_name, description, rules_text, status, mayor_uuid)
+                VALUES (?, ?, ?, ?, ?, 'PROVISIONING', ?)
                 """);
              PreparedStatement member = connection.prepareStatement("""
                      INSERT INTO town_members (town_id, player_uuid, role) VALUES (?, ?, ?)
@@ -364,7 +363,7 @@ final class TownProvisioningStore {
                      """)) {
             town.setBytes(1, uuid(townId));
             setTownText(town, 2, text);
-            town.setBytes(8, uuid(application.applicantId()));
+            town.setBytes(6, uuid(application.applicantId()));
             town.executeUpdate();
             member.setBytes(1, uuid(townId));
             member.setBytes(2, uuid(application.applicantId()));
@@ -454,10 +453,8 @@ final class TownProvisioningStore {
                                     ApplicationText text) throws SQLException {
         statement.setString(start, text.name());
         statement.setString(start + 1, text.normalizedName());
-        statement.setString(start + 2, text.shortName());
-        statement.setString(start + 3, text.normalizedShortName());
-        statement.setString(start + 4, text.description());
-        statement.setString(start + 5, String.join(RULE_SEPARATOR, text.rules()));
+        statement.setString(start + 2, text.description());
+        statement.setString(start + 3, String.join(RULE_SEPARATOR, text.rules()));
     }
 
     private static String safeDetail(String detail) {

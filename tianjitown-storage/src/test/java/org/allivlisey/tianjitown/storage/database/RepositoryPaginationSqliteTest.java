@@ -102,10 +102,8 @@ class RepositoryPaginationSqliteTest {
     private static void insertTown(Connection connection, UUID townId) throws Exception {
         try (PreparedStatement statement = connection.prepareStatement("""
                 INSERT INTO towns
-                    (town_id, name, normalized_name, short_name, normalized_short_name,
-                     description, rules_text, status, reuse_blocked, mayor_uuid,
-                     created_at, updated_at)
-                VALUES (?, '分页镇', '分页镇', '分页', '分页', '', '', 'ACTIVE', 1, ?, ?, ?)
+                    (town_id, name, normalized_name, description, rules_text, status, reuse_blocked, mayor_uuid, created_at, updated_at)
+                VALUES (?, '分页镇', '分页镇', '', '', 'ACTIVE', 1, ?, ?, ?)
                 """)) {
             statement.setBytes(1, uuid(townId));
             statement.setBytes(2, uuid(id(9_999)));
@@ -118,10 +116,8 @@ class RepositoryPaginationSqliteTest {
     private static void insertApplications(Connection connection, int count) throws Exception {
         try (PreparedStatement statement = connection.prepareStatement("""
                 INSERT INTO town_applications
-                    (application_id, applicant_uuid, name, normalized_name, short_name,
-                     normalized_short_name, residence_name, description, rules_text, status,
-                     submitted_at, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, '', '', 'SUBMITTED', ?, ?, ?)
+                    (application_id, applicant_uuid, name, normalized_name, residence_name, description, rules_text, status, submitted_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, '', '', 'SUBMITTED', ?, ?, ?)
                 """)) {
             for (int value = count; value >= 1; value--) {
                 String suffix = Integer.toString(value);
@@ -129,12 +125,10 @@ class RepositoryPaginationSqliteTest {
                 statement.setBytes(2, uuid(id(100_000 + value)));
                 statement.setString(3, "申请" + suffix);
                 statement.setString(4, "申请" + suffix);
-                statement.setString(5, "A" + suffix);
-                statement.setString(6, "a" + suffix);
-                statement.setString(7, "area" + suffix);
+                statement.setString(5, "area" + suffix);
+                statement.setLong(6, FIXED_MILLIS);
+                statement.setLong(7, FIXED_MILLIS);
                 statement.setLong(8, FIXED_MILLIS);
-                statement.setLong(9, FIXED_MILLIS);
-                statement.setLong(10, FIXED_MILLIS);
                 statement.addBatch();
             }
             statement.executeBatch();

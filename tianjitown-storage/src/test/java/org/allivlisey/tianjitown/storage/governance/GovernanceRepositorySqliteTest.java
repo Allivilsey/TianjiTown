@@ -144,7 +144,7 @@ class GovernanceRepositorySqliteTest {
 
             TownSnapshot beforeRules = townRepository.findTown(created.town().id()).orElseThrow();
             townRepository.updateTownProfile(beforeRules.id(), new ApplicationText(
-                    beforeRules.profile().name(), beforeRules.profile().shortName(),
+                    beforeRules.profile().name(),
                     beforeRules.profile().residenceName(), beforeRules.profile().description(),
                     List.of("新规则")), beforeRules.version(), created.mayorId(), "Mayor", "更新规则");
             MemberGovernanceSnapshot pendingRules = governance.dashboard(officerId).orElseThrow();
@@ -524,7 +524,7 @@ class GovernanceRepositorySqliteTest {
         UUID mayorId = UUID.randomUUID();
         UUID initialMemberOne = UUID.randomUUID();
         UUID initialMemberTwo = UUID.randomUUID();
-        ApplicationText text = new ApplicationText("治理测试镇", "治理", "GOV",
+        ApplicationText text = new ApplicationText("治理测试镇", "GOV",
                 "测试简介", List.of("初始规则"));
         ApplicationSnapshot draft = repository.createDraft(mayorId, text,
                 List.of(initialMemberOne, initialMemberTwo), Duration.ZERO);

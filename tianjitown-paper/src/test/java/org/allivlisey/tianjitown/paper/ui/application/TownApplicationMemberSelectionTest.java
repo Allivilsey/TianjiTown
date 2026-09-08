@@ -26,7 +26,7 @@ class TownApplicationMemberSelectionTest {
     private final UUID playerId = UUID.randomUUID();
     private final ApplicationFormSession form = new ApplicationFormSession(UUID.randomUUID(),
             FormPurpose.APPLICATION, null, 0,
-            new ApplicationText("", "", "", "", List.of()), List.of("Alex", "Steve"));
+            new ApplicationText("", "", "", List.of()), List.of("Alex", "Steve"));
     private TownApplicationFormDialogs dialogs;
 
     @BeforeEach

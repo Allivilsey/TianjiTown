@@ -192,8 +192,7 @@ public final class TownRulesDialogs {
                         presentation.dialogText("common.back"), "EDIT_TOWN_RULES", town.id().toString());
                 return;
             }
-            ApplicationText profile = new ApplicationText(town.profile().name(),
-                    town.profile().shortName(), town.profile().residenceName(),
+            ApplicationText profile = new ApplicationText(town.profile().name(), town.profile().residenceName(),
                     town.profile().description(), rules);
             actions.updateTownProfile(player, town.id(), profile, expectedVersion, outcome -> {
                 if (outcome.result().success()) {

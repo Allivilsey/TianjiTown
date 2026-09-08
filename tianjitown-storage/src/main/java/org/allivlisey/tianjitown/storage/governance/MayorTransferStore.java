@@ -79,7 +79,6 @@ final class MayorTransferStore {
                 if (!memberExists(connection, transfer.townId(), candidateId)) {
                     throw new ConflictException("候选人已不属于该小镇");
                 }
-                performMayorTransfer(connection, transfer.townId(), transfer.requestedBy(), candidateId);
             }
             String status = accept ? "ACCEPTED" : "REJECTED";
             try (PreparedStatement statement = connection.prepareStatement("""
@@ -91,6 +90,7 @@ final class MayorTransferStore {
                 statement.setBytes(3, uuid(transferId));
                 requireUpdated(statement, "转让请求已被处理");
             }
+            if (accept) performMayorTransfer(connection, transfer.townId(), transfer.requestedBy(), candidateId);
             audit(connection, candidateId, candidateId.toString(),
                     accept ? "MAYOR_TRANSFER_ACCEPT" : "MAYOR_TRANSFER_REJECT",
                     transfer.townId(), accept ? "候选成员接受镇长转让" : "候选成员拒绝镇长转让",
@@ -104,6 +104,12 @@ final class MayorTransferStore {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT * FROM mayor_transfer_requests
                  WHERE candidate_uuid = ? AND status = 'PENDING' AND expires_at > ?
+                   AND EXISTS (SELECT 1 FROM town_members m JOIN towns t ON t.town_id = m.town_id
+                       WHERE m.town_id = mayor_transfer_requests.town_id
+                         AND m.player_uuid = requested_by AND m.role = 'MAYOR' AND t.status = 'ACTIVE')
+                   AND EXISTS (SELECT 1 FROM town_members m
+                       WHERE m.town_id = mayor_transfer_requests.town_id
+                         AND m.player_uuid = candidate_uuid AND m.role <> 'MAYOR')
                  ORDER BY created_at DESC LIMIT 1
                 """)) {
             statement.setBytes(1, uuid(candidateId));
@@ -136,6 +142,7 @@ final class MayorTransferStore {
     }
 
     static void expireTransfers(Connection connection) throws SQLException {
+        MayorTransferValidity.cancelInvalid(connection);
         try (PreparedStatement statement = connection.prepareStatement("""
                 UPDATE mayor_transfer_requests SET status = 'EXPIRED', decided_at = ?
                  WHERE status = 'PENDING' AND expires_at <= ?

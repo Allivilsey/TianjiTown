@@ -56,8 +56,8 @@ class DatabaseConstraintConcurrencyTest {
         firstMayor = UUID.randomUUID();
         secondTown = UUID.randomUUID();
         secondMayor = UUID.randomUUID();
-        insertTown(firstGate, firstTown, firstMayor, "约束甲镇", "约甲", "DBA");
-        insertTown(firstGate, secondTown, secondMayor, "约束乙镇", "约乙", "DBB");
+        insertTown(firstGate, firstTown, firstMayor, "约束甲镇", "DBA");
+        insertTown(firstGate, secondTown, secondMayor, "约束乙镇", "DBB");
         firstTowns = new TownRepository(firstGate.dataSource(), () -> false);
         secondTowns = new TownRepository(secondGate.dataSource(), () -> false);
         firstGovernance = new GovernanceRepository(firstGate.dataSource(), () -> false);
@@ -210,14 +210,12 @@ class DatabaseConstraintConcurrencyTest {
         }
     }
 
-    private static void insertTown(DatabaseGate gate, UUID townId, UUID mayorId, String name,
-                                   String shortName, String residenceName) throws Exception {
+    private static void insertTown(DatabaseGate gate, UUID townId, UUID mayorId, String name, String residenceName) throws Exception {
         try (Connection connection = gate.dataSource().getConnection();
              var town = connection.prepareStatement("""
                      INSERT INTO towns
-                         (town_id, name, normalized_name, short_name, normalized_short_name,
-                          description, rules_text, status, mayor_uuid)
-                     VALUES (?, ?, ?, ?, ?, '约束测试', '规则', 'ACTIVE', ?)
+                         (town_id, name, normalized_name, description, rules_text, status, mayor_uuid)
+                     VALUES (?, ?, ?, '约束测试', '规则', 'ACTIVE', ?)
                      """);
              var mayor = connection.prepareStatement("""
                      INSERT INTO town_members (town_id, player_uuid, role)
@@ -233,9 +231,7 @@ class DatabaseConstraintConcurrencyTest {
             town.setBytes(1, uuid(townId));
             town.setString(2, name);
             town.setString(3, name);
-            town.setString(4, shortName);
-            town.setString(5, shortName);
-            town.setBytes(6, uuid(mayorId));
+            town.setBytes(4, uuid(mayorId));
             town.executeUpdate();
             mayor.setBytes(1, uuid(townId));
             mayor.setBytes(2, uuid(mayorId));

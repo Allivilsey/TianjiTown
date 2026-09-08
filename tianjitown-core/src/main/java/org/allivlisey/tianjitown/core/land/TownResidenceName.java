@@ -6,7 +6,7 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 public final class TownResidenceName {
-    private static final Pattern RESIDENCE_NAME = Pattern.compile("[a-z]{1,12}");
+    private static final Pattern RESIDENCE_NAME = Pattern.compile("[a-z]{3,9}");
 
     private TownResidenceName() {
     }
@@ -16,7 +16,7 @@ public final class TownResidenceName {
         String normalized = Normalizer.normalize(residenceName.strip(), Normalizer.Form.NFC)
                 .toLowerCase(Locale.ROOT);
         if (!RESIDENCE_NAME.matcher(normalized).matches()) {
-            throw new IllegalArgumentException("小镇代码必须为 1~12 个英文字母");
+            throw new IllegalArgumentException("小镇代码必须为 3~9 个英文字母");
         }
         return normalized;
     }

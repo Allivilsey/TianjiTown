@@ -20,12 +20,11 @@ final class TownProfileStore {
     public TownSnapshot updateTownProfile(UUID townId, ApplicationText profile, long expectedVersion,
                                           UUID actorId, String actorName, String reason) {
         database.requireWorkerThread();
-        profile.requireValidExistingProfile();
+        profile.requireValid();
         return database.transaction(connection -> {
             TownPersistence.requireManager(connection, townId, actorId);
             TownSnapshot current = TownPersistence.requireTown(connection, townId);
             if (!current.profile().name().equals(profile.name())
-                    || !current.profile().shortName().equals(profile.shortName())
                     || !current.profile().normalizedResidenceName()
                     .equals(profile.normalizedResidenceName())) {
                 throw new ConflictException("玩家资料入口不能修改小镇名称或小镇代码");

@@ -43,6 +43,7 @@ final class TownBeaconEffects {
     private final Supplier<TownBonusRepository.BonusIndex> index;
     private final Runnable refreshIndex;
     private final Map<PlayerEffectKey, ManagedEffect> managedEffects = new HashMap<>();
+    private PlayerEffectKey applyingEffect;
     private final AtomicBoolean beaconPlayerFailureLogged = new AtomicBoolean();
     private final AtomicBoolean beaconCleanupFailureLogged = new AtomicBoolean();
 
@@ -202,15 +203,32 @@ final class TownBeaconEffects {
                 continue;
             }
             int amplifier = entry.getValue();
-            player.addPotionEffect(new PotionEffect(entry.getKey().type(), duration, amplifier,
-                    true, true, true));
-            managedEffects.put(entry.getKey(), new ManagedEffect(amplifier, duration));
+            PotionEffect effect = new PotionEffect(entry.getKey().type(), duration, amplifier,
+                    true, true, true);
+            applyingEffect = entry.getKey();
+            try {
+                if (player.addPotionEffect(effect) && effect.equals(player.getPotionEffect(effect.getType()))) {
+                    managedEffects.put(entry.getKey(), new ManagedEffect(amplifier, duration,
+                            org.bukkit.Bukkit.getCurrentTick()));
+                } else {
+                    managedEffects.remove(entry.getKey());
+                }
+            } finally {
+                applyingEffect = null;
+            }
         }
         for (PlayerEffectKey key : new ArrayList<>(managedEffects.keySet())) {
             if (desired.containsKey(key)) {
                 continue;
             }
             removeManagedEffect(key, managedEffects.remove(key));
+        }
+    }
+
+    void onPotionEffectChange(org.bukkit.event.entity.EntityPotionEffectEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            PlayerEffectKey key = new PlayerEffectKey(player.getUniqueId(), event.getModifiedType());
+            if (!key.equals(applyingEffect)) managedEffects.remove(key);
         }
     }
 
@@ -242,7 +260,9 @@ final class TownBeaconEffects {
         }
         PotionEffect current = player.getPotionEffect(key.type());
         if (current != null && current.getAmplifier() == managed.amplifier()
-                && current.getDuration() <= managed.maximumDuration() + 40) {
+                && current.isAmbient() && current.hasParticles() && current.hasIcon()
+                && current.getDuration() == managed.maximumDuration()
+                    - (org.bukkit.Bukkit.getCurrentTick() - managed.appliedTick())) {
             player.removePotionEffect(key.type());
         }
     }
@@ -259,6 +279,6 @@ final class TownBeaconEffects {
     private record PlayerEffectKey(UUID playerId, PotionEffectType type) {
     }
 
-    private record ManagedEffect(int amplifier, int maximumDuration) {
+    private record ManagedEffect(int amplifier, int maximumDuration, int appliedTick) {
     }
 }

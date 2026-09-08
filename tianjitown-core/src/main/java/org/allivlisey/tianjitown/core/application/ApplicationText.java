@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-public record ApplicationText(String name, String shortName, String residenceName,
+public record ApplicationText(String name, String residenceName,
                               String description, List<String> rules) {
     private static final Pattern SAFE_NAME = Pattern.compile("[\\p{L}\\p{N}_\\-\\u00b7 ]+");
     private static final Pattern RESIDENCE_NAME = Pattern.compile("[A-Za-z]+");
@@ -18,7 +18,6 @@ public record ApplicationText(String name, String shortName, String residenceNam
 
     public ApplicationText {
         name = normalize(Objects.requireNonNull(name, "name"));
-        shortName = normalize(Objects.requireNonNull(shortName, "shortName"));
         residenceName = Normalizer.normalize(Objects.requireNonNull(residenceName, "residenceName"), Normalizer.Form.NFC);
         description = normalizeMultiline(Objects.requireNonNull(description, "description"));
         rules = Objects.requireNonNull(rules, "rules").stream()
@@ -52,18 +51,8 @@ public record ApplicationText(String name, String shortName, String residenceNam
         return List.copyOf(errors);
     }
 
-    public void requireValidExistingProfile() {
-        List<ValidationIssue> issues = validate().stream()
-                .filter(issue -> issue.field() != ValidationIssue.Field.RESIDENCE_NAME).toList();
-        if (!issues.isEmpty()) throw new ValidationException(issues);
-    }
-
     public String normalizedName() {
         return normalizeNameKey(name);
-    }
-
-    public String normalizedShortName() {
-        return normalizeKey(shortName);
     }
 
     public String normalizedResidenceName() {

@@ -15,7 +15,6 @@ public record ApplicationFormDraft(
         long applicationVersion,
         int currentStep,
         String name,
-        String shortName,
         String residenceName,
         String description,
         List<String> rules,
@@ -31,7 +30,6 @@ public record ApplicationFormDraft(
             throw new IllegalArgumentException("申请草稿步骤必须在 1~3 之间");
         }
         name = Objects.requireNonNullElse(name, "");
-        shortName = Objects.requireNonNullElse(shortName, "");
         residenceName = Objects.requireNonNullElse(residenceName, "");
         description = Objects.requireNonNullElse(description, "");
         rules = rules == null ? List.of() : List.copyOf(rules);

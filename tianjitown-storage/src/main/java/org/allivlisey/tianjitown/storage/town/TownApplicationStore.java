@@ -62,9 +62,8 @@ final class TownApplicationStore {
             UUID applicationId = UUID.randomUUID();
             try (PreparedStatement statement = connection.prepareStatement("""
                     INSERT INTO town_applications
-                        (application_id, applicant_uuid, name, normalized_name, short_name,
-                         normalized_short_name, residence_name, description, rules_text, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT')
+                        (application_id, applicant_uuid, name, normalized_name, residence_name, description, rules_text, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'DRAFT')
                     """)) {
                 setApplicationText(statement, 3, text);
                 statement.setBytes(1, uuid(applicationId));
@@ -95,13 +94,12 @@ final class TownApplicationStore {
             TownPersistence.ensureNameAvailable(connection, text, applicationId);
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE town_applications
-                       SET name = ?, normalized_name = ?, short_name = ?, normalized_short_name = ?,
-                           residence_name = ?, description = ?, rules_text = ?, version = version + 1
+                       SET name = ?, normalized_name = ?, residence_name = ?, description = ?, rules_text = ?, version = version + 1
                      WHERE application_id = ? AND version = ?
                     """)) {
                 setApplicationText(statement, 1, text);
-                statement.setBytes(8, uuid(applicationId));
-                statement.setLong(9, expectedVersion);
+                statement.setBytes(6, uuid(applicationId));
+                statement.setLong(7, expectedVersion);
                 TownPersistence.requireUpdated(statement, "申请资料已被其他操作修改，请重新打开");
             }
             replaceInitialMembers(connection, applicationId, applicantId, initialMemberIds);
@@ -461,11 +459,9 @@ final class TownApplicationStore {
                                             ApplicationText text) throws SQLException {
         statement.setString(start, text.name());
         statement.setString(start + 1, text.normalizedName());
-        statement.setString(start + 2, text.shortName());
-        statement.setString(start + 3, text.normalizedShortName());
-        statement.setString(start + 4, text.normalizedResidenceName());
-        statement.setString(start + 5, text.description());
-        statement.setString(start + 6, String.join(RULE_SEPARATOR, text.rules()));
+        statement.setString(start + 2, text.normalizedResidenceName());
+        statement.setString(start + 3, text.description());
+        statement.setString(start + 4, String.join(RULE_SEPARATOR, text.rules()));
     }
 
     private static void setTerritory(PreparedStatement statement, int start,

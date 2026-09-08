@@ -274,8 +274,6 @@ CREATE TABLE town_applications (
     applicant_uuid BLOB NOT NULL,
     name TEXT NOT NULL,
     normalized_name TEXT NOT NULL,
-    short_name TEXT NOT NULL,
-    normalized_short_name TEXT NOT NULL,
     residence_name TEXT NOT NULL,
     description TEXT NOT NULL,
     rules_text TEXT NOT NULL,
@@ -295,12 +293,6 @@ CREATE TABLE town_applications (
             'APPROVED_PROVISIONING', 'PROVISION_FAILED'
         ) THEN normalized_name ELSE NULL END
     ) STORED,
-    active_short_name TEXT GENERATED ALWAYS AS (
-        CASE WHEN status IN (
-            'DRAFT', 'SITE_SELECTED', 'SUBMITTED', 'UNDER_REVIEW', 'NEED_CHANGES',
-            'APPROVED_PROVISIONING', 'PROVISION_FAILED'
-        ) THEN normalized_short_name ELSE NULL END
-    ) STORED,
     active_residence_name TEXT GENERATED ALWAYS AS (
         CASE WHEN status IN (
             'DRAFT', 'SITE_SELECTED', 'SUBMITTED', 'UNDER_REVIEW', 'NEED_CHANGES',
@@ -317,7 +309,6 @@ CREATE TABLE town_applications (
     CHECK (application_fee_minor >= 0),
     CONSTRAINT uq_applications_active_applicant UNIQUE (active_applicant),
     CONSTRAINT uq_applications_active_name UNIQUE (active_name),
-    CONSTRAINT uq_applications_active_short_name UNIQUE (active_short_name),
     CONSTRAINT uq_applications_active_residence_name UNIQUE (active_residence_name),
     CONSTRAINT fk_applications_town FOREIGN KEY (town_id) REFERENCES towns (town_id)
 );
@@ -417,8 +408,6 @@ CREATE TABLE towns (
     town_id BLOB NOT NULL PRIMARY KEY,
     name TEXT NOT NULL,
     normalized_name TEXT NOT NULL,
-    short_name TEXT NOT NULL,
-    normalized_short_name TEXT NOT NULL,
     description TEXT NOT NULL,
     rules_text TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('PROVISIONING', 'ACTIVE', 'ARCHIVED')),
@@ -426,16 +415,12 @@ CREATE TABLE towns (
     reserved_normalized_name TEXT GENERATED ALWAYS AS (
         CASE WHEN status <> 'ARCHIVED' OR reuse_blocked = 1 THEN normalized_name ELSE NULL END
     ) STORED,
-    reserved_normalized_short_name TEXT GENERATED ALWAYS AS (
-        CASE WHEN status <> 'ARCHIVED' OR reuse_blocked = 1 THEN normalized_short_name ELSE NULL END
-    ) STORED,
     mayor_uuid BLOB NOT NULL,
     version INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)),
     updated_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)), rules_revision INTEGER NOT NULL DEFAULT 1, archived_at INTEGER, archive_reason TEXT, tax_rate_bps INTEGER NOT NULL DEFAULT 500
     CHECK (tax_rate_bps >= 0 AND tax_rate_bps < 10000), tax_revision INTEGER NOT NULL DEFAULT 1,
-    CONSTRAINT uq_towns_reserved_normalized_name UNIQUE (reserved_normalized_name),
-    CONSTRAINT uq_towns_reserved_normalized_short_name UNIQUE (reserved_normalized_short_name)
+    CONSTRAINT uq_towns_reserved_normalized_name UNIQUE (reserved_normalized_name)
 );
 CREATE INDEX ix_active_buffs_expiry ON active_buffs (status, expires_at);
 CREATE INDEX ix_active_buffs_town ON active_buffs (town_id, status, expires_at);
@@ -631,7 +616,6 @@ CREATE TABLE application_form_drafts (
     application_version INTEGER NOT NULL DEFAULT 0,
     current_step INTEGER NOT NULL DEFAULT 1 CHECK (current_step BETWEEN 1 AND 3),
     name TEXT NOT NULL DEFAULT '',
-    short_name TEXT NOT NULL DEFAULT '',
     residence_name TEXT NOT NULL DEFAULT '',
     description TEXT NOT NULL DEFAULT '',
     rules_text TEXT NOT NULL DEFAULT '',

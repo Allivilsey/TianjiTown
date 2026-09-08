@@ -42,6 +42,7 @@ final class TerritoryExpansionBatchStore {
             if (existing.isPresent()) {
                 return existing.get();
             }
+            requireNoPendingExpansion(connection, request.townId());
             AccountState account = EconomyPersistence.requireAccount(connection, request.townId());
             EconomyPersistence.requireUnlocked(account);
             if (account.balanceMinor() < request.totalPriceMinor()) {

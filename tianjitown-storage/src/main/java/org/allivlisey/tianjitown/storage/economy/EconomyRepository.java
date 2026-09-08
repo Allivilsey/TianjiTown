@@ -126,6 +126,10 @@ public final class EconomyRepository {
         return economyTaxStore.taxSubsidyQuota(townId, weeklyLimitMinor, twelveHourLimitMinor, now, zoneId);
     }
 
+    public LedgerMutation recordQuickShopTaxWithoutSubsidy(QuickShopTax tax, String detail) {
+        return economyTaxStore.recordQuickShopTax(tax, false, detail);
+    }
+
     public LedgerMutation recordQuickShopTax(QuickShopTax tax) {
         return economyTaxStore.recordQuickShopTax(tax);
     }

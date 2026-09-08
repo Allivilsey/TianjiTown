@@ -210,6 +210,10 @@ final class EconomyTaxStore {
     }
 
     LedgerMutation recordQuickShopTax(QuickShopTax tax) {
+        return recordQuickShopTax(tax, true, null);
+    }
+
+    LedgerMutation recordQuickShopTax(QuickShopTax tax, boolean applySubsidy, String detail) {
         database.requireWorkerThread();
         Objects.requireNonNull(tax, "tax");
         if (tax.taxMinor() <= 0 || tax.grossMinor() <= 0) {
@@ -227,7 +231,7 @@ final class EconomyTaxStore {
             SubsidyReservation subsidy = requireSubsidyReservation(connection, tax.businessKey());
             if (!subsidy.townId().equals(tax.townId())
                     || subsidy.requestedMinor() != tax.taxMinor()
-                    || subsidy.status().equals("CANCELLED")) {
+                    || (applySubsidy && subsidy.status().equals("CANCELLED"))) {
                 throw new ConflictException("税收补贴预留与税款不一致");
             }
             UUID taxId = UUID.randomUUID();
@@ -256,7 +260,7 @@ final class EconomyTaxStore {
                     tax.taxMinor(), tax.receiverId(), tax.receiverName(), tax.businessKey(),
                     tax.shopType() + " 商店税，shop=" + tax.shopId(), false);
             LedgerMutation result = taxMutation;
-            if (subsidy.grantedMinor() > 0) {
+            if (applySubsidy && subsidy.grantedMinor() > 0) {
                 result = EconomyPersistence.postLedger(connection, tax.townId(), "SERVER_TAX_SUBSIDY",
                         subsidy.grantedMinor(), null, "SERVER",
                         tax.businessKey() + ":subsidy",
@@ -264,12 +268,18 @@ final class EconomyTaxStore {
                                 ? "QuickShop 税收等额服务器补贴"
                                 : "QuickShop 税收限额内部分补贴", false);
             }
-            try (PreparedStatement statement = connection.prepareStatement("""
+            try (PreparedStatement statement = connection.prepareStatement(applySubsidy ? """
                     UPDATE quickshop_subsidy_reservations
                        SET status = 'APPLIED', last_error = NULL
                      WHERE business_key = ? AND status IN ('RESERVED', 'APPLIED')
+                    """ : """
+                    UPDATE quickshop_subsidy_reservations SET last_error = ? WHERE business_key = ?
                     """)) {
-                statement.setString(1, tax.businessKey());
+                if (applySubsidy) statement.setString(1, tax.businessKey());
+                else {
+                    statement.setString(1, EconomyPersistence.safe(detail));
+                    statement.setString(2, tax.businessKey());
+                }
                 EconomyPersistence.requireUpdated(statement, "税收补贴预留已失效");
             }
             return result;

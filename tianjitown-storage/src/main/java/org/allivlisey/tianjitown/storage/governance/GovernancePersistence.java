@@ -41,6 +41,7 @@ final class GovernancePersistence {
             town.setBytes(1, uuid(candidateId));
             town.setBytes(2, uuid(townId));
             requireUpdated(town, "小镇不存在");
+            MayorTransferValidity.cancelInvalid(connection);
         }
     }
 
@@ -60,6 +61,7 @@ final class GovernancePersistence {
             departure.setBytes(2, uuid(targetId));
             departure.setString(3, departureType);
             departure.executeUpdate();
+            MayorTransferValidity.cancelInvalid(connection);
         }
     }
 

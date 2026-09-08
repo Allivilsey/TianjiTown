@@ -75,7 +75,7 @@ class ApplicationFormDraftSqliteTest {
     }
 
     private static ApplicationFormDraft draft(UUID applicant, UUID member, List<String> rules) {
-        return new ApplicationFormDraft(applicant, null, 0, 2, "草稿小镇", "", "",
+        return new ApplicationFormDraft(applicant, null, 0, 2, "草稿小镇", "",
                 "尚未完成的表单", rules, member, member == null ? "" : "初始成员", null, "", null);
     }
 }

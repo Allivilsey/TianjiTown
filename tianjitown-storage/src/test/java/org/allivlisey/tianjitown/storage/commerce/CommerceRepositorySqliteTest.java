@@ -422,9 +422,8 @@ class CommerceRepositorySqliteTest {
         try (Connection connection = gate.dataSource().getConnection();
              PreparedStatement town = connection.prepareStatement("""
                      INSERT INTO towns
-                         (town_id, name, normalized_name, short_name, normalized_short_name,
-                          description, rules_text, status, mayor_uuid)
-                     VALUES (?, '消费测试镇', '消费测试镇', '消', '消', '测试', '规则', 'ACTIVE', ?)
+                         (town_id, name, normalized_name, description, rules_text, status, mayor_uuid)
+                     VALUES (?, '消费测试镇', '消费测试镇', '测试', '规则', 'ACTIVE', ?)
                      """);
              PreparedStatement member = connection.prepareStatement("""
                      INSERT INTO town_members (town_id, player_uuid, role) VALUES (?, ?, ?)

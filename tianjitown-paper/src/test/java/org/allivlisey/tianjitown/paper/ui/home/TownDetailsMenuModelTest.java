@@ -57,7 +57,7 @@ class TownDetailsMenuModelTest {
     }
 
     private static TownSnapshot town(String description, List<String> rules) {
-        ApplicationText profile = new ApplicationText("测试小镇", "TT", "TESTTOWN",
+        ApplicationText profile = new ApplicationText("测试小镇", "TESTTOWN",
                 description, rules);
         return new TownSnapshot(TOWN_ID, profile, TownStatus.ACTIVE, UUID.randomUUID(),
                 1L, 2L, Instant.parse("2026-01-01T00:00:00Z"), null, "READY", null);

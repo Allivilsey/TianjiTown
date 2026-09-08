@@ -140,10 +140,9 @@ class EconomyRepositorySqliteTest {
                     .stream().map(EconomyRepository.TerritoryUnitSnapshot::unit).toList(),
                     ExpansionDirection.EAST);
             assertEquals(2, outerEast.gridX());
-            EconomyRepository.ExpansionOperation outer = repository.prepareExpansion(
+            assertThrows(EconomyRepository.ConflictException.class, () -> repository.prepareExpansion(
                     new EconomyRepository.ExpansionRequest(townId, outerEast, "SKY", "unit_p2_p0",
-                            200, mayorId, "Mayor", "expansion:grid-outer"));
-            repository.refundExpansion(outer.expansionId(), "外圈测试回滚");
+                            200, mayorId, "Mayor", "expansion:grid-outer")));
             repository.refundExpansion(inner.expansionId(), "内圈测试回滚");
             assertEquals(2_000, repository.findFinanceByTown(townId).orElseThrow().balanceMinor());
 
@@ -220,7 +219,7 @@ class EconomyRepositorySqliteTest {
             insertTown(gate, townId, mayorId, UUID.randomUUID());
             UUID otherTown = UUID.randomUUID();
             UUID otherMayor = UUID.randomUUID();
-            insertTown(gate, otherTown, otherMayor, UUID.randomUUID(), "其他镇", "他", "OTHER", 50, 50);
+            insertTown(gate, otherTown, otherMayor, UUID.randomUUID(), "其他镇", "OTHER", 50, 50);
             EconomyRepository repository = new EconomyRepository(gate.dataSource(), () -> false);
             repository.initializeAccounts();
             Instant boundary = Instant.parse("2026-09-05T20:00:00Z"); // September 6, 04:00 Shanghai
@@ -627,7 +626,7 @@ class EconomyRepositorySqliteTest {
             UUID neighborId = UUID.randomUUID();
             insertTown(gate, townId, UUID.randomUUID(), worldId);
             insertTown(gate, neighborId, UUID.randomUUID(), worldId,
-                    "邻镇", "邻", "NEAR", 16, 20);
+                    "邻镇", "NEAR", 16, 20);
             EconomyRepository repository = new EconomyRepository(
                     gate.dataSource(), () -> false);
 
@@ -640,27 +639,6 @@ class EconomyRepositorySqliteTest {
                     chunk.townId().equals(neighborId) && chunk.townName().equals("邻镇")));
             assertTrue(repository.occupiedChunksOutsideTown(neighborId, worldId,
                     15, 17, 19, 21).isEmpty());
-        }
-    }
-
-    @Test
-    void legacyTownCodesStillLoadAndAllowProfileManagement() throws Exception {
-        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("legacy-codes.db");
-        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url, Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
-            assertTrue(gate.verifyAndMigrate().healthy());
-            UUID town = UUID.randomUUID(), mayor = UUID.randomUUID();
-            insertTown(gate, town, mayor, UUID.randomUUID());
-            var repository = new org.allivlisey.tianjitown.storage.town.TownRepository(gate.dataSource(), () -> false);
-            for (String code : List.of("a", "ab", "abcdefghij", "abcdefghijkl")) {
-                execute(gate, "UPDATE territory_units SET residence_name = '" + code + "'");
-                var loaded = repository.findTown(town).orElseThrow();
-                assertEquals(code, loaded.profile().residenceName());
-                var old = loaded.profile();
-                var updated = new org.allivlisey.tianjitown.core.application.ApplicationText(old.name(), old.shortName(), code,
-                        "修改后的简介", old.rules());
-                assertEquals("修改后的简介", repository.updateTownProfile(town, updated, loaded.version(),
-                        mayor, "Mayor", "旧代码兼容验证").profile().description());
-            }
         }
     }
 
@@ -800,22 +778,21 @@ class EconomyRepositorySqliteTest {
             assertTrue(repo.pendingOperations().isEmpty());
         }
     }
-    private static void insertTown(DatabaseGate gate, UUID townId, UUID mayorId, UUID worldId)
+    static void insertTown(DatabaseGate gate, UUID townId, UUID mayorId, UUID worldId)
             throws Exception {
         insertTown(gate, townId, mayorId, worldId,
-                "测试镇", "测", "SKY", 10, 20);
+                "测试镇", "SKY", 10, 20);
     }
 
     private static void insertTown(DatabaseGate gate, UUID townId, UUID mayorId, UUID worldId,
-                                   String name, String shortName, String residenceName,
+                                   String name, String residenceName,
                                    int centerX, int centerZ) throws Exception {
         UUID unitId = UUID.randomUUID();
         try (Connection connection = gate.dataSource().getConnection();
              PreparedStatement town = connection.prepareStatement("""
                      INSERT INTO towns
-                         (town_id, name, normalized_name, short_name, normalized_short_name,
-                          description, rules_text, status, mayor_uuid)
-                     VALUES (?, ?, ?, ?, ?, '经济测试', '规则', 'ACTIVE', ?)
+                         (town_id, name, normalized_name, description, rules_text, status, mayor_uuid)
+                     VALUES (?, ?, ?, '经济测试', '规则', 'ACTIVE', ?)
                      """);
              PreparedStatement member = connection.prepareStatement("""
                      INSERT INTO town_members (town_id, player_uuid, role)
@@ -831,9 +808,7 @@ class EconomyRepositorySqliteTest {
             town.setBytes(1, uuid(townId));
             town.setString(2, name);
             town.setString(3, name);
-            town.setString(4, shortName);
-            town.setString(5, shortName);
-            town.setBytes(6, uuid(mayorId));
+            town.setBytes(4, uuid(mayorId));
             town.executeUpdate();
             member.setBytes(1, uuid(townId));
             member.setBytes(2, uuid(mayorId));

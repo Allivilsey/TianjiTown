@@ -20,7 +20,7 @@ class TownActionsTest {
 
     @Test
     void invalidMiniMessageTextAlwaysUsesValidationFailedReason() {
-        ApplicationText text = new ApplicationText("<red>镇", "TJ", "SKY", "简介",
+        ApplicationText text = new ApplicationText("<red>镇", "SKY", "简介",
                 List.of("友善交流"));
         AtomicReference<TownActionOutcome<Object>> outcome = new AtomicReference<>();
 

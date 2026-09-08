@@ -91,7 +91,6 @@ final class TownComponentRegistrar {
         });
         runtime.recoverStartupState();
         runtime.buffs().refreshAllPlayers();
-        runtime.bonuses().recoverTaggedBeacons();
         runtime.bonuses().refreshIndex();
         startup.scheduler.registerPeriodic(runtime);
         List<String> details = new ArrayList<>(previousDetails);

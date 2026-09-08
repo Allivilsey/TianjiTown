@@ -28,9 +28,8 @@ class StationRepositorySqliteTest {
             assertTrue(gate.verifyAndMigrate().healthy());
             try (var connection = gate.dataSource().getConnection();
                  var statement = connection.prepareStatement("""
-                         INSERT INTO towns (town_id, name, normalized_name, short_name,
-                             normalized_short_name, description, rules_text, status, mayor_uuid)
-                         VALUES (?, '测试镇', 'test', '测试', 'tt', '', '', 'ACTIVE', ?)
+                         INSERT INTO towns (town_id, name, normalized_name, description, rules_text, status, mayor_uuid)
+                         VALUES (?, '测试镇', 'test', '', '', 'ACTIVE', ?)
                          """)) {
                 byte[] id = ByteBuffer.allocate(16).putLong(town.getMostSignificantBits())
                         .putLong(town.getLeastSignificantBits()).array();

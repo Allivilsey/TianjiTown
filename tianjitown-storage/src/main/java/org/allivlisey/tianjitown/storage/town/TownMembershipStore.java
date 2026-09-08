@@ -226,6 +226,7 @@ final class TownMembershipStore {
                 departure.setBytes(2, uuid(playerId));
                 departure.executeUpdate();
             }
+            org.allivlisey.tianjitown.storage.governance.MayorTransferValidity.cancelInvalid(connection);
             TownPersistence.audit(connection, null, playerId, playerId.toString(), "MEMBER_LEAVE", "TOWN",
                     townId.toString(), "成员主动退出", "");
             return null;
@@ -251,6 +252,7 @@ final class TownMembershipStore {
                 departure.setBytes(2, uuid(playerId));
                 departure.executeUpdate();
             }
+            org.allivlisey.tianjitown.storage.governance.MayorTransferValidity.cancelInvalid(connection);
             TownPersistence.audit(connection, null, actorId, actorName, "MEMBER_REMOVE", "TOWN", townId.toString(),
                     reason, playerId.toString());
             return null;
@@ -325,6 +327,7 @@ final class TownMembershipStore {
                 townUpdate.setLong(3, town.version());
                 TownPersistence.requireUpdated(townUpdate, "小镇资料已被其他操作修改");
             }
+            org.allivlisey.tianjitown.storage.governance.MayorTransferValidity.cancelInvalid(connection);
             TownPersistence.audit(connection, null, actorId, actorName, "MAYOR_TRANSFER", "TOWN",
                     townId.toString(), reason, town.mayorId() + " -> " + newMayorId);
             return null;

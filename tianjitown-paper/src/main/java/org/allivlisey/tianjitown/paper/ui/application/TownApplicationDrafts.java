@@ -82,10 +82,10 @@ public final class TownApplicationDrafts {
                 .orElse(null), draft -> {
             if (draft == null) {
                 startApplicationForm(player, null, 0,
-                        new ApplicationText("", "", "", "", List.of()), List.of(), 1);
+                        new ApplicationText("", "", "", List.of()), List.of(), 1);
                 return;
             }
-            ApplicationText text = new ApplicationText(draft.name(), draft.shortName(),
+            ApplicationText text = new ApplicationText(draft.name(),
                     draft.residenceName(), draft.description(), draft.rules());
             startApplicationForm(player, draft.applicationId(), draft.applicationVersion(), text,
                     List.of(draft.memberOneName(), draft.memberTwoName()), draft.currentStep());
@@ -110,7 +110,7 @@ public final class TownApplicationDrafts {
         UUID first = playerIdForDraft(names.get(0));
         UUID second = playerIdForDraft(names.get(1));
         ApplicationFormDraft draft = new ApplicationFormDraft(player.getUniqueId(),
-                form.targetId(), form.version(), step, form.text().name(), form.text().shortName(),
+                form.targetId(), form.version(), step, form.text().name(),
                 form.text().residenceName(), form.text().description(), form.text().rules(),
                 first, names.get(0), second, names.get(1), null);
         runtime.write(player, () -> runtime.repository().saveFormDraft(draft), afterSave);
@@ -171,8 +171,7 @@ public final class TownApplicationDrafts {
             return;
         }
         try {
-            if (form.purpose() == FormPurpose.TOWN_PROFILE) form.text().requireValidExistingProfile();
-            else form.text().requireValid();
+            form.text().requireValid();
         } catch (ApplicationText.ValidationException exception) {
             presentation.openNotice(player, presentation.dialogText("notice.draft-incomplete-title"),
                     ApplicationTextMessages.join(plugin.messages(), exception.issues()),

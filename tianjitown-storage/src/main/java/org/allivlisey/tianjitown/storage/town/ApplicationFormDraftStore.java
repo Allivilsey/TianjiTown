@@ -34,16 +34,13 @@ final class ApplicationFormDraftStore {
     static void save(Connection connection, ApplicationFormDraft draft) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 INSERT INTO application_form_drafts
-                    (applicant_uuid, application_id, application_version, current_step,
-                     name, short_name, residence_name, description, rules_text,
-                     member_one_uuid, member_one_name, member_two_uuid, member_two_name)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (applicant_uuid, application_id, application_version, current_step, name, residence_name, description, rules_text, member_one_uuid, member_one_name, member_two_uuid, member_two_name)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (applicant_uuid) DO UPDATE SET
                     application_id = excluded.application_id,
                     application_version = excluded.application_version,
                     current_step = excluded.current_step,
                     name = excluded.name,
-                    short_name = excluded.short_name,
                     residence_name = excluded.residence_name,
                     description = excluded.description,
                     rules_text = excluded.rules_text,
@@ -61,14 +58,13 @@ final class ApplicationFormDraftStore {
             statement.setLong(3, draft.applicationVersion());
             statement.setInt(4, draft.currentStep());
             statement.setString(5, draft.name());
-            statement.setString(6, draft.shortName());
-            statement.setString(7, draft.residenceName());
-            statement.setString(8, draft.description());
-            statement.setString(9, String.join(RULE_SEPARATOR, draft.rules()));
-            setNullableUuid(statement, 10, draft.memberOneId());
-            statement.setString(11, draft.memberOneName());
-            setNullableUuid(statement, 12, draft.memberTwoId());
-            statement.setString(13, draft.memberTwoName());
+            statement.setString(6, draft.residenceName());
+            statement.setString(7, draft.description());
+            statement.setString(8, String.join(RULE_SEPARATOR, draft.rules()));
+            setNullableUuid(statement, 9, draft.memberOneId());
+            statement.setString(10, draft.memberOneName());
+            setNullableUuid(statement, 11, draft.memberTwoId());
+            statement.setString(12, draft.memberTwoName());
             statement.executeUpdate();
         }
     }
@@ -105,7 +101,7 @@ final class ApplicationFormDraftStore {
         return new ApplicationFormDraft(readUuid(result, "applicant_uuid"),
                 application == null ? null : uuid(application),
                 result.getLong("application_version"), result.getInt("current_step"),
-                result.getString("name"), result.getString("short_name"),
+                result.getString("name"),
                 result.getString("residence_name"), result.getString("description"), rules,
                 memberOne == null ? null : uuid(memberOne), result.getString("member_one_name"),
                 memberTwo == null ? null : uuid(memberTwo), result.getString("member_two_name"),

@@ -225,7 +225,7 @@ public final class TerritoryService {
         }
         List<EconomyRepository.TerritoryUnitSnapshot> snapshots =
                 finance.territoryUnits(account.townId()).stream()
-                        .filter(unit -> !unit.projectionStatus().equals("FAILED"))
+                        .filter(unit -> unit.projectionStatus().equals("ACTIVE"))
                         .toList();
         EconomyRepository.TerritoryUnitSnapshot origin = snapshots.stream()
                 .filter(unit -> unit.unit().gridX() == 0 && unit.unit().gridZ() == 0)

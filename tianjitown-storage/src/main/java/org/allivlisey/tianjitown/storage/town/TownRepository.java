@@ -391,10 +391,6 @@ public final class TownRepository {
         deletionStore.completeTownDeletion(townId, actorId, actorName, reason);
     }
 
-    public boolean archiveTownForMissingProjection(UUID townId, String detail) {
-        return deletionStore.archiveTownForMissingProjection(townId, detail);
-    }
-
     public TownSnapshot updateTownProfile(UUID townId, ApplicationText profile, long expectedVersion,
                                           UUID actorId, String actorName, String reason) {
         return profileStore.updateTownProfile(townId, profile, expectedVersion, actorId, actorName, reason);

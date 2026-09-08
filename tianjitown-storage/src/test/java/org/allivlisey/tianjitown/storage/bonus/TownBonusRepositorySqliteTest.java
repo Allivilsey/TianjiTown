@@ -121,10 +121,8 @@ class TownBonusRepositorySqliteTest {
         try (Connection connection = gate.dataSource().getConnection();
              PreparedStatement town = connection.prepareStatement("""
                      INSERT INTO towns
-                         (town_id, name, normalized_name, short_name, normalized_short_name,
-                          description, rules_text, status, mayor_uuid)
-                     VALUES (?, '归档投影镇', '归档投影镇', '旧', '旧', '测试', '规则',
-                             'ARCHIVED', ?)
+                         (town_id, name, normalized_name, description, rules_text, status, mayor_uuid)
+                     VALUES (?, '归档投影镇', '归档投影镇', '测试', '规则', 'ARCHIVED', ?)
                      """);
              PreparedStatement unit = connection.prepareStatement("""
                      INSERT INTO territory_units
@@ -150,9 +148,8 @@ class TownBonusRepositorySqliteTest {
         try (Connection connection = gate.dataSource().getConnection();
              PreparedStatement town = connection.prepareStatement("""
                      INSERT INTO towns
-                         (town_id, name, normalized_name, short_name, normalized_short_name,
-                          description, rules_text, status, mayor_uuid)
-                     VALUES (?, '加成测试镇', '加成测试镇', '加', '加', '测试', '规则', 'ACTIVE', ?)
+                         (town_id, name, normalized_name, description, rules_text, status, mayor_uuid)
+                     VALUES (?, '加成测试镇', '加成测试镇', '测试', '规则', 'ACTIVE', ?)
                      """);
              PreparedStatement member = connection.prepareStatement("""
                      INSERT INTO town_members (town_id, player_uuid, role)

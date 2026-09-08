@@ -114,7 +114,7 @@ public final class TownApplicationFormDialogs {
         }
         String townCode = responseText(response, "residence_name");
         ApplicationText updated = new ApplicationText(
-                responseText(response, "town_name"), townCode, townCode,
+                responseText(response, "town_name"), townCode,
                 responseText(response, "description"), form.text().rules());
         ApplicationFormSession candidate = new ApplicationFormSession(form.id(), form.purpose(),
                 form.targetId(), form.version(), updated, form.initialMemberNames());
@@ -217,7 +217,7 @@ public final class TownApplicationFormDialogs {
 
     private void updateApplicationRules(Player player, ApplicationFormSession form,
                                         List<String> rules) {
-        ApplicationText updated = new ApplicationText(form.text().name(), form.text().shortName(),
+        ApplicationText updated = new ApplicationText(form.text().name(),
                 form.text().residenceName(), form.text().description(), rules);
         ApplicationFormSession candidate = new ApplicationFormSession(form.id(), form.purpose(),
                 form.targetId(), form.version(), updated, form.initialMemberNames());
@@ -265,7 +265,7 @@ public final class TownApplicationFormDialogs {
             ApplicationFormSession form, DialogResponseView response) {
         String townCode = responseText(response, "residence_name");
         ApplicationText updated = new ApplicationText(
-                responseText(response, "town_name"), townCode, townCode,
+                responseText(response, "town_name"), townCode,
                 responseText(response, "description"), form.text().rules());
         return new ApplicationFormSession(form.id(), form.purpose(), form.targetId(),
                 form.version(), updated, form.initialMemberNames());
@@ -460,7 +460,6 @@ public final class TownApplicationFormDialogs {
                 .filter(rule -> !rule.isBlank()).toList() : text.rules();
         return new ApplicationText(
                 field == ApplicationField.NAME ? value : text.name(),
-                text.shortName(),
                 field == ApplicationField.RESIDENCE_NAME ? value : text.residenceName(),
                 field == ApplicationField.DESCRIPTION ? value : text.description(),
                 rules);

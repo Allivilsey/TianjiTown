@@ -85,6 +85,7 @@ final class TerritoryExpansionStore {
             if (existing.isPresent()) {
                 return existing.get();
             }
+            requireNoPendingExpansion(connection, request.townId());
             AccountState account = EconomyPersistence.requireAccount(connection, request.townId());
             EconomyPersistence.requireUnlocked(account);
             if (account.balanceMinor() < request.priceMinor()) {
@@ -146,6 +147,7 @@ final class TerritoryExpansionStore {
     ExpansionOperation completeExpansion(UUID expansionId) {
         database.requireWorkerThread();
         return database.transaction(connection -> {
+            requireStandaloneExpansion(connection, expansionId);
             ExpansionOperation expansion = requireExpansion(connection, expansionId);
             if (expansion.status().equals("COMPLETED")) {
                 return expansion;
@@ -171,6 +173,7 @@ final class TerritoryExpansionStore {
     void refundExpansion(UUID expansionId, String error) {
         database.requireWorkerThread();
         database.transaction(connection -> {
+            requireStandaloneExpansion(connection, expansionId);
             ExpansionOperation expansion = requireExpansion(connection, expansionId);
             if (expansion.status().equals("COMPLETED")) {
                 throw new ConflictException("已完成扩张不能退款");
@@ -206,7 +209,7 @@ final class TerritoryExpansionStore {
                     SELECT e.*, u.world_uuid, u.world_name, u.grid_x, u.grid_z,
                            u.center_chunk_x, u.center_chunk_z, u.residence_name, u.residence_area_name
                       FROM territory_expansions e JOIN territory_units u ON u.unit_id = e.unit_id
-                     WHERE e.status IN ('PREPARED', 'COMPENSATION_REQUIRED')
+                     WHERE e.batch_id IS NULL AND e.status IN ('PREPARED', 'COMPENSATION_REQUIRED')
                      ORDER BY e.created_at, e.expansion_id
                     """); ResultSet rows = statement.executeQuery()) {
                 while (rows.next()) {

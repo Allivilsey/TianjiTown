@@ -80,62 +80,6 @@ final class TownDeletionStore {
         });
     }
 
-    public boolean archiveTownForMissingProjection(UUID townId, String detail) {
-        database.requireWorkerThread();
-        TownPersistence.requireReason(detail);
-        return database.transaction(connection -> {
-            try (PreparedStatement town = connection.prepareStatement("""
-                    UPDATE towns
-                       SET status = 'ARCHIVED', reuse_blocked = TRUE, archived_at = ?,
-                           archive_reason = ?, version = version + 1
-                     WHERE town_id = ? AND status = 'ACTIVE'
-                    """);
-                 PreparedStatement units = connection.prepareStatement("""
-                         UPDATE territory_units
-                            SET projection_status = 'FAILED', projection_error = ?, reuse_blocked = TRUE
-                          WHERE town_id = ?
-                         """);
-                 PreparedStatement members = connection.prepareStatement(
-                         "DELETE FROM town_members WHERE town_id = ?");
-                 PreparedStatement visitors = connection.prepareStatement(
-                         "DELETE FROM town_visitors WHERE town_id = ?");
-                 PreparedStatement invitations = connection.prepareStatement("""
-                         UPDATE town_invitations
-                            SET revoked_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
-                          WHERE town_id = ? AND accepted_at IS NULL AND revoked_at IS NULL
-                         """);
-                 PreparedStatement joinApplications = connection.prepareStatement("""
-                         UPDATE town_join_applications
-                            SET status = 'CANCELLED',
-                                decided_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
-                          WHERE town_id = ? AND status = 'PENDING'
-                         """)) {
-                snapshotMembers(connection, townId);
-                town.setLong(1, Instant.now().toEpochMilli());
-                town.setString(2, detail);
-                town.setBytes(3, uuid(townId));
-                if (town.executeUpdate() != 1) {
-                    return false;
-                }
-                units.setString(1, detail);
-                units.setBytes(2, uuid(townId));
-                units.executeUpdate();
-                members.setBytes(1, uuid(townId));
-                members.executeUpdate();
-                visitors.setBytes(1, uuid(townId));
-                visitors.executeUpdate();
-                invitations.setBytes(1, uuid(townId));
-                invitations.executeUpdate();
-                joinApplications.setBytes(1, uuid(townId));
-                joinApplications.executeUpdate();
-            }
-            TownPersistence.audit(connection, null, null, "SYSTEM", "TOWN_SAFETY_ARCHIVE", "TOWN",
-                    townId.toString(), "Residence 投影缺失", detail
-                            + "；名称、小镇代码和区块继续锁定，禁止自动复用");
-            return true;
-        });
-    }
-
     private TownSnapshot prepareTownDeletion(Connection connection, UUID townId, UUID actorId,
                                               String actorName, String reason, boolean mayorOnly,
                                               long expectedVersion) throws SQLException {

@@ -107,7 +107,16 @@ public final class DonationRefundCoordinator {
             result = VaultSettlementService.Result.failure(
                     resolveMessage(REFUND_CALL_FAILURE, Map.of("detail",
                             safeText(TownActionFailures.safeMessage(exception)))),
-                    false, false);
+                    false, true);
+        }
+        if (result == null || result.compensationRequired()) {
+            // Keep this operation registered to prevent resubmission from paying again.
+            // Its persisted compensation record and account lock require manual verification.
+            String detail = result == null
+                    ? resolveMessage(REFUND_CALL_FAILURE, Map.of("detail", "null")) : result.message();
+            listener.retryFailed(recovery.operation, recovery.externalAttempts, detail);
+            listener.exhausted(recovery.operation, detail);
+            return;
         }
         if (result.success()) {
             recovery.externalRestored = true;

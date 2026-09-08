@@ -197,6 +197,80 @@ class TownTaxRuntimeTest {
         verify(finance).recordExternalIncomeTax(any());
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void quickShopTaxSurvivesReservationAndPaymentFailures(boolean reservationFails) {
+        var reservation = new EconomyRepository.SubsidyReservation(UUID.randomUUID(), townId,
+                "quickshop:test", 500, 500, Instant.now(), Instant.now(), "RESERVED");
+        if (reservationFails) {
+            when(finance.reserveTaxSubsidy(any(), anyString(), anyLong(), anyLong(), anyLong(), any(), any()))
+                    .thenThrow(new EconomyRepository.StorageUnavailableException("offline", null))
+                    .thenReturn(reservation);
+        }
+        when(settlement.adjustSettlement(500)).thenReturn(
+                VaultSettlementService.Result.failure("definite failure", false, false));
+        taxes.acceptQuickShopTax(quickShopTax());
+        worker.remove().run();
+        if (reservationFails) {
+            assertFalse(available.get());
+            assertEquals(1, delayed.size());
+            delayed.remove().run();
+            worker.remove().run();
+        }
+        main.remove().run();
+        worker.remove().run();
+        verify(finance).cancelTaxSubsidy("quickshop:test", "definite failure");
+        verify(finance).recordQuickShopTaxWithoutSubsidy(argThat(tax -> tax.taxMinor() == 500),
+                eq("definite failure"));
+        assertTrue(available.get());
+        assertTrue(worker.isEmpty());
+        assertTrue(main.isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"success", "ambiguous", "exception", "null"})
+    void quickShopLedgerRetryNeverRepeatsSubsidyPayment(String outcome) {
+        switch (outcome) {
+            case "success" -> when(settlement.adjustSettlement(500))
+                    .thenReturn(VaultSettlementService.Result.success("paid"));
+            case "ambiguous" -> when(settlement.adjustSettlement(500))
+                    .thenReturn(VaultSettlementService.Result.failure("unknown", false, true));
+            case "exception" -> when(settlement.adjustSettlement(500))
+                    .thenThrow(new IllegalStateException("lost response"));
+            default -> when(settlement.adjustSettlement(500)).thenReturn(null);
+        }
+        if (outcome.equals("success")) {
+            when(finance.recordQuickShopTax(any()))
+                    .thenThrow(new EconomyRepository.StorageUnavailableException("offline", null))
+                    .thenReturn(null);
+        } else {
+            when(finance.recordQuickShopTaxWithoutSubsidy(any(), anyString()))
+                    .thenThrow(new EconomyRepository.StorageUnavailableException("offline", null))
+                    .thenReturn(null);
+        }
+        taxes.acceptQuickShopTax(quickShopTax());
+        worker.remove().run();
+        main.remove().run();
+        worker.remove().run();
+        assertEquals(1, delayed.size());
+        delayed.remove().run();
+        worker.remove().run();
+        taxes.flushPendingTaxes();
+        verify(settlement, times(1)).adjustSettlement(500);
+        verify(finance, never()).cancelTaxSubsidy(anyString(), anyString());
+        if (outcome.equals("success")) verify(finance, times(2)).recordQuickShopTax(any());
+        else verify(finance, times(2)).recordQuickShopTaxWithoutSubsidy(any(), anyString());
+        assertTrue(worker.isEmpty());
+        assertTrue(main.isEmpty());
+        assertTrue(delayed.isEmpty());
+    }
+
+    private org.allivlisey.tianjitown.integrations.quickshop.QuickShopTaxAdapter.SuccessfulTax quickShopTax() {
+        return new org.allivlisey.tianjitown.integrations.quickshop.QuickShopTaxAdapter.SuccessfulTax(
+                townId, "quickshop:test", 1, "SELLING", playerId, "Member", UUID.randomUUID(),
+                10_000, 500, 500, "world");
+    }
+
     private void acceptIncome(String source) {
         if (source.equals("JOBS")) {
             var result = taxes.acceptJobsIncomeTax(new JobsIncomeTaxAdapter.Earning(player, 100));

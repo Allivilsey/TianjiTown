@@ -149,18 +149,17 @@ final class TownPersistence {
         ensureTownNameAvailable(connection, text, null);
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT application_id FROM town_applications
-                 WHERE (active_name = ? OR active_short_name = ? OR active_residence_name = ?)
+                 WHERE (active_name = ? OR active_residence_name = ?)
                    AND (? IS NULL OR application_id <> ?) LIMIT 1
                 """)) {
             statement.setString(1, text.normalizedName());
-            statement.setString(2, text.normalizedShortName());
-            statement.setString(3, text.normalizedResidenceName());
+            statement.setString(2, text.normalizedResidenceName());
             if (ignoredApplicationId == null) {
+                statement.setNull(3, java.sql.Types.BINARY);
                 statement.setNull(4, java.sql.Types.BINARY);
-                statement.setNull(5, java.sql.Types.BINARY);
             } else {
+                statement.setBytes(3, uuid(ignoredApplicationId));
                 statement.setBytes(4, uuid(ignoredApplicationId));
-                statement.setBytes(5, uuid(ignoredApplicationId));
             }
             try (ResultSet result = statement.executeQuery()) {
                 if (result.next()) {
@@ -184,17 +183,16 @@ final class TownPersistence {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT town_id FROM towns
                  WHERE reuse_blocked = TRUE
-                   AND (normalized_name = ? OR normalized_short_name = ?)
+                   AND (normalized_name = ?)
                   AND (? IS NULL OR town_id <> ?) LIMIT 1
                 """)) {
             statement.setString(1, text.normalizedName());
-            statement.setString(2, text.normalizedShortName());
             if (ignoredTownId == null) {
+                statement.setNull(2, java.sql.Types.BINARY);
                 statement.setNull(3, java.sql.Types.BINARY);
-                statement.setNull(4, java.sql.Types.BINARY);
             } else {
+                statement.setBytes(2, uuid(ignoredTownId));
                 statement.setBytes(3, uuid(ignoredTownId));
-                statement.setBytes(4, uuid(ignoredTownId));
             }
             try (ResultSet result = statement.executeQuery()) {
                 if (result.next()) {
@@ -434,7 +432,7 @@ final class TownPersistence {
 
     static ApplicationText readText(ResultSet result, String residenceName) throws SQLException {
         String rules = result.getString("rules_text");
-        return new ApplicationText(result.getString("name"), result.getString("short_name"),
+        return new ApplicationText(result.getString("name"),
                 residenceName, result.getString("description"),
                 rules == null || rules.isEmpty() ? List.of() : List.of(rules.split(RULE_SEPARATOR, -1)));
     }

@@ -83,6 +83,6 @@ class TownApplicationDraftsTest {
 
     private static ApplicationFormSession newForm() {
         return new ApplicationFormSession(UUID.randomUUID(), FormPurpose.APPLICATION, null, 0,
-                new ApplicationText("", "", "", "", List.of()), List.of());
+                new ApplicationText("", "", "", List.of()), List.of());
     }
 }
