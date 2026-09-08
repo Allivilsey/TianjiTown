@@ -2,6 +2,8 @@ package org.allivlisey.tianjitown.core.land;
 
 import org.allivlisey.tianjitown.core.economy.MoneyAmount;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -88,5 +90,52 @@ class ExpansionRulesTest {
     private static TerritoryUnit unit(int gridX, int gridZ, int centerX, int centerZ) {
         return new TerritoryUnit(gridX, gridZ, new InitialTerritory(
                 new ChunkPosition(WORLD, "world", centerX, centerZ)));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"1,1", "-1,-1", "2,0", "0,-2", "-3,0", "0,3",
+            "-2147483648,0", "0,-2147483648", "2147483647,0", "0,2147483647"})
+    void rejectsDiagonalDisconnectedAndExtremeTargets(int x, int z) {
+        var units = new java.util.ArrayList<>(List.of(unit(0, 0, 10, 20)));
+        var before = List.copyOf(units);
+        assertThrows(IllegalArgumentException.class, () -> TerritoryRules.target(units, x, z));
+        assertEquals(before, units);
+    }
+
+    @Test
+    void refusesExpansionFromDuplicateDisconnectedOrMissingOriginState() {
+        var origin = unit(0, 0, 10, 20);
+        for (var units : List.of(List.<TerritoryUnit>of(), List.of(origin, origin),
+                List.of(unit(1, 0, 15, 20)), List.of(origin, unit(2, 0, 20, 20)))) {
+            assertThrows(IllegalArgumentException.class, () -> TerritoryRules.target(units, 0, 1));
+            assertThrows(IllegalArgumentException.class,
+                    () -> TerritoryRules.next(units, ExpansionDirection.SOUTH));
+        }
+    }
+
+    @Test
+    void acceptsTheTwentyFifthUnitAndRejectsFurtherExpansion() {
+        var units = new java.util.ArrayList<TerritoryUnit>();
+        for (int z = -2; z <= 2; z++) {
+            for (int x = -2; x <= 2; x++) {
+                if (x != 2 || z != 2) units.add(unit(x, z, 10 + 5 * x, 20 + 5 * z));
+            }
+        }
+        var last = TerritoryRules.target(units, 2, 2);
+        assertEquals(unit(2, 2, 20, 30), last);
+        units.add(last);
+        assertEquals(25, units.size());
+        for (var direction : ExpansionDirection.values()) {
+            assertThrows(IllegalArgumentException.class, () -> TerritoryRules.next(units, direction));
+        }
+        assertThrows(IllegalArgumentException.class, () -> TerritoryRules.target(units, 2, 2));
+    }
+
+    @Test
+    void rejectsBatchTotalOverflowEvenWhenEachItemPriceFits() {
+        var base = new BigDecimal("50000000000000000");
+        assertEquals(5_000_000_000_000_000_000L, ExpansionPricing.price(base, 0, 2).minorUnits());
+        assertEquals(5_250_000_000_000_000_000L, ExpansionPricing.price(base, 1, 2).minorUnits());
+        assertThrows(ArithmeticException.class, () -> ExpansionPricing.batchPriceMinor(base, 0, 2, 2));
     }
 }

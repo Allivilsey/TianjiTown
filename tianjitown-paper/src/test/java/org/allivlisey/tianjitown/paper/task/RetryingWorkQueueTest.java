@@ -164,12 +164,60 @@ class RetryingWorkQueueTest {
                 (item, error) -> failures.add(item));
     }
 
+    @Test
+    void rejectedTimerRetainsHeadAndAllowsSchedulingAgainAfterExplicitFlush() {
+        AtomicBoolean unavailable = new AtomicBoolean(true);
+        var queue = queue(item -> {
+            if (unavailable.get()) throw new IllegalStateException("database offline");
+            completed.add(item);
+        });
+        queue.submit("first");
+        queue.submit("second");
+        scheduler.rejectTimer = true;
+        assertThrows(java.util.concurrent.RejectedExecutionException.class, scheduler::runWorker);
+        assertEquals(2, queue.pendingCount());
+        assertTrue(completed.isEmpty());
+        assertTrue(scheduler.delayed.isEmpty());
+
+        scheduler.rejectTimer = false;
+        queue.flush();
+        scheduler.runWorker();
+        assertEquals(1, scheduler.delayed.size());
+        unavailable.set(false);
+        scheduler.runRetry();
+        scheduler.runWorker();
+        assertEquals(List.of("first", "second"), completed);
+        assertEquals(List.of("first", "first"), failures);
+        assertEquals(0, queue.pendingCount());
+        assertTrue(scheduler.delayed.isEmpty());
+    }
+
+    @Test
+    void staleTimerAfterExplicitRecoveryDoesNotProcessItemsTwice() {
+        AtomicBoolean unavailable = new AtomicBoolean(true);
+        var queue = queue(item -> {
+            if (unavailable.get()) throw new IllegalStateException("offline");
+            completed.add(item);
+        });
+        queue.submit("first");
+        scheduler.runWorker();
+        unavailable.set(false);
+        queue.submit("second");
+        scheduler.runWorker();
+        assertEquals(List.of("first", "second"), completed);
+        scheduler.runRetry();
+        assertTrue(scheduler.workers.isEmpty());
+        assertEquals(0, queue.pendingCount());
+        assertEquals(List.of("first", "second"), completed);
+    }
+
     // Separate worker and timer queues model scheduling without wall-clock sleeps.
     private static final class TestScheduler implements RetryingWorkQueue.Scheduler {
         private final Queue<Runnable> workers = new ArrayDeque<>();
         private final Queue<Runnable> delayed = new ArrayDeque<>();
         private final List<Long> delays = new ArrayList<>();
         private boolean rejectWorker;
+        private boolean rejectTimer;
 
         @Override
         public void executeAsync(Runnable task) {
@@ -179,6 +227,7 @@ class RetryingWorkQueueTest {
 
         @Override
         public void schedule(Runnable task, long delayTicks) {
+            if (rejectTimer) throw new java.util.concurrent.RejectedExecutionException();
             delays.add(delayTicks);
             delayed.add(task);
         }
