@@ -117,6 +117,9 @@ public final class TownDiagnosticRepository {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT m.town_id, m.player_uuid FROM town_members m
                 JOIN towns t ON t.town_id = m.town_id WHERE t.status = 'ACTIVE'
+                UNION
+                SELECT v.town_id, v.player_uuid FROM town_visitors v
+                JOIN towns t ON t.town_id = v.town_id WHERE t.status = 'ACTIVE'
                 """); ResultSet rows = statement.executeQuery()) {
             while (rows.next()) {
                 LandBuilder builder = builders.get(readUuid(rows, "town_id"));

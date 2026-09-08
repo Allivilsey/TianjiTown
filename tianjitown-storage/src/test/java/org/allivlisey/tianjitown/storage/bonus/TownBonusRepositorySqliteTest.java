@@ -1,6 +1,7 @@
 package org.allivlisey.tianjitown.storage.bonus;
 
 import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
+import org.allivlisey.tianjitown.storage.town.TownRepository;
 
 import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
 import org.allivlisey.tianjitown.storage.database.DatabaseGate;
@@ -25,6 +26,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TownBonusRepositorySqliteTest {
     @TempDir
     Path temporaryDirectory;
+
+    @Test
+    void diagnosticsIncludeVisitorsWithoutCountingThemAsMembers() throws Exception {
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("diagnostic-visitors.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID townId = UUID.randomUUID();
+            UUID mayorId = UUID.randomUUID();
+            UUID visitorId = UUID.randomUUID();
+            insertTownAndTerritory(gate, townId, mayorId, UUID.randomUUID());
+            TownRepository towns = new TownRepository(gate.dataSource(), () -> false);
+            towns.addVisitor(townId, visitorId, mayorId, "Mayor");
+            TownDiagnosticRepository diagnostics = new TownDiagnosticRepository(
+                    gate.dataSource(), () -> false);
+            var added = diagnostics.diagnose(Instant.EPOCH);
+            assertEquals(java.util.Set.of(mayorId, visitorId),
+                    java.util.Set.copyOf(added.landStates().getFirst().members()));
+            assertEquals(1, added.counts().get("members"));
+            towns.removeVisitor(townId, visitorId, mayorId, "Mayor");
+            assertEquals(java.util.List.of(mayorId),
+                    diagnostics.diagnose(Instant.EPOCH).landStates().getFirst().members());
+        }
+    }
 
     @Test
     void reservesWeeklyRefundAtomicallyAndRevalidatesTerritory() throws Exception {

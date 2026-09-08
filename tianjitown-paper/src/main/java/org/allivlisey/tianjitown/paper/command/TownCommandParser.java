@@ -222,7 +222,7 @@ public final class TownCommandParser {
         return new ParseException(key, placeholders);
     }
 
-    static final class ParseException extends IllegalArgumentException {
+    public static final class ParseException extends IllegalArgumentException {
         private final String messageKey;
         private final Map<String, ?> placeholders;
 
@@ -238,11 +238,11 @@ public final class TownCommandParser {
             this.placeholders = Map.copyOf(placeholders);
         }
 
-        String messageKey() {
+        public String messageKey() {
             return messageKey;
         }
 
-        Map<String, ?> placeholders() {
+        public Map<String, ?> placeholders() {
             return placeholders;
         }
     }

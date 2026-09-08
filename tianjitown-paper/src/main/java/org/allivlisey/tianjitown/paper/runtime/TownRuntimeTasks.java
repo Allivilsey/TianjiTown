@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
+import org.allivlisey.tianjitown.paper.command.TownCommandParser;
 import org.allivlisey.tianjitown.storage.bonus.TownBonusRepository;
 import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
 import org.allivlisey.tianjitown.storage.commerce.CommerceRepository;
@@ -89,7 +90,9 @@ final class TownRuntimeTasks {
         if (exception instanceof RuntimeException runtimeException) {
             markStorageFailure(runtimeException);
         }
-        String detail = exception instanceof ApplicationNotFoundException
+        String detail = exception instanceof TownCommandParser.ParseException parse
+                ? plugin.messages().plainText(parse.messageKey(), parse.placeholders())
+                : exception instanceof ApplicationNotFoundException
                 ? plugin.messages().plainText(PROVISION_APPLICATION_NOT_FOUND_DETAIL)
                 : safeText(safeMessage(exception));
         plugin.runMain(

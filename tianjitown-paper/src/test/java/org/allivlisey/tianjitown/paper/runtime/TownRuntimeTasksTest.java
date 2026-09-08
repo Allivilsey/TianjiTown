@@ -2,10 +2,13 @@ package org.allivlisey.tianjitown.paper.runtime;
 
 import java.util.ArrayDeque;
 import java.util.Queue;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
+import org.allivlisey.tianjitown.paper.command.TownCommandParser;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.allivlisey.tianjitown.storage.town.TownRepository;
@@ -29,6 +32,21 @@ class TownRuntimeTasksTest {
         when(plugin.getLogger()).thenReturn(Logger.getAnonymousLogger());
         when(plugin.runAsync(any())).thenAnswer(call -> worker.add(call.getArgument(0)));
         when(plugin.runMain(any())).thenAnswer(call -> main.add(call.getArgument(0)));
+    }
+
+    @Test
+    void asynchronousCommandParseFailureResolvesMessageAndKeepsStorageAvailable() {
+        when(plugin.messages().plainText("chat.parser.missing-reason", Map.of()))
+                .thenReturn("必须填写原因");
+        tasks.read(sender, () -> TownCommandParser.namedAmountReason(
+                        new String[]{"astrara", "5"}, 0, List.of("astrara")),
+                ignored -> fail("invalid command must not succeed"));
+        worker.remove().run();
+        verify(plugin.messages(), never()).send(eq(sender), eq("chat.runtime.operation-failed"), anyMap());
+        assertTrue(available.get());
+        main.remove().run();
+        verify(plugin.messages()).send(sender, "chat.runtime.operation-failed",
+                Map.of("detail", "必须填写原因"));
     }
 
     @Test
