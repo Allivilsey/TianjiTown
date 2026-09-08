@@ -87,19 +87,19 @@ validation:
     areas-required: '领地预览至少需要一个区域'
     world-mismatch: '领地预览区域必须位于同一世界'
     focus-missing: '领地中心不在预览区域中'
-  # TerritoryService 扩张校验消息；批量选择失败、身份校验和批量请求状态不含动态占位符
+  # TerritoryService 激活校验消息；批量选择失败、身份校验和批量请求状态不含动态占位符
   territory:
-    price-changed: '&e扩张价格已变化，请重新查看价格后确认'
+    price-changed: '&e激活价格已变化，请重新查看价格后确认'
     batch-selection-required: '请至少选择一个领地单元'
-    batch-capacity-exceeded: '批量扩张后超过领地单元上限'
-    batch-grid-out-of-bounds: '选中的领地单元超出 5×5 扩张网格'
-    batch-duplicate-selection: '批量扩张包含重复领地单元'
-    batch-occupied-selection: '选中的领地单元已经被占领'
+    batch-capacity-exceeded: '批量激活后超过领地单元上限'
+    batch-grid-out-of-bounds: '选中的领地单元超出 5×5 激活网格'
+    batch-duplicate-selection: '批量激活包含重复领地单元'
+    batch-occupied-selection: '选中的领地单元已经激活'
     batch-not-connected: '批量选区必须与现有领地四方向连通'
-    batch-request-id-required: '批量扩张幂等键不能为空'
-    batch-already-refunded: '该批量扩张操作已经退款，请重新选择区域'
+    batch-request-id-required: '批量激活幂等键不能为空'
+    batch-already-refunded: '该批量激活操作已经退款，请重新选择区域'
     town-required: '你不属于任何小镇'
-    mayor-required: '只有镇长可以使用公共资金扩张'
+    mayor-required: '只有镇长可以使用公共资金激活'
     origin-missing: '初始领地单元缺失'
     capacity-reached: '领地单元已达到配置上限'
 
@@ -334,7 +334,7 @@ chat:
     usage-land: '用法: /tianjitown land <preview|reconcile|rebuild> <小镇代码|all>'
     land-player-only: '&c领地粒子预览只能由游戏内玩家执行'
     land-action-unsupported: 'land 只支持 preview/reconcile/rebuild'
-    # 管理员资金、税率、账本、扩张和 Buff 命令；{town}=小镇名，{buff}=Buff 显示名，
+    # 管理员资金、税率、账本、激活和 Buff 命令；{town}=小镇名，{buff}=Buff 显示名，
     # {permission}=权限节点
     usage-money-root: '用法: /tianjitown money <view|adjust> ...'
     usage-money: '用法: /tianjitown money <view|adjust> <小镇代码> [金额 原因]'
@@ -461,7 +461,7 @@ chat:
     residence-unavailable: '暂时无法检查附近是否已有领地：{detail}'
     residence-collision: '所选范围与已有领地“{name}”重叠'
     residence-name-conflict: '领地名与已存在的领地重复'
-    expansion-collision: '扩张范围与其他领地“{name}”重叠'
+    expansion-collision: '激活范围与其他领地“{name}”重叠'
     world-unloaded: '目标世界当前未加载'
     worldborder-unavailable: '暂时无法确认所选范围是否超出世界边界：{detail}'
     worldborder-unconfigured: '当前世界暂不支持在这里建立小镇'
@@ -486,17 +486,17 @@ chat:
     controlled-projection-missing: '缺少受控 Residence 投影 {residence}'
     teleport-point-outside-projection: '传送点不在本镇 Residence 内'
     teleport-point-updated: 'Residence 传送点已更新: {residence}'
-    expansion-projection-missing: '缺少待扩张的 Residence 投影 {residence}'
+    expansion-projection-missing: '缺少待激活的 Residence 投影 {residence}'
     projection-owner-not-controlled: 'Residence 所有者不是受控服务端账户: {owner}'
     area-owner-not-controlled: '同名 Residence 不属于受控服务端账户，拒绝移除区域'
     area-bounds-mismatch: '同名 Residence 区域边界不一致: {area}'
     expansion-collision: '目标 5×5 区块与 Residence 冲突: {residence}'
     area-add-rejected: 'Residence API 拒绝添加区域 {area}'
     area-add-rollback-failed: 'Residence API 不可用: {detail}；新增区域回滚失败: {cleanup}'
-    expansion-area-already-absent: 'Residence 扩张区域已不存在'
+    expansion-area-already-absent: 'Residence 激活区域已不存在'
     main-area-removal-rejected: '拒绝移除 Residence 主区域'
     area-still-present: 'Residence 区域移除后仍可读取: {area}'
-    expansion-area-removed: 'Residence 扩张区域已移除'
+    expansion-area-removed: 'Residence 激活区域已移除'
     projection-rebuilt-from-database: 'Residence 投影已依照数据库重建: {residence}'
     main-area-missing: '多区域 Residence 缺少 main 区域'
     database-area-create-failed: '依照数据库创建区域失败，区域={area}；不完整投影已清理，后续对账将重试'
@@ -523,8 +523,8 @@ chat:
     projection-healthy: 'Residence 投影正常: {residence}'
     unsupported-teleport-point: '&c当前领地适配器不支持设置传送点'
     unsupported-multi-area: '&c当前领地适配器不支持多区域 Residence'
-    unsupported-add-area: '&c当前领地适配器不支持扩张区域'
-    unsupported-remove-area: '&c当前领地适配器不支持移除扩张区域'
+    unsupported-add-area: '&c当前领地适配器不支持激活区域'
+    unsupported-remove-area: '&c当前领地适配器不支持移除激活区域'
 
   # 建筑返还、信标加成和统一诊断相关消息
   bonus:
@@ -569,11 +569,11 @@ chat:
     residence-unavailable: '领地服务暂时不可用：{detail}'
     external-preflight-failed: '暂时无法确认公共资金余额：{detail}'
     external-failed: '资金操作结果需要管理员复核：{detail}'
-    expansion-validation-failed: '暂时无法确认该区域能否扩张：{detail}'
-    expansion-failed-refunded: '领地扩张未成功，费用已退回公共资金：{detail}'
+    expansion-validation-failed: '暂时无法确认该区域能否激活：{detail}'
+    expansion-failed-refunded: '领地激活未成功，费用已退回公共资金：{detail}'
     # {detail}=Residence/运行时技术详情；{cause}=批量回滚前的原始失败原因
     expansion-area-presence-check-failed: '无法确认 Residence 原有区域: {detail}'
-    expansion-batch-failed: 'Residence 批量扩张失败: {detail}'
+    expansion-batch-failed: 'Residence 批量激活失败: {detail}'
     expansion-batch-rollback-partial: '{cause}；部分 Residence 区域未能回滚，批次保留待恢复'
     refund-auto: '；该小镇暂时无法使用公共资金，请联系管理员处理'
     manual-review: '；该小镇暂时无法使用公共资金，请联系管理员处理'
@@ -735,13 +735,13 @@ log:
   # 建镇申请草稿清理日志；{player}=玩家 UUID，{detail}=异常详情
   application:
     draft-cleanup-failure: '清理已提交申请草稿失败 {player}: {detail}'
-  # 领地扩张外部投影与恢复日志；{batch}/{expansion}=稳定操作 ID，{cleanup}/{detail}=技术详情
+  # 领地激活外部投影与恢复日志；{batch}/{expansion}=稳定操作 ID，{cleanup}/{detail}=技术详情
   expansion:
-    batch-rollback-failed: '批量扩张外部区域回滚失败 batch={batch}: {cleanup}'
-    recovered: '已恢复领地扩张 {expansion}'
-    recovery-failed: '恢复领地扩张失败 {expansion}: {detail}'
-    batch-recovered: '已恢复批量领地扩张 {batch}'
-    batch-recovery-failed: '恢复批量领地扩张失败 {batch}: {detail}'
+    batch-rollback-failed: '批量激活外部区域回滚失败 batch={batch}: {cleanup}'
+    recovered: '已恢复领地激活 {expansion}'
+    recovery-failed: '恢复领地激活失败 {expansion}: {detail}'
+    batch-recovered: '已恢复批量领地激活 {batch}'
+    batch-recovery-failed: '恢复批量领地激活失败 {batch}: {detail}'
   # TownRuntime 外部资金操作退款/人工核对日志；{operation}/{town}=稳定 ID，{detail}=结算详情
   external-operation:
     finalization-retry: '外部资金已执行，重试账本入账 {operation}: {detail}'
@@ -1098,7 +1098,7 @@ dialog:
     tax: '&e税率设置'
     ledger: '&6小镇账本'
     buff: '&d公共 Buff'
-    expansion: '&b领地扩张'
+    expansion: '&b领地激活'
 
   town:
     # 小镇详情菜单文本
@@ -1179,7 +1179,7 @@ dialog:
   tooltip:
     main:
       town: '&7简介、规则、领地和基础资料'
-      finance: '&7资金、账本、Buff、税率和扩张'
+      finance: '&7资金、账本、Buff、税率和激活'
       governance: '&7成员、申请、投票和资料管理'
       pending: '&7点击查看代办事项'
       personal: '&7领取手册、退出或解散小镇'
@@ -1221,7 +1221,7 @@ dialog:
       ledger-subsidy: '&7职业、商店收入按每日四点分日汇总，含实际补贴'
       buff-active: '&7查看效果、等级、时长和购买价格'
       buff-paused: '&7商店已暂停，可查看仍在生效的 Buff'
-      expansion: '&7在 5×5 地图上扩张领地，每块区域花费 {price} 公共资金'
+      expansion: '&7在 5×5 地图上激活领地，每块区域花费 {price} 公共资金'
     application:
       edit: '&7点击修改申请资料'
       remind: '&7重新发送确认邀请'
@@ -1340,7 +1340,7 @@ dialog:
     handbook-received-title: '&6领取成功'
     handbook-cooldown-title: '&6暂时不能领取'
     handbook-cooldown-message: '&f每小时只能领取一次小镇手册'
-    expansion-complete-title: '&6领地扩张完成'
+    expansion-complete-title: '&6领地激活完成'
     expansion-complete-message: '&f新领地已经生效'
     expired-title: '&6界面已失效'
     stale-data-title: '&6界面数据已过期'
@@ -1544,8 +1544,8 @@ dialog:
       server-tax-subsidy: '服务器税收补贴'
       application-fee: '建镇初始资金'
       donation: '成员捐款'
-      expansion: '领地扩张'
-      expansion-refund: '扩张退款'
+      expansion: '领地激活'
+      expansion-refund: '激活退款'
       admin-adjustment: '管理员调整'
       buff-purchase: 'Buff 购买'
       buff-refund: 'Buff 退款'
@@ -1553,39 +1553,39 @@ dialog:
 
   # 5×5 领地地图和格子悬浮提示
   territory:
-    title: '&6小镇领地扩张'
-    summary: '&7已拥有区域: {current}/{maximum}'
-    legend: '&8黄色=中心 绿色=已扩张 浅灰色=可扩张 红色=不可扩张'
+    title: '&6小镇领地激活'
+    summary: '&7已激活区域: {current}/{maximum}（全部区域已预留）'
+    legend: '&8黄色=中心 绿色=已激活 浅灰色=可激活 红色=不可激活'
     limit-reached: '&c已达上限'
-    unavailable-title: '&6当前区域不可扩张'
-    confirm-title: '&6确认扩张至区域 {grid}'
+    unavailable-title: '&6当前区域不可激活'
+    confirm-title: '&6确认激活至区域 {grid}'
     confirm-consequence: |-
       &7强度: {level}
       &7持续时间: {weeks} 周
       &7价格 {price}
-    batch-summary: '&7本次选择: {count} 个区域 · 合计 {price} · 扩张后 {units}/{maximum}'
-    batch-confirm: '&a确认扩张所选区域'
+    batch-summary: '&7本次选择: {count} 个区域 · 合计 {price} · 激活后 {units}/{maximum}'
+    batch-confirm: '&a确认激活所选区域'
     selection-actions: '&e选择操作'
     continue-selection: '&e继续选择领地'
     batch-clear: '&e清除已选区域'
-    batch-select-hint: '&a点击可扩张格子选择/取消选择'
-    batch-confirm-consequence: '&7消耗 {price} 扩张 {count} 个区域'
+    batch-select-hint: '&a点击可激活格子选择/取消选择'
+    batch-confirm-consequence: '&7消耗 {price} 激活 {count} 个区域'
     cell:
       center: '&6小镇中心'
-      owned: '&a已占领区域'
-      expandable: '&b可扩张区域'
-      blocked: '&8不可扩张区域'
+      owned: '&a已激活区域'
+      expandable: '&b可激活区域'
+      blocked: '&8不可激活区域'
       other-town: '&c其他小镇区域'
-      center-detail: '小镇初始中心'
-      owned-detail: '已属于当前小镇'
+      center-detail: '初始区域已激活，拥有完整小镇保护'
+      owned-detail: '已激活，拥有完整小镇保护'
       other-town-detail: '属于其他小镇：{town}'
-      capacity-detail: '可拥有的领地区域已达到上限'
-      expandable-detail: '可使用公共资金扩张'
-      unavailable-detail: '当前区域暂时不可扩张'
-      not-adjacent-detail: '只能扩张与已有领地边缘相连的区域'
+      capacity-detail: '可激活的领地区域已达到上限'
+      expandable-detail: '已归小镇所有；当前仅禁止圈地，激活后启用完整小镇保护'
+      unavailable-detail: '已预留，当前保持野外行为，仅禁止圈地'
+      not-adjacent-detail: '只能激活与已激活区域边缘相连的区域'
       grid: '&7区域坐标: {x},{z}'
       price: '&6价格: {price}'
-      units-after-expansion: '&7扩张后拥有区域: {units}'
+      units-after-expansion: '&7激活后已激活区域: {units}'
       expand-hint: '&a点击选择此区域'
       detail: '&7{detail}'
       selected: '&a已选中（再次点击取消）'

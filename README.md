@@ -1,6 +1,6 @@
 # TianjiTown
 
-面向单个 Paper 服务器的小镇插件，当前开发版本统一为 `1.0.0-SNAPSHOT`。玩家通过讲台服务台、小镇手册和 Paper Dialog 完成建镇、入镇、治理、捐款、领地扩张和公共 Buff 购买；管理员通过 `/tianjitown` 审核、代办和排障。
+面向单个 Paper 服务器的小镇插件，当前开发版本统一为 `1.0.0-SNAPSHOT`。玩家通过讲台服务台、小镇手册和 Paper Dialog 完成建镇、入镇、治理、捐款、领地激活和公共 Buff 购买；管理员通过 `/tianjitown` 审核、代办和排障。
 
 ## 从哪里开始
 

@@ -91,12 +91,12 @@ class TerritoryServiceTest {
             Set<TerritoryService.GridSelection> oversized = IntStream.range(0, 25)
                     .mapToObj(index -> new TerritoryService.GridSelection(index, 0))
                     .collect(Collectors.toSet());
-            assertMessage("批量扩张后超过领地单元上限",
+            assertMessage("批量激活后超过领地单元上限",
                     () -> service.batchPreview(mayorId, oversized));
-            assertMessage("选中的领地单元超出 5×5 扩张网格",
+            assertMessage("选中的领地单元超出 5×5 激活网格",
                     () -> service.batchPreview(mayorId,
                             Set.of(new TerritoryService.GridSelection(3, 0))));
-            assertMessage("选中的领地单元已经被占领",
+            assertMessage("选中的领地单元已经激活",
                     () -> service.batchPreview(mayorId,
                             Set.of(new TerritoryService.GridSelection(0, 0))));
             assertMessage("批量选区必须与现有领地四方向连通",
@@ -104,7 +104,7 @@ class TerritoryServiceTest {
                             Set.of(new TerritoryService.GridSelection(2, 0))));
             assertMessage("你不属于任何小镇",
                     () -> service.batchPreview(UUID.randomUUID(), Set.of()));
-            assertMessage("只有镇长可以使用公共资金扩张",
+            assertMessage("只有镇长可以使用公共资金激活",
                     () -> service.batchPreview(memberId,
                             Set.of(new TerritoryService.GridSelection(1, 0))));
 
@@ -117,7 +117,7 @@ class TerritoryServiceTest {
                     () -> noExpansionService.preview(mayorId, ExpansionDirection.EAST));
 
             TerritoryService.TerritoryMap map = service.map(mayorId);
-            assertEquals("只能扩张与已有领地边缘相连的区域", map.cells().stream()
+            assertEquals("只能激活与已激活区域边缘相连的区域", map.cells().stream()
                     .filter(cell -> cell.gridX() == 2 && cell.gridZ() == 2)
                     .findFirst().orElseThrow().detail());
 

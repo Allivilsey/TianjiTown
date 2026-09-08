@@ -191,7 +191,7 @@ final class TownProvisionRuntime {
         List<UUID> expectedMembers = new ArrayList<>();
         expectedMembers.add(application.applicantId());
         application.initialMembers().forEach(member -> expectedMembers.add(member.playerId()));
-        SitePolicy.Validation environment = sitePolicy.validateEnvironment(application.territory());
+        SitePolicy.Validation environment = sitePolicy.validateReservationEnvironment(application.territory());
         if (!environment.valid()) {
             provisions.finish(application.id());
             completion.accept(ProvisionResult.failure(application,
@@ -314,7 +314,7 @@ final class TownProvisionRuntime {
             plugin.getLogger().info(plugin.messages().plainText(PROVISION_PROJECTION_STARTED,
                     Map.of("application", applicationId, "time", Instant.now())));
             // 碰撞由创建服务检查，使重试能够识别并复用本镇已经创建的系统投影。
-            SitePolicy.Validation validation = sitePolicy.validateEnvironment(
+            SitePolicy.Validation validation = sitePolicy.validateReservationEnvironment(
                     provisioning.town().territory());
             LandProtectionService.Result land = validation.valid()
                     ? landProtection.create(provisioning.town().residenceName(),

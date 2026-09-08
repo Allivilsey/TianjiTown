@@ -9,6 +9,7 @@ import org.allivlisey.tianjitown.core.ports.WorldBoundaryService;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
+import org.allivlisey.tianjitown.core.land.TownReservation;
 import java.util.Map;
 
 public final class SitePolicy {
@@ -31,6 +32,22 @@ public final class SitePolicy {
     }
 
     public Validation validate(InitialTerritory territory) {
+        for (InitialTerritory unit : new TownReservation(territory).units()) {
+            Validation result = validateUnit(unit);
+            if (!result.valid()) return result;
+        }
+        return Validation.success(territory);
+    }
+
+    public Validation validateReservationEnvironment(InitialTerritory territory) {
+        for (InitialTerritory unit : new TownReservation(territory).units()) {
+            Validation result = validateEnvironment(unit);
+            if (!result.valid()) return result;
+        }
+        return Validation.success(territory);
+    }
+
+    private Validation validateUnit(InitialTerritory territory) {
         Validation environment = validateEnvironment(territory);
         if (!environment.valid()) {
             return environment;

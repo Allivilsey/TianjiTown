@@ -31,6 +31,38 @@ class TownRepositorySqliteTest {
     Path temporaryDirectory;
 
     @Test
+    void reservesUnactivatedGridAndReleasesItOnlyAfterDeletionCompletes() throws Exception {
+        DatabaseConfig config = new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("reserved-grid.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5));
+        try (DatabaseGate gate = new DatabaseGate(config)) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            TownRepository repository = new TownRepository(gate.dataSource(), () -> false);
+            CreatedTown town = createTown(repository, 0, "预留镇", "RESGRID");
+            UUID applicant = UUID.randomUUID();
+            ApplicationSnapshot draft = repository.createDraft(applicant,
+                    applicationText("邻居镇", "NEIGHBOR"),
+                    List.of(UUID.randomUUID(), UUID.randomUUID()), Duration.ZERO);
+            UUID world = town.town().territory().center().worldId();
+            InitialTerritory overlapping = new InitialTerritory(new ChunkPosition(world, "world", 24, 0));
+            assertEquals(1, repository.listReservedTowns().size());
+            // The initial areas do not touch; the outermost reserved columns overlap.
+            assertThrows(TownRepository.ConflictException.class, () -> repository.selectSite(
+                    draft.id(), applicant, overlapping, Instant.now().plusSeconds(600), 0));
+            repository.selectSite(draft.id(), applicant,
+                    new InitialTerritory(new ChunkPosition(world, "world", 25, 0)),
+                    Instant.now().plusSeconds(600), 0);
+            repository.deleteTown(town.town().id(), UUID.randomUUID(), "Admin", "删除测试");
+            assertEquals(1, repository.listReservedTowns().size());
+            assertThrows(TownRepository.ConflictException.class, () -> repository.selectSite(
+                    draft.id(), applicant, overlapping, Instant.now().plusSeconds(600), 0));
+            repository.completeTownDeletion(town.town().id(), UUID.randomUUID(), "Admin", "清理完成");
+            assertTrue(repository.listReservedTowns().isEmpty());
+            repository.selectSite(draft.id(), applicant, overlapping, Instant.now().plusSeconds(600), 0);
+        }
+    }
+
+    @Test
     void completesApplicationAndJoinApplicationLifecycle() throws Exception {
         DatabaseConfig config = new DatabaseConfig(
                 "jdbc:sqlite:" + temporaryDirectory.resolve("lifecycle.db"),
@@ -751,7 +783,7 @@ class TownRepositorySqliteTest {
         repository.respondInitialMember(draft.id(), initialMemberTwo, true);
         InitialTerritory territory = new InitialTerritory(new ChunkPosition(
                 UUID.fromString("00000000-0000-0000-0000-000000000999"),
-                "world", index * 10, index * 10));
+                "world", index * 30, index * 30));
         ApplicationSnapshot selected = repository.selectSite(draft.id(), mayorId, territory,
                 Instant.now().plus(Duration.ofHours(1)), 1);
         ApplicationSnapshot submitted = repository.submit(selected.id(), mayorId);

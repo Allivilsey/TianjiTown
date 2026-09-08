@@ -32,7 +32,7 @@ public final class TerritoryRules {
                 .filter(grid -> !occupied.contains(grid))
                 .min(Comparator.comparingInt((Grid grid) -> Math.abs(grid.x()) + Math.abs(grid.z()))
                         .thenComparingInt(Grid::z).thenComparingInt(Grid::x))
-                .orElseThrow(() -> new IllegalArgumentException("该方向在 5×5 网格内已无可扩张单元"));
+                .orElseThrow(() -> new IllegalArgumentException("该方向在 5×5 网格内已无可激活单元"));
         return target(units, candidate.x(), candidate.z());
     }
 
@@ -42,7 +42,7 @@ public final class TerritoryRules {
         }
         requireConnected(units);
         if (Math.abs((long) gridX) > GRID_RADIUS || Math.abs((long) gridZ) > GRID_RADIUS) {
-            throw new IllegalArgumentException("目标超出 5×5 扩张网格");
+            throw new IllegalArgumentException("目标超出 5×5 激活网格");
         }
         TerritoryUnit origin = units.stream()
                 .filter(unit -> unit.gridX() == 0 && unit.gridZ() == 0)
@@ -51,7 +51,7 @@ public final class TerritoryRules {
         units.forEach(unit -> occupied.add(new Grid(unit.gridX(), unit.gridZ())));
         Grid target = new Grid(gridX, gridZ);
         if (occupied.contains(target)) {
-            throw new IllegalArgumentException("目标领地单元已经被占领");
+            throw new IllegalArgumentException("目标领地单元已经激活");
         }
         boolean adjacent = java.util.Arrays.stream(ExpansionDirection.values())
                 .map(direction -> new Grid(gridX + direction.gridX(),

@@ -1,5 +1,6 @@
 package org.allivlisey.tianjitown.storage.town;
 
+import org.allivlisey.tianjitown.core.land.TownReservation;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -101,6 +102,7 @@ final class TownPersistence {
     static void requireDatabaseSiteAvailable(Connection connection, UUID applicationId,
                                               InitialTerritory territory, int bufferChunks)
             throws SQLException {
+        TownReservation reserved = new TownReservation(territory);
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT application_id FROM site_reservations
                  WHERE world_uuid = ? AND application_id <> ? AND released_at IS NULL
@@ -111,10 +113,10 @@ final class TownPersistence {
                 """)) {
             statement.setBytes(1, uuid(territory.center().worldId()));
             statement.setBytes(2, uuid(applicationId));
-            statement.setInt(3, territory.maximumChunkX() + bufferChunks);
-            statement.setInt(4, territory.minimumChunkX() - bufferChunks);
-            statement.setInt(5, territory.maximumChunkZ() + bufferChunks);
-            statement.setInt(6, territory.minimumChunkZ() - bufferChunks);
+            statement.setInt(3, reserved.maximumChunkX() + bufferChunks);
+            statement.setInt(4, reserved.minimumChunkX() - bufferChunks);
+            statement.setInt(5, reserved.maximumChunkZ() + bufferChunks);
+            statement.setInt(6, reserved.minimumChunkZ() - bufferChunks);
             try (ResultSet result = statement.executeQuery()) {
                 if (result.next()) {
                     throw new ConflictException("选址与其他申请的有效预留重叠或距离过近");
@@ -123,19 +125,19 @@ final class TownPersistence {
         }
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT u.unit_id FROM territory_units u JOIN towns t ON t.town_id = u.town_id
-                 WHERE u.world_uuid = ? AND u.reuse_blocked = TRUE
+                 WHERE u.world_uuid = ? AND u.reuse_blocked = TRUE AND u.grid_x = 0 AND u.grid_z = 0
                    AND u.center_chunk_x BETWEEN ? AND ? AND u.center_chunk_z BETWEEN ? AND ?
                  LIMIT 1
                 """)) {
             statement.setBytes(1, uuid(territory.center().worldId()));
-            statement.setInt(2, territory.minimumChunkX()
-                    - InitialTerritory.RADIUS - bufferChunks);
-            statement.setInt(3, territory.maximumChunkX()
-                    + InitialTerritory.RADIUS + bufferChunks);
-            statement.setInt(4, territory.minimumChunkZ()
-                    - InitialTerritory.RADIUS - bufferChunks);
-            statement.setInt(5, territory.maximumChunkZ()
-                    + InitialTerritory.RADIUS + bufferChunks);
+            statement.setInt(2, reserved.minimumChunkX()
+                    - TownReservation.RADIUS - bufferChunks);
+            statement.setInt(3, reserved.maximumChunkX()
+                    + TownReservation.RADIUS + bufferChunks);
+            statement.setInt(4, reserved.minimumChunkZ()
+                    - TownReservation.RADIUS - bufferChunks);
+            statement.setInt(5, reserved.maximumChunkZ()
+                    + TownReservation.RADIUS + bufferChunks);
             try (ResultSet result = statement.executeQuery()) {
                 if (result.next()) {
                     throw new ConflictException("选址与已有小镇领地重叠或距离过近");

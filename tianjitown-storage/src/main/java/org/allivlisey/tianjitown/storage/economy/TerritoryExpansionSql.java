@@ -27,7 +27,7 @@ final class TerritoryExpansionSql {
             statement.setBytes(1, EconomyPersistence.uuid(townId));
             statement.setBytes(2, EconomyPersistence.uuid(townId));
             try (ResultSet rows = statement.executeQuery()) {
-                if (rows.next()) throw new EconomyRepository.ConflictException("本镇有未完成扩张，请等待结算后重试");
+                if (rows.next()) throw new EconomyRepository.ConflictException("本镇有未完成激活，请等待结算后重试");
             }
         }
     }
@@ -38,7 +38,7 @@ final class TerritoryExpansionSql {
             statement.setBytes(1, EconomyPersistence.uuid(expansionId));
             try (ResultSet rows = statement.executeQuery()) {
                 if (rows.next() && rows.getBytes("batch_id") != null) {
-                    throw new EconomyRepository.ConflictException("批量扩张子项必须通过批次结算");
+                    throw new EconomyRepository.ConflictException("批量激活子项必须通过批次结算");
                 }
             }
         }
@@ -110,7 +110,7 @@ final class TerritoryExpansionSql {
             statement.setBytes(1, EconomyPersistence.uuid(expansionId));
             try (ResultSet row = statement.executeQuery()) {
                 if (!row.next()) {
-                    throw new ConflictException("扩张操作不存在");
+                    throw new ConflictException("激活操作不存在");
                 }
                 return readExpansion(row);
             }
@@ -125,7 +125,7 @@ final class TerritoryExpansionSql {
             statement.setString(1, status);
             statement.setString(2, error);
             statement.setBytes(3, EconomyPersistence.uuid(expansionId));
-            EconomyPersistence.requireUpdated(statement, "扩张操作不存在");
+            EconomyPersistence.requireUpdated(statement, "激活操作不存在");
         }
     }
 

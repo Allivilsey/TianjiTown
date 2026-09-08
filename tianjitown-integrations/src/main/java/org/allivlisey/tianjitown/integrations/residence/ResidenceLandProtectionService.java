@@ -13,6 +13,7 @@ import org.bukkit.World;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Vector;
 
+import org.allivlisey.tianjitown.core.land.TownReservation;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,28 @@ import static org.allivlisey.tianjitown.integrations.residence.ResidenceGeometry
 
 public final class ResidenceLandProtectionService implements LandProtectionService {
     private static final String SYSTEM_OWNER_HINT = "TianjiTownSystem";
+    private final Map<String, TownReservation> reservations = new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile boolean reservationsLoaded;
+
+    public void reserve(String name, InitialTerritory territory) {
+        reservations.put(TownResidenceName.initial(name), new TownReservation(territory));
+    }
+
+    public void reservationsLoaded() { reservationsLoaded = true; }
+    boolean reservationsReady() { return reservationsLoaded; }
+
+    String reservationCollision(CuboidArea area, String ignoredName) {
+        for (var entry : reservations.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(ignoredName)) continue;
+            if (entry.getValue().overlaps(area.getWorld().getUID(),
+                    Math.floorDiv(area.getLowVector().getBlockX(), 16),
+                    Math.floorDiv(area.getHighVector().getBlockX(), 16),
+                    Math.floorDiv(area.getLowVector().getBlockZ(), 16),
+                    Math.floorDiv(area.getHighVector().getBlockZ(), 16))) return entry.getKey();
+        }
+        return null;
+    }
+
     private final Server server;
     private final Set<String> managedNames;
     private final ResidenceMutationContext context;
@@ -68,6 +91,8 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                 return Collision.failureCode(ResultCode.WORLD_UNLOADED,
                         Map.of("world", safeText(territory.center().worldName())));
             }
+            String reserved = reservationCollision(bounds.area(), null);
+            if (reserved != null) return new Collision(true, reserved);
             ClaimedResidence collision = manager().collidesWithResidence(bounds.area());
             return collision == null ? Collision.none()
                     : new Collision(true, safeText(collision.getName()));
@@ -114,6 +139,18 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                         Map.of("world", safeText(territory.center().worldName())));
             }
             ClaimedResidence existing = manager.getByName(name);
+            // Reserve the entire grid before creating the initial protected area.
+            for (InitialTerritory unit : new TownReservation(territory).units()) {
+                Bounds reservedBounds = geometry.bounds(unit);
+                String collisionName = reservationCollision(reservedBounds.area(), name);
+                if (collisionName == null) {
+                    ClaimedResidence other = manager.collidesWithResidence(reservedBounds.area());
+                    if (other != null && other != existing) collisionName = other.getName();
+                }
+                if (collisionName != null) return Result.failureCode(ResultCode.INITIAL_PROJECTION_COLLISION,
+                        Map.of("residence", safeText(collisionName)));
+            }
+            reserve(name, territory);
             if (existing != null) {
                 return verifyAndApply(name, existing, bounds, members, true);
             }
@@ -122,7 +159,10 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                 return Result.failureCode(ResultCode.INITIAL_PROJECTION_COLLISION,
                         Map.of("residence", safeText(collision.getName())));
             }
-            if (!manager.addResidence(name, SYSTEM_OWNER_HINT, bounds.low(), bounds.high())) {
+            boolean[] createdSuccessfully = {false};
+            context.withInternalMutation(() -> createdSuccessfully[0] =
+                    manager.addResidence(name, SYSTEM_OWNER_HINT, bounds.low(), bounds.high()));
+            if (!createdSuccessfully[0]) {
                 return Result.failureCode(ResultCode.PROJECTION_CREATE_REJECTED,
                         Map.of("residence", safeText(name)));
             }
@@ -146,6 +186,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             ResidenceManager manager = manager();
             ClaimedResidence existing = manager.getByName(name);
             if (existing == null) {
+                reservations.remove(name);
                 return Result.successCode(ResultCode.PROJECTION_ALREADY_ABSENT);
             }
             Bounds bounds = geometry.bounds(territory);
@@ -158,6 +199,7 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                         Map.of("residence", safeText(name)));
             }
             context.removeResidence(manager, name);
+            if (manager.getByName(name) == null) reservations.remove(name);
             return manager.getByName(name) == null
                     ? Result.successCode(ResultCode.PROJECTION_REMOVED)
                     : Result.failureCode(ResultCode.PROJECTION_STILL_PRESENT,
@@ -323,7 +365,14 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
                 return Result.failureCode(ResultCode.EXPANSION_COLLISION,
                         Map.of("residence", safeText(collision)));
             }
-            if (!residence.addArea(bounds.area(), area.name())) {
+            String reservedCollision = reservationCollision(bounds.area(), name);
+            if (reservedCollision != null) return Result.failureCode(ResultCode.EXPANSION_COLLISION,
+                    Map.of("residence", safeText(reservedCollision)));
+            boolean[] addedSuccessfully = {false};
+            ClaimedResidence targetResidence = residence;
+            context.withInternalMutation(() -> addedSuccessfully[0] =
+                    targetResidence.addArea(bounds.area(), area.name()));
+            if (!addedSuccessfully[0]) {
                 return Result.failureCode(ResultCode.AREA_ADD_REJECTED,
                         Map.of("area", safeText(area.name())));
             }

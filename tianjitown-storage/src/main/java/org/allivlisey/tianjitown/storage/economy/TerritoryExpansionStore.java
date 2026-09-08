@@ -78,7 +78,7 @@ final class TerritoryExpansionStore {
         database.requireWorkerThread();
         Objects.requireNonNull(request, "request");
         if (request.priceMinor() <= 0) {
-            throw new IllegalArgumentException("扩张价格必须大于 0");
+            throw new IllegalArgumentException("激活价格必须大于 0");
         }
         return database.transaction(connection -> {
             Optional<ExpansionOperation> existing = findExpansion(connection, request.businessKey());
@@ -94,7 +94,7 @@ final class TerritoryExpansionStore {
             List<TerritoryUnitSnapshot> snapshots = listTerritoryUnits(connection, request.townId());
             if (request.expectedUnitCount() >= 0
                     && request.expectedUnitCount() != snapshots.size()) {
-                throw new ConflictException("领地数量已变化，请刷新扩张报价后重试");
+                throw new ConflictException("领地数量已变化，请刷新激活报价后重试");
             }
             List<TerritoryUnit> units = snapshots.stream().map(TerritoryUnitSnapshot::unit).toList();
             TerritoryUnit origin = units.stream()
@@ -116,7 +116,7 @@ final class TerritoryExpansionStore {
             TerritoryRules.requireConnected(withCandidate);
             if (Math.abs((long) request.unit().gridX()) > TerritoryRules.GRID_RADIUS
                     || Math.abs((long) request.unit().gridZ()) > TerritoryRules.GRID_RADIUS) {
-                throw new ConflictException("目标超出 5×5 扩张网格");
+                throw new ConflictException("目标超出 5×5 激活网格");
             }
             UUID unitId = insertTerritoryUnit(connection, request.townId(), request.unit(),
                     request.residenceName(), request.residenceAreaName());
@@ -136,10 +136,10 @@ final class TerritoryExpansionStore {
             }
             EconomyPersistence.postLedger(connection, request.townId(), "EXPANSION", -request.priceMinor(),
                     request.actorId(), request.actorName(), request.businessKey(),
-                    "扩张至网格 " + request.unit().gridX() + "," + request.unit().gridZ(), false);
+                    "激活至网格 " + request.unit().gridX() + "," + request.unit().gridZ(), false);
             EconomyPersistence.audit(connection, request.actorId(), request.actorName(), "EXPANSION_PREPARE",
                     request.townId(), request.businessKey(),
-                    "扩张至网格 " + request.unit().gridX() + "," + request.unit().gridZ());
+                    "激活至网格 " + request.unit().gridX() + "," + request.unit().gridZ());
             return requireExpansion(connection, expansionId);
         });
     }
@@ -153,7 +153,7 @@ final class TerritoryExpansionStore {
                 return expansion;
             }
             if (!expansion.status().equals("PREPARED")) {
-                throw new ConflictException("当前扩张状态不能完成");
+                throw new ConflictException("当前激活状态不能完成");
             }
             try (PreparedStatement unit = connection.prepareStatement("""
                     UPDATE territory_units SET projection_status = 'ACTIVE', projection_error = NULL
@@ -165,7 +165,7 @@ final class TerritoryExpansionStore {
             setExpansionStatus(connection, expansionId, "COMPLETED", null);
             EconomyPersistence.audit(connection, expansion.actorId(), expansion.actorId().toString(),
                     "EXPANSION_COMPLETE", expansion.townId(), expansion.businessKey(),
-                    "Residence 扩张投影完成");
+                    "Residence 激活投影完成");
             return requireExpansion(connection, expansionId);
         });
     }
@@ -176,7 +176,7 @@ final class TerritoryExpansionStore {
             requireStandaloneExpansion(connection, expansionId);
             ExpansionOperation expansion = requireExpansion(connection, expansionId);
             if (expansion.status().equals("COMPLETED")) {
-                throw new ConflictException("已完成扩张不能退款");
+                throw new ConflictException("已完成激活不能退款");
             }
             String refundKey = expansion.businessKey() + ":refund";
             if (EconomyPersistence.findLedgerByBusinessKey(connection, refundKey).isEmpty()) {
@@ -196,7 +196,7 @@ final class TerritoryExpansionStore {
             }
             EconomyPersistence.audit(connection, expansion.actorId(), expansion.actorId().toString(),
                     "EXPANSION_REFUND", expansion.townId(), expansion.businessKey(),
-                    "Residence 扩张投影失败，已退款: " + EconomyPersistence.safe(error));
+                    "Residence 激活投影失败，已退款: " + EconomyPersistence.safe(error));
             return null;
         });
     }

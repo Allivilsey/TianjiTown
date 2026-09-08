@@ -76,8 +76,14 @@ final class TownComponentRegistrar {
         plugin.getServer().getPluginManager().registerEvents(new ResidenceDeletionGuard(plugin,
                 managedResidenceNames::contains, residenceProtection::internalMutation,
                 runtime::reconcileAll, startup.messages()::text, startup.messages()::plainText), plugin);
+        plugin.getServer().getPluginManager().registerEvents(
+                new org.allivlisey.tianjitown.integrations.residence.ResidenceReservationGuard(
+                        residenceProtection), plugin);
         startup.scheduler.runAsync(() -> {
             try {
+                runtime.repository().listReservedTowns().forEach(town ->
+                        residenceProtection.reserve(town.residenceName(), town.territory()));
+                residenceProtection.reservationsLoaded();
                 runtime.repository().listTowns(true).forEach(town -> {
                     managedResidenceNames.add(town.residenceName());
                     if (town.status() == org.allivlisey.tianjitown.core.town.TownStatus.ACTIVE) {

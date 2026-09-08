@@ -1,5 +1,6 @@
 package org.allivlisey.tianjitown.storage.town;
 
+import org.allivlisey.tianjitown.core.land.TownReservation;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -470,10 +471,11 @@ final class TownApplicationStore {
         statement.setString(start + 1, territory.center().worldName());
         statement.setInt(start + 2, territory.center().x());
         statement.setInt(start + 3, territory.center().z());
-        statement.setInt(start + 4, territory.minimumChunkX());
-        statement.setInt(start + 5, territory.maximumChunkX());
-        statement.setInt(start + 6, territory.minimumChunkZ());
-        statement.setInt(start + 7, territory.maximumChunkZ());
+        TownReservation reserved = new TownReservation(territory);
+        statement.setInt(start + 4, reserved.minimumChunkX());
+        statement.setInt(start + 5, reserved.maximumChunkX());
+        statement.setInt(start + 6, reserved.minimumChunkZ());
+        statement.setInt(start + 7, reserved.maximumChunkZ());
     }
 
     private static void requireApplicant(ApplicationSnapshot application, UUID applicantId) {

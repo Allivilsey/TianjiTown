@@ -24,6 +24,33 @@ class SitePolicyTest {
     Path temporaryDirectory;
 
     @Test
+    void checksOuterReservedUnitsBeforeAcceptingSite() {
+        var plugin = org.mockito.Mockito.mock(org.allivlisey.tianjitown.paper.TianjiTownPlugin.class);
+        var server = org.mockito.Mockito.mock(org.bukkit.Server.class);
+        var world = org.mockito.Mockito.mock(org.bukkit.World.class);
+        var land = org.mockito.Mockito.mock(org.allivlisey.tianjitown.core.ports.LandProtectionService.class);
+        var boundaries = org.mockito.Mockito.mock(org.allivlisey.tianjitown.core.ports.WorldBoundaryService.class);
+        org.mockito.Mockito.when(plugin.getServer()).thenReturn(server);
+        org.mockito.Mockito.when(plugin.getConfig()).thenReturn(new YamlConfiguration());
+        org.mockito.Mockito.when(plugin.messages()).thenReturn(new PluginMessages(temporaryDirectory.toFile()));
+        org.mockito.Mockito.when(server.getWorld(WORLD_ID)).thenReturn(world);
+        org.mockito.Mockito.when(boundaries.check(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(org.allivlisey.tianjitown.core.ports.WorldBoundaryService.Check.configuredInside());
+        org.mockito.Mockito.when(land.findCollision(org.mockito.ArgumentMatchers.any())).thenAnswer(call -> {
+            InitialTerritory unit = call.getArgument(0);
+            return unit.center().x() == 10 && unit.center().z() == 10
+                    ? new org.allivlisey.tianjitown.core.ports.LandProtectionService.Collision(true, "neighbor")
+                    : org.allivlisey.tianjitown.core.ports.LandProtectionService.Collision.none();
+        });
+        SitePolicy policy = new SitePolicy(plugin, land, boundaries);
+        assertFalse(policy.validate(territory(WORLD_ID, 0, 0, "world")).valid());
+        org.mockito.Mockito.verify(land, org.mockito.Mockito.times(25)).findCollision(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.when(boundaries.check(territory(WORLD_ID, 10, 10, "world"), 1))
+                .thenReturn(org.allivlisey.tianjitown.core.ports.WorldBoundaryService.Check.configuredOutside());
+        assertFalse(policy.validateReservationEnvironment(territory(WORLD_ID, 0, 0, "world")).valid());
+    }
+
+    @Test
     void rendersSiteMessagesWithCompletePlaceholders() {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
         Map<String, ?> placeholders = Map.of(

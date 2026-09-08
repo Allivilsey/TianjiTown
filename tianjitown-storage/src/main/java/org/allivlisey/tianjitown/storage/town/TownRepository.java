@@ -247,6 +247,10 @@ public final class TownRepository {
         return queryStore.dashboard(playerId);
     }
 
+    public List<TownSnapshot> listReservedTowns() {
+        return queryStore.listReservedTowns();
+    }
+
     public List<TownSnapshot> listTowns(boolean includeArchived) {
         return queryStore.listTowns(includeArchived);
     }

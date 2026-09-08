@@ -101,6 +101,20 @@ final class TownQueryStore {
         });
     }
 
+    public List<TownSnapshot> listReservedTowns() {
+        database.requireWorkerThread();
+        return database.query(connection -> {
+            List<TownSnapshot> towns = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT town_id FROM towns WHERE reuse_blocked = TRUE");
+                 ResultSet result = statement.executeQuery()) {
+                while (result.next()) TownPersistence.findTown(connection,
+                        readUuid(result, "town_id")).ifPresent(towns::add);
+            }
+            return List.copyOf(towns);
+        });
+    }
+
     public List<TownSnapshot> listTowns(boolean includeArchived) {
         database.requireWorkerThread();
         return database.query(connection -> {

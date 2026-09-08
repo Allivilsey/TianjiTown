@@ -52,12 +52,12 @@ final class TerritoryExpansionBatchStore {
                     request.townId());
             if (request.expectedUnitCount() >= 0
                     && request.expectedUnitCount() != snapshots.size()) {
-                throw new ConflictException("领地数量已变化，请刷新扩张报价后重试");
+                throw new ConflictException("领地数量已变化，请刷新激活报价后重试");
             }
             List<TerritoryUnit> units = new ArrayList<>(snapshots.stream()
                     .map(TerritoryUnitSnapshot::unit).toList());
             if (units.size() + request.items().size() > TerritoryRules.MAXIMUM_UNITS) {
-                throw new ConflictException("批量扩张后超过领地单元上限");
+                throw new ConflictException("批量激活后超过领地单元上限");
             }
             TerritoryUnit origin = units.stream()
                     .filter(unit -> unit.gridX() == 0 && unit.gridZ() == 0)
@@ -68,11 +68,11 @@ final class TerritoryExpansionBatchStore {
             for (ExpansionBatchItem item : request.items()) {
                 TerritoryUnit candidate = item.unit();
                 if (!occupied.add(new Grid(candidate.gridX(), candidate.gridZ()))) {
-                    throw new ConflictException("批量扩张包含已占用或重复的领地单元");
+                    throw new ConflictException("批量激活包含已占用或重复的领地单元");
                 }
                 if (Math.abs((long) candidate.gridX()) > TerritoryRules.GRID_RADIUS
                         || Math.abs((long) candidate.gridZ()) > TerritoryRules.GRID_RADIUS) {
-                    throw new ConflictException("目标超出 5×5 扩张网格");
+                    throw new ConflictException("目标超出 5×5 激活网格");
                 }
                 ChunkPosition expectedCenter = new ChunkPosition(
                         origin.territory().center().worldId(),
@@ -137,10 +137,10 @@ final class TerritoryExpansionBatchStore {
             }
             EconomyPersistence.postLedger(connection, request.townId(), "EXPANSION", -request.totalPriceMinor(),
                     request.actorId(), request.actorName(), request.businessKey(),
-                    "批量扩张 " + request.items().size() + " 个领地单元", false);
+                    "批量激活 " + request.items().size() + " 个领地单元", false);
             EconomyPersistence.audit(connection, request.actorId(), request.actorName(), "EXPANSION_BATCH_PREPARE",
                     request.townId(), request.businessKey(),
-                    "批量扩张 " + request.items().size() + " 个领地单元，总价 "
+                    "批量激活 " + request.items().size() + " 个领地单元，总价 "
                             + request.totalPriceMinor());
             return requireExpansionBatch(connection, batchId);
         });
@@ -155,7 +155,7 @@ final class TerritoryExpansionBatchStore {
                 return batch;
             }
             if (!batch.status().equals("PREPARED")) {
-                throw new ConflictException("当前批量扩张状态不能完成");
+                throw new ConflictException("当前批量激活状态不能完成");
             }
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE territory_units SET projection_status = 'ACTIVE',
@@ -177,10 +177,10 @@ final class TerritoryExpansionBatchStore {
                      WHERE batch_id = ? AND status = 'PREPARED'
                     """)) {
                 statement.setBytes(1, EconomyPersistence.uuid(batchId));
-                EconomyPersistence.requireUpdated(statement, "批量扩张状态已被其他操作修改");
+                EconomyPersistence.requireUpdated(statement, "批量激活状态已被其他操作修改");
             }
             EconomyPersistence.audit(connection, batch.actorId(), batch.actorName(), "EXPANSION_BATCH_COMPLETE",
-                    batch.townId(), batch.businessKey(), "批量扩张 Residence 投影完成");
+                    batch.townId(), batch.businessKey(), "批量激活 Residence 投影完成");
             return requireExpansionBatch(connection, batchId);
         });
     }
@@ -194,7 +194,7 @@ final class TerritoryExpansionBatchStore {
                 return null;
             }
             if (batch.status().equals("COMPLETED")) {
-                throw new ConflictException("已完成批量扩张不能退款");
+                throw new ConflictException("已完成批量激活不能退款");
             }
             String refundKey = batch.businessKey() + ":refund";
             if (EconomyPersistence.findLedgerByBusinessKey(connection, refundKey).isEmpty()) {
@@ -225,10 +225,10 @@ final class TerritoryExpansionBatchStore {
                     """)) {
                 statement.setString(1, EconomyPersistence.safe(error));
                 statement.setBytes(2, EconomyPersistence.uuid(batchId));
-                EconomyPersistence.requireUpdated(statement, "批量扩张状态已被其他操作修改");
+                EconomyPersistence.requireUpdated(statement, "批量激活状态已被其他操作修改");
             }
             EconomyPersistence.audit(connection, batch.actorId(), batch.actorName(), "EXPANSION_BATCH_REFUND",
-                    batch.townId(), batch.businessKey(), "批量扩张已退款: " + EconomyPersistence.safe(error));
+                    batch.townId(), batch.businessKey(), "批量激活已退款: " + EconomyPersistence.safe(error));
             return null;
         });
     }
@@ -273,7 +273,7 @@ final class TerritoryExpansionBatchStore {
             statement.setBytes(1, EconomyPersistence.uuid(batchId));
             try (ResultSet row = statement.executeQuery()) {
                 if (!row.next()) {
-                    throw new ConflictException("批量扩张操作不存在");
+                    throw new ConflictException("批量激活操作不存在");
                 }
                 return readExpansionBatch(connection, row);
             }
@@ -315,14 +315,14 @@ final class TerritoryExpansionBatchStore {
         Objects.requireNonNull(request.townId(), "townId");
         Objects.requireNonNull(request.actorId(), "actorId");
         if (request.actorName() == null || request.actorName().isBlank()) {
-            throw new IllegalArgumentException("批量扩张操作人名称不能为空");
+            throw new IllegalArgumentException("批量激活操作人名称不能为空");
         }
         if (request.businessKey() == null || request.businessKey().isBlank()) {
-            throw new IllegalArgumentException("批量扩张幂等键不能为空");
+            throw new IllegalArgumentException("批量激活幂等键不能为空");
         }
         if (request.items() == null || request.items().isEmpty()
                 || request.items().size() > TerritoryRules.MAXIMUM_UNITS) {
-            throw new IllegalArgumentException("批量扩张至少需要一个且不能超过 25 个领地单元");
+            throw new IllegalArgumentException("批量激活至少需要一个且不能超过 25 个领地单元");
         }
         long total = 0;
         Set<Grid> grids = new HashSet<>();
@@ -330,19 +330,19 @@ final class TerritoryExpansionBatchStore {
             Objects.requireNonNull(item, "batch item");
             Objects.requireNonNull(item.unit(), "batch item unit");
             if (item.priceMinor() <= 0) {
-                throw new IllegalArgumentException("批量扩张单元价格必须大于 0");
+                throw new IllegalArgumentException("批量激活单元价格必须大于 0");
             }
             if (item.residenceName() == null || item.residenceName().isBlank()
                     || item.residenceAreaName() == null || item.residenceAreaName().isBlank()) {
-                throw new IllegalArgumentException("批量扩张 Residence 名称不能为空");
+                throw new IllegalArgumentException("批量激活 Residence 名称不能为空");
             }
             if (!grids.add(new Grid(item.unit().gridX(), item.unit().gridZ()))) {
-                throw new IllegalArgumentException("批量扩张包含重复网格");
+                throw new IllegalArgumentException("批量激活包含重复网格");
             }
             total = Math.addExact(total, item.priceMinor());
         }
         if (request.totalPriceMinor() <= 0 || total != request.totalPriceMinor()) {
-            throw new IllegalArgumentException("批量扩张总价与单元价格不一致");
+            throw new IllegalArgumentException("批量激活总价与单元价格不一致");
         }
     }
 
