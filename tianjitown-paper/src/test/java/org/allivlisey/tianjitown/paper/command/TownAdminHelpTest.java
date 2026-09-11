@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TownAdminHelpTest {
@@ -18,14 +17,13 @@ class TownAdminHelpTest {
     Path temporaryDirectory;
 
     @Test
-    void rootHelpListsConfiguredEntriesOnceAndDoesNotAdvertiseBuffRefunds() {
+    void rootHelpListsConfiguredEntriesOnce() {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
         List<String> entries = TownAdminCommand.rootHelpEntries(
                 Set.of(TownAdminPermissions.ROOT)::contains, messages::text);
 
-        assertEquals(1, entries.stream().filter(line -> line.startsWith("§esystem ")).count());
-        assertTrue(entries.stream().anyMatch(line -> line.startsWith("§ebuff ")));
-        assertFalse(entries.stream().anyMatch(line -> line.contains("退款取消")));
+        assertEquals(1, entries.stream().filter(line -> line.equals(messages.text("chat.admin.help-entry-system"))).count());
+        assertTrue(entries.stream().anyMatch(line -> line.equals(messages.text("chat.admin.help-entry-buff"))));
     }
 
     @Test

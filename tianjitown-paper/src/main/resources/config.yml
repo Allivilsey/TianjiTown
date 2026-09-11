@@ -72,7 +72,7 @@ buffs:
       effect-kind: ATTRIBUTE
       effect-key: 'minecraft:oxygen_bonus'
       operation: ADD_NUMBER
-      base-price: '1000.00'
+      base-price: '3000.00'
       maximum-level: 1
       amount-per-level: 19
     safe_fall:

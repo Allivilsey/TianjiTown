@@ -57,19 +57,19 @@ class TownAdminCompletionEngineTest {
         assertEquals(List.of("MemberOne"), engine.complete(
                 new String[]{"member", "remove", "sky", ""},
                 snapshot, dynamic));
-        assertEquals(List.of("<原因>"), engine.complete(
+        assertEquals(List.of(messages.plainText("chat.admin.completion.reason-hint")), engine.complete(
                 new String[]{"member", "remove", "sky", "MemberOne", ""},
                 snapshot, dynamic));
         assertEquals(List.of("DEPUTY_MAYOR", "MEMBER"), engine.complete(
                 new String[]{"member", "role", "sky", "MemberOne", ""},
                 snapshot, dynamic));
 
-        assertEquals(List.of("<原因>"), engine.complete(
+        assertEquals(List.of(messages.plainText("chat.admin.completion.reason-hint")), engine.complete(
                 new String[]{"vote", "cancel", "sky", ""},
                 snapshot, dynamic));
         assertEquals(List.of("repair"), engine.complete(
                 new String[]{"land", "reconcile", "sky", ""}, snapshot, dynamic));
-        assertEquals(List.of("<原因>"), engine.complete(
+        assertEquals(List.of(messages.plainText("chat.admin.completion.reason-hint")), engine.complete(
                 new String[]{"town", "delete", "sky", ""}, snapshot, dynamic));
 
     }
@@ -85,11 +85,11 @@ class TownAdminCompletionEngineTest {
 
     @Test
     void usesConfiguredArgumentHintsAfterMessagesReload() throws Exception {
-        assertEquals(List.of("<原因>"), engine.complete(
+        assertEquals(List.of(messages.plainText("chat.admin.completion.reason-hint")), engine.complete(
                 new String[]{"town", "delete", "sky", ""}, snapshot, dynamic));
-        assertEquals(List.of("<玩家>"), engine.complete(
+        assertEquals(List.of(messages.plainText("chat.admin.completion.player-hint")), engine.complete(
                 new String[]{"member", "add", "sky", ""}, snapshot, dynamic));
-        assertEquals(List.of("<金额>"), engine.complete(
+        assertEquals(List.of(messages.plainText("chat.admin.completion.amount-hint")), engine.complete(
                 new String[]{"money", "adjust", "sky", ""}, snapshot, dynamic));
 
         YamlConfiguration configuration = new YamlConfiguration();

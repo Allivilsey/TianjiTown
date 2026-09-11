@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -32,9 +33,12 @@ class ReadOnlyRulesDialogRendererTest {
         assertEquals(plain(messages, details), plain(messages, join));
         assertEquals(new DialogRoute("TOWN", TOWN_ID.toString()), details.returnRoute());
         assertEquals(new DialogRoute("JOIN_TOWN", TOWN_ID.toString()), join.returnRoute());
-        assertTrue(plain(messages, join).contains("1. 不得破坏公共设施"));
-        assertTrue(plain(messages, join).contains("2. " + rules.get(1)));
-        assertTrue(plain(messages, join).contains("\n\n1."));
+        assertTrue(plain(messages, join).contains(messages.plainText("dialog.rules.item",
+                Map.of("index", 1, "rule", rules.get(0)))));
+        assertTrue(plain(messages, join).contains(messages.plainText("dialog.rules.item",
+                Map.of("index", 2, "rule", rules.get(1)))));
+        assertTrue(plain(messages, join).contains("\n\n" + messages.plainText("dialog.rules.item",
+                Map.of("index", 1, "rule", rules.get(0)))));
     }
 
     @Test
@@ -55,7 +59,8 @@ class ReadOnlyRulesDialogRendererTest {
             } else {
                 assertFalse(rendered.contains(messages.plainText("dialog.rules.empty")));
                 for (int index = 0; index < rules.size(); index++) {
-                    assertTrue(rendered.contains((index + 1) + ". " + rules.get(index)));
+                    assertTrue(rendered.contains(messages.plainText("dialog.rules.item",
+                            Map.of("index", index + 1, "rule", rules.get(index)))));
                 }
             }
         }

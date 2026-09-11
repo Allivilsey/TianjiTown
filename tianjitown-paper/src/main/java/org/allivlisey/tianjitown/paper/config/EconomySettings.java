@@ -60,9 +60,9 @@ public record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, St
         BigDecimal expansionCost = ConfigurationValues.decimalText(config,
                 "economy.expansion.base-cost", "5000.00", messageResolver);
         BigDecimal weeklySubsidyLimit = ConfigurationValues.decimalText(config,
-                "economy.tax.subsidy.weekly-limit", "50000.00", messageResolver);
+                "economy.tax.subsidy.weekly-limit", "10000.00", messageResolver);
         BigDecimal twelveHourSubsidyLimit = ConfigurationValues.decimalText(config,
-                "economy.tax.subsidy.twelve-hour-limit", "5000.00", messageResolver);
+                "economy.tax.subsidy.twelve-hour-limit", "2000.00", messageResolver);
         int maximumUnits = org.allivlisey.tianjitown.core.land.TerritoryRules.MAXIMUM_UNITS;
         if (account == null || account.isBlank()) {
             throw new IllegalArgumentException(resolveMessage(messageResolver,

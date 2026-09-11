@@ -31,8 +31,8 @@ class EconomySettingsTest {
         assertEquals(2500, settings.maximumTaxBps());
         assertEquals(new BigDecimal("5000.00"), settings.expansionCost());
         assertEquals(25, settings.maximumUnits());
-        assertEquals(new BigDecimal("50000.00"), settings.weeklySubsidyLimit());
-        assertEquals(new BigDecimal("5000.00"), settings.twelveHourSubsidyLimit());
+        assertEquals(new BigDecimal("10000.00"), settings.weeklySubsidyLimit());
+        assertEquals(new BigDecimal("2000.00"), settings.twelveHourSubsidyLimit());
         assertTrue(settings.allowsTaxRate(500));
         assertTrue(settings.allowsTaxRate(600));
         assertTrue(settings.allowsTaxRate(2500));
@@ -69,34 +69,43 @@ class EconomySettingsTest {
             String rendered = messages.plainText(key, Map.of(
                     "path", "economy.example", "minimum", 0, "maximum", 8));
             assertFalse(rendered.isBlank());
-            assertFalse(rendered.contains("缺少消息配置"));
+            assertTrue(messages.hasMessage(key), key);
             assertFalse(rendered.contains("{"));
         }
 
-        assertEquals("economy.settlement-account 不能为空",
+        assertEquals(messages.plainText("validation.common.value-required",
+                Map.of("path", "economy.settlement-account")),
                 reject(configuration("economy.settlement-account", ""), messages).getMessage());
-        assertEquals("economy.money-scale 必须在 0~8 之间",
+        assertEquals(messages.plainText("validation.economy.money-scale-range",
+                Map.of("path", "economy.money-scale", "minimum", 0, "maximum", 8)),
                 reject(configuration("economy.money-scale", 9), messages).getMessage());
-        assertEquals("economy.expansion.base-cost 必须大于 0",
+        assertEquals(messages.plainText("validation.economy.expansion-cost-positive",
+                Map.of("path", "economy.expansion.base-cost")),
                 reject(configuration("economy.expansion.base-cost", "0"), messages)
                         .getMessage());
-        assertEquals("economy.tax.subsidy.weekly-limit 不能小于 0",
+        assertEquals(messages.plainText("validation.common.non-negative",
+                Map.of("path", "economy.tax.subsidy.weekly-limit")),
                 reject(configuration("economy.tax.subsidy.weekly-limit", "-1"), messages)
                         .getMessage());
-        assertEquals("economy.tax.subsidy.twelve-hour-limit 不能小于 0",
+        assertEquals(messages.plainText("validation.common.non-negative",
+                Map.of("path", "economy.tax.subsidy.twelve-hour-limit")),
                 reject(configuration("economy.tax.subsidy.twelve-hour-limit", "-1"), messages)
                         .getMessage());
 
         MemoryConfiguration relation = new MemoryConfiguration();
         relation.set("economy.tax.subsidy.weekly-limit", "1.00");
         relation.set("economy.tax.subsidy.twelve-hour-limit", "2.00");
-        assertEquals("economy.tax.subsidy.twelve-hour-limit 不能大于每周限额",
+        assertEquals(messages.plainText("validation.economy.twelve-hour-limit-exceeds-weekly",
+                Map.of("path", "economy.tax.subsidy.twelve-hour-limit")),
                 reject(relation, messages).getMessage());
 
         IllegalArgumentException overflow = reject(
                 configuration("economy.expansion.base-cost", "1E100"), messages);
-        assertEquals("economy.expansion 价格超出次级货币单位范围", overflow.getMessage());
-        assertEquals("金额超过上限", overflow.getCause().getMessage());
+        assertEquals(messages.plainText("validation.economy.expansion-cost-range",
+                Map.of("path", "economy.expansion")),
+                overflow.getMessage());
+        assertEquals(messages.plainText("validation.economy.expansion-cost-overflow"),
+                overflow.getCause().getMessage());
 
         String key = "validation.common.value-required";
         YamlConfiguration override = new YamlConfiguration();

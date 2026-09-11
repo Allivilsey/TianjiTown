@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -48,10 +49,10 @@ class BuffSettingsTest {
         BuffSettings settings = BuffSettings.load(config, messages);
 
         assertTrue(settings.buffShopEnabled());
-        assertEquals("速度", settings.label("speed"));
+        assertEquals(messages.plainText("dialog.buff.labels.speed").strip(), settings.label("speed"));
         assertEquals(new java.math.BigDecimal("100.00"), settings.requireBuff("speed").basePrice());
         assertEquals(2, settings.requireBuff("speed").maximumLevel());
-        assertEquals("速度", settings.requireBuff("speed").displayName());
+        assertEquals(messages.plainText("dialog.buff.labels.speed").strip(), settings.requireBuff("speed").displayName());
         assertEquals(BuffDefinition.EffectKind.ATTRIBUTE,
                 settings.requireBuff("speed").effectKind());
         assertEquals("minecraft:movement_speed", settings.requireBuff("speed").effectKey());
@@ -119,7 +120,9 @@ class BuffSettingsTest {
 
         IllegalArgumentException initial = assertThrows(IllegalArgumentException.class,
                 () -> settings.requireBuff("missing"));
-        assertEquals("未知 Buff: missing", initial.getMessage());
+        assertEquals(messages.plainText("validation.buff.unknown",
+                Map.of("key", "missing")),
+                initial.getMessage());
 
         YamlConfiguration override = new YamlConfiguration();
         override.set("validation.buff.unknown", "自定义 Buff 校验: {key}");
@@ -137,10 +140,10 @@ class BuffSettingsTest {
         BuffSettings settings = BuffSettings.load(
                 configuration("speed", "100.00"), messages);
 
-        assertEquals("速度", settings.label("speed"));
+        assertEquals(messages.plainText("dialog.buff.labels.speed").strip(), settings.label("speed"));
 
         YamlConfiguration override = new YamlConfiguration();
-        override.set("dialog.buff.labels.speed", "&d疾速");
+        override.set("dialog.buff.labels.speed", "  &d疾速 \n");
         override.save(temporaryDirectory.resolve("messages.yml").toFile());
         messages.reload();
 
@@ -154,9 +157,8 @@ class BuffSettingsTest {
         IllegalArgumentException missing = assertThrows(IllegalArgumentException.class,
                 () -> BuffSettings.load(configuration("custom", "100.00"),
                         messages));
-        assertEquals("Buff custom 缺少显示标签，请在 messages.yml 添加 dialog.buff.labels.custom",
+        assertEquals(messages.plainText("validation.buff.label-required", Map.of("key", "custom")),
                 missing.getMessage());
-        assertFalse(missing.getMessage().contains("缺少消息配置"));
 
         YamlConfiguration override = new YamlConfiguration();
         override.set("dialog.buff.labels.custom", "自定义增益");

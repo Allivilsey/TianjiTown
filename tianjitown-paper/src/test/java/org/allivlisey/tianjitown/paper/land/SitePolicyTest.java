@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -70,12 +71,14 @@ class SitePolicyTest {
                 "log.site.preview-cancel-failed")) {
             String rendered = messages.plainText(key, placeholders);
             assertFalse(rendered.isBlank(), key);
-            assertFalse(rendered.contains("缺少消息配置"), key);
+            assertTrue(messages.hasMessage(key), key);
             assertFalse(rendered.contains("{"), key);
         }
 
-        assertEquals("5×5 区块", TerritoryPreviewService.previewScope(1, messages::plainText));
-        assertEquals("2 个领地单元", TerritoryPreviewService.previewScope(2, messages::plainText));
+        assertEquals(messages.plainText("chat.site.preview-scope-single"), TerritoryPreviewService.previewScope(1, messages::plainText));
+        assertEquals(messages.plainText("chat.site.preview-scope-multiple",
+                Map.of("count", 2)),
+                TerritoryPreviewService.previewScope(2, messages::plainText));
     }
 
     @Test
@@ -85,13 +88,13 @@ class SitePolicyTest {
         InitialTerritory otherWorldArea = territory(OTHER_WORLD_ID, 0, 0, "nether");
         InitialTerritory missingFocus = territory(WORLD_ID, 10, 10, "world");
 
-        assertEquals("领地预览至少需要一个区域", assertThrows(IllegalArgumentException.class,
+        assertEquals(messages.plainText("validation.site.areas-required"), assertThrows(IllegalArgumentException.class,
                 () -> TerritoryPreviewService.previewAreas(null, List.of(), messages::plainText)).getMessage());
-        assertEquals("领地预览区域必须位于同一世界",
+        assertEquals(messages.plainText("validation.site.world-mismatch"),
                 assertThrows(IllegalArgumentException.class,
                         () -> TerritoryPreviewService.previewAreas(null, List.of(area, otherWorldArea),
                                 messages::plainText)).getMessage());
-        assertEquals("领地中心不在预览区域中",
+        assertEquals(messages.plainText("validation.site.focus-missing"),
                 assertThrows(IllegalArgumentException.class,
                         () -> TerritoryPreviewService.previewAreas(missingFocus, List.of(area),
                                 messages::plainText)).getMessage());

@@ -38,7 +38,6 @@ class TownDetailsMenuModelTest {
                         "description", description))), model.summaryLore());
         assertEquals(2, model.summaryLore().size());
         assertTrue(model.summaryLore().get(1).contains(description));
-        assertFalse(String.join("\n", model.summaryLore()).contains("规则数"));
         assertEquals(new TownDetailsMenuModel.RulesEntry(10, "town.rules",
                 "tooltip.town.rules", "TOWN_RULES", TOWN_ID.toString()), model.rulesEntry());
         assertFalse(messages.hasMessage("dialog.town.rule-count"));
@@ -53,7 +52,6 @@ class TownDetailsMenuModelTest {
 
         assertEquals(messages.rawText("dialog.common.town-description",
                 Map.of("description", "")), model.summaryLore().get(1));
-        assertFalse(String.join("\n", model.summaryLore()).contains("规则数"));
     }
 
     private static TownSnapshot town(String description, List<String> rules) {

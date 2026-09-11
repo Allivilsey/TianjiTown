@@ -2,6 +2,7 @@ package org.allivlisey.tianjitown.paper.ui.membership;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -18,10 +19,12 @@ import static org.mockito.ArgumentMatchers.*;
 
 class PlayerChangeDeliveryTest {
     @TempDir Path directory;
+    private PluginMessages messages;
 
     private TianjiTownPlugin plugin() {
         TianjiTownPlugin plugin = mock(TianjiTownPlugin.class);
-        when(plugin.messages()).thenReturn(new PluginMessages(directory.toFile()));
+        messages = spy(new PluginMessages(directory.toFile()));
+        when(plugin.messages()).thenReturn(messages);
         when(plugin.getLogger()).thenReturn(Logger.getAnonymousLogger());
         when(plugin.runAsync(any())).thenAnswer(call -> { call.<Runnable>getArgument(0).run(); return true; });
         when(plugin.runMain(any())).thenAnswer(call -> { call.<Runnable>getArgument(0).run(); return true; });
@@ -30,19 +33,19 @@ class PlayerChangeDeliveryTest {
 
     @ParameterizedTest
     @CsvSource({
-            "NONE, MEMBER, 你已加入“测试镇”小镇",
-            "VISITOR, MEMBER, 你已加入“测试镇”小镇",
-            "NONE, MAYOR, 你已成为“测试镇”小镇的镇长",
-            "MEMBER, MAYOR, 你已成为“测试镇”小镇的镇长",
-            "DEPUTY_MAYOR, MAYOR, 你已成为“测试镇”小镇的镇长",
-            "MEMBER, DEPUTY_MAYOR, 你已成为“测试镇”小镇的副镇长",
-            "MAYOR, MEMBER, 你已被降职为普通成员",
-            "DEPUTY_MAYOR, MEMBER, 你已被降职为普通成员",
-            "MEMBER, NONE, 你已离开“测试镇”小镇",
-            "DEPUTY_MAYOR, NONE, 你已离开“测试镇”小镇",
-            "MAYOR, NONE, 你已离开“测试镇”小镇",
-            "NONE, VISITOR, 你已成为“测试镇”小镇的访客",
-            "VISITOR, NONE, 你已不再是“测试镇”小镇的访客"
+            "NONE, MEMBER, member-joined",
+            "VISITOR, MEMBER, member-joined",
+            "NONE, MAYOR, became-mayor",
+            "MEMBER, MAYOR, became-mayor",
+            "DEPUTY_MAYOR, MAYOR, became-mayor",
+            "MEMBER, DEPUTY_MAYOR, became-deputy-mayor",
+            "MAYOR, MEMBER, became-member",
+            "DEPUTY_MAYOR, MEMBER, became-member",
+            "MEMBER, NONE, member-left",
+            "DEPUTY_MAYOR, NONE, member-left",
+            "MAYOR, NONE, member-left",
+            "NONE, VISITOR, visitor-added",
+            "VISITOR, NONE, visitor-removed"
     })
     void deliversSpecificMessageForIdentityTransition(String oldRole, String newRole, String expected) {
         UUID target = UUID.randomUUID();
@@ -54,7 +57,8 @@ class PlayerChangeDeliveryTest {
         try (var bukkit = mockStatic(Bukkit.class)) {
             bukkit.when(() -> Bukkit.getPlayer(target)).thenReturn(player);
             new PlayerChangeDelivery(plugin(), repository).deliver(target);
-            verify(player).sendMessage(contains(expected));
+            verify(messages).send(player, "chat.notification." + expected, Map.of("town", "测试镇"));
+            verify(player).sendMessage(messages.text("chat.notification." + expected, Map.of("town", "测试镇")));
             verify(repository).acknowledgePlayerChanges(target, List.of(1L));
         }
     }
@@ -74,7 +78,9 @@ class PlayerChangeDeliveryTest {
             delivery.deliver(target);
             delivery.deliver(target);
             delivery.deliver(target);
-            verify(player, times(1)).sendMessage(contains("你已成为“测试镇”小镇的副镇长"));
+            verify(messages, times(1)).send(player, "chat.notification.became-deputy-mayor",
+                    Map.of("town", "测试镇"));
+            verify(player, times(1)).sendMessage(anyString());
             verify(repository, times(2)).acknowledgePlayerChanges(target, List.of(1L));
         }
     }
@@ -92,7 +98,8 @@ class PlayerChangeDeliveryTest {
             verify(repository, never()).acknowledgePlayerChanges(any(), any());
             bukkit.when(() -> Bukkit.getPlayer(target)).thenReturn(player);
             delivery.deliver(target);
-            verify(player).sendMessage(contains("你已被降职为普通成员"));
+            verify(messages).send(player, "chat.notification.became-member", Map.of("town", "测试镇"));
+            verify(player).sendMessage(anyString());
             verify(repository).acknowledgePlayerChanges(target, List.of(1L));
         }
     }

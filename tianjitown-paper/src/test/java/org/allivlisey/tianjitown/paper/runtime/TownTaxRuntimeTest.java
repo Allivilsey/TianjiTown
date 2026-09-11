@@ -41,6 +41,8 @@ class TownTaxRuntimeTest {
     private final TownTaxRuntime taxes;
 
     TownTaxRuntimeTest() {
+        config.set("economy.tax.subsidy.weekly-limit", "50000.00");
+        config.set("economy.tax.subsidy.twelve-hour-limit", "5000.00");
         when(plugin.getConfig()).thenReturn(config);
         when(plugin.messages()).thenReturn(mock(PluginMessages.class));
         when(plugin.getLogger()).thenReturn(Logger.getAnonymousLogger());

@@ -55,7 +55,7 @@ class TerritoryServiceTest {
         for (String key : MESSAGE_KEYS) {
             String rendered = messages.plainText(key);
             assertFalse(rendered.isBlank(), key);
-            assertFalse(rendered.contains("缺少消息配置"), key);
+            assertTrue(messages.hasMessage(key), key);
             assertFalse(rendered.contains("{"), key);
         }
 
@@ -86,25 +86,25 @@ class TerritoryServiceTest {
             assertEquals(1_576_250, batch.totalPriceMinor());
             assertEquals(500_000, service.map(mayorId).priceMinor());
 
-            assertMessage("请至少选择一个领地单元",
+            assertMessage(messages.plainText("validation.territory.batch-selection-required"),
                     () -> service.batchPreview(mayorId, Set.of()));
             Set<TerritoryService.GridSelection> oversized = IntStream.range(0, 25)
                     .mapToObj(index -> new TerritoryService.GridSelection(index, 0))
                     .collect(Collectors.toSet());
-            assertMessage("批量激活后超过领地单元上限",
+            assertMessage(messages.plainText("validation.territory.batch-capacity-exceeded"),
                     () -> service.batchPreview(mayorId, oversized));
-            assertMessage("选中的领地单元超出 5×5 激活网格",
+            assertMessage(messages.plainText("validation.territory.batch-grid-out-of-bounds"),
                     () -> service.batchPreview(mayorId,
                             Set.of(new TerritoryService.GridSelection(3, 0))));
-            assertMessage("选中的领地单元已经激活",
+            assertMessage(messages.plainText("validation.territory.batch-occupied-selection"),
                     () -> service.batchPreview(mayorId,
                             Set.of(new TerritoryService.GridSelection(0, 0))));
-            assertMessage("批量选区必须与现有领地四方向连通",
+            assertMessage(messages.plainText("validation.territory.batch-not-connected"),
                     () -> service.batchPreview(mayorId,
                             Set.of(new TerritoryService.GridSelection(2, 0))));
-            assertMessage("你不属于任何小镇",
+            assertMessage(messages.plainText("validation.territory.town-required"),
                     () -> service.batchPreview(UUID.randomUUID(), Set.of()));
-            assertMessage("只有镇长可以使用公共资金激活",
+            assertMessage(messages.plainText("validation.territory.mayor-required"),
                     () -> service.batchPreview(memberId,
                             Set.of(new TerritoryService.GridSelection(1, 0))));
 
@@ -113,11 +113,11 @@ class TerritoryServiceTest {
                     new BigDecimal("50000.00"), new BigDecimal("5000.00"));
             TerritoryService noExpansionService = new TerritoryService(finance,
                     new SitePolicy(null, null, null), messages, noExpansionSettings, 2);
-            assertMessage("领地单元已达到配置上限",
+            assertMessage(messages.plainText("validation.territory.capacity-reached"),
                     () -> noExpansionService.preview(mayorId, ExpansionDirection.EAST));
 
             TerritoryService.TerritoryMap map = service.map(mayorId);
-            assertEquals("只能激活与已激活区域边缘相连的区域", map.cells().stream()
+            assertEquals(messages.plainText("dialog.territory.cell.not-adjacent-detail"), map.cells().stream()
                     .filter(cell -> cell.gridX() == 2 && cell.gridZ() == 2)
                     .findFirst().orElseThrow().detail());
 
@@ -140,7 +140,7 @@ class TerritoryServiceTest {
                 statement.setBytes(1, uuid(townId));
                 statement.executeUpdate();
             }
-            assertMessage("初始领地单元缺失",
+            assertMessage(messages.plainText("validation.territory.origin-missing"),
                     () -> service.batchPreview(mayorId, Set.of()));
         }
     }

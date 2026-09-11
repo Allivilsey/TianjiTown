@@ -132,12 +132,11 @@ class PluginDescriptorTest {
         assertEquals("§b自定义取消", messages.text("dialog.common.cancel"));
         assertEquals("自定义取消", messages.plainText("dialog.common.cancel"));
         assertEquals(NamedTextColor.AQUA, messages.component("dialog.common.cancel").color());
-        assertEquals("设置收入税率", messages.plainText("dialog.tax.title"));
-        assertEquals(NamedTextColor.GOLD, messages.component("dialog.tax.title").color());
-        assertEquals("已激活区域: 9/25（全部区域已预留）", messages.plainText("dialog.territory.summary",
-                Map.of("current", 9, "maximum", 25)));
-        assertEquals("§7已激活区域: 9/25（全部区域已预留）", messages.text("dialog.territory.summary",
-                Map.of("current", 9, "maximum", 25)));
+        PluginMessages defaults = new PluginMessages(dataFolder.resolve("defaults").toFile());
+        assertEquals(defaults.component("dialog.tax.title"), messages.component("dialog.tax.title"));
+        Map<String, ?> placeholders = Map.of("current", 9, "maximum", 25);
+        assertEquals(defaults.component("dialog.territory.summary", placeholders),
+                messages.component("dialog.territory.summary", placeholders));
     }
 
     private static String descriptor() throws IOException {

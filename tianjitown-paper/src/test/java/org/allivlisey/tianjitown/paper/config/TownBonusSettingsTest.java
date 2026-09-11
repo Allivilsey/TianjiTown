@@ -38,18 +38,23 @@ class TownBonusSettingsTest {
         IllegalArgumentException material = assertThrows(IllegalArgumentException.class,
                 () -> TownBonusSettings.load(configuration("NOT_A_MATERIAL", "0.25"),
                         messages::plainText));
-        assertEquals("建筑返还黑名单材料无效: NOT_A_MATERIAL", material.getMessage());
+        assertEquals(messages.plainText("validation.bonus.building-refund-blacklist-material-invalid",
+                Map.of("value", "NOT_A_MATERIAL")),
+                material.getMessage());
 
         IllegalArgumentException chance = assertThrows(IllegalArgumentException.class,
                 () -> TownBonusSettings.load(configuration("STONE", "1.5"),
                         messages::plainText));
-        assertEquals("territory.building-refund.chance 必须在 (0, 1] 范围内",
+        assertEquals(messages.plainText("validation.bonus.building-refund-chance-range",
+                Map.of("path", "territory.building-refund.chance")),
                 chance.getMessage());
 
         IllegalArgumentException wrongType = assertThrows(IllegalArgumentException.class,
                 () -> TownBonusSettings.load(configuration("STONE", "not-a-number"),
                         messages::plainText));
-        assertEquals("territory.building-refund.chance 必须为数字", wrongType.getMessage());
+        assertEquals(messages.plainText("validation.configuration.number-type",
+                Map.of("path", "territory.building-refund.chance")),
+                wrongType.getMessage());
         assertTrue(TownBonusSettings.isRedstoneCategory(Material.OAK_BUTTON));
         assertFalse(TownBonusSettings.isSafeSingleBlock(Material.OAK_DOOR));
         assertFalse(TownBonusSettings.isSafeSingleBlock(Material.SHULKER_BOX));
@@ -77,41 +82,9 @@ class TownBonusSettingsTest {
         for (String key : keys) {
             String rendered = messages.plainText(key, placeholders);
             assertFalse(rendered.isBlank(), key);
-            assertFalse(rendered.contains("缺少消息配置"), key);
+            assertTrue(messages.hasMessage(key), key);
             assertFalse(rendered.contains("{"), key);
         }
-
-        assertEquals("territory.building-refund.chance 必须在 (0, 1] 范围内",
-                messages.plainText("validation.bonus.building-refund-chance-range",
-                        Map.of("path", "territory.building-refund.chance")));
-        assertEquals("territory.building-refund.weekly-limit 超出整数范围",
-                messages.plainText("validation.bonus.integer-range",
-                        Map.of("path", "territory.building-refund.weekly-limit")));
-        assertEquals("territory.building-refund.weekly-limit 必须在 1~100000 范围内",
-                messages.plainText("validation.common.range",
-                        Map.of("path", "territory.building-refund.weekly-limit", "minimum", 1,
-                                "maximum", 100_000)));
-        assertEquals("territory.building-refund.counter-retention-weeks 必须在 2~260 范围内",
-                messages.plainText("validation.common.range",
-                        Map.of("path", "territory.building-refund.counter-retention-weeks",
-                                "minimum", 2, "maximum", 260)));
-        assertEquals("territory.building-refund.reset-zone 不是有效时区",
-                messages.plainText("validation.bonus.building-refund-reset-zone-invalid",
-                        Map.of("path", "territory.building-refund.reset-zone")));
-        assertEquals("territory.building-refund.blacklist 至少需要一个方块或分组",
-                messages.plainText("validation.bonus.building-refund-blacklist-required",
-                        Map.of("path", "territory.building-refund.blacklist")));
-        assertEquals("建筑返还黑名单材料无效: NOT_A_MATERIAL",
-                messages.plainText("validation.bonus.building-refund-blacklist-material-invalid",
-                        Map.of("value", "NOT_A_MATERIAL")));
-        assertEquals("territory.beacon.refresh-interval-ticks 必须在 20~1200 范围内",
-                messages.plainText("validation.common.range",
-                        Map.of("path", "territory.beacon.refresh-interval-ticks", "minimum", 20,
-                                "maximum", 1_200)));
-        assertEquals("operations.quickshop-diagnostic-days 必须在 1~180 天之间",
-                messages.plainText("validation.bonus.diagnostic-days-range",
-                        Map.of("path", "operations.quickshop-diagnostic-days", "minimum", 1,
-                                "maximum", 180)));
     }
 
     @Test
@@ -121,38 +94,45 @@ class TownBonusSettingsTest {
         YamlConfiguration weeklyLimit = configuration("STONE", "0.25");
         weeklyLimit.set("territory.building-refund.weekly-limit", 0);
         assertFailure(messages, weeklyLimit,
-                "territory.building-refund.weekly-limit 必须在 1~100000 范围内");
+                messages.plainText("validation.common.range",
+                        Map.of("path", "territory.building-refund.weekly-limit", "minimum", 1, "maximum", 100_000)));
 
         YamlConfiguration integerRange = configuration("STONE", "0.25");
         integerRange.set("territory.building-refund.weekly-limit", Integer.MAX_VALUE + 1L);
         assertFailure(messages, integerRange,
-                "territory.building-refund.weekly-limit 超出整数范围");
+                messages.plainText("validation.bonus.integer-range",
+                        Map.of("path", "territory.building-refund.weekly-limit")));
 
         YamlConfiguration retentionWeeks = configuration("STONE", "0.25");
         retentionWeeks.set("territory.building-refund.counter-retention-weeks", 1);
         assertFailure(messages, retentionWeeks,
-                "territory.building-refund.counter-retention-weeks 必须在 2~260 范围内");
+                messages.plainText("validation.common.range",
+                        Map.of("path", "territory.building-refund.counter-retention-weeks",
+                                "minimum", 2, "maximum", 260)));
 
         YamlConfiguration resetZone = configuration("STONE", "0.25");
         resetZone.set("territory.building-refund.reset-zone", "not-a-time-zone");
         assertFailure(messages, resetZone,
-                "territory.building-refund.reset-zone 不是有效时区");
+                messages.plainText("validation.bonus.building-refund-reset-zone-invalid",
+                        Map.of("path", "territory.building-refund.reset-zone")));
 
         YamlConfiguration blacklist = configuration("STONE", "0.25");
         blacklist.set("territory.building-refund.blacklist", List.of());
         assertFailure(messages, blacklist,
-                "territory.building-refund.blacklist 至少需要一个方块或分组");
+                messages.plainText("validation.bonus.building-refund-blacklist-required",
+                        Map.of("path", "territory.building-refund.blacklist")));
 
         YamlConfiguration beaconRefresh = configuration("STONE", "0.25");
         beaconRefresh.set("territory.beacon.refresh-interval-ticks", 19);
         assertFailure(messages, beaconRefresh,
-                "territory.beacon.refresh-interval-ticks 必须在 20~1200 范围内");
+                messages.plainText("validation.common.range",
+                        Map.of("path", "territory.beacon.refresh-interval-ticks", "minimum", 20, "maximum", 1_200)));
 
         YamlConfiguration diagnosticDays = configuration("STONE", "0.25");
         diagnosticDays.set("operations.quickshop-diagnostic-days", 0);
         assertFailure(messages, diagnosticDays,
-                "operations.quickshop-diagnostic-days 必须在 1~180 天之间");
-
+                messages.plainText("validation.bonus.diagnostic-days-range",
+                        Map.of("path", "operations.quickshop-diagnostic-days", "minimum", 1, "maximum", 180)));
     }
 
     @Test
@@ -161,7 +141,8 @@ class TownBonusSettingsTest {
         YamlConfiguration config = configuration("STONE", "1.5");
 
         assertFailure(messages, config,
-                "territory.building-refund.chance 必须在 (0, 1] 范围内");
+                messages.plainText("validation.bonus.building-refund-chance-range",
+                        Map.of("path", "territory.building-refund.chance")));
 
         YamlConfiguration override = new YamlConfiguration();
         override.set("validation.bonus.building-refund-chance-range",

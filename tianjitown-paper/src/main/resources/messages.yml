@@ -1631,7 +1631,7 @@ dialog:
     success-message: "&f已购买 {name}\n等级: {level}\n到期: {expires}\n公共余额: {balance}"
     health-effect: '&7每级最大生命值 +4（2 颗心）'
     speed-effect: '&7每级移动速度 +20%'
-    diving-effect: '&7氧气加成 +3，减少水下耗氧，仍需换气；仅 I 级'
+    diving-effect: '&7氧气加成 +19，减少水下耗氧，仍需换气；仅 I 级'
     safe_fall-effect: '&7每级安全坠落距离 +2 格，最高 III 级'
     mining-effect: '&7每级方块破坏速度属性 +10%，最高 III 级'
     generic-effect: '&7每级 {effect} {amount}'

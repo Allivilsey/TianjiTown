@@ -76,11 +76,11 @@ class RuleEditorDialogRendererTest {
                 () -> RuleEditorDialogRenderer.DeleteTarget.decode("invalid",
                         messages::rawText));
 
-        assertEquals("&c规则删除请求无效，请刷新界面", deleteRequest.getMessage());
+        assertEquals(messages.rawText("dialog.rules.delete-request-invalid"), deleteRequest.getMessage());
         String rendered = messages.rawText("dialog.rules.delete-request-invalid");
         assertFalse(rendered.isBlank());
         assertFalse(rendered.contains("{"));
-        assertFalse(rendered.contains("缺少消息配置"));
+        assertTrue(messages.hasMessage("dialog.rules.delete-request-invalid"));
     }
 
     @Test

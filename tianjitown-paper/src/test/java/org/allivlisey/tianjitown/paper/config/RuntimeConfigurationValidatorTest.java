@@ -90,12 +90,8 @@ class RuntimeConfigurationValidatorTest {
     void rendersRuntimeConfigurationValidationMessagesWithoutUnresolvedPlaceholders() {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
 
-        assertEquals("database.file 不能为空",
-                messages.plainText("validation.runtime-configuration.database-file-required"));
-        assertEquals("town.application.reservation-minutes 必须在 1~1440 范围内",
-                messages.plainText("validation.common.range", Map.of(
-                        "path", "town.application.reservation-minutes", "minimum", 1,
-                        "maximum", 1_440)));
+        assertTrue(messages.hasMessage("validation.runtime-configuration.database-file-required"));
+        assertTrue(messages.hasMessage("validation.common.range"));
 
         Map<String, ?> placeholders = Map.of(
                 "path", "town.application.reservation-minutes", "minimum", 1, "maximum", 2);
@@ -104,7 +100,7 @@ class RuntimeConfigurationValidatorTest {
                 "validation.common.range")) {
             String rendered = messages.plainText(key, placeholders);
             assertFalse(rendered.isBlank());
-            assertFalse(rendered.contains("缺少消息配置"));
+            assertTrue(messages.hasMessage(key), key);
             assertFalse(rendered.contains("{"));
         }
     }
@@ -115,11 +111,12 @@ class RuntimeConfigurationValidatorTest {
 
         YamlConfiguration database = configuration();
         database.set("database.file", " ");
-        assertEquals("database.file 不能为空", databaseFailure(database, messages).getMessage());
+        assertEquals(messages.plainText("validation.runtime-configuration.database-file-required"), databaseFailure(database, messages).getMessage());
 
         YamlConfiguration range = configuration();
         range.set("town.application.reservation-minutes", 0);
-        assertEquals("town.application.reservation-minutes 必须在 1~1440 范围内",
+        assertEquals(messages.plainText("validation.common.range",
+                Map.of("path", "town.application.reservation-minutes", "minimum", 1, "maximum", 1440)),
                 validationFailure(range, messages).getMessage());
     }
 
@@ -129,7 +126,8 @@ class RuntimeConfigurationValidatorTest {
         YamlConfiguration config = configuration();
         config.set("town.application.reservation-minutes", 0);
 
-        assertEquals("town.application.reservation-minutes 必须在 1~1440 范围内",
+        assertEquals(messages.plainText("validation.common.range",
+                Map.of("path", "town.application.reservation-minutes", "minimum", 1, "maximum", 1440)),
                 validationFailure(config, messages).getMessage());
 
         YamlConfiguration override = new YamlConfiguration();

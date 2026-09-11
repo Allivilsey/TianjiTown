@@ -48,7 +48,7 @@ public record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement
             ConfigurationSection config,
             BiFunction<String, Map<String, ?>, String> messageResolver) {
         String root = "territory.building-refund";
-        double chance = decimal(config, root + ".chance", 0.1D, messageResolver);
+        double chance = decimal(config, root + ".chance", 0.25D, messageResolver);
         int weeklyLimit = integer(config, root + ".weekly-limit", 3_000, messageResolver);
         int retentionWeeks = integer(config, root + ".counter-retention-weeks", 12,
                 messageResolver);

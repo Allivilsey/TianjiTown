@@ -2,6 +2,7 @@ package org.allivlisey.tianjitown.paper.ui.membership;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -16,10 +17,12 @@ import static org.mockito.ArgumentMatchers.*;
 
 class VoteResultDeliveryTest {
     @TempDir Path directory;
+    private PluginMessages messages;
 
     private TianjiTownPlugin plugin() {
         TianjiTownPlugin plugin = mock(TianjiTownPlugin.class);
-        when(plugin.messages()).thenReturn(new PluginMessages(directory.toFile()));
+        messages = spy(new PluginMessages(directory.toFile()));
+        when(plugin.messages()).thenReturn(messages);
         when(plugin.getLogger()).thenReturn(Logger.getAnonymousLogger());
         when(plugin.runAsync(any())).thenAnswer(call -> { call.<Runnable>getArgument(0).run(); return true; });
         when(plugin.runMain(any())).thenAnswer(call -> { call.<Runnable>getArgument(0).run(); return true; });
@@ -41,7 +44,13 @@ class VoteResultDeliveryTest {
             delivery.deliver(target);
             delivery.deliver(target);
             delivery.deliver(target);
-            verify(player, times(1)).sendMessage(contains("已通过"));
+            Map<String, ?> expected = Map.of(
+                    "town", "测试镇", "id", record.voteId(),
+                    "type", messages.plainText("dialog.votes.type-kick"),
+                    "status", messages.plainText("dialog.votes.status-passed"),
+                    "yes", 2, "no", 0, "required", 2);
+            verify(messages, times(1)).send(player, "chat.notification.vote-result", expected);
+            verify(player, times(1)).sendMessage(anyString());
             verify(repository, times(2)).acknowledgeVoteResults(target, List.of(1L));
         }
     }
@@ -49,8 +58,9 @@ class VoteResultDeliveryTest {
     @Test void offlinePlayerKeepsPendingRecordUntilLogin() {
         UUID target = UUID.randomUUID();
         TownRepository repository = mock(TownRepository.class);
-        when(repository.pendingVoteResults(target)).thenReturn(List.of(
-                new TownRepository.VoteResultNotification(1, target, "测试镇", UUID.randomUUID(), "REPLACE_MAYOR", "REJECTED", 0, 2, 2)));
+        var record = new TownRepository.VoteResultNotification(1, target, "测试镇", UUID.randomUUID(),
+                "REPLACE_MAYOR", "REJECTED", 0, 2, 2);
+        when(repository.pendingVoteResults(target)).thenReturn(List.of(record));
         Player player = mock(Player.class);
         when(player.isOnline()).thenReturn(true);
         try (var bukkit = mockStatic(Bukkit.class)) {
@@ -59,7 +69,13 @@ class VoteResultDeliveryTest {
             verify(repository, never()).acknowledgeVoteResults(any(), any());
             bukkit.when(() -> Bukkit.getPlayer(target)).thenReturn(player);
             delivery.deliver(target);
-            verify(player).sendMessage(contains("未通过"));
+            Map<String, ?> expected = Map.of(
+                    "town", "测试镇", "id", record.voteId(),
+                    "type", messages.plainText("dialog.votes.type-replace-mayor"),
+                    "status", messages.plainText("dialog.votes.status-rejected"),
+                    "yes", 0, "no", 2, "required", 2);
+            verify(messages).send(player, "chat.notification.vote-result", expected);
+            verify(player).sendMessage(anyString());
             verify(repository).acknowledgeVoteResults(target, List.of(1L));
         }
     }

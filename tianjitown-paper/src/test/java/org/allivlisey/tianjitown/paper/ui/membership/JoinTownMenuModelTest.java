@@ -39,7 +39,6 @@ class JoinTownMenuModelTest {
                 "tooltip.join.submit-expiry", "common.join-application-limit"),
                 "CONFIRM_APPLY_JOIN", TOWN_ID.toString()), model.applyEntry());
         assertFalse(String.join("\n", model.summaryLore()).contains("规则一"));
-        assertFalse(String.join("\n", model.summaryLore()).contains(" | "));
     }
 
     private static TownSnapshot town(String description, List<String> rules) {

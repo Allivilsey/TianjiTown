@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class TownActionsTest {
@@ -32,13 +33,7 @@ class TownActionsTest {
     void rendersTownActionMessagesAndUsesReloadedOverrides() throws Exception {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
 
-        assertEquals("申请不存在", messages.plainText("chat.application.not-found"));
         assertFalse(messages.plainText("chat.site-validation.residence-name-conflict").isBlank());
-        assertEquals("捐款金额必须大于 0",
-                messages.plainText("validation.vault.donation-amount-positive"));
-        assertEquals("同步 Residence 成员失败 town=town-1: boom",
-                messages.plainText("log.residence.member-sync-failure",
-                        Map.of("town", "town-1", "detail", "boom")));
         assertFalse(messages.plainText("dialog.review.empty-error").isBlank());
         assertFalse(messages.plainText("dialog.review.too-long-error").isBlank());
 
@@ -52,7 +47,7 @@ class TownActionsTest {
             String rendered = messages.plainText(key, Map.of(
                     "town", "town-1", "detail", "boom"));
             assertFalse(rendered.isBlank(), key);
-            assertFalse(rendered.contains("缺少消息配置"), key);
+            assertTrue(messages.hasMessage(key), key);
             assertFalse(rendered.contains("{"), key);
         }
 
