@@ -36,6 +36,74 @@ class GovernanceRepositorySqliteTest {
     @TempDir
     Path temporaryDirectory;
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "KICK_MEMBER,2,false", "KICK_MEMBER,3,true",
+            "REPLACE_MAYOR,2,false", "REPLACE_MAYOR,3,true"})
+    void fourVoterThresholdsFreezeEligibilityAndApplyOutcomeOnce(
+            VoteType type, int yesCount, boolean passed) throws Exception {
+        DatabaseConfig config = new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("four-voters.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5));
+        try (DatabaseGate gate = new DatabaseGate(config)) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            TownRepository towns = new TownRepository(gate.dataSource(), () -> false);
+            GovernanceRepository governance = new GovernanceRepository(gate.dataSource(), () -> false);
+            CreatedTown created = createTown(towns);
+            UUID townId = created.town().id();
+            for (int i = 0; i < 2; i++) {
+                towns.addMember(townId, UUID.randomUUID(), created.mayorId(), "Admin", "选民夹具");
+            }
+            for (UUID member : towns.listMemberIds(townId)) governance.recordActivity(member);
+            UUID target = towns.listMemberIds(townId).stream()
+                    .filter(id -> !id.equals(created.mayorId())).findFirst().orElseThrow();
+            VoteSnapshot vote = governance.createVote(townId, type, target, created.mayorId(),
+                    Duration.ofDays(30), Duration.ZERO, Duration.ofHours(72), false);
+            List<UUID> voters = governance.listVoteVoterIds(vote.id());
+            assertEquals(4, voters.size());
+            assertEquals(3, vote.requiredYes());
+            UUID excluded = type == VoteType.KICK_MEMBER ? target : created.mayorId();
+            assertFalse(voters.contains(excluded));
+            UUID newcomer = UUID.randomUUID();
+            towns.addMember(townId, newcomer, created.mayorId(), "Admin", "冻结后加入");
+            governance.recordActivity(newcomer);
+            for (UUID ineligible : List.of(excluded, newcomer, UUID.randomUUID())) {
+                assertThrows(GovernanceRepository.ConflictException.class,
+                        () -> governance.castVote(vote.id(), ineligible, true));
+            }
+            assertEquals(voters, governance.listVoteVoterIds(vote.id()));
+            for (int i = 0; i < voters.size(); i++) {
+                governance.castVote(vote.id(), voters.get(i), i < yesCount);
+                if (i == 0) {
+                    assertThrows(GovernanceRepository.ConflictException.class,
+                            () -> governance.castVote(vote.id(), voters.getFirst(), false));
+                }
+                if (i < voters.size() - 1) {
+                    assertEquals(VoteStatus.OPEN, governance.listTownVotes(townId,
+                            created.mayorId(), false).getFirst().status());
+                }
+            }
+            VoteSnapshot settled = governance.listTownVotes(townId, created.mayorId(), false)
+                    .getFirst();
+            assertEquals(passed ? VoteStatus.PASSED : VoteStatus.REJECTED, settled.status());
+            assertEquals(yesCount, settled.yesVotes());
+            if (type == VoteType.KICK_MEMBER) {
+                assertEquals(!passed, towns.listMemberIds(townId).contains(target));
+                assertEquals(created.mayorId(), towns.findTown(townId).orElseThrow().mayorId());
+            } else {
+                assertEquals(passed ? target : created.mayorId(),
+                        towns.findTown(townId).orElseThrow().mayorId());
+                assertEquals(passed ? MemberRole.MEMBER : MemberRole.MAYOR,
+                        governance.memberRole(townId, created.mayorId()));
+            }
+            governance.settleVote(vote.id(), created.mayorId(), "Admin", true);
+            assertEquals(1, scalar(gate,
+                    "SELECT COUNT(*) FROM audit_logs WHERE action='VOTE_SETTLE'"));
+            assertEquals(1, scalar(gate,
+                    "SELECT COUNT(*) FROM town_members WHERE role='MAYOR'"));
+        }
+    }
+
     @Test
     void persistsVoteResultsForAllMembersAcrossSettlementPaths() throws Exception {
         DatabaseConfig config = new DatabaseConfig(

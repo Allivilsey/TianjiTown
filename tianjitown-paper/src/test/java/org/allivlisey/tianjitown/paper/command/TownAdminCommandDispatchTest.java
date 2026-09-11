@@ -31,6 +31,45 @@ import io.papermc.paper.plugin.configuration.PluginMeta;
 import java.util.Map;
 
 class TownAdminCommandDispatchTest {
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "operations,diagnose 7", "money,money view sky", "tax,tax set sky 10 permission-check",
+            "ledger,ledger view sky", "buff,buff grant sky health permission-check"})
+    void scopedPermissionReachesRuntimeGateForItsOwnCommand(String scope, String command) {
+        when(sender.hasPermission("tianjitown.admin." + scope)).thenReturn(true);
+        when(plugin.townRuntime()).thenReturn(null);
+        lamp.dispatch(actor, "tianjitown " + command);
+        verify(messages).send(sender, "chat.admin.runtime-not-ready");
+        verify(messages, never()).send(sender, "chat.admin.no-permission");
+        verifyNoInteractions(runtime);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"operations", "money", "tax", "ledger", "buff"})
+    void scopedPermissionCannotDispatchOtherBusinessCommands(String scope) {
+        when(sender.hasPermission("tianjitown.admin." + scope)).thenReturn(true);
+        Map<String, String> commands = Map.of(
+                "operations", "diagnose 7",
+                "money", "money adjust sky 100 permission-check",
+                "tax", "tax set sky 25 permission-check",
+                "ledger", "ledger view sky",
+                "buff", "buff grant sky health permission-check");
+        for (var command : commands.entrySet()) {
+            if (command.getKey().equals(scope)) continue;
+            clearInvocations(messages, runtime);
+            lamp.dispatch(actor, "tianjitown " + command.getValue());
+            verify(messages).send(sender, "chat.admin.no-permission");
+            verifyNoInteractions(runtime);
+        }
+        for (String rootOnly : List.of("member remove sky Steve permission-check",
+                "town delete sky permission-check", "land rebuild sky")) {
+            clearInvocations(messages, runtime);
+            lamp.dispatch(actor, "tianjitown " + rootOnly);
+            verify(messages).send(sender, "chat.admin.no-permission");
+            verifyNoInteractions(runtime);
+        }
+    }
+
     private final TianjiTownPlugin plugin = mock(TianjiTownPlugin.class);
     private final PluginMessages messages = mock(PluginMessages.class);
     private final TownRuntime runtime = mock(TownRuntime.class);
