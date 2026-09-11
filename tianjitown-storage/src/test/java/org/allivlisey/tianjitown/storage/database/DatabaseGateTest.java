@@ -56,6 +56,32 @@ class DatabaseGateTest {
     }
 
     @Test
+    void repeatedPoolRecreationPreservesExistingData() throws Exception {
+        DatabaseConfig config = new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("reload.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5));
+        for (int cycle = 0; cycle < 3; cycle++) {
+            DatabaseGate gate = new DatabaseGate(config);
+            try (gate) {
+                assertTrue(gate.verifyAndMigrate().healthy());
+                try (Connection connection = gate.dataSource().getConnection();
+                     Statement statement = connection.createStatement()) {
+                    if (cycle == 0) {
+                        statement.executeUpdate("CREATE TABLE reload_probe (value TEXT NOT NULL)");
+                        statement.executeUpdate("INSERT INTO reload_probe VALUES ('preserved')");
+                    }
+                    try (ResultSet result = statement.executeQuery("SELECT value FROM reload_probe")) {
+                        assertTrue(result.next());
+                        assertEquals("preserved", result.getString(1));
+                        assertFalse(result.next());
+                    }
+                }
+            }
+            assertTrue(gate.dataSource().isClosed());
+        }
+    }
+
+    @Test
     void rejectsNonSqliteConfiguration() {
         assertThrows(IllegalArgumentException.class, () -> new DatabaseConfig(
                 "jdbc:mysql://localhost/town", Duration.ofSeconds(5), Duration.ofSeconds(5)));

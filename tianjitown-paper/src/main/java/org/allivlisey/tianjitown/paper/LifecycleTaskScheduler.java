@@ -30,6 +30,9 @@ final class LifecycleTaskScheduler {
     }
 
     long start() {
+        if (asyncExecutor != null) {
+            throw new IllegalStateException("上一生命周期尚未关闭");
+        }
         long generation = lifecycleGeneration.incrementAndGet();
         periodicFailures.clear();
         asyncTasks.startAccepting();
@@ -48,7 +51,9 @@ final class LifecycleTaskScheduler {
     public boolean runAsync(Runnable task) {
         java.util.Objects.requireNonNull(task, "task");
         ExecutorService executor = asyncExecutor;
-        long generation = lifecycleGeneration.get();
+        Long inheritedGeneration = asyncGeneration.get();
+        long generation = inheritedGeneration == null
+                ? lifecycleGeneration.get() : inheritedGeneration;
         if (executor == null || !isCurrentLifecycle(generation)) {
             return false;
         }
@@ -145,6 +150,7 @@ final class LifecycleTaskScheduler {
     }
 
     void shutdown() {
+        stopAccepting();
         ExecutorService executor = asyncExecutor;
         if (executor != null) {
             executor.shutdown();

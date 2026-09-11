@@ -38,6 +38,18 @@ class LifecycleTaskSchedulerTest {
     }
 
     @Test
+    void shutdownAloneRejectsSubmissionsAndAllowsAFreshExecutor() throws Exception {
+        assertThrows(IllegalStateException.class, scheduler::start);
+        scheduler.shutdown();
+        assertFalse(scheduler.runMain(() -> fail("disabled callback")));
+        assertFalse(scheduler.runAsync(() -> fail("disabled worker")));
+        scheduler.start();
+        CountDownLatch ran = new CountDownLatch(1);
+        assertTrue(scheduler.runAsync(ran::countDown));
+        assertTrue(ran.await(5, TimeUnit.SECONDS));
+    }
+
+    @Test
     void discardsQueuedMainCallbacksAcrossRestart() {
         Runnable action = mock(Runnable.class);
         assertTrue(scheduler.runMainLater(action, 5));

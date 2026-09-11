@@ -698,6 +698,10 @@ log:
     vote-result-delivery-failed: '投票结果通知投递失败，将重试: {detail}'
   # 插件停服期间的资源清理和异步任务等待；{detail}=异常详情，{active}=未结束任务数，{player}=玩家 UUID
   lifecycle:
+    listener-cleanup-failure: '停用插件时注销事件监听器失败: {detail}'
+    command-cleanup-failure: '停用插件时注销命令失败: {detail}'
+    completion-cleanup-failure: '停用插件时清理命令补全失败: {detail}'
+    scheduler-cleanup-failure: '停用插件时关闭任务调度器失败: {detail}'
     ui-close-failure: '停服关闭玩家界面失败: {detail}'
     ui-viewer-close-failure: '关闭玩家小镇界面失败 {player}: {detail}'
     async-shutdown-timeout: '等待异步任务结束超时，仍有 {active} 个任务；将继续关闭数据源请检查阻塞的第三方 API'

@@ -37,13 +37,22 @@ public final class DatabaseGate implements AutoCloseable {
         hikari.addDataSourceProperty("date_precision", "MILLISECONDS");
         hikari.addDataSourceProperty("recursive_triggers", false);
         dataSource = new HikariDataSource(hikari);
-        flyway = Flyway.configure(DatabaseGate.class.getClassLoader())
-                .dataSource(dataSource)
-                .locations("classpath:db/migration")
-                .failOnMissingLocations(true)
-                .validateMigrationNaming(true)
-                .cleanDisabled(true)
-                .load();
+        try {
+            flyway = Flyway.configure(DatabaseGate.class.getClassLoader())
+                    .dataSource(dataSource)
+                    .locations("classpath:db/migration")
+                    .failOnMissingLocations(true)
+                    .validateMigrationNaming(true)
+                    .cleanDisabled(true)
+                    .load();
+        } catch (RuntimeException | LinkageError failure) {
+            try {
+                dataSource.close();
+            } catch (RuntimeException | LinkageError cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
     }
 
     public HealthResult verifyAndMigrate() {

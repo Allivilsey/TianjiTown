@@ -136,10 +136,13 @@ final class TownStartupCoordinator {
     volatile TownAdminTabCompleter townAdminTabCompleter;
     volatile PluginMessages messages;
     private Lamp<BukkitCommandActor> commandLamp;
+    // Own pools before queuing activation: Bukkit may cancel that callback during unload.
+    private final Set<DatabaseGate> databaseCandidates = new java.util.HashSet<>();
 
     public void onEnable() {
         long generation = scheduler.start();
         plugin.saveDefaultConfig();
+        plugin.reloadConfig();
         if (Files.notExists(plugin.getDataFolder().toPath().resolve("messages.yml"))) {
             plugin.saveResource("messages.yml", false);
         }
@@ -177,8 +180,13 @@ final class TownStartupCoordinator {
 
     public void onDisable() {
         scheduler.stopAccepting();
+        java.util.function.Consumer<CleanupFailure> failures = failure -> plugin.getLogger().warning(
+                plainText(failure.key(), Map.of("detail", safeMessage(failure.cause()))));
+        cleanupEffect(() -> HandlerList.unregisterAll(plugin),
+                "log.lifecycle.listener-cleanup-failure", failures);
         if (commandLamp != null) {
-            commandLamp.unregisterAllCommands();
+            cleanupEffect(commandLamp::unregisterAllCommands,
+                    "log.lifecycle.command-cleanup-failure", failures);
             commandLamp = null;
         }
         TownUiController ui = townUi;
@@ -192,23 +200,23 @@ final class TownStartupCoordinator {
         }
         TownAdminTabCompleter completer = townAdminTabCompleter;
         if (completer != null) {
-            completer.stop();
+            cleanupEffect(completer::stop, "log.lifecycle.completion-cleanup-failure", failures);
         }
-        scheduler.shutdown();
+        cleanupEffect(scheduler::shutdown, "log.lifecycle.scheduler-cleanup-failure", failures);
         TownRuntime runtime = townRuntime;
-        cleanupRuntimeEffects(runtime, failure -> plugin.getLogger().warning(
-                plainText(failure.key(), Map.of("detail", safeMessage(failure.cause())))));
-        DatabaseGate gate = databaseGate;
-        if (gate != null) {
-            try {
-                gate.close();
-            } catch (RuntimeException exception) {
-                plugin.getLogger().warning(plainText(DATABASE_CLOSE_FAILURE,
-                        Map.of("detail", safeMessage(exception))));
-            } finally {
-                databaseGate = null;
-            }
+        cleanupRuntimeEffects(runtime, failures);
+        List<DatabaseGate> candidates;
+        synchronized (databaseCandidates) {
+            candidates = new ArrayList<>(databaseCandidates);
         }
+        DatabaseGate gate = databaseGate;
+        if (gate != null && !candidates.contains(gate)) {
+            candidates.add(gate);
+        }
+        for (DatabaseGate candidate : candidates) {
+            cleanupEffect(() -> closeDatabaseCandidate(candidate), DATABASE_CLOSE_FAILURE, failures);
+        }
+        databaseGate = null;
         townRuntime = null;
         townActions = null;
         townUi = null;
@@ -296,19 +304,23 @@ final class TownStartupCoordinator {
         return healthy && economyHealthy;
     }
 
-    private void checkDatabase(List<String> previousChecks,
+    void checkDatabase(List<String> previousChecks,
                                RuntimeConfigurationValidator.DatabaseSettings settings,
                                long generation) {
         List<String> details = new ArrayList<>(previousChecks);
+        DatabaseGate candidate = null;
         try {
             DatabaseConfig config = new DatabaseConfig(
                     resolveDatabaseUrl(),
                     Duration.ofMillis(settings.connectionTimeoutMillis()),
                     Duration.ofMillis(settings.busyTimeoutMillis()));
-            DatabaseGate candidate = new DatabaseGate(config);
+            candidate = new DatabaseGate(config);
+            if (!trackDatabaseCandidate(candidate, generation)) {
+                return;
+            }
             DatabaseGate.HealthResult result = candidate.verifyAndMigrate();
             if (!result.healthy()) {
-                candidate.close();
+                closeDatabaseCandidate(candidate);
                 if (!scheduler.isCurrentLifecycle(generation)) {
                     return;
                 }
@@ -318,13 +330,21 @@ final class TownStartupCoordinator {
                 return;
             }
             if (!scheduler.isCurrentLifecycle(generation)) {
-                candidate.close();
+                closeDatabaseCandidate(candidate);
                 return;
             }
-            if (!scheduler.runMain(() -> activateRuntime(candidate, details, result.detail(), generation))) {
-                candidate.close();
+            DatabaseGate verified = candidate;
+            if (!scheduler.runMain(() -> activateRuntime(verified, details, result.detail(), generation))) {
+                closeDatabaseCandidate(candidate);
             }
         } catch (RuntimeException | LinkageError exception) {
+            if (candidate != null) {
+                try {
+                    closeDatabaseCandidate(candidate);
+                } catch (RuntimeException | LinkageError cleanupFailure) {
+                    exception.addSuppressed(cleanupFailure);
+                }
+            }
             if (!scheduler.isCurrentLifecycle(generation)) {
                 return;
             }
@@ -375,7 +395,7 @@ final class TownStartupCoordinator {
     private void activateRuntimeChecked(DatabaseGate candidate, List<String> previousDetails,
                                         String databaseDetail, long generation) {
         if (!scheduler.isCurrentLifecycle(generation)) {
-            candidate.close();
+            closeDatabaseCandidate(candidate);
             return;
         }
         Set<String> managedResidenceNames = ConcurrentHashMap.newKeySet();
@@ -397,7 +417,7 @@ final class TownStartupCoordinator {
             actions = new TownActions(plugin, runtime);
             ui = new TownUiController(plugin, runtime, actions);
         } catch (RuntimeException | LinkageError exception) {
-            candidate.close();
+            closeDatabaseCandidate(candidate);
             List<String> details = new ArrayList<>(previousDetails);
             details.add(messages().plainText(RUNTIME_INITIALIZATION_FAILURE,
                     Map.of("detail", safeText(safeMessage(exception)))));
@@ -517,11 +537,28 @@ final class TownStartupCoordinator {
 
     private record CleanupFailure(String key, Throwable cause) {}
 
-    private void closeDatabaseCandidate(DatabaseGate candidate) {
-        if (databaseGate == candidate) {
-            databaseGate = null;
+    boolean trackDatabaseCandidate(DatabaseGate candidate, long generation) {
+        synchronized (databaseCandidates) {
+            if (scheduler.isCurrentLifecycle(generation)) {
+                databaseCandidates.add(candidate);
+                return true;
+            }
         }
         candidate.close();
+        return false;
+    }
+
+    private void closeDatabaseCandidate(DatabaseGate candidate) {
+        synchronized (databaseCandidates) {
+            boolean owned = databaseCandidates.remove(candidate);
+            if (databaseGate == candidate) {
+                databaseGate = null;
+                owned = true;
+            }
+            if (owned) {
+                candidate.close();
+            }
+        }
     }
 
     private WorldBoundaryService worldBoundaryService() {

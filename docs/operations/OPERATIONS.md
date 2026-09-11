@@ -8,7 +8,22 @@
 2. 查看后台清算对账日志和账户锁定状态；对账由后台定时执行。
 3. 需要复核时执行 `/tianjitown diagnose 7`，保留报告并检查 `DIFFERENCE`、`INCOMPLETE`、`WRITE_LOCKED`、`COMPENSATION_REQUIRED` 和 `SEVERE`。
 
-初始化阶段统一诊断通过后才注册业务运行时；失败保持 `LOCKED`。启动失败应根据 `status` 和日志修复后重启，`reload` 不会重新初始化。运行期间统一诊断只在手动命令时执行，不会周期重复。
+初始化阶段统一诊断通过后才注册业务运行时；失败保持 `LOCKED`。启动失败应根据 `status` 和日志修复后重启插件或服务器，`/tianjitown reload` 不会重新初始化。运行期间统一诊断只在手动命令时执行，不会周期重复。
+
+## PlugMan 热重载
+
+TianjiTown 使用标准 Bukkit 插件启停流程，无需安装 PlugMan API 依赖。使用与当前服务端版本兼容的 PlugManX；[上游命令说明](https://github.com/Test-Account666/PlugManX)中 `reload` 表示卸载并重新加载 JAR，`restart` 表示停用并重新启用现有实例。
+
+1. 选择没有正在进行的捐款、退款、购买和第三方交易的时段。需要暂停玩家入口时先执行 `/tianjitown maintenance on`。
+2. 重新初始化配置或恢复启动检查时执行 `/plugman restart TianjiTown`；重新加载插件 JAR 时执行 `/plugman reload TianjiTown`。替换 JAR 可先 `/plugman unload TianjiTown`，替换完成后 `/plugman load TianjiTown`。
+3. 等待 `/tianjitown status` 从 `CHECKING` 变为 `READY`；若为 `LOCKED`，按日志修复后重新启用。PlugMan 的加载成功提示不代表异步启动诊断已经通过。
+4. 检查服务台、手册、命令补全和在线玩家 Buff；旧界面和聊天按钮在停用时失效，需要重新打开。确认正常后执行 `/tianjitown maintenance off`（如果之前开启了维护模式）。
+
+停用时注销事件和命令、关闭小镇界面、取消定时任务、等待正在执行的后台任务、清理托管效果并关闭 SQLite 连接池（包括尚未完成启动的连接池）。每次启用都会重读配置与消息、重新校验依赖和数据库，并恢复持久业务状态及在线玩家效果。热重载不会删除数据库、重建已有结构或搬运数据。
+
+支持范围是单独重载 TianjiTown，依赖插件保持启用；`reload all` 或热换 Residence、Vault、经济提供者等依赖不属于此范围。停用最多等待后台任务 30 秒，第三方 API 阻塞导致超时应检查日志并重启服务器；内存中的待重试退款和未保存表单不会跨重载保留，需要按操作 ID 核对未完成交易。插件停用期间小镇税收监听和入口不可用，维护模式本身不会阻止第三方交易。
+
+预发验收：连续执行三次 `reload`，再执行 `disable` / `enable` 和 `restart`；每次确认 `READY`、命令仅执行一次、一次交易仅入账一次、Buff 不叠加、服务台与原有数据仍可使用。另在 `CHECKING` 阶段立即停用再启用，确认没有遗留连接池、旧回调或 SQLite 锁定。自动化测试覆盖生命周期和数据库回收，不能替代当前 Paper/PlugMan/依赖组合的真实服务器验收。
 
 ## 暂停功能
 

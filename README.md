@@ -33,8 +33,10 @@ mvn -B clean verify
 
 Paper API、Residence 和 Vault API 不打入安装包；项目模块和重定位后的 Lamp 命令库内嵌。HikariCP、Flyway、SQLite JDBC 由 Paper 按 `plugin.yml` 的 `libraries` 下载，首次启动需要可访问依赖仓库；离线部署应预先准备服务端 `libraries` 缓存。
 
+支持通过 `/plugman reload TianjiTown` 热重载插件，或 `/plugman restart TianjiTown` 停用后重新启用。每次启用都会重读配置、重建运行时并执行启动诊断；操作步骤和验收见 [PlugMan 热重载](docs/operations/OPERATIONS.md#plugman-热重载)。
+
 ## 数据与开发约定
 
-SQLite 文件可由 `database.file` 指定，支持绝对路径和相对插件目录的路径。使用单连接、WAL、外键约束，默认连接等待和忙等待均为 5 秒。数据库路径和超时修改后需要重启。
+SQLite 文件可由 `database.file` 指定，支持绝对路径和相对插件目录的路径。使用单连接、WAL、外键约束，默认连接等待和忙等待均为 5 秒。数据库路径和超时修改后需要重启插件或服务器。
 
 配置不设版本号。数据库结构只维护 `V1_0__initial_schema.sql`，Flyway 用于首次建表和完整性校验，不提供旧开发数据库升级、回填或 MySQL 自动导入。已有文件不会因结构调整自动删除或重建；校验失败应保留数据并在副本中定位，恢复步骤见 [SQLite 备份手册](docs/operations/SQLITE_AND_BACKUP.md)。

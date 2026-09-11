@@ -4,6 +4,8 @@
 
 ## 怎样使修改生效
 
+本页“重启”对 TianjiTown 自身配置也可以通过 `/plugman restart TianjiTown` 或 `/plugman reload TianjiTown` 完成：它们会重建连接池、运行时和定时任务，重新执行启动诊断。依赖插件本身的变更仍按依赖要求重启服务器，详见 [PlugMan 热重载](../operations/OPERATIONS.md#plugman-热重载)。
+
 `/tianjitown reload` 只重读文件，不重新创建运行时、连接池或定时任务。以下开关在运行时动态读取，重载后用于后续操作：
 
 | 配置键 | 默认值 | 作用 |
