@@ -362,7 +362,7 @@ chat:
     ledger-record: '&7{created} &f{type} &e{amount} &8余额={balance} {note}'
     buff-title: '&6生效中的公共 Buff: {count}'
     buff-record: '&7{id} &d{key} &f等级={level} 到期={expires}'
-    buff-set-complete: '&aBuff 免费设置完成，公共余额: {balance}'
+    buff-set-complete: '&aBuff设置完成'
     buff-set-failed: '&cBuff 设置未能应用，已恢复设置前状态'
     land-rebuild-success: '&a{town}: {detail}'
     land-rebuild-failure: '&c{town}: {detail}'
