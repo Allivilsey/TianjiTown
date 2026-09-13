@@ -4,10 +4,11 @@
 
 - [自动化、命令与运维测试列表](testlist.md)：`AUTO`、`CMD` 与 `OPS` 测试项、执行模板和报告索引；
 - [P0 人工证明集](manualtest.md)：12段连续流程、50个常规步骤，复用A/B镇和S1，包含操作、预期和发布门槛；
-- [压缩审查与旧→新覆盖映射](P0_COMPRESSION_REVIEW.md)：115个原登记单元拆为137个子项，逐项追踪实现、自动测试断言和覆盖边界；
-- [条件专项与故障覆盖缺口](P0_SPECIAL_TESTS.md)：首次基线、相关代码/依赖变化或可选功能启用时执行，未触发须关联既有成功基线；
-- [Dialog UI 改版人工测试清单](UI_DIALOG_MANUAL_TEST.md)：本轮界面改版的角色、表单、分页、确认、会话与显示专项验收；
-- [测试报告分类](reports/README.md)：按 AUTO/MANUAL 分类存放；当前已有报告全部归入自动测试；
+- [Buff 与 HuskSync 验收](../docs/deployment/BUFFS_AND_RESOURCES.md)、[领地加成验收](../docs/deployment/TERRITORY_BONUSES.md)、[PlugMan 热重载验收](../docs/operations/OPERATIONS.md#plugman-热重载)：现有功能专项步骤；
+- [告警与故障注入](../docs/operations/ALERTS_AND_FAULT_INJECTION.md)：隔离环境故障矩阵与证据要求；
+- [测试报告分类](reports/README.md)：自动测试/审查档案，以及人工反馈的修复方案和实施结果；
+
+旧清单引用的 `P0_COMPRESSION_REVIEW.md`、`P0_SPECIAL_TESTS.md` 和 `UI_DIALOG_MANUAL_TEST.md` 当前未收录。现有功能验收文档不等同于缺失的覆盖映射或专项成功证据；按 [人工测试手册](manualtest.md) 核实适用范围及材料缺口，不能据此认定全部专项或真实客户端验收已经通过。
 
 各 Maven 模块的自动化测试源码继续保留在模块标准的 `src/test` 目录，确保 Maven 能自动发现并执行。`LocalTestServer`、`MinecraftConsoleClient` 与 `backups` 是本机测试环境及证据目录，不纳入版本控制，报告中的路径仍以项目根目录为基准。
 

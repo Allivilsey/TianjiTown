@@ -26,7 +26,7 @@ mvn -B clean verify
 安装包为 `tianjitown-paper/target/TianjiTown-1.0.0-SNAPSHOT.jar`。当前声明的 Paper API 版本为 `26.2`；服务端必须能加载该 API 并支持 Paper Dialog，具体服务器组合需在预发环境验证。
 
 1. 安装并启用 Residence、Vault、XConomy、WorldBorder、QuickShop-Hikari、Jobs、GlobalMarketPlus，确认 Vault 提供可用 Economy 服务。QuickShop 税务适配要求至少 `6.3.0.0` 并通过 API 能力检查。HuskSync 为可选集成。
-2. 通过 WorldBorder `/wb` 为开放选址的世界配置边界。初始 5×5 区块和缓冲范围必须完整位于边界内。
+2. 通过 WorldBorder `/wb` 为开放选址的世界配置边界。选址检查整镇 5×5 单元网格，即 25×25 区块（625 区块）及缓冲范围，必须完整位于边界内；中心 5×5 区块是建镇后自动激活的初始单元。
 3. 将构建 JAR 放入 `plugins` 并启动。首次运行创建 `plugins/TianjiTown/config.yml`、`messages.yml` 和默认 SQLite 文件 `tianjitown.db`。
 4. 执行 `/tianjitown status`，待初始化和统一诊断通过、状态为 `READY` 后，再由游戏内管理员看向讲台执行 `/tianjitown station create`。
 5. 通过服务台领取手册，在隔离区域完成一次建镇及经济流程验收。

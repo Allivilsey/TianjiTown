@@ -21,7 +21,7 @@
 ## 首次安装
 
 1. 准备独立预发服务器及空数据库路径，安装上述依赖，确认服务器进程对插件目录可写。
-2. 用 WorldBorder `/wb` 为开放选址的世界配置边界；初始 5×5 区块与默认一圈区块缓冲须完整位于边界内。
+2. 用 WorldBorder `/wb` 为开放选址的世界配置边界；整镇 5×5 单元网格，即 25×25 区块（625 区块）与默认一圈区块缓冲须完整位于边界内。中心 5×5 区块在建镇后自动激活，其余单元先预留。
 3. 放入 TianjiTown JAR 并启动，生成 `config.yml`、`messages.yml` 和默认 `tianjitown.db`。Paper 首次需下载 `libraries` 声明的存储依赖；离线环境提前准备缓存。
 4. 按 [配置说明](CONFIGURATION.md) 调整清算账户、价格和开关。数据库路径、经济参数和商品定义等修改后重启。
 5. 执行 `/tianjitown status`，检查启动状态和所有诊断细节。初始化阶段的 SQLite、Residence、Vault 与 QuickShop 历史统一诊断通过后才注册业务运行时并进入 `READY`。
@@ -37,7 +37,7 @@
 
 ## 开放前验收
 
-- 使用申请人、两名初始成员和管理员，完成成员确认、5×5 选址、审核和 Residence 创建。
+- 使用申请人、两名初始成员和管理员，完成成员确认、整镇 25×25 区块选址检查、审核和初始 5×5 区块的 Residence 创建；确认其余 24 个单元预留且禁止圈地。
 - 验证入镇申请、退出、访客权限、投票、捐款、三种收入税、扩张与 Buff；检查失败操作没有重复扣款。
 - 执行 `/tianjitown land reconcile all` 和 `/tianjitown diagnose 7`，保存结果。
 - 按 [SQLite 备份手册](../operations/SQLITE_AND_BACKUP.md) 完成一次同时间点备份与隔离恢复。

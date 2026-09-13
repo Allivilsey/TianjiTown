@@ -44,16 +44,21 @@
 
 | 组件 | 职责 |
 | --- | --- |
+| `TownRepository` | 组装存储组件、提供公开接口，并读取/确认身份变更与投票结果的待投递通知 |
+| `TownQueryStore` | 小镇查询、按名称/代码/成员查镇、玩家概览及小镇列表 |
+| `TownProfileStore` | 资料更新、名称与代码不可修改的校验、规则版本和审计 |
+| `TownDeletionStore` | 管理员归档、镇长解散、清理关联状态，以及领地移除后的名称/代码/区块释放 |
+| `TownAuditStore` | 最近审计查询及独立审计写入 |
 | `TownApplicationStore` | 申请编辑、选址、提交、审核与申请查询 |
 | `TownProvisioningStore` | 建镇数据准备、完成、失败恢复和退款确认 |
-| `TownMembershipStore` | 成员列表、角色与镇长变更、离镇、访客管理 |
+| `TownMembershipStore` | 成员查询、加入/移除、离镇、管理员镇长转移及访客管理；副镇长任免由治理存储处理 |
 | `TownJoinApplicationStore` | 入镇申请、审批、撤回与过期检查 |
 | `TownInvitationStore` | 邀请创建、接受与拒绝 |
 | `ApplicationFormDraftStore` / `TownVisitorStore` | 使用调用方连接执行表单草稿和访客 SQL |
 | `TownPersistence` / `TownSqlValues` | 跨流程共享的连接级查询、校验、审计及 JDBC 值转换 |
 | `TownDatabase` | 连接生命周期、线程检查、事务与异常转换 |
 
-`TownRepository` 自身保留小镇概览、资料维护、归档/删除与公开接口。申请、成员及建镇流程通过独立组件运行。
+`TownRepository` 将小镇概览、资料维护、归档/删除、审计及申请/成员/建镇流程委托给上述组件，通知队列的读取与确认仍在入口类中实现。
 
 ## 经济存储
 

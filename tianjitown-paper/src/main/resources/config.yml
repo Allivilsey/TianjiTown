@@ -7,7 +7,7 @@ database:
 town:
   # 可通过 /tianjitown maintenance on|off 即时切换；开启时玩家 UI 和表单全部暂停。
   maintenance-mode: false
-  # 玩家每次领取手册后需要等待的时间，管理员发放同样遵守该冷却。
+  # 玩家自行领取手册的冷却；管理员发放跳过冷却，也不更新自行领取的冷却时间。
   handbook-cooldown-minutes: 60
   application:
     # 审批通过时扣取，并转入小镇初始公共资金；必须大于 0，且符合货币精度。

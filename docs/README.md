@@ -31,5 +31,5 @@
 - [告警和故障注入](operations/ALERTS_AND_FAULT_INJECTION.md)：隔离环境验收矩阵。
 - [依赖升级检查](operations/DEPENDENCY_UPGRADE_CHECKLIST.md)：替换依赖前后的能力验证。
 - [运行时与存储](architecture/RUNTIME_AND_STORAGE.md)：组件职责和事务边界。
-- [测试入口](../test/README.md)：自动测试、人工验收、隔离接口和历史报告。历史报告只表示当时的验证结果。
+- [测试入口](../test/README.md)：自动测试、人工验收、隔离环境流程和历史报告。历史报告只表示当时的验证结果。
 - [中文代码扫描历史](CHINESE_CODE_LINES.md)：历史扫描快照，不能作为当前源码行号索引。
