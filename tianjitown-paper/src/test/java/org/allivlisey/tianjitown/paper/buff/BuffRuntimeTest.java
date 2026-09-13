@@ -125,7 +125,7 @@ class BuffRuntimeTest {
             RuntimeException applyFailure = new IllegalStateException("apply failed");
             doThrow(applyFailure).when(effects).applyBuffs(eq(player), anyList(), eq(false));
             AtomicReference<RuntimeException> failure = new AtomicReference<>();
-            runtime.buyBuffAction(player, "speed", 1, 1,
+            runtime.buyBuffAction(player, "speed", 1, 1, UUID.randomUUID(), null, "test",
                     ignored -> fail("failed application must not report purchase success"), failure::set);
             CommerceRepository.ActiveBuff buff = activeBuff();
             CommerceRepository.BuffPurchase purchase = new CommerceRepository.BuffPurchase(buff, 100);

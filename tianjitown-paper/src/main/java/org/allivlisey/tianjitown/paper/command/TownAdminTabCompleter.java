@@ -89,7 +89,10 @@ public final class TownAdminTabCompleter {
             Map<UUID, List<UUID>> members = currentRuntime.repository().listMemberIdsByTown();
             snapshot.set(new TownAdminCompletionEngine.Snapshot(
                     towns.stream().map(town -> new TownAdminCompletionEngine.TownCandidate(
-                            town.id(), town.profile().residenceName(), town.status())).toList(), members));
+                            town.id(), town.profile().residenceName(), town.status())).toList(), members,
+                    currentRuntime.buffs().settings().buffs().values().stream().collect(
+                            java.util.stream.Collectors.toMap(definition -> definition.key(),
+                                    definition -> Math.min(5, definition.maximumLevel())))));
             refreshedAt.set(System.nanoTime());
             if (refreshFailureLogged.compareAndSet(true, false)) {
                 plugin.getLogger().info(plugin.messages().plainText(COMPLETION_CACHE_RESTORED));

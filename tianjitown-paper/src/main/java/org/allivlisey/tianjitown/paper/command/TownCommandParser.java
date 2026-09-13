@@ -205,10 +205,12 @@ public final class TownCommandParser {
 
     private static String join(String[] args, int start, int end, String missingKey) {
         if (start >= end || start < 0 || end > args.length) {
+            if (missingKey.equals("chat.parser.missing-reason")) return "管理员调整";
             throw error(missingKey);
         }
         String value = String.join(" ", Arrays.copyOfRange(args, start, end)).strip();
         if (value.isBlank()) {
+            if (missingKey.equals("chat.parser.missing-reason")) return "管理员调整";
             throw error(missingKey);
         }
         return value;

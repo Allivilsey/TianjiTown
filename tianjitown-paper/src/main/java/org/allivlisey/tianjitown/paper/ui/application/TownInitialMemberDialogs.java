@@ -39,6 +39,7 @@ public final class TownInitialMemberDialogs {
     }
 
     public void notifyInitialMembers(ApplicationSnapshot application) {
+        if (application.needsInitialMemberReselection()) return;
         for (InitialMemberConfirmation confirmation : application.initialMembers()) {
             if (confirmation.status() != InitialMemberConfirmation.Status.PENDING) {
                 continue;
@@ -71,6 +72,10 @@ public final class TownInitialMemberDialogs {
                         presentation.dialogText("common.back"), "MAIN", null);
                 return;
             }
+            if (application.needsInitialMemberReselection()) {
+                facade.openApplication(applicant, application);
+                return;
+            }
             if (application.initialMembers().stream().noneMatch(member ->
                     member.status() == InitialMemberConfirmation.Status.PENDING)) {
                 presentation.openNotice(applicant, presentation.dialogText("notice.reminder-unneeded-title"),
@@ -90,6 +95,12 @@ public final class TownInitialMemberDialogs {
     }
 
     public void sendInitialMemberReminder(Player member, ApplicationSnapshot application) {
+        if (application.needsInitialMemberReselection()) return;
+        UUID token = application.initialMembers().stream()
+                .filter(entry -> entry.playerId().equals(member.getUniqueId()))
+                .filter(entry -> entry.status() == InitialMemberConfirmation.Status.PENDING)
+                .map(InitialMemberConfirmation::invitationToken).findFirst().orElse(null);
+        if (token == null) return;
         Component message = presentation.dialogComponent("invitation.message", Map.of(
                 "player", facade.displayName(application.applicantId()),
                 "town", TownUiLegacyFacade.safeText(application.text().name())));
@@ -100,17 +111,17 @@ public final class TownInitialMemberDialogs {
                                 ActionButton.create(presentation.dialogComponent("invitation.accept"),
                                         null, 170, presentation.dialogAction(member, session,
                                                 response -> respondInitialMember(member,
-                                                        application.id(), true))),
+                                                        application.id(), token, true))),
                                 ActionButton.create(presentation.dialogComponent("invitation.reject"),
                                         null, 170, presentation.dialogAction(member, session,
                                                 response -> respondInitialMember(member,
-                                                         application.id(), false)))))
+                                                         application.id(), token, false)))))
                                 .exitAction(presentation.returnButton(member, session, DialogRoute.ROOT))
                                 .columns(2).build(), DialogRoute.ROOT);
     }
 
-    private void respondInitialMember(Player member, UUID applicationId, boolean confirm) {
-        actions.respondInitialMember(member, applicationId, confirm, outcome ->
+    private void respondInitialMember(Player member, UUID applicationId, UUID token, boolean confirm) {
+        actions.respondInitialMember(member, applicationId, token, confirm, outcome ->
                 facade.handleOutcome(member, outcome, application -> {
                     presentation.openNotice(member, confirm
                                     ? presentation.dialogText("notice.invitation-accepted-title")

@@ -30,9 +30,9 @@ class TownAdminHelpTest {
     void operationsOnlyHelpStillListsConfiguredSystemOnce() {
         PluginMessages messages = new PluginMessages(temporaryDirectory.toFile());
         List<String> entries = TownAdminCommand.rootHelpEntries(
-                Set.of(TownAdminPermissions.OPERATIONS)::contains, messages::text);
+                Set.of("tianjitown.admin.operations")::contains, messages::text);
 
-        assertEquals(List.of(messages.text("chat.admin.help-entry-system")), entries);
+        assertTrue(entries.isEmpty());
     }
 
     @Test

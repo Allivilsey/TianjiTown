@@ -28,7 +28,7 @@ public final class TownAdminGovernanceCommands {
     }
 
     @Command("tianjitown member add")
-    @Usage("/tianjitown member add <小镇代码> <玩家> <原因>")
+    @Usage("/tianjitown member add <小镇代码> <玩家> [原因]")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void addMember(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> memberRequest(runtime, input), request -> {
@@ -50,7 +50,7 @@ public final class TownAdminGovernanceCommands {
     }
 
     @Command("tianjitown member remove")
-    @Usage("/tianjitown member remove <小镇代码> <玩家> <原因>")
+    @Usage("/tianjitown member remove <小镇代码> <玩家> [原因]")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void removeMember(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> memberRequest(runtime, input), request -> {
@@ -74,34 +74,31 @@ public final class TownAdminGovernanceCommands {
     @Command("tianjitown member role")
     @Usage("/tianjitown member role <小镇代码> <玩家> <角色>")
     @AdminAccess(TownAdminPermissions.ROOT)
-    public void roleMember(CommandSender sender, TownRuntime runtime, String input) {
-        runtime.read(sender, () -> memberRequest(runtime, input), request -> {
-            UUID playerId = TownAdminCommand.playerId(request.player());
-            MemberRole role;
-            try {
-                role = MemberRole.valueOf(request.reason().toUpperCase(Locale.ROOT));
-            } catch (IllegalArgumentException exception) {
-                facade.send(sender, "chat.admin.role-invalid");
-                return;
-            }
-            runtime.write(sender, () -> {
-                TownSnapshot town = facade.requireTown(runtime, request.townId());
-                runtime.governance().changeRoleByAdmin(town.id(), playerId, role,
-                        TownAdminCommand.actorId(sender), sender.getName(),
-                        plugin.messages().plainText("log.admin.member-role-change-reason"));
-                return town;
-            }, town -> {
-                facade.send(sender, "chat.admin.role-updated", Map.of("role", role));
-                facade.reconcileOne(sender, runtime, town.id(), true);
-            });
+    public void roleMember(CommandSender sender, TownRuntime runtime,
+            @revxrsal.commands.annotation.Single String townCode,
+            @revxrsal.commands.annotation.Single String playerName,
+            @revxrsal.commands.annotation.Single String roleName) {
+        MemberRole role;
+        try { role = MemberRole.valueOf(roleName.toUpperCase(Locale.ROOT)); }
+        catch (IllegalArgumentException exception) { throw facade.messageArgument("chat.admin.role-invalid"); }
+        UUID playerId = TownAdminCommand.playerId(playerName);
+        runtime.write(sender, () -> {
+            TownSnapshot town = facade.requireTown(runtime, townCode);
+            runtime.governance().changeRoleByAdmin(town.id(), playerId, role,
+                    TownAdminCommand.actorId(sender), sender.getName(), "管理员调整");
+            return town;
+        }, town -> {
+            facade.send(sender, "chat.admin.role-updated", Map.of("role", role));
+            facade.reconcileOne(sender, runtime, town.id(), true);
         });
     }
 
     @Command("tianjitown vote cancel")
-    @Usage("/tianjitown vote cancel <小镇代码> <原因>")
+    @Usage("/tianjitown vote cancel <小镇代码> [原因]")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void cancelVote(CommandSender sender, TownRuntime runtime,
-                           @revxrsal.commands.annotation.Single String townCode, String inputReason) {
+                           @revxrsal.commands.annotation.Single String townCode,
+                           @revxrsal.commands.annotation.Default("管理员调整") String inputReason) {
         String reason = TownCommandParser.reason(inputReason.split(" "), 0, plugin.messages()::plainText);
         runtime.write(sender, () -> {
             TownSnapshot town = facade.requireTown(runtime, townCode);
@@ -114,7 +111,7 @@ public final class TownAdminGovernanceCommands {
     }
 
     @Command("tianjitown mayor transfer")
-    @Usage("/tianjitown mayor transfer <小镇代码> <玩家> <原因>")
+    @Usage("/tianjitown mayor transfer <小镇代码> <玩家> [原因]")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void transferMayor(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> memberRequest(runtime, input), request -> {

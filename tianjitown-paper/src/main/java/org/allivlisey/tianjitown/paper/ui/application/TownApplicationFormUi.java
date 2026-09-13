@@ -87,6 +87,11 @@ public final class TownApplicationFormUi {
         reminderOwners.clear();
     }
 
+    public void clearReminder(UUID applicationId) {
+        initialMemberReminderCooldowns.remove(applicationId);
+        reminderOwners.remove(applicationId);
+    }
+
     public Instant reminderAvailableAt(UUID applicationId) {
         return initialMemberReminderCooldowns.get(applicationId);
     }

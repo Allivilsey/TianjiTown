@@ -55,8 +55,8 @@ public final class TownRepository {
     }
 
     public ApplicationSnapshot respondInitialMember(UUID applicationId, UUID playerId,
-                                                     boolean confirm) {
-        return applicationStore.respondInitialMember(applicationId, playerId, confirm);
+                                                     UUID invitationToken, boolean confirm) {
+        return applicationStore.respondInitialMember(applicationId, playerId, invitationToken, confirm);
     }
 
     public ApplicationSnapshot selectSite(UUID applicationId, UUID applicantId,
@@ -249,6 +249,10 @@ public final class TownRepository {
 
     public List<TownSnapshot> listReservedTowns() {
         return queryStore.listReservedTowns();
+    }
+
+    public List<TownSnapshot> listTowns(org.allivlisey.tianjitown.core.town.TownStatus status) {
+        return queryStore.listTowns(status);
     }
 
     public List<TownSnapshot> listTowns(boolean includeArchived) {

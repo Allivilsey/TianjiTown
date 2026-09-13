@@ -69,7 +69,6 @@ final class TownBonusDiagnostics {
             return;
         }
         long externalBalance = captureExternalBalance();
-        plugin.messages().send(sender, "chat.bonus.diagnostic-started");
         submitDiagnostic(sender, days, externalBalance, null);
     }
 
@@ -129,7 +128,7 @@ final class TownBonusDiagnostics {
                                     Consumer<DiagnosticResult> completion) {
         DiagnosticResult result;
         try {
-            result = finishDiagnostic(sender, data);
+            result = finishDiagnostic(sender, data, completion != null);
         } catch (RuntimeException | LinkageError exception) {
             result = failedDiagnostic(exception);
             completeFailedDiagnostic(sender, completion, result);
@@ -160,7 +159,7 @@ final class TownBonusDiagnostics {
                         "detail", safeMessage(exception))), null);
     }
 
-    private DiagnosticResult finishDiagnostic(CommandSender sender, DiagnosticData data) {
+    private DiagnosticResult finishDiagnostic(CommandSender sender, DiagnosticData data, boolean startup) {
         int days = data.days();
         TownDiagnosticRepository.DiagnosticSnapshot database = data.database();
         String schemaVersion = data.schemaVersion();
@@ -229,16 +228,16 @@ final class TownBonusDiagnostics {
         DiagnosticResult result = new DiagnosticResult(healthy, Instant.now(), detail, null);
         lastDiagnostic.set(result);
         diagnosticRunning.set(false);
-        if (sender != null) {
+        if (sender != null && (!startup || !healthy)) {
             plugin.messages().send(sender, summaryKey);
-            lines.forEach(line -> plugin.messages().send(sender, "chat.bonus.diagnostic-line",
+            if (!healthy) lines.forEach(line -> plugin.messages().send(sender, "chat.bonus.diagnostic-line",
                     Map.of("line", line)));
         }
-        writeDiagnosticReport(lines, result);
+        writeDiagnosticReport(sender, lines, result);
         return result;
     }
 
-    private void writeDiagnosticReport(List<String> lines, DiagnosticResult base) {
+    private void writeDiagnosticReport(CommandSender sender, List<String> lines, DiagnosticResult base) {
         plugin.runAsync(() -> {
             Path directory = plugin.getDataFolder().toPath().resolve("diagnostics")
                     .toAbsolutePath().normalize();
@@ -250,6 +249,13 @@ final class TownBonusDiagnostics {
                 lastDiagnostic.set(new DiagnosticResult(base.healthy(), base.completedAt(),
                         base.detail(), report));
                 pruneReports(directory);
+                if (!base.healthy()) {
+                    plugin.getLogger().warning("统一诊断报告: " + report);
+                    if (sender != null && !(sender instanceof org.bukkit.command.ConsoleCommandSender)) {
+                        plugin.runMain(() -> plugin.messages().send(sender,
+                                "chat.bonus.diagnostic-report", Map.of("path", report.toString())));
+                    }
+                }
             } catch (IOException exception) {
                 plugin.getLogger().warning(plugin.messages().plainText(
                         DIAGNOSTIC_REPORT_WRITE_FAILURE,

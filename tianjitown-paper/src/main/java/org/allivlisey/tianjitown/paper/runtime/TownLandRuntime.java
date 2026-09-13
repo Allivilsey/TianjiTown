@@ -118,8 +118,9 @@ final class TownLandRuntime {
                         }
                         if (inspection.state()
                                 == LandProtectionService.ProjectionState.HEALTHY) {
-                            recordLandAudit(null, "SYSTEM", state.town().id(), false,
-                                    LandProtectionService.Result.fromHealthyInspection(inspection));
+                            var messages = org.allivlisey.tianjitown.paper.message.TownResidenceMessages.sync(
+                                    plugin.messages(), landProtection, state.town());
+                            recordLandAudit(null, "SYSTEM", state.town().id(), false, messages);
                             continue;
                         }
                         String detectedDifference = safeText(LandProtectionMessages.detail(
@@ -232,8 +233,10 @@ final class TownLandRuntime {
                                 "repair", safeText(LandProtectionMessages.detail(
                                         plugin.messages(), outcome.result())))));
             }
-            recordLandAudit(null, "SYSTEM", state.town().id(),
-                    outcome.repairAttempted(), outcome.result());
+            var result = outcome.result().success()
+                    ? org.allivlisey.tianjitown.paper.message.TownResidenceMessages.sync(
+                            plugin.messages(), landProtection, state.town()) : outcome.result();
+            recordLandAudit(null, "SYSTEM", state.town().id(), outcome.repairAttempted(), result);
         } finally {
             pendingLandRepairs.remove(state.town().id());
         }
@@ -297,6 +300,10 @@ final class TownLandRuntime {
                     try {
                         result = landProtection.reconcile(town.residenceName(), areas, members,
                                 repair);
+                        if (repair && result.success()) {
+                            result = org.allivlisey.tianjitown.paper.message.TownResidenceMessages.sync(
+                                    plugin.messages(), landProtection, town);
+                        }
                     } catch (RuntimeException | LinkageError exception) {
                         result = LandProtectionService.Result.failureCode(
                                 LandProtectionService.ResultCode.RESIDENCE_API_UNAVAILABLE,

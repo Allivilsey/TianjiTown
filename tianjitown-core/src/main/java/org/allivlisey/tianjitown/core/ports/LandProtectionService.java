@@ -9,6 +9,11 @@ import java.util.Objects;
 import java.util.UUID;
 
 public interface LandProtectionService {
+    default Result setMessages(String residenceName, String enterMessage, String leaveMessage) {
+        return Result.failureCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                Map.of("detail", "领地实现不支持消息同步"));
+    }
+
     default Collision findNameCollision(String residenceName) {
         return Collision.none();
     }

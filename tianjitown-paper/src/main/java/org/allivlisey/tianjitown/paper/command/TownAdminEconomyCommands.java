@@ -28,7 +28,7 @@ public final class TownAdminEconomyCommands {
 
     @Command("tianjitown money view")
     @Usage("/tianjitown money view <小镇代码>")
-    @AdminAccess(TownAdminPermissions.MONEY)
+    @AdminAccess(TownAdminPermissions.ROOT)
     public void viewMoney(CommandSender sender, TownRuntime runtime, String input) {
         String townName = input.strip();
         runtime.read(sender, () -> {
@@ -41,8 +41,8 @@ public final class TownAdminEconomyCommands {
     }
 
     @Command("tianjitown money adjust")
-    @Usage("/tianjitown money adjust <小镇代码> <带符号金额> <原因>")
-    @AdminAccess(TownAdminPermissions.MONEY)
+    @Usage("/tianjitown money adjust <小镇代码> <带符号金额> [原因]")
+    @AdminAccess(TownAdminPermissions.ROOT)
     public void adjustMoney(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {
             List<TownSnapshot> towns = runtime.repository().listTowns(true);
@@ -63,7 +63,7 @@ public final class TownAdminEconomyCommands {
 
     @Command("tianjitown buff list")
     @Usage("/tianjitown buff list <小镇代码>")
-    @AdminAccess(TownAdminPermissions.BUFF)
+    @AdminAccess(TownAdminPermissions.ROOT)
     public void listBuffs(CommandSender sender, TownRuntime runtime, String input) {
         String townName = input.strip();
         runtime.read(sender, () -> {
@@ -78,50 +78,28 @@ public final class TownAdminEconomyCommands {
         });
     }
 
-    @Command("tianjitown buff grant")
-    @Usage("/tianjitown buff grant <小镇代码> <buffKey> <原因>")
-    @AdminAccess(TownAdminPermissions.BUFF)
-    public void grantBuff(CommandSender sender, TownRuntime runtime, String input) {
-        if (!runtime.buffs().buffShopEnabled() || !runtime.consumptionEnabled()) {
-            throw facade.messageArgument("chat.admin.buff-purchase-paused");
-        }
-        runtime.read(sender, () -> {
-            List<TownSnapshot> towns = runtime.repository().listTowns(true);
-            TownCommandParser.NamedActionReason parsed = TownCommandParser.namedActionReason(
-                    input.split(" "), 0, TownAdminCommand.townCodes(towns),
-                    runtime.buffs().settings().buffs().keySet(),
-                    plugin.messages()::plainText);
-            TownSnapshot town = towns.stream().filter(candidate -> TownAdminCommand.sameCode(
-                            candidate.profile().residenceName(), parsed.townName())).findFirst()
-                    .orElseThrow(() -> facade.messageArgument("chat.admin.town-not-found-generic"));
-            BuffDefinition definition = runtime.buffs().settings().requireBuff(
-                    parsed.action().toLowerCase(Locale.ROOT));
-            return new BuffGrantRequest(town.id(), town.profile().name(), definition,
-                    parsed.reason());
-        }, request -> facade.requestConfirmation(sender,
-                plugin.messages().text("chat.admin.buff-purchase-confirmation", Map.of(
-                        "town", TownAdminCommand.safeText(request.townName()),
-                        "buff", TownAdminCommand.safeText(runtime.buffs().settings().label(
-                                request.definition().key())))),
-                () -> runtime.write(sender, () -> runtime.buffs().repository()
-                                .purchaseBuffForTown(request.townId(), TownAdminCommand.actorId(sender),
-                                        sender.getName(), request.definition(),
-                                        runtime.buffs().settings().label(
-                                                request.definition().key()),
-                                        runtime.settlement().scale(),
-                                        1, 1,
-                        "admin-buff-purchase:" + UUID.randomUUID(),
-                        java.time.Instant.now(), request.reason()),
-                        purchase -> {
-                            facade.send(sender, "chat.admin.buff-purchase-complete", Map.of(
-                                    "balance", runtime.money(purchase.balanceAfterMinor())));
-                            runtime.buffs().refreshAllPlayers();
-                        })));
+    @Command("tianjitown buff set")
+    @Usage("/tianjitown buff set <小镇代码> <buffKey> [周数] [等级]")
+    @AdminAccess(TownAdminPermissions.ROOT)
+    public void setBuff(CommandSender sender, TownRuntime runtime,
+            @revxrsal.commands.annotation.Single String townCode,
+            @revxrsal.commands.annotation.Single String buffKey,
+            @revxrsal.commands.annotation.Default("1") @revxrsal.commands.annotation.Single String time,
+            @revxrsal.commands.annotation.Default("1") @revxrsal.commands.annotation.Single String intensity) {
+        int weeks = Integer.parseInt(time);
+        int level = Integer.parseInt(intensity);
+        BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey.toLowerCase(Locale.ROOT));
+        org.allivlisey.tianjitown.core.consumption.BuffPricing.weeklyPrice(definition, weeks, level,
+                runtime.settlement().scale());
+        runtime.read(sender, () -> facade.requireTown(runtime, townCode), town ->
+                runtime.buffs().setBuffAction(sender, town.id(), definition, weeks, level,
+                        purchase -> facade.send(sender, "chat.admin.buff-set-complete", Map.of(
+                                "balance", runtime.money(purchase.balanceAfterMinor())))));
     }
 
     @Command("tianjitown tax set")
-    @Usage("/tianjitown tax set <小镇代码> <百分比> <原因>")
-    @AdminAccess(TownAdminPermissions.TAX)
+    @Usage("/tianjitown tax set <小镇代码> <百分比> [原因]")
+    @AdminAccess(TownAdminPermissions.ROOT)
     public void tax(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {
             List<TownSnapshot> towns = runtime.repository().listTowns(true);
@@ -139,7 +117,7 @@ public final class TownAdminEconomyCommands {
 
     @Command("tianjitown ledger view")
     @Usage("/tianjitown ledger view <小镇代码>")
-    @AdminAccess(TownAdminPermissions.LEDGER)
+    @AdminAccess(TownAdminPermissions.ROOT)
     public void ledger(CommandSender sender, TownRuntime runtime, String input) {
         String townName = input.strip();
         runtime.read(sender, () -> {
@@ -176,7 +154,4 @@ public final class TownAdminEconomyCommands {
     private record TaxAdjustment(UUID townId, int basisPoints, String reason) {
     }
 
-    private record BuffGrantRequest(UUID townId, String townName,
-                                    BuffDefinition definition, String reason) {
-    }
 }

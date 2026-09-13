@@ -24,9 +24,16 @@ class ResidencePermissionSyncTest {
     private final UUID member = UUID.randomUUID();
     private final Map<String, Boolean> flags = new HashMap<>();
     private ResidencePermissionSync sync;
+    private org.mockito.MockedStatic<com.bekvon.bukkit.residence.containers.ResidencePlayer> players;
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() { players.close(); }
+
 
     @BeforeEach
     void setUp() {
+        players = mockStatic(com.bekvon.bukkit.residence.containers.ResidencePlayer.class);
+        FlagPermissions.addFlagToFlagGroup(padd.groupedFlag, "build");
         when(server.isPrimaryThread()).thenReturn(true);
         when(residence.getPermissions()).thenReturn(permissions);
         when(residence.isTrusted(member)).thenReturn(true);
@@ -147,7 +154,7 @@ class ResidencePermissionSyncTest {
                 .thenReturn(true);
         when(permissions.setFlag(any(), anyString(), eq(FlagPermissions.FlagState.FALSE), eq(true), eq(false)))
                 .thenReturn(true);
-        when(permissions.setFlagGroupOnPlayer(null, member, padd.groupedFlag, "true", true)).thenReturn(true);
+        when(permissions.setPlayerFlag(isNull(), eq(member), anyString(), anyString(), eq(true), eq(false))).thenReturn(true);
         when(permissions.setPlayerFlag(eq(member), anyString(), eq(FlagPermissions.FlagState.TRUE)))
                 .thenReturn(true);
     }

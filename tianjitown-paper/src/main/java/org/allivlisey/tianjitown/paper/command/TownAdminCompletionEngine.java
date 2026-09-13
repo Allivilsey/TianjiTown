@@ -48,6 +48,9 @@ public final class TownAdminCompletionEngine {
 
     private List<String> town(String[] args, Snapshot snapshot) {
 
+        if (args[1].equalsIgnoreCase("list") && args.length == 3) {
+            return filter(List.of("active", "provisioning", "archived"), current(args));
+        }
         List<String> names = townNames(snapshot, ignored -> true);
         if (args[1].equalsIgnoreCase("view")) {
             return completePhrase(args, 2, names);
@@ -167,7 +170,7 @@ public final class TownAdminCompletionEngine {
     private List<String> buffs(String[] args, Snapshot snapshot) {
 
         String action = args[1].toLowerCase(Locale.ROOT);
-        if (!action.equals("list") && !action.equals("grant")) {
+        if (!action.equals("list") && !action.equals("set")) {
             return List.of();
         }
         List<String> names = townNames(snapshot, town -> town.status() == TownStatus.ACTIVE);
@@ -181,8 +184,11 @@ public final class TownAdminCompletionEngine {
             return phrases;
         }
         return switch (tail) {
-            case 1 -> merge(phrases, hint(current(args), "<buffKey>"));
-            case 2 -> reasonHint(current(args));
+            case 1 -> filter(snapshot.buffLevels().keySet(), current(args));
+            case 2 -> filter(List.of("1", "2", "3", "4"), current(args));
+            case 3 -> filter(java.util.stream.IntStream.rangeClosed(1,
+                    snapshot.buffLevels().getOrDefault(args[match.end()].toLowerCase(Locale.ROOT), 0))
+                    .mapToObj(Integer::toString).toList(), current(args));
             default -> List.of();
         };
     }
@@ -298,10 +304,14 @@ public final class TownAdminCompletionEngine {
     }
 
     public record Snapshot(List<TownCandidate> towns,
-                    Map<UUID, List<UUID>> membersByTown) {
+                    Map<UUID, List<UUID>> membersByTown, Map<String, Integer> buffLevels) {
+        public Snapshot(List<TownCandidate> towns, Map<UUID, List<UUID>> membersByTown) {
+            this(towns, membersByTown, Map.of());
+        }
         public Snapshot {
             towns = List.copyOf(towns);
             membersByTown = Map.copyOf(membersByTown);
+            buffLevels = Map.copyOf(buffLevels);
         }
 
         static Snapshot empty() {

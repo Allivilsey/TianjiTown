@@ -69,6 +69,101 @@ class CommerceRepositorySqliteTest {
     }
 
     @Test
+    void proratesDiscountedOrdersAndRestoresExactReplacementAfterFreeSetFailure() throws Exception {
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("replacement.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID town = UUID.randomUUID(), mayor = UUID.randomUUID();
+            insertTown(gate, town, mayor, UUID.randomUUID());
+            CommerceRepository repository = new CommerceRepository(gate.dataSource(), () -> false);
+            BuffDefinition buff = new BuffDefinition("health", "生命", BuffDefinition.EffectKind.ATTRIBUTE,
+                    "minecraft:max_health", "ADD_NUMBER", BigDecimal.ONE, 5, 4);
+            Instant start = Instant.now().minus(Duration.ofDays(7));
+            var old = repository.purchaseBuff(mayor, "Mayor", buff, 2, 3, 2, "old", start);
+            Instant now = start.plus(Duration.ofDays(7));
+            var quote = repository.quoteBuff(mayor, buff, 1, 1, 2, now);
+            assertEquals(570, old.buff().priceMinor());
+            assertEquals(285, quote.refundMinor());
+            assertEquals(-185, quote.netCostMinor());
+            var paid = repository.purchaseConfirmedBuff(mayor, "Mayor", buff, "生命", 1, 1, 2,
+                    "paid", now, town, old.buff().buffId());
+            assertEquals(old.balanceAfterMinor() + 185, paid.balanceAfterMinor());
+            assertEquals(paid, repository.purchaseConfirmedBuff(mayor, "Mayor", buff, "生命", 1, 1, 2,
+                    "paid", now, town, old.buff().buffId()));
+            assertThrows(CommerceRepository.ConflictException.class, () -> repository.purchaseConfirmedBuff(
+                    mayor, "Mayor", buff, "生命", 1, 2, 2, "stale", now, town, old.buff().buffId()));
+            var free = repository.setBuffForTown(town, mayor, "Admin", buff, 4, 5, "free", now);
+            assertEquals(0, free.buff().priceMinor());
+            assertEquals(paid.balanceAfterMinor(), free.balanceAfterMinor());
+            assertEquals(0, repository.quoteBuff(mayor, buff, 1, 1, 2, now).refundMinor());
+            assertEquals(1, scalar(gate, "SELECT COUNT(*) FROM audit_logs WHERE action='BUFF_SET'"));
+            assertThrows(CommerceRepository.ConflictException.class,
+                    () -> repository.refundActiveBuff(paid.buff().buffId(), null, "SYSTEM", "过期回调"));
+            assertEquals(free.buff().buffId(), repository.activeBuffsForTown(town, now).getFirst().buffId());
+            var restored = repository.refundActiveBuff(free.buff().buffId(), null, "SYSTEM", "设置应用失败");
+            assertEquals(paid.balanceAfterMinor(), restored.balanceAfterMinor());
+            assertEquals(paid.buff().buffId(), repository.activeBuffsForTown(town, now).getFirst().buffId());
+            repository.refundActiveBuff(paid.buff().buffId(), null, "SYSTEM", "购买应用失败");
+            assertEquals(old.balanceAfterMinor(), accountBalance(gate, town));
+            assertEquals(old.buff().buffId(), repository.activeBuffsForTown(town, now).getFirst().buffId());
+            // A compensated order can be purchased again; its prior refund was already reversed.
+            repository.purchaseConfirmedBuff(mayor, "Mayor", buff, "生命", 1, 1, 2,
+                    "again", now, town, old.buff().buffId());
+        }
+    }
+
+    @Test
+    void refundCanFundPurchaseAndConcurrentConfirmationsOnlyReplaceOnce() throws Exception {
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("concurrent-replacement.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            UUID town = UUID.randomUUID(), mayor = UUID.randomUUID();
+            insertTown(gate, town, mayor, UUID.randomUUID());
+            CommerceRepository repository = new CommerceRepository(gate.dataSource(), () -> false);
+            BuffDefinition buff = new BuffDefinition("speed", "迅捷", BuffDefinition.EffectKind.ATTRIBUTE,
+                    "minecraft:movement_speed", "ADD_NUMBER", new BigDecimal("1000"), 5, 1);
+            Instant now = Instant.now();
+            var old = repository.purchaseBuff(mayor, "Mayor", buff, 1, 1, 2, "old", now);
+            assertEquals(0, old.balanceAfterMinor());
+            var ready = new java.util.concurrent.CountDownLatch(2);
+            var start = new java.util.concurrent.CountDownLatch(1);
+            try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+                List<java.util.concurrent.Future<Boolean>> results = new java.util.ArrayList<>();
+                for (int i = 0; i < 2; i++) {
+                    String key = "concurrent:" + i;
+                    results.add(pool.submit(() -> {
+                        ready.countDown(); start.await();
+                        try {
+                            repository.purchaseConfirmedBuff(mayor, "Mayor", buff, "迅捷", 1, 1, 2,
+                                    key, now, town, old.buff().buffId());
+                            return true;
+                        } catch (CommerceRepository.ConflictException exception) { return false; }
+                    }));
+                }
+                assertTrue(ready.await(5, java.util.concurrent.TimeUnit.SECONDS)); start.countDown();
+                int winners = 0;
+                for (var result : results) if (result.get(10, java.util.concurrent.TimeUnit.SECONDS)) winners++;
+                assertEquals(1, winners);
+            }
+            assertEquals(0, accountBalance(gate, town));
+            assertEquals(1, ledgerCount(gate, town, "BUFF_REFUND"));
+            try (var connection = gate.dataSource().getConnection(); var unit = connection.prepareStatement(
+                    "INSERT INTO territory_units(unit_id,town_id,world_uuid,world_name,grid_x,grid_z,center_chunk_x,center_chunk_z,residence_name) VALUES(?,?,?,'world',0,0,0,0,'test')")) {
+                unit.setBytes(1, uuid(UUID.randomUUID())); unit.setBytes(2, uuid(town));
+                unit.setBytes(3, uuid(UUID.randomUUID())); unit.executeUpdate();
+            }
+            var towns = new TownRepository(gate.dataSource(), () -> false);
+            towns.deleteTown(town, mayor, "Admin", "管理员调整");
+            assertTrue(repository.activeBuffsForPlayer(mayor, now).isEmpty());
+            assertEquals(0, scalar(gate, "SELECT COUNT(*) FROM active_buffs WHERE status='ACTIVE'"));
+            assertThrows(CommerceRepository.ConflictException.class,
+                    () -> repository.setBuffForTown(town, mayor, "Admin", buff, 1, 1, "archived", now));
+        }
+    }
+
+    @Test
     void rejectsEveryPublicOperationBeforeAccessingDataSourceOnMainThread() {
         DataSource dataSource = (DataSource) Proxy.newProxyInstance(
                 DataSource.class.getClassLoader(), new Class<?>[]{DataSource.class},
@@ -154,7 +249,7 @@ class CommerceRepositorySqliteTest {
                     + "WHERE business_key = 'selected:first'"));
             assertEquals(second.buff().buffId(),
                     repository.activeBuffsForTown(townId, now).getFirst().buffId());
-            assertEquals(0, ledgerCount(gate, townId, "BUFF_REFUND"));
+            assertEquals(1, ledgerCount(gate, townId, "BUFF_REFUND"));
             execute(gate, "DROP TRIGGER fail_selected_refund");
 
             assertEquals(first.balanceAfterMinor(), repository.refundActiveBuff(
@@ -228,7 +323,7 @@ class CommerceRepositorySqliteTest {
             CommerceRepository.BuffPurchase second = repository.purchaseBuff(mayorId, "Mayor",
                     buff, 1, 2, 2, "buff:test:2", now.plusSeconds(1));
             assertEquals(2, second.buff().level());
-            assertEquals(70_000, second.balanceAfterMinor());
+            assertEquals(79_999, second.balanceAfterMinor());
             assertThrows(IllegalArgumentException.class,
                     () -> repository.purchaseBuff(mayorId, "Mayor", buff,
                             1, 3, 2,
@@ -243,7 +338,7 @@ class CommerceRepositorySqliteTest {
                             "重复退款测试"));
             assertEquals(refundedBuff.balanceAfterMinor(), accountBalance(gate, townId));
             assertEquals(90_000, refundedBuff.balanceAfterMinor());
-            assertEquals(1, ledgerCount(gate, townId, "BUFF_REFUND"));
+            assertEquals(3, ledgerCount(gate, townId, "BUFF_REFUND"));
             assertEquals(1, repository.activeBuffsForPlayer(memberId, now).getFirst().level());
 
             BuffDefinition refresh = new BuffDefinition("refresh", "刷新测试",

@@ -36,17 +36,17 @@ class TownRuntimeTasksTest {
 
     @Test
     void asynchronousCommandParseFailureResolvesMessageAndKeepsStorageAvailable() {
-        when(plugin.messages().plainText("chat.parser.missing-reason", Map.of()))
-                .thenReturn("必须填写原因");
+        when(plugin.messages().plainText("chat.parser.missing-amount", Map.of()))
+                .thenReturn("必须填写金额");
         tasks.read(sender, () -> TownCommandParser.namedAmountReason(
-                        new String[]{"astrara", "5"}, 0, List.of("astrara")),
+                        new String[]{"astrara"}, 0, List.of("astrara")),
                 ignored -> fail("invalid command must not succeed"));
         worker.remove().run();
         verify(plugin.messages(), never()).send(eq(sender), eq("chat.runtime.operation-failed"), anyMap());
         assertTrue(available.get());
         main.remove().run();
         verify(plugin.messages()).send(sender, "chat.runtime.operation-failed",
-                Map.of("detail", "必须填写原因"));
+                Map.of("detail", "必须填写金额"));
     }
 
     @Test

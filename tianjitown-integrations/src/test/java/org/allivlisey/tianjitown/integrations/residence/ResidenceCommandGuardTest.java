@@ -10,6 +10,20 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ResidenceCommandGuardTest {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "/res tp", "/res tp ordinary", "/residence tp town", "/res teleport town",
+            "/residence teleport ordinary", "/residence:res tp town",
+            "/residence:residence teleport town", "/res tp town extra"})
+    void teleportNeverQueriesDependenciesOrCancelsCommands(String command) {
+        var guard = new ResidenceCommandGuard(name -> { throw new AssertionError("must not query town state"); });
+        var event = org.mockito.Mockito.mock(org.bukkit.event.player.PlayerCommandPreprocessEvent.class);
+        org.mockito.Mockito.when(event.getMessage()).thenReturn(command);
+        guard.onPlayerCommand(event);
+        org.mockito.Mockito.verify(event, org.mockito.Mockito.never()).getPlayer();
+        org.mockito.Mockito.verify(event, org.mockito.Mockito.never()).setCancelled(true);
+    }
+
     @Test
     void matchesOnlyCompleteDatabaseRegisteredNames() {
         Set<String> managedNames = Set.of("sky", "abc");

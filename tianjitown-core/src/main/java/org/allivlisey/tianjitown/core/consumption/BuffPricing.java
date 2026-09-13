@@ -9,6 +9,18 @@ public final class BuffPricing {
     private BuffPricing() {
     }
 
+    public static long remainingRefund(long paidMinor, java.time.Instant startsAt,
+                                       java.time.Instant expiresAt, java.time.Instant now) {
+        if (paidMinor < 0) throw new IllegalArgumentException("Buff 支付金额不能为负数");
+        java.math.BigInteger total = java.math.BigInteger.valueOf(expiresAt.toEpochMilli())
+                .subtract(java.math.BigInteger.valueOf(startsAt.toEpochMilli()));
+        if (total.signum() <= 0) throw new IllegalArgumentException("Buff 有效期无效");
+        java.math.BigInteger remaining = java.math.BigInteger.valueOf(expiresAt.toEpochMilli())
+                .subtract(java.math.BigInteger.valueOf(now.toEpochMilli()))
+                .max(java.math.BigInteger.ZERO).min(total);
+        return java.math.BigInteger.valueOf(paidMinor).multiply(remaining).divide(total).longValueExact();
+    }
+
     public static MoneyAmount weeklyPrice(BuffDefinition definition, int weeks, int level,
                                           int scale) {
         if (weeks < 1 || weeks > 4) {

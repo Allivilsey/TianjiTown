@@ -66,7 +66,13 @@ public final class TownDialogService {
     }
 
     public DialogAction action(Player recipient, UUID session, String action, String target) {
-        return action(recipient, session, response -> dispatcher.dispatch(recipient, action, target));
+        return action(recipient, session, response -> {
+            if ("ADMIN_APPROVE".equals(action)) {
+                plugin.getLogger().info("Provision dialog dispatch: actor=" + recipient.getUniqueId()
+                        + " session=" + session + " application=" + target + " source=dialog-action");
+            }
+            dispatcher.dispatch(recipient, action, target);
+        });
     }
 
     public DialogAction action(Player recipient, UUID session, Consumer<DialogResponseView> handler) {

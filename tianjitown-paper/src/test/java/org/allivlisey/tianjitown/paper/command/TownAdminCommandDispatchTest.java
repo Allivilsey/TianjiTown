@@ -34,13 +34,12 @@ class TownAdminCommandDispatchTest {
     @ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
             "operations,diagnose 7", "money,money view sky", "tax,tax set sky 10 permission-check",
-            "ledger,ledger view sky", "buff,buff grant sky health permission-check"})
-    void scopedPermissionReachesRuntimeGateForItsOwnCommand(String scope, String command) {
+            "ledger,ledger view sky", "buff,buff set sky health"})
+    void scopedPermissionCannotReachRuntimeGate(String scope, String command) {
         when(sender.hasPermission("tianjitown.admin." + scope)).thenReturn(true);
         when(plugin.townRuntime()).thenReturn(null);
         lamp.dispatch(actor, "tianjitown " + command);
-        verify(messages).send(sender, "chat.admin.runtime-not-ready");
-        verify(messages, never()).send(sender, "chat.admin.no-permission");
+        verify(messages).send(sender, "chat.admin.no-permission");
         verifyNoInteractions(runtime);
     }
 
@@ -53,7 +52,7 @@ class TownAdminCommandDispatchTest {
                 "money", "money adjust sky 100 permission-check",
                 "tax", "tax set sky 25 permission-check",
                 "ledger", "ledger view sky",
-                "buff", "buff grant sky health permission-check");
+                "buff", "buff set sky health");
         for (var command : commands.entrySet()) {
             if (command.getKey().equals(scope)) continue;
             clearInvocations(messages, runtime);
@@ -94,7 +93,7 @@ class TownAdminCommandDispatchTest {
     @Test
     void helpDirectoryWorksWithoutRuntimeAndHasClickablePermittedTopics() {
         prepareHelp();
-        when(sender.hasPermission(TownAdminPermissions.MONEY)).thenReturn(true);
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
         when(plugin.townRuntime()).thenReturn(null);
 
         execute("help");
@@ -103,14 +102,14 @@ class TownAdminCommandDispatchTest {
                 .clickEvent(ClickEvent.runCommand("/tianjitown help money"))
                 .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(
                         Component.text("chat.admin.help-topic-tooltip"))));
-        verify(messages, never()).component("chat.admin.help-entry-tax");
+        verify(messages).component("chat.admin.help-entry-tax");
         verifyNoInteractions(runtime);
     }
 
     @Test
     void rootCommandOpensHelpDirectory() {
         prepareHelp();
-        when(sender.hasPermission(TownAdminPermissions.MONEY)).thenReturn(true);
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
         execute();
         verify(messages).send(sender, "chat.admin.help-title", Map.of("version", "1.0.0-SNAPSHOT"));
     }
@@ -118,13 +117,13 @@ class TownAdminCommandDispatchTest {
     @Test
     void operationsHelpOnlyShowsCommandsAvailableToOperations() {
         prepareHelp();
-        when(sender.hasPermission(TownAdminPermissions.OPERATIONS)).thenReturn(true);
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
         execute("help", "SYSTEM");
         verify(messages).send(sender, "chat.admin.help-system-status");
         verify(messages).send(sender, "chat.admin.help-system-diagnose");
-        verify(messages, never()).send(sender, "chat.admin.help-system-reload");
-        verify(messages, never()).send(sender, "chat.admin.help-system-maintenance");
-        verify(messages, never()).send(sender, "chat.admin.help-system-audit");
+        verify(messages).send(sender, "chat.admin.help-system-reload");
+        verify(messages).send(sender, "chat.admin.help-system-maintenance");
+        verify(messages).send(sender, "chat.admin.help-system-audit");
         verify(sender).sendMessage(Component.text("chat.admin.help-back")
                 .clickEvent(ClickEvent.runCommand("/tianjitown help")));
     }
@@ -132,7 +131,7 @@ class TownAdminCommandDispatchTest {
     @Test
     void unknownHelpTopicReportsTypoAndShowsDirectoryForScopedAdmin() {
         prepareHelp();
-        when(sender.hasPermission(TownAdminPermissions.MONEY)).thenReturn(true);
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
         execute("help", "monye");
         verify(messages).send(sender, "chat.admin.help-unknown", Map.of("topic", "monye"));
         verify(messages).send(sender, "chat.admin.help-usage");
@@ -141,9 +140,9 @@ class TownAdminCommandDispatchTest {
 
     @Test
     void helpRejectsKnownTopicOutsidePermissionScope() {
-        when(sender.hasPermission(TownAdminPermissions.MONEY)).thenReturn(true);
+        when(sender.hasPermission("tianjitown.admin.money")).thenReturn(true);
         execute("help", "town");
-        verify(messages).send(sender, "chat.admin.help-forbidden");
+        verify(messages).send(sender, "chat.admin.no-permission");
         verify(messages, never()).send(sender, "chat.admin.help-town-title");
     }
 
@@ -173,7 +172,7 @@ class TownAdminCommandDispatchTest {
 
     @Test
     void openRequiresFullAdminPermission() {
-        when(sender.hasPermission(TownAdminPermissions.OPERATIONS)).thenReturn(true);
+        when(sender.hasPermission("tianjitown.admin.operations")).thenReturn(true);
 
         execute("open", "Steve");
 
@@ -229,9 +228,9 @@ class TownAdminCommandDispatchTest {
         TownSnapshot town = mock(TownSnapshot.class, RETURNS_DEEP_STUBS);
         when(town.profile().name()).thenReturn("天际 之城");
         when(town.profile().residenceName()).thenReturn("sky");
-        when(town.status()).thenReturn(org.allivlisey.tianjitown.core.town.TownStatus.ARCHIVED);
+        when(town.status()).thenReturn(org.allivlisey.tianjitown.core.town.TownStatus.ACTIVE);
         List<TownSnapshot> towns = empty ? List.of() : List.of(town);
-        when(repository.listTowns(true)).thenReturn(towns);
+        when(repository.listTowns(org.allivlisey.tianjitown.core.town.TownStatus.ACTIVE)).thenReturn(towns);
         doAnswer(invocation -> {
             Object result = ((Supplier<?>) invocation.getArgument(1)).get();
             java.util.function.Consumer<Object> success = invocation.getArgument(2);
@@ -241,14 +240,14 @@ class TownAdminCommandDispatchTest {
 
         execute("town", "list");
 
-        verify(repository).listTowns(true);
+        verify(repository).listTowns(org.allivlisey.tianjitown.core.town.TownStatus.ACTIVE);
         verify(messages).send(sender, "chat.admin.town-list-title", java.util.Map.of("count", towns.size()));
         if (empty) {
             verify(messages).send(sender, "chat.admin.town-list-empty");
         } else {
             verify(messages).send(sender, "chat.admin.town-list-entry", java.util.Map.of(
                     "town", "天际 之城", "code", "sky",
-                    "status", org.allivlisey.tianjitown.core.town.TownStatus.ARCHIVED));
+                    "status", org.allivlisey.tianjitown.core.town.TownStatus.ACTIVE));
         }
         assertEquals(List.of("list"), lamp.autoCompleter().complete(actor, "tianjitown town li"));
     }
@@ -263,7 +262,7 @@ class TownAdminCommandDispatchTest {
 
     @Test
     void authorizedEconomyCommandStillReachesTheRuntime() {
-        when(sender.hasPermission(TownAdminPermissions.MONEY)).thenReturn(true);
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
 
         execute("money", "view", "sky");
 
@@ -272,7 +271,7 @@ class TownAdminCommandDispatchTest {
 
     @Test
     void malformedArgumentsStillUseTheSharedErrorBoundary() {
-        when(sender.hasPermission(TownAdminPermissions.MONEY)).thenReturn(true);
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
 
         execute("money");
 
@@ -289,7 +288,7 @@ class TownAdminCommandDispatchTest {
 
     @Test
     void lampCompletesRootAndNestedArguments() {
-        when(sender.hasPermission(TownAdminPermissions.MONEY)).thenReturn(true);
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
         assertEquals(List.of("money"), lamp.autoCompleter().complete(actor, "tianjitown mo"));
         assertEquals(List.of(), lamp.autoCompleter().complete(actor, "tianjitown money rec"));
         assertEquals(java.util.Set.of("view", "adjust"),
@@ -299,8 +298,8 @@ class TownAdminCommandDispatchTest {
 
     @Test
     void permissionFilteredCompletionsDoNotExposeOtherScopesOrSecretCommands() {
-        when(sender.hasPermission(TownAdminPermissions.MONEY)).thenReturn(true);
-        assertEquals(Set.of("help", "money"), Set.copyOf(lamp.autoCompleter().complete(actor, "tianjitown ")));
+        when(sender.hasPermission("tianjitown.admin.money")).thenReturn(true);
+        assertEquals(Set.of(), Set.copyOf(lamp.autoCompleter().complete(actor, "tianjitown ")));
         assertEquals(List.of(), lamp.autoCompleter().complete(actor, "tianjitown tax "));
         verifyNoInteractions(runtime);
     }
@@ -340,7 +339,7 @@ class TownAdminCommandDispatchTest {
 
     @Test
     void runtimeGateRunsBeforeBusinessLogic() {
-        when(sender.hasPermission(TownAdminPermissions.MONEY)).thenReturn(true);
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
         when(plugin.townRuntime()).thenReturn(null);
         execute("money", "view", "sky");
         verify(messages).send(sender, "chat.admin.runtime-not-ready");
@@ -399,7 +398,7 @@ class TownAdminCommandDispatchTest {
 
     @Test
     void lampKeepsTownCodeSuggestionsAndReasonHints() {
-        when(sender.hasPermission(TownAdminPermissions.MONEY)).thenReturn(true);
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
         when(completer.complete(eq(sender), aryEq(new String[]{"money", "view", "sk"})))
                 .thenReturn(List.of("sky"));
         when(completer.complete(eq(sender), aryEq(new String[]{"money", "adjust", "sky", "10", ""})))
@@ -411,7 +410,7 @@ class TownAdminCommandDispatchTest {
 
     @Test
     void numericSuggestionsComeFromLampAnnotations() {
-        when(sender.hasPermission(TownAdminPermissions.OPERATIONS)).thenReturn(true);
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
         assertEquals(Set.of("1", "7", "14", "30", "90", "180"),
                 Set.copyOf(lamp.autoCompleter().complete(actor, "tianjitown diagnose ")));
         verifyNoInteractions(completer);

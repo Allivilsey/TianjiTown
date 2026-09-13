@@ -264,8 +264,17 @@ final class BuffPlayerEffects {
                         modifierKey(definition.key())));
             }
         }
+        for (Attribute attribute : Registry.ATTRIBUTE) {
+            AttributeInstance instance = player.getAttribute(attribute);
+            if (instance == null) continue;
+            for (AttributeModifier modifier : instance.getModifiers()) {
+                NamespacedKey key = modifier.getKey();
+                if (key.getNamespace().equals(modifierNamespace) && key.getKey().startsWith("buff_")) {
+                    attributes.add(new AttributeKey(attribute, key));
+                }
+            }
+        }
         removeAttributeModifiers(player, attributes);
-
         clampCurrentHealth(player);
     }
 

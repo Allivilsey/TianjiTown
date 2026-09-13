@@ -115,6 +115,23 @@ final class TownQueryStore {
         });
     }
 
+    public List<TownSnapshot> listTowns(TownStatus status) {
+        database.requireWorkerThread();
+        java.util.Objects.requireNonNull(status, "status");
+        return database.query(connection -> {
+            List<TownSnapshot> towns = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT town_id FROM towns WHERE status = ? ORDER BY created_at, town_id")) {
+                statement.setString(1, status.name());
+                try (ResultSet result = statement.executeQuery()) {
+                    while (result.next()) TownPersistence.findTown(connection,
+                            readUuid(result, "town_id")).ifPresent(towns::add);
+                }
+            }
+            return List.copyOf(towns);
+        });
+    }
+
     public List<TownSnapshot> listTowns(boolean includeArchived) {
         database.requireWorkerThread();
         return database.query(connection -> {

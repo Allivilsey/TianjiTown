@@ -118,7 +118,20 @@ final class TownProvisionRuntime {
 
     void provision(CommandSender sender, UUID applicationId, UUID reviewerId,
                    String reviewerName, String reason, String idempotencyKey,
-        Consumer<ProvisionResult> completion) {
+        Consumer<ProvisionResult> callback) {
+        AtomicBoolean delivered = new AtomicBoolean();
+        Consumer<ProvisionResult> completion = result -> {
+            if (!delivered.compareAndSet(false, true)) return;
+            try {
+                callback.accept(result);
+            } catch (RuntimeException | LinkageError exception) {
+                plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                        "Provision result callback failed: application=" + applicationId
+                                + " operation=" + idempotencyKey, exception);
+            }
+        };
+        plugin.getLogger().info("Provision entry: application=" + applicationId
+                + " actor=" + reviewerId + " operation=" + idempotencyKey);
         plugin.getLogger().info(plugin.messages().plainText(PROVISION_APPROVAL_STARTED,
                 Map.of("application", applicationId, "time", Instant.now())));
         if (!databaseAvailable.get()) {
@@ -138,14 +151,23 @@ final class TownProvisionRuntime {
             try {
                 ApplicationSnapshot application = repository.findApplication(applicationId)
                         .orElseThrow(TownRuntimeTasks.ApplicationNotFoundException::new);
+                TownSnapshot existingTown = application.townId() == null ? null
+                        : repository.findTown(application.townId()).orElseThrow();
+                plugin.getLogger().info("Provision state: application=" + applicationId
+                        + " status=" + application.status() + " version=" + application.version()
+                        + " town=" + application.townId() + " territorySource="
+                        + (existingTown == null ? "reservation" : "territory_units"));
                 long feeMinor = application.applicationFeeMinor() > 0
                         ? application.applicationFeeMinor()
                         : applicationFeeMinor.getAsLong();
                 Runnable start = () -> {
                     try {
-                        chargeAndBeginProvision(sender, application, reviewerId, reviewerName,
+                        chargeAndBeginProvision(sender, application, existingTown, reviewerId, reviewerName,
                                 reason, idempotencyKey, feeMinor, completion);
                     } catch (RuntimeException | LinkageError exception) {
+                        plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                                "Provision preflight failed: application=" + application.id()
+                                        + " operation=" + idempotencyKey, exception);
                         provisions.finish(application.id());
                         tasks.handleFailure(sender, exception);
                         completion.accept(ProvisionResult.failure(application,
@@ -185,13 +207,40 @@ final class TownProvisionRuntime {
     }
 
     private void chargeAndBeginProvision(CommandSender sender, ApplicationSnapshot application,
+                                         TownSnapshot existingTown,
                                          UUID reviewerId, String reviewerName, String reason,
                                          String idempotencyKey, long feeMinor,
                                          Consumer<ProvisionResult> completion) {
+        if (existingTown != null && existingTown.status() == TownStatus.ARCHIVED) {
+            throw new IllegalStateException("小镇已归档，不能继续或重复批准");
+        }
+        if (application.status() == org.allivlisey.tianjitown.core.application.ApplicationStatus.ACTIVE) {
+            if (existingTown == null || existingTown.status() != TownStatus.ACTIVE) {
+                throw new IllegalStateException("申请与小镇状态不一致");
+            }
+            provisions.finish(application.id());
+            completion.accept(ProvisionResult.existing(application));
+            return;
+        }
+        if (application.status() == org.allivlisey.tianjitown.core.application.ApplicationStatus.APPROVED_PROVISIONING) {
+            provisions.finish(application.id());
+            completion.accept(ProvisionResult.busy(
+                    ProvisionResult.MessageRef.configured(PROVISION_BUSY_DETAIL)));
+            return;
+        }
+        org.allivlisey.tianjitown.core.application.ApplicationWorkflow.requireAllowed(
+                application.status(),
+                org.allivlisey.tianjitown.core.application.ApplicationStatus.APPROVED_PROVISIONING,
+                org.allivlisey.tianjitown.core.application.ApplicationActor.ADMINISTRATOR);
+        var territory = existingTown == null ? application.territory() : existingTown.territory();
+        if (existingTown == null && (application.reservationExpiresAt() == null
+                || !application.reservationExpiresAt().isAfter(Instant.now()))) {
+            throw new IllegalStateException("选址预留已经过期，不能批准");
+        }
         List<UUID> expectedMembers = new ArrayList<>();
         expectedMembers.add(application.applicantId());
         application.initialMembers().forEach(member -> expectedMembers.add(member.playerId()));
-        SitePolicy.Validation environment = sitePolicy.validateReservationEnvironment(application.territory());
+        SitePolicy.Validation environment = sitePolicy.validateReservationEnvironment(territory);
         if (!environment.valid()) {
             provisions.finish(application.id());
             completion.accept(ProvisionResult.failure(application,
@@ -214,7 +263,7 @@ final class TownProvisionRuntime {
             LandProtectionService.Inspection inspection = application.townId() == null
                     ? LandProtectionService.Inspection.invalidCode(LandProtectionService.ResultCode.PROJECTION_MISSING)
                     : landProtection.inspect(application.text().normalizedResidenceName(),
-                    application.territory(), expectedMembers);
+                    territory, expectedMembers);
             if (inspection.state() != LandProtectionService.ProjectionState.HEALTHY) {
                 provisions.finish(application.id());
                 completion.accept(ProvisionResult.failure(application,
@@ -242,21 +291,11 @@ final class TownProvisionRuntime {
             }
         }
         if (!plugin.runAsync(() -> {
+            TownRepository.Provisioning provisioning;
             try {
-                TownRepository.Provisioning provisioning = repository.beginProvision(
+                provisioning = repository.beginProvision(
                         application.id(), reviewerId, reviewerName, reason, idempotencyKey,
                         feeMinor, playerName(application.applicantId()));
-                databaseAvailable.set(true);
-                plugin.getLogger().info(plugin.messages().plainText(PROVISION_DATABASE_PREPARED,
-                        Map.of("application", application.id(), "time", Instant.now())));
-                if (!plugin.runMain(() -> projectProvision(sender, application.id(), provisioning,
-                        completion))) {
-                    provisions.finish(application.id());
-                    completion.accept(ProvisionResult.failure(application,
-                            ProvisionResult.MessageRef.configured(
-                                    PROVISION_PROJECTION_START_FAILED_DETAIL),
-                            ProvisionResult.MessageRef.configured(PROVISION_LIFECYCLE_RETRY_ACTION)));
-                }
             } catch (RuntimeException exception) {
                 Runnable failed = () -> {
                     if (needsCharge) {
@@ -278,8 +317,31 @@ final class TownProvisionRuntime {
                 if (!plugin.runMain(failed)) {
                     failed.run();
                 }
+                return;
+            }
+            // Preparation committed the fee. Later projection/notification failures must not refund it.
+            databaseAvailable.set(true);
+            try {
+                plugin.getLogger().info(plugin.messages().plainText(PROVISION_DATABASE_PREPARED,
+                        Map.of("application", application.id(), "time", Instant.now())));
+            } catch (RuntimeException exception) {
+                plugin.getLogger().log(java.util.logging.Level.WARNING,
+                        "Provision preparation notification failed: application=" + application.id(), exception);
+            }
+            if (!plugin.runMain(() -> projectProvision(sender, application.id(), provisioning,
+                    completion))) {
+                provisions.finish(application.id());
+                completion.accept(ProvisionResult.failure(application,
+                        ProvisionResult.MessageRef.configured(PROVISION_PROJECTION_START_FAILED_DETAIL),
+                        ProvisionResult.MessageRef.configured(PROVISION_LIFECYCLE_RETRY_ACTION)));
             }
         })) {
+            if (needsCharge) {
+                VaultSettlementService.Result refund = settlement.transferToPlayer(
+                        plugin.getServer().getOfflinePlayer(application.applicantId()), feeMinor);
+                if (!refund.success()) plugin.getLogger().severe(plugin.messages().plainText(
+                        PROVISION_REFUND_FAILURE, Map.of("detail", safeText(refund.message()))));
+            }
             provisions.finish(application.id());
             completion.accept(ProvisionResult.failure(application,
                 ProvisionResult.MessageRef.configured(
@@ -297,7 +359,7 @@ final class TownProvisionRuntime {
             if (!plugin.runAsync(() -> {
                 ApplicationSnapshot current = repository.findApplication(applicationId)
                         .orElse(null);
-                ProvisionResult result = ProvisionResult.success(current);
+                ProvisionResult result = ProvisionResult.existing(current);
                 if (!plugin.runMain(() -> completion.accept(result))) {
                     completion.accept(result);
                 }
@@ -322,6 +384,10 @@ final class TownProvisionRuntime {
                     provisioning.members())
                     : LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROVISION_SITE_VALIDATION_DETAIL,
                             Map.of("detail", safeText(validation.error())));
+            if (land.success()) {
+                land = org.allivlisey.tianjitown.paper.message.TownResidenceMessages.sync(
+                        plugin.messages(), landProtection, provisioning.town());
+            }
             LandProtectionService.Result completedLand = land.success()
                     ? setDefaultTeleportPoint(provisioning.town(), land) : land;
             if (!plugin.runAsync(() -> finishProvision(sender, applicationId, completedLand,
@@ -337,8 +403,9 @@ final class TownProvisionRuntime {
             // create/set-default-tp 可能在主线程直接抛出；仍要把申请落到
             // PROVISION_FAILED，再回调 UI，避免审核页一直停留在 APPROVED_PROVISIONING。
             String detail = safeText(safeMessage(exception));
-            plugin.getLogger().severe(plugin.messages().plainText(PROVISION_PROJECTION_EXCEPTION,
-                    Map.of("application", applicationId, "detail", detail)));
+            plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                    plugin.messages().plainText(PROVISION_PROJECTION_EXCEPTION,
+                    Map.of("application", applicationId, "detail", detail)), exception);
             LandProtectionService.Result failed = LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROVISION_OPERATION_FAILED, Map.of("detail", detail));
             if (!plugin.runAsync(() -> finishProvision(sender, applicationId, failed, completion))) {
                 provisions.finish(applicationId);
@@ -394,45 +461,53 @@ final class TownProvisionRuntime {
     private void finishProvision(CommandSender sender, UUID applicationId,
                                  LandProtectionService.Result land,
                                  Consumer<ProvisionResult> completion) {
+        boolean completed = land.success();
+        String detail = safeText(LandProtectionMessages.detail(plugin.messages(), land));
+        ApplicationSnapshot application;
         try {
-            boolean completed = land.success();
-            String completedDetail = safeText(LandProtectionMessages.detail(plugin.messages(), land));
-            ApplicationSnapshot application = repository.finishProvision(
-                    applicationId, completed, completedDetail);
-            if (completed) {
-                repository.findApplication(applicationId).map(ApplicationSnapshot::townId)
-                        .flatMap(repository::findTown).map(TownSnapshot::residenceName)
-                        .ifPresent(activeResidenceNames::add);
-                refreshTaxPolicies.run();
-            }
+            application = repository.finishProvision(applicationId, completed, detail);
             databaseAvailable.set(true);
-            Runnable callback = () -> {
-                plugin.messages().send(sender, completed ? "chat.runtime.provision-success"
-                        : "chat.runtime.provision-failed", completed
-                        ? Map.of() : Map.of("detail", completedDetail));
-                plugin.getLogger().info(plugin.messages().plainText(PROVISION_UI_CALLBACK,
-                        Map.of("application", applicationId, "time", Instant.now(),
-                                "success", completed)));
-                completion.accept(completed ? ProvisionResult.success(application)
-                        : ProvisionResult.failure(application,
-                        ProvisionResult.MessageRef.literal(completedDetail),
-                        ProvisionResult.MessageRef.configured(PROVISION_RETRY_APPROVAL_ACTION)));
-            };
-            if (!plugin.runMain(callback)) {
-                completion.accept(completed ? ProvisionResult.success(application)
-                        : ProvisionResult.failure(application,
-                        ProvisionResult.MessageRef.literal(completedDetail),
-                        ProvisionResult.MessageRef.configured(PROVISION_RETRY_APPROVAL_ACTION)));
-            }
         } catch (RuntimeException exception) {
+            plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                    "Provision commit failed: application=" + applicationId, exception);
             tasks.handleFailure(sender, exception);
-            ProvisionResult result = ProvisionResult.failure(null,
+            provisions.finish(applicationId);
+            var failure = ProvisionResult.failure(null,
                     ProvisionResult.MessageRef.literal(safeText(safeMessage(exception))),
                     ProvisionResult.MessageRef.configured(PROVISION_REFRESH_STATE_ACTION));
-            if (!plugin.runMain(() -> completion.accept(result))) {
-                completion.accept(result);
+            if (!plugin.runMain(() -> completion.accept(failure))) completion.accept(failure);
+            return;
+        }
+        // The database outcome is committed. Notification/cache errors cannot turn it into failure.
+        if (completed) {
+            try {
+                repository.findTown(application.townId()).map(TownSnapshot::residenceName)
+                        .ifPresent(activeResidenceNames::add);
+                refreshTaxPolicies.run();
+            } catch (RuntimeException | LinkageError exception) {
+                plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                        "Provision post-commit synchronization failed: application=" + applicationId, exception);
             }
-        } finally {
+        }
+        ProvisionResult result = completed ? ProvisionResult.success(application)
+                : ProvisionResult.failure(application, ProvisionResult.MessageRef.literal(detail),
+                        ProvisionResult.MessageRef.configured(PROVISION_RETRY_APPROVAL_ACTION));
+        Runnable callback = () -> {
+            try {
+                plugin.messages().send(sender, completed ? "chat.runtime.provision-success"
+                        : "chat.runtime.provision-failed", completed ? Map.of() : Map.of("detail", detail));
+                plugin.getLogger().info(plugin.messages().plainText(PROVISION_UI_CALLBACK,
+                        Map.of("application", applicationId, "time", Instant.now(), "success", completed)));
+            } catch (RuntimeException | LinkageError exception) {
+                plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                        "Provision notification failed: application=" + applicationId, exception);
+            } finally {
+                completion.accept(result);
+                provisions.finish(applicationId);
+            }
+        };
+        if (!plugin.runMain(callback)) {
+            completion.accept(result);
             provisions.finish(applicationId);
         }
     }

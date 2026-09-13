@@ -19,7 +19,7 @@
 | [建镇与成员](deployment/TOWN_LIFECYCLE.md) | 初始成员确认、选址、审批、删除和权限投影 |
 | [治理](deployment/GOVERNANCE.md) | 副镇长、访客、接任与投票验收 |
 | [经济与扩张](deployment/ECONOMY_AND_EXPANSION.md) | 三种收入税、补贴、资金补偿和扩张检查 |
-| [Buff](deployment/BUFFS_AND_RESOURCES.md) | 玩家购买与管理员代购区别、到期、HuskSync 验收 |
+| [Buff](deployment/BUFFS_AND_RESOURCES.md) | 玩家购买与管理员免费设置区别、到期、HuskSync 验收 |
 | [定价](deployment/PRICING.md) | 五种属性商品价格及递增扩张公式 |
 | [领地加成](deployment/TERRITORY_BONUSES.md) | 建筑返还和持久信标效果的配置与验证 |
 | [通知与周期](deployment/FEEDBACK_UPGRADE.md) | 补贴周期、身份通知可靠性和消息配置 |

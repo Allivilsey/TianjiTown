@@ -44,7 +44,8 @@ public final class TownApplicationDrafts {
                         plugin.messages().plainText("chat.application.not-found"))), application ->
                 startApplicationForm(player, application.id(), application.version(),
                         application.text(), application.initialMembers().stream()
-                                .map(member -> facade.displayName(member.playerId())).toList()));
+                                .map(member -> facade.displayName(member.playerId())).toList(),
+                        application.needsInitialMemberReselection() ? 3 : 1));
     }
 
     public void loadTownForForm(Player player, UUID townId) {
@@ -234,6 +235,7 @@ public final class TownApplicationDrafts {
             actions.createApplication(player, form.text(), initialMemberIds, outcome ->
                     handleApplicationSaveOutcome(player, form, outcome, application -> {
                 clearPersistedDraft(player);
+                facade.applicationFormUi().clearReminder(application.id());
                 facade.notifyInitialMembers(application);
                 presentation.openNotice(player, presentation.dialogText("common.draft-saved-title"),
                         plugin.messages().text("application.draft-saved"),
@@ -245,6 +247,7 @@ public final class TownApplicationDrafts {
                     form.version(), outcome ->
                     handleApplicationSaveOutcome(player, form, outcome, application -> {
                 clearPersistedDraft(player);
+                facade.applicationFormUi().clearReminder(application.id());
                 facade.notifyInitialMembers(application);
                 presentation.openNotice(player, presentation.dialogText("common.draft-saved-title"),
                         plugin.messages().text("application.draft-saved"),

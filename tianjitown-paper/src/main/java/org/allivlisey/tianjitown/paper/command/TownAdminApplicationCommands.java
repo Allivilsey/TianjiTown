@@ -33,10 +33,15 @@ public final class TownAdminApplicationCommands {
     }
 
     @Command("tianjitown town list")
-    @Usage("/tianjitown town list")
+    @Usage("/tianjitown town list [active|provisioning|archived]")
     @AdminAccess(TownAdminPermissions.ROOT)
-    public void listTowns(CommandSender sender, TownRuntime runtime) {
-        runtime.read(sender, () -> runtime.repository().listTowns(true), towns -> {
+    public void listTowns(CommandSender sender, TownRuntime runtime,
+            @revxrsal.commands.annotation.Default("active") @revxrsal.commands.annotation.Single
+            @revxrsal.commands.annotation.Suggest({"active", "provisioning", "archived"}) String status) {
+        org.allivlisey.tianjitown.core.town.TownStatus selected;
+        try { selected = org.allivlisey.tianjitown.core.town.TownStatus.valueOf(status.toUpperCase(java.util.Locale.ROOT)); }
+        catch (IllegalArgumentException exception) { throw new IllegalArgumentException("状态必须为 active、provisioning 或 archived"); }
+        runtime.read(sender, () -> runtime.repository().listTowns(selected), towns -> {
             facade.send(sender, "chat.admin.town-list-title", Map.of("count", towns.size()));
             if (towns.isEmpty()) {
                 facade.send(sender, "chat.admin.town-list-empty");
@@ -73,7 +78,7 @@ public final class TownAdminApplicationCommands {
     }
 
     @Command("tianjitown town delete")
-    @Usage("/tianjitown town delete <小镇代码> <原因>")
+    @Usage("/tianjitown town delete <小镇代码> [原因]")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void deleteTownCommand(CommandSender sender, TownRuntime runtime, String input) {
         runtime.read(sender, () -> {
@@ -102,6 +107,7 @@ public final class TownAdminApplicationCommands {
                     request.reason());
             return current;
         }, deleted -> {
+            runtime.townArchived(deleted);
             LandProtectionService.Result result = runtime.landProtection().remove(
                     deleted.residenceName(), deleted.territory());
             if (result.success()) {

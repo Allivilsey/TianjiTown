@@ -37,6 +37,11 @@ public record ApplicationSnapshot(
                 member.status() == InitialMemberConfirmation.Status.CONFIRMED);
     }
 
+    public boolean needsInitialMemberReselection() {
+        return initialMembers.stream().anyMatch(member ->
+                member.status() == InitialMemberConfirmation.Status.REJECTED);
+    }
+
     public enum FeeStatus {
         UNPAID,
         ESCROWED,

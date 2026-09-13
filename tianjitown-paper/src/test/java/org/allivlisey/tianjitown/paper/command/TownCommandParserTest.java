@@ -71,8 +71,8 @@ class TownCommandParserTest {
 
     @Test
     void rejectsMissingReasonAndInsertedPlaceholder() {
-        assertThrows(IllegalArgumentException.class, () -> TownCommandParser.namedReason(
-                new String[]{"application", "change", "skycity"}, 2, TOWNS));
+        assertEquals("管理员调整", TownCommandParser.namedReason(
+                new String[]{"application", "change", "skycity"}, 2, TOWNS).reason());
         TownCommandParser.ParseException exception = assertThrows(TownCommandParser.ParseException.class,
                 () -> TownCommandParser.namedReason(new String[]{
                         "application", "approve", "skycity", "<reason>"

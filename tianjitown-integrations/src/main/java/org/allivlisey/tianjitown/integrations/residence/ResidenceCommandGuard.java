@@ -80,7 +80,7 @@ public final class ResidenceCommandGuard implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
         ParsedCommand parsed = parse(event.getMessage());
-        if (parsed == null || !parsed.protectedOperation()) {
+        if (parsed == null || parsed.teleport() || !parsed.protectedOperation()) {
             return;
         }
         try {
@@ -96,19 +96,6 @@ public final class ResidenceCommandGuard implements Listener {
                 ClaimedResidence residence = manager.getByName(name);
                 return residence != null && residence.isServerLand();
             };
-            if (parsed.teleport()) {
-                String target = parsed.targetName();
-                ClaimedResidence destination = target == null ? null : manager.getByName(target);
-                if (target != null && activeName.test(target) && managedName.test(target)
-                        && destination != null
-                        && destination.isServerLand()) {
-                    return;
-                }
-                event.setCancelled(true);
-                event.getPlayer().sendMessage(messageResolver.apply(
-                        "chat.residence.command-blocked", Map.of()));
-                return;
-            }
             if (insideSystemResidence || mentionsManagedName(parsed.normalized(), protectedName)) {
                 event.setCancelled(true);
                 event.getPlayer().sendMessage(messageResolver.apply(
@@ -171,8 +158,10 @@ public final class ResidenceCommandGuard implements Listener {
         }
         String normalized = command.toLowerCase(Locale.ROOT).strip();
         String[] tokens = normalized.split("\\s+");
-        if (tokens.length == 0 || (!tokens[0].equals("/res")
-                && !tokens[0].equals("/residence"))) {
+        String root = tokens[0];
+        int namespace = root.indexOf(':');
+        if (namespace > 0) root = "/" + root.substring(namespace + 1);
+        if (!root.equals("/res") && !root.equals("/residence")) {
             return null;
         }
         if (tokens.length < 2) {

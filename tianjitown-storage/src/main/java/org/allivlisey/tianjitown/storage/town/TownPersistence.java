@@ -228,7 +228,7 @@ final class TownPersistence {
             throws SQLException {
         List<InitialMemberConfirmation> members = new ArrayList<>(2);
         try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT player_uuid, confirmation_status, responded_at
+                SELECT player_uuid, confirmation_status, responded_at, invitation_token
                   FROM application_initial_members
                  WHERE application_id = ? ORDER BY created_at, player_uuid
                 """)) {
@@ -240,7 +240,8 @@ final class TownPersistence {
                             readUuid(result, "player_uuid"),
                             InitialMemberConfirmation.Status.valueOf(
                                     result.getString("confirmation_status")),
-                            responded == null ? null : responded.toInstant()));
+                            responded == null ? null : responded.toInstant(),
+                            readUuid(result, "invitation_token")));
                 }
             }
         }

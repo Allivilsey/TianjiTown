@@ -120,10 +120,28 @@ final class BuffLifecycleStore {
             if (!buff.status().equals("ACTIVE")) {
                 throw new ConflictException("只有当前生效的 Buff 可以退款取消");
             }
-            String businessKey = "buff-refund:" + buff.buffId();
-            long balance = postLedger(connection, buff.townId(), "BUFF_REFUND",
-                    buff.priceMinor(), actorId, actorName, businessKey,
-                    "Buff 退款: " + buff.buffKey() + "；" + reason, true);
+            UUID replacedId = null;
+            long replacementRefund = 0;
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT replaced_buff_id, replacement_refund_minor FROM active_buffs WHERE buff_id = ?")) {
+                statement.setBytes(1, uuid(buffId));
+                try (ResultSet row = statement.executeQuery()) {
+                    if (!row.next()) throw new ConflictException("Buff 不存在");
+                    byte[] replaced = row.getBytes("replaced_buff_id");
+                    replacedId = replaced == null ? null : CommerceSqlValues.uuid(replaced);
+                    replacementRefund = row.getLong("replacement_refund_minor");
+                }
+            }
+            long balance = CommercePersistence.requireAccount(connection, buff.townId()).balanceMinor();
+            if (buff.priceMinor() > 0) {
+                balance = postLedger(connection, buff.townId(), "BUFF_REFUND", buff.priceMinor(),
+                        actorId, actorName, "buff-refund:" + buffId, "撤销 Buff 新扣款；" + reason, true);
+            }
+            if (replacementRefund > 0) {
+                balance = postLedger(connection, buff.townId(), "BUFF_REFUND", -replacementRefund,
+                        actorId, actorName, "buff-refund-reversal:" + buffId,
+                        "撤销本次替换的剩余时间退款；" + reason, true);
+            }
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE active_buffs SET status = 'CANCELLED', last_error = ?
                      WHERE buff_id = ? AND status = 'ACTIVE'
@@ -132,20 +150,17 @@ final class BuffLifecycleStore {
                 statement.setBytes(2, uuid(buffId));
                 requireUpdated(statement, "Buff 状态已变化");
             }
-            // 退款当前叠加层后恢复最近一层仍未到期的快照，避免较早购买的权益一并丢失。
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE active_buffs SET status = 'ACTIVE'
-                     WHERE buff_id = (
-                         SELECT buff_id FROM active_buffs
-                          WHERE town_id = ? AND buff_key = ? AND status = 'SUPERSEDED'
-                            AND expires_at > ?
-                          ORDER BY starts_at DESC, created_at DESC LIMIT 1
-                     )
-                    """)) {
-                statement.setBytes(1, uuid(buff.townId()));
-                statement.setString(2, buff.buffKey());
-                statement.setLong(3, Instant.now().toEpochMilli());
-                statement.executeUpdate();
+            if (replacedId != null) {
+                try (PreparedStatement statement = connection.prepareStatement("""
+                        UPDATE active_buffs SET status = CASE WHEN expires_at > ? THEN 'ACTIVE' ELSE 'EXPIRED' END
+                         WHERE buff_id = ? AND town_id = ? AND buff_key = ? AND status = 'SUPERSEDED'
+                        """)) {
+                    statement.setLong(1, Instant.now().toEpochMilli());
+                    statement.setBytes(2, uuid(replacedId));
+                    statement.setBytes(3, uuid(buff.townId()));
+                    statement.setString(4, buff.buffKey());
+                    requireUpdated(statement, "被替换的 Buff 已变化，不能补偿");
+                }
             }
             audit(connection, actorId, actorName, "BUFF_REFUND", "BUFF", buffId.toString(),
                     reason, "退回公共资金 " + buff.priceMinor());

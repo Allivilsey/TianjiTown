@@ -596,8 +596,8 @@ class GovernanceRepositorySqliteTest {
                 "测试简介", List.of("初始规则"));
         ApplicationSnapshot draft = repository.createDraft(mayorId, text,
                 List.of(initialMemberOne, initialMemberTwo), Duration.ZERO);
-        repository.respondInitialMember(draft.id(), initialMemberOne, true);
-        repository.respondInitialMember(draft.id(), initialMemberTwo, true);
+        repository.respondInitialMember(draft.id(), initialMemberOne, draft.initialMembers().getFirst().invitationToken(), true);
+        repository.respondInitialMember(draft.id(), initialMemberTwo, draft.initialMembers().getFirst().invitationToken(), true);
         InitialTerritory territory = new InitialTerritory(new ChunkPosition(UUID.randomUUID(),
                 "world", 100, 100));
         ApplicationSnapshot selected = repository.selectSite(draft.id(), mayorId, territory,

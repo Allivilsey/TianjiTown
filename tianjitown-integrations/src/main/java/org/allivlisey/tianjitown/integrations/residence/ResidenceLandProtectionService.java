@@ -69,6 +69,24 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
     }
 
     @Override
+    public Result setMessages(String residenceName, String enterMessage, String leaveMessage) {
+        context.requireMainThread();
+        String name = TownResidenceName.initial(residenceName);
+        try {
+            ClaimedResidence residence = manager().getByName(name);
+            if (residence == null || !managedNames.contains(name) || !residence.isServerLand()) {
+                return Result.failureCode(ResultCode.CONTROLLED_PROJECTION_MISSING);
+            }
+            residence.setEnterMessage(enterMessage);
+            residence.setLeaveMessage(leaveMessage);
+            return Result.successCode(ResultCode.PROJECTION_HEALTHY, Map.of("residence", name));
+        } catch (RuntimeException | LinkageError exception) {
+            return Result.failureCode(ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", dependencyDetail(exception)));
+        }
+    }
+
+    @Override
     public Collision findNameCollision(String residenceName) {
         context.requireMainThread();
         String name = TownResidenceName.initial(residenceName);

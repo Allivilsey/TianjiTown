@@ -85,7 +85,7 @@ public final class TownAdminCommand {
 
     @Command("tianjitown status")
     @Usage("/tianjitown status")
-    @AdminAccess(TownAdminPermissions.OPERATIONS)
+    @AdminAccess(TownAdminPermissions.ROOT)
     public void status(CommandSender sender) {
         GateStatus status = plugin.gateStatus();
         send(sender, "chat.admin.status-header", Map.of(
@@ -121,7 +121,7 @@ public final class TownAdminCommand {
 
     @Command("tianjitown diagnose")
     @Usage("/tianjitown diagnose [1~180天]")
-    @AdminAccess(TownAdminPermissions.OPERATIONS)
+    @AdminAccess(TownAdminPermissions.ROOT)
     public void diagnose(CommandSender sender, TownRuntime runtime,
                          @Optional @Range(min = 1, max = 180) @Suggest({"1", "7", "14", "30", "90", "180"}) Integer days) {
         runtime.bonuses().diagnose(sender, days == null
@@ -134,13 +134,13 @@ public final class TownAdminCommand {
         sendMaintenanceStatus(sender);
     }
 
-    @Command({"tianjitown maintenance on", "tianjitown maintenance enable"})
+    @Command("tianjitown maintenance on")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void enableMaintenance(CommandSender sender) {
         setMaintenance(sender, true);
     }
 
-    @Command({"tianjitown maintenance off", "tianjitown maintenance disable"})
+    @Command("tianjitown maintenance off")
     @AdminAccess(TownAdminPermissions.ROOT)
     public void disableMaintenance(CommandSender sender) {
         setMaintenance(sender, false);
@@ -457,7 +457,7 @@ public final class TownAdminCommand {
     private void buffsHelp(CommandSender sender) {
         send(sender, "chat.admin.help-buff-title");
         send(sender, "chat.admin.help-buff-list");
-        send(sender, "chat.admin.help-buff-grant");
+        send(sender, "chat.admin.help-buff-set");
         send(sender, "chat.admin.help-buff-note");
     }
 

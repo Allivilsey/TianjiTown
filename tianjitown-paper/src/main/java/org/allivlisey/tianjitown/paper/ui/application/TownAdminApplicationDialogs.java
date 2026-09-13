@@ -221,11 +221,14 @@ public final class TownAdminApplicationDialogs {
                             presentation.dialogText("provision.back-to-list"), "ADMIN_APPLICATIONS", null);
                 }
             }, 20L * 30);
+            plugin.getLogger().info("Provision dialog: application=" + application.id()
+                    + " actor=" + admin.getUniqueId() + " session=" + progressSession
+                    + " operation=" + idempotencyKey + " source=admin-dialog");
             runtime.provision(admin, application.id(), admin.getUniqueId(), admin.getName(),
                     plugin.messages().plainText("log.provision.admin-approval-reason"),
                     idempotencyKey, result -> {
                         ApplicationSnapshot completed = result.application();
-                        if (completed != null) {
+                        if (completed != null && result.notifyDecision()) {
                             facade.notifyApplicationDecision(completed);
                         }
                         presentation.playSound(admin, result.status() == ProvisionResult.Status.SUCCESS

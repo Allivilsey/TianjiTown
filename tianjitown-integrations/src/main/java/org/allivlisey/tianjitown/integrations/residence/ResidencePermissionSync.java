@@ -86,8 +86,7 @@ final class ResidencePermissionSync {
                 return Result.failureCode(ResultCode.MEMBER_VEHICLE_DESTROY_PERMISSION_MISMATCH,
                         Map.of("member", safeText(member)));
             }
-            if (applyPermissions && !residence.getPermissions().setFlagGroupOnPlayer(
-                     server.getConsoleSender(), member, padd.groupedFlag, "true", true)) {
+            if (applyPermissions && !applyPaddSilently(residence, member)) {
                 return Result.failureCode(ResultCode.MEMBER_PADD_PERMISSION_WRITE_FAILED,
                         Map.of("member", safeText(member)));
             }
@@ -106,4 +105,52 @@ final class ResidencePermissionSync {
                 Map.of("residence", safeText(name)));
     }
 
+    private boolean applyPaddSilently(ClaimedResidence residence, UUID member) {
+        Map<String, FlagPermissions.FlagState> flags = paddFlags();
+        if (flags.isEmpty()) return false;
+        for (var flag : flags.entrySet()) {
+            if (!setGroupedFlagSilently(residence.getPermissions(), member, flag.getKey(), flag.getValue())) {
+                return false;
+            }
+        }
+        var player = com.bekvon.bukkit.residence.containers.ResidencePlayer.get(member);
+        if (player != null) player.addTrustedResidence(residence);
+        return true;
+    }
+
+    private boolean setGroupedFlagSilently(com.bekvon.bukkit.residence.protection.ResidencePermissions permissions,
+            UUID member, String flag, FlagPermissions.FlagState state) {
+        try {
+            // The published compile API predates the typed seven-argument setter in 6.0.2.4.
+            var method = permissions.getClass().getMethod("setPlayerFlag",
+                    org.bukkit.command.CommandSender.class, UUID.class, String.class,
+                    FlagPermissions.FlagState.class, boolean.class, boolean.class, boolean.class);
+            boolean ignoreAccess = (boolean) FlagPermissions.class.getMethod("isIgnoreGroupedFlagsAccess").invoke(null);
+            return (boolean) method.invoke(permissions, server.getConsoleSender(), member,
+                    flag, state, true, false, !ignoreAccess);
+        } catch (NoSuchMethodException exception) {
+            return permissions.setPlayerFlag(server.getConsoleSender(), member, flag,
+                    state.name().toLowerCase(java.util.Locale.ROOT), true, false);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Residence 静默授权失败", exception);
+        }
+    }
+
+    static Map<String, FlagPermissions.FlagState> paddFlags() {
+        try {
+            var field = FlagPermissions.class.getDeclaredField("validFlagGroups");
+            field.setAccessible(true);
+            Object group = ((Map<?, ?>) field.get(null)).get(padd.groupedFlag);
+            Map<String, FlagPermissions.FlagState> result = new java.util.LinkedHashMap<>();
+            if (group instanceof Map<?, ?> values) {
+                values.forEach((key, value) -> result.put((String) key, (FlagPermissions.FlagState) value));
+            } else if (group instanceof Collection<?> values) {
+                // Public 6.0.0.1 API describes groups as sets of true flags.
+                values.forEach(key -> result.put((String) key, FlagPermissions.FlagState.TRUE));
+            }
+            return Map.copyOf(result);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("无法读取 Residence padd 权限组", exception);
+        }
+    }
 }

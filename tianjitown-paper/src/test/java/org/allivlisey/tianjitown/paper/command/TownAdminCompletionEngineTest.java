@@ -77,8 +77,16 @@ class TownAdminCompletionEngineTest {
     @Test
     void completesBuffManagementCommands() {
 
-        assertEquals(List.of("<buffKey>"), engine.complete(
-                new String[]{"buff", "grant", "sky", ""}, snapshot, dynamic));
+        var configured = new TownAdminCompletionEngine.Snapshot(snapshot.towns(), snapshot.membersByTown(),
+                Map.of("speed", 5, "diving", 1));
+        assertEquals(List.of("diving", "speed"), engine.complete(
+                new String[]{"buff", "set", "sky", ""}, configured, dynamic));
+        assertEquals(List.of("1", "2", "3", "4"), engine.complete(
+                new String[]{"buff", "set", "sky", "diving", ""}, configured, dynamic));
+        assertEquals(List.of("1"), engine.complete(
+                new String[]{"buff", "set", "sky", "diving", "1", ""}, configured, dynamic));
+        assertEquals(List.of(), engine.complete(
+                new String[]{"buff", "grant", "sky", ""}, configured, dynamic));
         assertEquals(List.of(), engine.complete(
                 new String[]{"order", "create", "sky", ""}, snapshot, dynamic));
     }

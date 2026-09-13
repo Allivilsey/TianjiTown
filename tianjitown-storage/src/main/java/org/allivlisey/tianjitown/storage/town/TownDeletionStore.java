@@ -140,6 +140,13 @@ final class TownDeletionStore {
         }
         String action = mayorOnly ? "TOWN_DISBAND_PREPARE"
                 : alreadyPrepared ? "TOWN_DELETE_RETRY" : "TOWN_DELETE_PREPARE";
+        try (PreparedStatement buffs = connection.prepareStatement("""
+                UPDATE active_buffs SET status = 'CANCELLED', last_error = '小镇已归档'
+                 WHERE town_id = ? AND status = 'ACTIVE'
+                """)) {
+            buffs.setBytes(1, uuid(townId));
+            buffs.executeUpdate();
+        }
         TownPersistence.audit(connection, null, actorId, actorName, action, "TOWN", townId.toString(), reason,
                 "已安全归档；名称、小镇代码和区块保持锁定，等待移除投影");
         return current;

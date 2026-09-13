@@ -31,6 +31,81 @@ class TownRepositorySqliteTest {
     Path temporaryDirectory;
 
     @Test
+    void rejectionPersistsAndInvalidatesTheWholeRoundUntilReselection() throws Exception {
+        DatabaseConfig config = new DatabaseConfig("jdbc:sqlite:" + temporaryDirectory.resolve("invitations.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5));
+        UUID applicant = UUID.randomUUID(), one = UUID.randomUUID(), two = UUID.randomUUID();
+        UUID applicationId, token;
+        InitialTerritory territory = new InitialTerritory(new ChunkPosition(UUID.randomUUID(), "world", 0, 0));
+        try (DatabaseGate gate = new DatabaseGate(config)) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            var repository = new TownRepository(gate.dataSource(), () -> false);
+            var draft = repository.createDraft(applicant, applicationText("邀请镇", "invite"),
+                    List.of(one, two), Duration.ZERO);
+            applicationId = draft.id(); token = draft.initialMembers().getFirst().invitationToken();
+            repository.selectSite(applicationId, applicant, territory, Instant.now().plusSeconds(3600), 0);
+            repository.respondInitialMember(applicationId, one, token, false);
+            assertThrows(TownRepository.ConflictException.class,
+                    () -> repository.respondInitialMember(applicationId, two, token, true));
+            assertThrows(TownRepository.ConflictException.class,
+                    () -> repository.respondInitialMember(applicationId, two, token, false));
+        }
+        try (DatabaseGate gate = new DatabaseGate(config)) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            var repository = new TownRepository(gate.dataSource(), () -> false);
+            var rejected = repository.findApplication(applicationId).orElseThrow();
+            assertTrue(rejected.needsInitialMemberReselection());
+            var selected = repository.updateApplicationText(applicationId, applicant, rejected.text(),
+                    List.of(one, two), rejected.version());
+            assertFalse(selected.needsInitialMemberReselection());
+            assertEquals(territory, selected.territory());
+            assertTrue(selected.initialMembers().stream().allMatch(member -> member.status() == InitialMemberConfirmation.Status.PENDING));
+            UUID newToken = selected.initialMembers().getFirst().invitationToken();
+            assertFalse(token.equals(newToken));
+            assertThrows(TownRepository.ConflictException.class,
+                    () -> repository.respondInitialMember(applicationId, one, token, true));
+            try (var pool = Executors.newFixedThreadPool(2)) {
+                var first = pool.submit(() -> repository.respondInitialMember(applicationId, one, newToken, true));
+                var second = pool.submit(() -> repository.respondInitialMember(applicationId, two, newToken, true));
+                first.get(); second.get();
+            }
+            assertTrue(repository.findApplication(applicationId).orElseThrow().initialMembersConfirmed());
+            assertThrows(TownRepository.ConflictException.class,
+                    () -> repository.respondInitialMember(applicationId, one, newToken, false));
+        }
+    }
+
+    @Test
+    void statusFiltersAndCompletedProvisionDoNotDependOnReleasedReservation() throws Exception {
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(
+                "jdbc:sqlite:" + temporaryDirectory.resolve("status-provision.db"),
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            assertTrue(gate.verifyAndMigrate().healthy());
+            var repository = new TownRepository(gate.dataSource(), () -> false);
+            CreatedTown town = createTown(repository, 0, "amu", "amu");
+            UUID applicationId;
+            try (var connection = gate.dataSource().getConnection(); var statement = connection.createStatement();
+                 var row = statement.executeQuery("SELECT application_id FROM town_applications")) {
+                assertTrue(row.next()); applicationId = TownSqlValues.uuid(row.getBytes(1));
+            }
+            var application = repository.findApplication(applicationId).orElseThrow();
+            assertTrue(application.territory() == null);
+            var existing = repository.beginProvision(applicationId, UUID.randomUUID(), "Admin", "管理员调整", "reentry", 200000);
+            assertEquals(town.town().id(), existing.town().id());
+            assertEquals(town.town().territory(), existing.town().territory());
+            assertEquals(1, repository.listTowns(TownStatus.ACTIVE).size());
+            assertTrue(repository.listTowns(TownStatus.ARCHIVED).isEmpty());
+            assertTrue(repository.listTowns(TownStatus.PROVISIONING).isEmpty());
+            assertEquals(1, scalar(gate, "SELECT COUNT(*) FROM ledger_entries WHERE entry_type='APPLICATION_FEE'"));
+            repository.deleteTown(town.town().id(), null, "Admin", "管理员调整");
+            assertTrue(repository.listTowns(TownStatus.ACTIVE).isEmpty());
+            assertEquals(1, repository.listTowns(TownStatus.ARCHIVED).size());
+            assertThrows(TownRepository.ConflictException.class, () -> repository.beginProvision(
+                    applicationId, UUID.randomUUID(), "Admin", "管理员调整", "archived-reentry", 200000));
+        }
+    }
+
+    @Test
     void reservesUnactivatedGridAndReleasesItOnlyAfterDeletionCompletes() throws Exception {
         DatabaseConfig config = new DatabaseConfig(
                 "jdbc:sqlite:" + temporaryDirectory.resolve("reserved-grid.db"),
@@ -92,8 +167,8 @@ class TownRepositorySqliteTest {
                     draft.id(), applicantId, territory, Instant.now().plus(Duration.ofHours(1)), 1);
             assertThrows(TownRepository.ConflictException.class,
                     () -> repository.submit(selected.id(), applicantId));
-            repository.respondInitialMember(selected.id(), initialMemberOne, true);
-            repository.respondInitialMember(selected.id(), initialMemberTwo, true);
+            repository.respondInitialMember(selected.id(), initialMemberOne, selected.initialMembers().getFirst().invitationToken(), true);
+            repository.respondInitialMember(selected.id(), initialMemberTwo, selected.initialMembers().getFirst().invitationToken(), true);
             assertTrue(repository.listPendingInitialMemberApplications(initialMemberOne)
                     .isEmpty());
             ApplicationSnapshot submitted = repository.submit(selected.id(), applicantId);
@@ -141,8 +216,8 @@ class TownRepositorySqliteTest {
             ApplicationText text = applicationText("恢复测试镇", "RECOVER");
             ApplicationSnapshot draft = repository.createDraft(applicantId, text,
                     List.of(firstMember, secondMember), Duration.ZERO);
-            repository.respondInitialMember(draft.id(), firstMember, true);
-            repository.respondInitialMember(draft.id(), secondMember, true);
+            repository.respondInitialMember(draft.id(), firstMember, draft.initialMembers().getFirst().invitationToken(), true);
+            repository.respondInitialMember(draft.id(), secondMember, draft.initialMembers().getFirst().invitationToken(), true);
             ApplicationSnapshot selected = repository.selectSite(draft.id(), applicantId,
                     new InitialTerritory(new ChunkPosition(UUID.randomUUID(), "world", 30, 40)),
                     Instant.now().plus(Duration.ofHours(1)), 1);
@@ -344,8 +419,8 @@ class TownRepositorySqliteTest {
             ApplicationSnapshot rejected = repository.createDraft(rejectedApplicant,
                     applicationText("拒绝镇", "REJECTED"),
                     List.of(firstMember, secondMember), cooldown);
-            repository.respondInitialMember(rejected.id(), firstMember, true);
-            repository.respondInitialMember(rejected.id(), secondMember, true);
+            repository.respondInitialMember(rejected.id(), firstMember, rejected.initialMembers().getFirst().invitationToken(), true);
+            repository.respondInitialMember(rejected.id(), secondMember, rejected.initialMembers().getFirst().invitationToken(), true);
             rejected = repository.selectSite(rejected.id(), rejectedApplicant,
                     new InitialTerritory(new ChunkPosition(UUID.randomUUID(), "world", 50, 50)),
                     Instant.now().plus(Duration.ofHours(1)), 1);
@@ -379,8 +454,8 @@ class TownRepositorySqliteTest {
             text.requireValid();
             ApplicationSnapshot draft = repository.createDraft(applicantId, text,
                     List.of(firstMember, secondMember), Duration.ZERO);
-            repository.respondInitialMember(draft.id(), firstMember, true);
-            repository.respondInitialMember(draft.id(), secondMember, true);
+            repository.respondInitialMember(draft.id(), firstMember, draft.initialMembers().getFirst().invitationToken(), true);
+            repository.respondInitialMember(draft.id(), secondMember, draft.initialMembers().getFirst().invitationToken(), true);
             ApplicationSnapshot selected = repository.selectSite(draft.id(), applicantId,
                     new InitialTerritory(new ChunkPosition(UUID.randomUUID(), "world", 80, 80)),
                     Instant.now().plus(Duration.ofHours(1)), 1);
@@ -459,8 +534,8 @@ class TownRepositorySqliteTest {
             ApplicationSnapshot draft = repository.createDraft(applicantId,
                     applicationText("事务申请镇", "ROLLAPP"),
                     List.of(firstMember, secondMember), Duration.ZERO);
-            repository.respondInitialMember(draft.id(), firstMember, true);
-            repository.respondInitialMember(draft.id(), secondMember, true);
+            repository.respondInitialMember(draft.id(), firstMember, draft.initialMembers().getFirst().invitationToken(), true);
+            repository.respondInitialMember(draft.id(), secondMember, draft.initialMembers().getFirst().invitationToken(), true);
             ApplicationSnapshot selected = repository.selectSite(draft.id(), applicantId,
                     new InitialTerritory(new ChunkPosition(UUID.randomUUID(), "world", 100, 100)),
                     Instant.now().plus(Duration.ofHours(1)), 1);
@@ -521,8 +596,8 @@ class TownRepositorySqliteTest {
             ApplicationSnapshot draft = repository.createDraft(applicantId,
                     applicationText("预留边界镇", "RESTIME"),
                     List.of(firstMember, secondMember), Duration.ZERO);
-            repository.respondInitialMember(draft.id(), firstMember, true);
-            repository.respondInitialMember(draft.id(), secondMember, true);
+            repository.respondInitialMember(draft.id(), firstMember, draft.initialMembers().getFirst().invitationToken(), true);
+            repository.respondInitialMember(draft.id(), secondMember, draft.initialMembers().getFirst().invitationToken(), true);
             ApplicationSnapshot selected = repository.selectSite(draft.id(), applicantId,
                     new InitialTerritory(new ChunkPosition(UUID.randomUUID(), "world", 70, 70)),
                     Instant.now().plusSeconds(60), 1);
@@ -535,8 +610,8 @@ class TownRepositorySqliteTest {
             ApplicationSnapshot expiredDraft = repository.createDraft(expiredApplicant,
                     applicationText("过期预留镇", "RESEXPIRE"),
                     List.of(expiredFirst, expiredSecond), Duration.ZERO);
-            repository.respondInitialMember(expiredDraft.id(), expiredFirst, true);
-            repository.respondInitialMember(expiredDraft.id(), expiredSecond, true);
+            repository.respondInitialMember(expiredDraft.id(), expiredFirst, expiredDraft.initialMembers().getFirst().invitationToken(), true);
+            repository.respondInitialMember(expiredDraft.id(), expiredSecond, expiredDraft.initialMembers().getFirst().invitationToken(), true);
             repository.selectSite(expiredDraft.id(), expiredApplicant,
                     new InitialTerritory(new ChunkPosition(UUID.randomUUID(), "world", 80, 80)),
                     Instant.now().plusSeconds(60), 1);
@@ -779,8 +854,8 @@ class TownRepositorySqliteTest {
                 "测试简介", List.of("友善交流"));
         ApplicationSnapshot draft = repository.createDraft(mayorId, text,
                 List.of(initialMemberOne, initialMemberTwo), Duration.ZERO);
-        repository.respondInitialMember(draft.id(), initialMemberOne, true);
-        repository.respondInitialMember(draft.id(), initialMemberTwo, true);
+        repository.respondInitialMember(draft.id(), initialMemberOne, draft.initialMembers().getFirst().invitationToken(), true);
+        repository.respondInitialMember(draft.id(), initialMemberTwo, draft.initialMembers().getFirst().invitationToken(), true);
         InitialTerritory territory = new InitialTerritory(new ChunkPosition(
                 UUID.fromString("00000000-0000-0000-0000-000000000999"),
                 "world", index * 30, index * 30));

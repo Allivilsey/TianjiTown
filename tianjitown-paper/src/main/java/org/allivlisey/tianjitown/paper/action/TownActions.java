@@ -53,9 +53,9 @@ public final class TownActions {
         application.updateApplication(actor, applicationId, text, initialMemberIds, expectedVersion, completion);
     }
 
-    public void respondInitialMember(Player actor, UUID applicationId, boolean confirm,
+    public void respondInitialMember(Player actor, UUID applicationId, UUID invitationToken, boolean confirm,
                               Consumer<TownActionOutcome<ApplicationSnapshot>> completion) {
-        application.respondInitialMember(actor, applicationId, confirm, completion);
+        application.respondInitialMember(actor, applicationId, invitationToken, confirm, completion);
     }
 
     public void selectApplicationSite(Player actor, UUID applicationId,
@@ -190,9 +190,9 @@ public final class TownActions {
         expansion.expandTown(actor, gridX, gridZ, completion);
     }
 
-    public void buyBuff(Player actor, String buffKey, int weeks, int level,
+    public void buyBuff(Player actor, String buffKey, int weeks, int level, java.util.UUID expectedTown, java.util.UUID expectedBuff, String businessKey,
                  Consumer<TownActionOutcome<CommerceRepository.BuffPurchase>> completion) {
-        buff.buyBuff(actor, buffKey, weeks, level, completion);
+        buff.buyBuff(actor, buffKey, weeks, level, expectedTown, expectedBuff, businessKey, completion);
     }
 
     public void queryActor(Player actor, Consumer<TownActionOutcome<Void>> completion) {

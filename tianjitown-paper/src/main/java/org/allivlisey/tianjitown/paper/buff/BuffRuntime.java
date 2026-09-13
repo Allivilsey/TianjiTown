@@ -83,7 +83,7 @@ public final class BuffRuntime implements Listener {
                 settings.buffShopEnabled());
     }
 
-    public void buyBuffAction(Player player, String key, int weeks, int level,
+    public void buyBuffAction(Player player, String key, int weeks, int level, UUID expectedTown, UUID expectedBuff, String businessKey,
                        Consumer<CommerceRepository.BuffPurchase> success,
                        Consumer<RuntimeException> failure) {
         if (!buffShopEnabled() || !host.consumptionEnabled()) {
@@ -92,14 +92,67 @@ public final class BuffRuntime implements Listener {
         }
         try {
             BuffDefinition definition = settings.requireBuff(key);
-            host.writeAction(player, () -> repository.purchaseBuff(player.getUniqueId(),
+            host.writeAction(player, () -> repository.purchaseConfirmedBuff(player.getUniqueId(),
                             player.getName(), definition, settings.label(key), weeks, level,
                             host.settlement().scale(),
-                            "buff-purchase:" + UUID.randomUUID(), Instant.now()),
+                            businessKey, Instant.now(), expectedTown, expectedBuff),
                     purchase -> verifyBuffPurchase(player, purchase, success, failure), failure);
         } catch (RuntimeException exception) {
             failure.accept(exception);
         }
+    }
+
+    public void setBuffAction(org.bukkit.command.CommandSender sender, UUID townId,
+            BuffDefinition definition, int weeks, int level,
+            Consumer<CommerceRepository.BuffPurchase> success) {
+        String operation = "admin-buff-set:" + UUID.randomUUID();
+        host.writeAction(sender, () -> repository.setBuffForTown(townId,
+                sender instanceof Player player ? player.getUniqueId() : null, sender.getName(),
+                definition, weeks, level, operation, Instant.now()), purchase -> {
+            // Capture generations before reading; later membership changes invalidate this projection.
+            java.util.Map<Player, Long> generations = new java.util.LinkedHashMap<>();
+            for (Player player : plugin.getServer().getOnlinePlayers()) {
+                generations.put(player, expirations.nextRefreshGeneration(player.getUniqueId()));
+            }
+            host.readAction(sender, () -> {
+                java.util.Map<Player, List<CommerceRepository.ActiveBuff>> snapshots = new java.util.LinkedHashMap<>();
+                for (Player player : generations.keySet()) {
+                    snapshots.put(player, repository.activeBuffsForPlayer(player.getUniqueId(), Instant.now()));
+                }
+                return snapshots;
+            }, snapshots -> {
+                try {
+                    for (var entry : snapshots.entrySet()) {
+                        Player player = entry.getKey();
+                        if (entry.getValue().stream().noneMatch(buff -> buff.buffId().equals(purchase.buff().buffId()))) continue;
+                        if (!player.isOnline() || awaitingSync.contains(player)
+                                || !expirations.isCurrentRefresh(player.getUniqueId(), generations.get(player))) continue;
+                        effects.applyBuffs(player, entry.getValue(), false);
+                        expirations.scheduleExpiration(player.getUniqueId(), entry.getValue(), generations.get(player));
+                    }
+                } catch (RuntimeException | LinkageError exception) {
+                    compensateSetting(sender, purchase, exception);
+                    return;
+                }
+                refreshAllPlayers();
+                success.accept(purchase);
+            }, exception -> compensateSetting(sender, purchase, exception));
+        }, exception -> {
+            plugin.messages().send(sender, "chat.runtime.operation-failed", Map.of("detail", safeText(safeMessage(exception))));
+            plugin.getLogger().log(java.util.logging.Level.SEVERE, "Buff set failed", exception);
+        });
+    }
+
+    private void compensateSetting(org.bukkit.command.CommandSender sender,
+            CommerceRepository.BuffPurchase purchase, Throwable failure) {
+        host.writeAction(sender, () -> repository.refundActiveBuff(purchase.buff().buffId(), null,
+                "SYSTEM", "免费设置应用失败：" + safeMessage(failure)), ignored -> {
+            refreshAllPlayers();
+            plugin.messages().send(sender, "chat.admin.buff-set-failed");
+        }, exception -> {
+            refreshAllPlayers();
+            plugin.getLogger().log(java.util.logging.Level.SEVERE, "Buff set compensation failed", exception);
+        });
     }
 
     public void refreshAllPlayers() {
@@ -114,11 +167,11 @@ public final class BuffRuntime implements Listener {
 
     private void refreshPlayer(Player player, boolean expireRecords,
                                 boolean normalizeRespawnHealth) {
+        UUID playerId = player.getUniqueId();
+        long refreshGeneration = expirations.nextRefreshGeneration(playerId);
         if (!player.isOnline() || awaitingSync.contains(player)) {
             return;
         }
-        UUID playerId = player.getUniqueId();
-        long refreshGeneration = expirations.nextRefreshGeneration(playerId);
         Consumer<List<CommerceRepository.ActiveBuff>> apply = buffs -> {
             if (player.isOnline() && expirations.isCurrentRefresh(playerId, refreshGeneration)) {
                 try {
@@ -220,8 +273,6 @@ public final class BuffRuntime implements Listener {
             try {
                 effects.applyBuffs(player, buffs, false);
                 expirations.scheduleExpiration(playerId, buffs, refreshGeneration);
-                refreshAllPlayers();
-                success.accept(purchase);
             } catch (RuntimeException | LinkageError exception) {
                 host.writeAction(player,
                         () -> repository.refundActiveBuff(purchase.buff().buffId(), null,
@@ -236,7 +287,10 @@ public final class BuffRuntime implements Listener {
                             retryRefresh(player, playerId, refreshGeneration, false, refundFailure);
                             failure.accept(refundFailure);
                         });
+                return;
             }
+            refreshAllPlayers();
+            success.accept(purchase);
         }, exception -> {
             retryRefresh(player, playerId, refreshGeneration, false, exception);
             failure.accept(exception);

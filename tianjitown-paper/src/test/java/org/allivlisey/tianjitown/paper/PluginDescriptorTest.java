@@ -53,7 +53,7 @@ class PluginDescriptorTest {
         for (String permission : List.of("tianjitown.admin.money", "tianjitown.admin.tax",
                 "tianjitown.admin.ledger",
                 "tianjitown.admin.buff", "tianjitown.admin.operations")) {
-            assertTrue(descriptor.contains(permission + ":"), permission + " 必须被声明");
+            assertFalse(descriptor.contains(permission + ":"), permission + " 不再单独授权");
         }
     }
 
@@ -63,11 +63,6 @@ class PluginDescriptorTest {
 
         assertTrue(descriptor.contains("description: TianjiTown 管理命令"));
         assertTrue(descriptor.contains("description: TianjiTown 全部管理权限"));
-        for (String localizedText : List.of("查询和调整小镇公共资金", "强制调整小镇统一收入税率",
-                "查询小镇完整公共账本", "查询和代购公共 Buff",
-                "执行统一诊断")) {
-            assertTrue(descriptor.contains("description: " + localizedText), localizedText);
-        }
         assertTrue(descriptor.contains("usage: /tianjitown help"));
         assertFalse(descriptor.contains("/tianjitown reload"));
     }
@@ -81,7 +76,7 @@ class PluginDescriptorTest {
         assertEquals("/tianjitown help", parsed.getCommands().get("tianjitown").get("usage"));
         assertEquals("TianjiTown 管理命令",
                 parsed.getCommands().get("tianjitown").get("description"));
-        assertEquals(6, parsed.getPermissions().size());
+        assertEquals(1, parsed.getPermissions().size());
     }
 
     @Test

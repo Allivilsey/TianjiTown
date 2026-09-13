@@ -22,7 +22,7 @@ final class TownBuffActions {
         this.runtime = support.runtime;
     }
 
-    public void buyBuff(Player actor, String buffKey, int weeks, int level,
+    public void buyBuff(Player actor, String buffKey, int weeks, int level, java.util.UUID expectedTown, java.util.UUID expectedBuff, String businessKey,
                  Consumer<TownActionOutcome<CommerceRepository.BuffPurchase>> completion) {
         String action = "BUFF_BUY";
         if (support.rejectBeforeWrite(action, completion)) {
@@ -33,7 +33,7 @@ final class TownBuffActions {
                     "FEATURE_DISABLED")));
             return;
         }
-        runtime.buffs().buyBuffAction(actor, buffKey, weeks, level,
+        runtime.buffs().buyBuffAction(actor, buffKey, weeks, level, expectedTown, expectedBuff, businessKey,
                 purchase -> completion.accept(TownActionOutcome.success(
                         TownActionResult.success(action, Map.of("buff_key", buffKey,
                                 "buff_id", purchase.buff().buffId(), "level", level,

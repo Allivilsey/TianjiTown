@@ -45,6 +45,14 @@ public final class TownApplicationDialogs {
     }
 
     public void renderApplication(Player player, ApplicationSnapshot application) {
+        if (application.applicantId().equals(player.getUniqueId())
+                && application.needsInitialMemberReselection()
+                && (application.status() == ApplicationStatus.DRAFT
+                    || application.status() == ApplicationStatus.SITE_SELECTED
+                    || application.status() == ApplicationStatus.NEED_CHANGES)) {
+            facade.loadApplicationForForm(player, application.id());
+            return;
+        }
         List<String> summary = new ArrayList<>(List.of(
                 presentation.dialogText("common.applicant", Map.of(
                         "applicant", TownUiLegacyFacade.safeText(facade.displayName(application.applicantId())))),

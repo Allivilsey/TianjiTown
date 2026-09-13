@@ -57,6 +57,18 @@ public final class CommerceRepository {
                 moneyScale, weeks, level, businessKey, now, reason);
     }
 
+    public BuffPurchase purchaseConfirmedBuff(UUID playerId, String actorName, BuffDefinition definition,
+            String buffLabel, int weeks, int level, int moneyScale, String businessKey,
+            Instant now, UUID expectedTown, UUID expectedBuff) {
+        return purchases.purchaseConfirmedBuff(playerId, actorName, definition, buffLabel, weeks,
+                level, moneyScale, businessKey, now, expectedTown, expectedBuff);
+    }
+
+    public BuffPurchase setBuffForTown(UUID townId, UUID actorId, String actorName,
+            BuffDefinition definition, int weeks, int level, String businessKey, Instant now) {
+        return purchases.setBuffForTown(townId, actorId, actorName, definition, weeks, level, businessKey, now);
+    }
+
     public List<ActiveBuff> activeBuffsForPlayer(UUID playerId, Instant now) {
         return lifecycle.activeBuffsForPlayer(playerId, now);
     }
@@ -82,7 +94,12 @@ public final class CommerceRepository {
     }
 
     public record SelectedBuffQuote(PlayerContext context, ActiveBuff current, int level,
-                                    int weeks, long priceMinor, Instant expiresAt) {
+                                    int weeks, long priceMinor, Instant expiresAt, long refundMinor) {
+        public SelectedBuffQuote(PlayerContext context, ActiveBuff current, int level,
+                                 int weeks, long priceMinor, Instant expiresAt) {
+            this(context, current, level, weeks, priceMinor, expiresAt, 0);
+        }
+        public long netCostMinor() { return priceMinor - refundMinor; }
     }
 
     public record BuffPurchase(ActiveBuff buff, long balanceAfterMinor) {

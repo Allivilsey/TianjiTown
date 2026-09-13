@@ -7,7 +7,17 @@ import java.util.Map;
 import java.util.Objects;
 
 public record ProvisionResult(Status status, ApplicationSnapshot application, MessageRef detail,
-                       MessageRef recoveryAction) {
+                       MessageRef recoveryAction, boolean notifyDecision) {
+    public ProvisionResult(Status status, ApplicationSnapshot application, MessageRef detail,
+                           MessageRef recoveryAction) {
+        this(status, application, detail, recoveryAction, true);
+    }
+
+    public static ProvisionResult existing(ApplicationSnapshot application) {
+        return new ProvisionResult(Status.SUCCESS, application,
+                MessageRef.configured(SUCCESS_DETAIL), MessageRef.literal(""), false);
+    }
+
     private static final String SUCCESS_DETAIL = "dialog.provision.success-detail";
     private static final String BUSY_RECOVERY_ACTION =
             "dialog.provision.busy-recovery-action";

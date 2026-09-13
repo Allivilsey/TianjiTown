@@ -109,10 +109,13 @@ final class TownApplicationStore {
     }
 
     ApplicationSnapshot respondInitialMember(UUID applicationId, UUID playerId,
-                                                     boolean confirm) {
+                                                     UUID invitationToken, boolean confirm) {
         database.requireWorkerThread();
         return database.transaction(connection -> {
             ApplicationSnapshot current = TownPersistence.requireApplication(connection, applicationId);
+            if (invitationToken == null || current.needsInitialMemberReselection()) {
+                throw new ConflictException("本轮邀请已失效，请等待申请人重新选择初始成员");
+            }
             if (current.status() != ApplicationStatus.DRAFT
                     && current.status() != ApplicationStatus.SITE_SELECTED
                     && current.status() != ApplicationStatus.NEED_CHANGES) {
@@ -126,10 +129,12 @@ final class TownApplicationStore {
                        SET confirmation_status = ?,
                            responded_at = CAST(unixepoch('subsec') * 1000 AS INTEGER)
                      WHERE application_id = ? AND player_uuid = ?
+                       AND invitation_token = ? AND confirmation_status = 'PENDING'
                     """)) {
                 statement.setString(1, confirm ? "CONFIRMED" : "REJECTED");
                 statement.setBytes(2, uuid(applicationId));
                 statement.setBytes(3, uuid(playerId));
+                statement.setBytes(4, uuid(invitationToken));
                 TownPersistence.requireUpdated(statement, "你不在该申请的初始成员名单中");
             }
             TownPersistence.audit(connection, null, playerId, playerId.toString(),
@@ -437,19 +442,19 @@ final class TownApplicationStore {
         }
         try (PreparedStatement delete = connection.prepareStatement("""
                 DELETE FROM application_initial_members
-                 WHERE application_id = ? AND player_uuid NOT IN (?, ?)
+                 WHERE application_id = ?
                 """);
              PreparedStatement insert = connection.prepareStatement("""
-                INSERT INTO application_initial_members (application_id, player_uuid)
-                VALUES (?, ?) ON CONFLICT (application_id, player_uuid) DO NOTHING
+                INSERT INTO application_initial_members (application_id, player_uuid, invitation_token)
+                VALUES (?, ?, ?)
                 """)) {
             delete.setBytes(1, uuid(applicationId));
-            delete.setBytes(2, uuid(memberIds.get(0)));
-            delete.setBytes(3, uuid(memberIds.get(1)));
             delete.executeUpdate();
+            UUID invitationToken = UUID.randomUUID();
             for (UUID memberId : memberIds) {
                 insert.setBytes(1, uuid(applicationId));
                 insert.setBytes(2, uuid(memberId));
+                insert.setBytes(3, uuid(invitationToken));
                 insert.addBatch();
             }
             insert.executeBatch();

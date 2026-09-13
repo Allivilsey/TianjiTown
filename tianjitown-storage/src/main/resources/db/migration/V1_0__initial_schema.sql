@@ -7,7 +7,9 @@ CREATE TABLE active_buffs (
     effect_operation TEXT NOT NULL,
     level INTEGER NOT NULL CHECK (level >= 1),
     amount_per_level REAL NOT NULL,
-    price_minor INTEGER NOT NULL CHECK (price_minor > 0),
+    price_minor INTEGER NOT NULL CHECK (price_minor >= 0),
+    replaced_buff_id BLOB REFERENCES active_buffs(buff_id),
+    replacement_refund_minor INTEGER NOT NULL DEFAULT 0 CHECK (replacement_refund_minor >= 0),
     purchased_by BLOB,
     purchased_by_name TEXT NOT NULL,
     business_key TEXT NOT NULL,
@@ -25,6 +27,7 @@ CREATE TABLE active_buffs (
 CREATE TABLE application_initial_members (
     application_id BLOB NOT NULL,
     player_uuid BLOB NOT NULL,
+    invitation_token BLOB NOT NULL,
     confirmation_status TEXT NOT NULL DEFAULT 'PENDING'
         CHECK (confirmation_status IN ('PENDING', 'CONFIRMED', 'REJECTED')),
     responded_at INTEGER,

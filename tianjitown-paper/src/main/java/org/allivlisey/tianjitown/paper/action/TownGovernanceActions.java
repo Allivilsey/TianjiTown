@@ -39,8 +39,14 @@ final class TownGovernanceActions {
         support.write("TOWN_PROFILE_UPDATE", actor,
                 () -> runtime.repository().updateTownProfile(townId, profile, expectedVersion,
                         actor.getUniqueId(), actor.getName(), "管理组通过共享业务入口修改资料"),
-                town -> Map.of("town_id", town.id(), "version", town.version(),
-                        "rules_revision", town.rulesRevision()), completion);
+                town -> {
+                    var result = org.allivlisey.tianjitown.paper.message.TownResidenceMessages.sync(
+                            plugin.messages(), runtime.landProtection(), town);
+                    if (!result.success()) plugin.getLogger().warning(
+                            LandProtectionMessages.detail(plugin.messages(), result));
+                    return Map.of("town_id", town.id(), "version", town.version(),
+                            "rules_revision", town.rulesRevision());
+                }, completion);
     }
 
     public void requestMayorTransfer(Player actor, UUID townId, UUID candidateId,
@@ -119,6 +125,7 @@ final class TownGovernanceActions {
                         return;
                     }
                     TownSnapshot town = archived.value();
+                    runtime.townArchived(town);
                     LandProtectionService.Result removed;
                     try {
                         removed = runtime.landProtection().remove(town.residenceName(),
@@ -142,8 +149,6 @@ final class TownGovernanceActions {
                                 actor.getName(), "镇长通过共享业务入口解散");
                         return town;
                     }, completed -> {
-                        runtime.deactivateResidence(completed.residenceName());
-                        runtime.buffs().refreshAllPlayers();
                         return Map.of("town_id", completed.id(), "status", "DELETED");
                     }, completion);
                 });

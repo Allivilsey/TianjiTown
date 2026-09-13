@@ -32,6 +32,7 @@ public final class SitePolicy {
     }
 
     public Validation validate(InitialTerritory territory) {
+        if (territory == null) return missingTerritory();
         for (InitialTerritory unit : new TownReservation(territory).units()) {
             Validation result = validateUnit(unit);
             if (!result.valid()) return result;
@@ -40,6 +41,7 @@ public final class SitePolicy {
     }
 
     public Validation validateReservationEnvironment(InitialTerritory territory) {
+        if (territory == null) return missingTerritory();
         for (InitialTerritory unit : new TownReservation(territory).units()) {
             Validation result = validateEnvironment(unit);
             if (!result.valid()) return result;
@@ -97,6 +99,7 @@ public final class SitePolicy {
     }
 
     public Validation validateEnvironment(InitialTerritory territory) {
+        if (territory == null) return missingTerritory();
         World world = plugin.getServer().getWorld(territory.center().worldId());
         if (world == null) {
             return Validation.failure(plugin.messages().plainText(
@@ -121,6 +124,10 @@ public final class SitePolicy {
                     "chat.site-validation.worldborder-outside"));
         }
         return Validation.success(territory);
+    }
+
+    private Validation missingTerritory() {
+        return Validation.failure(plugin.messages().plainText("chat.site-validation.territory-missing"));
     }
 
     private static String safeMessage(Throwable throwable) {

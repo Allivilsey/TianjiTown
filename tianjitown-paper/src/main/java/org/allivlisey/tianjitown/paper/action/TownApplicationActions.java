@@ -58,11 +58,11 @@ final class TownApplicationActions {
                 completion);
     }
 
-    public void respondInitialMember(Player actor, UUID applicationId, boolean confirm,
+    public void respondInitialMember(Player actor, UUID applicationId, UUID invitationToken, boolean confirm,
                               Consumer<TownActionOutcome<ApplicationSnapshot>> completion) {
         support.write("INITIAL_MEMBER_RESPONSE", actor,
                 () -> runtime.repository().respondInitialMember(applicationId,
-                        actor.getUniqueId(), confirm),
+                        actor.getUniqueId(), invitationToken, confirm),
                 application -> Map.of("application_id", application.id(),
                         "confirmed", confirm), completion);
     }

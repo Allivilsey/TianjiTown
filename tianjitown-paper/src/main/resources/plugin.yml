@@ -19,24 +19,3 @@ permissions:
   tianjitown.admin:
     description: TianjiTown 全部管理权限
     default: op
-    children:
-      tianjitown.admin.money: true
-      tianjitown.admin.tax: true
-      tianjitown.admin.ledger: true
-      tianjitown.admin.buff: true
-      tianjitown.admin.operations: true
-  tianjitown.admin.money:
-    description: 查询和调整小镇公共资金
-    default: op
-  tianjitown.admin.tax:
-    description: 强制调整小镇统一收入税率
-    default: op
-  tianjitown.admin.ledger:
-    description: 查询小镇完整公共账本
-    default: op
-  tianjitown.admin.buff:
-    description: 查询和代购公共 Buff
-    default: op
-  tianjitown.admin.operations:
-    description: 执行统一诊断
-    default: op

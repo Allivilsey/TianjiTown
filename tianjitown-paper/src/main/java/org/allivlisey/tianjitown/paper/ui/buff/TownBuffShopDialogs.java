@@ -151,19 +151,27 @@ public final class TownBuffShopDialogs {
             return runtime.buffs().repository().quoteBuff(player.getUniqueId(), definition,
                     weeks, level, runtime.settlement().scale(), Instant.now());
         }, quote -> presentation.openConfirmation(player, presentation.dialogText("buff.confirm-title"), "BUY_BUFF",
-                buffKey + ":" + weeks + ":" + level,
+                buffKey + ":" + weeks + ":" + level + ":" + quote.context().townId()
+                        + ":" + (quote.current() == null ? "none" : quote.current().buffId())
+                        + ":" + java.util.UUID.randomUUID(),
                 presentation.dialogText("buff.confirm-consequence", Map.of(
                         "level", BuffDialogRenderer.roman(level), "weeks", weeks,
-                        "price", runtime.money(quote.priceMinor()))),
+                        "price", runtime.money(quote.priceMinor()),
+                        "refund", runtime.money(quote.refundMinor()),
+                        "net", runtime.money(quote.netCostMinor()))),
                 "BUFF_DURATIONS", buffKey));
     }
 
     public void buyBuff(Player player, String target) {
+        if (target == null) throw new IllegalArgumentException("Buff 确认已失效");
         String[] parts = target.split(":");
+        if (parts.length != 6) throw new IllegalArgumentException("Buff 确认已失效，请重新选择");
         String buffKey = parts[0];
         int weeks = Integer.parseInt(parts[1]);
         int level = Integer.parseInt(parts[2]);
-        actions.buyBuff(player, buffKey, weeks, level, outcome ->
+        actions.buyBuff(player, buffKey, weeks, level, java.util.UUID.fromString(parts[3]),
+                parts[4].equals("none") ? null : java.util.UUID.fromString(parts[4]),
+                "buff-purchase:" + java.util.UUID.fromString(parts[5]), outcome ->
                 facade.handleOutcome(player, outcome, purchase -> {
                     BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey);
                     presentation.openNotice(player, presentation.dialogText("buff.success-title"),

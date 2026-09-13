@@ -350,6 +350,11 @@ public final class TownRuntime {
         provisionRecovery.recoverFailedApplication(administrator, applicationId, mode, completion);
     }
 
+    public void townArchived(TownSnapshot town) {
+        deactivateResidence(town.residenceName());
+        buffs.refreshAllPlayers();
+    }
+
     public void deactivateResidence(String residenceName) {
         activeResidenceNames.remove(residenceName.toLowerCase(java.util.Locale.ROOT));
     }

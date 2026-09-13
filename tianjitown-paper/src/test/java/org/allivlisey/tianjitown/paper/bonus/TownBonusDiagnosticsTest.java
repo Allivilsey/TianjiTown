@@ -30,6 +30,22 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class TownBonusDiagnosticsTest {
+    @Test
+    void manualSuccessOnlySendsSummaryAndStartupSuccessIsSilent() {
+        PluginMessages messages = spy(plugin.messages());
+        when(plugin.messages()).thenReturn(messages);
+        diagnostics.diagnose(sender, 7);
+        async.getFirst().run();
+        main.getFirst().run();
+        verify(messages).send(sender, "chat.bonus.diagnostic-summary-success");
+        verify(messages, never()).send(eq(sender), eq("chat.bonus.diagnostic-line"), anyMap());
+        clearInvocations(messages, sender);
+        diagnostics.diagnoseAtStartup(ignored -> {});
+        async.getLast().run();
+        main.getLast().run();
+        verifyNoInteractions(sender);
+    }
+
     @TempDir Path directory;
     private final TianjiTownPlugin plugin = mock(TianjiTownPlugin.class);
     private final TownRuntime host = mock(TownRuntime.class);

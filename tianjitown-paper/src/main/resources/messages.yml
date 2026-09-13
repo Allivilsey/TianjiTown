@@ -280,7 +280,7 @@ chat:
 
     # /tianjitown Tab 补全中的参数位置提示；仅用于显示，不是可提交的命令参数
     completion:
-      reason-hint: '<原因>'
+      reason-hint: '[原因]'
       player-hint: '<玩家>'
       amount-hint: '<金额>'
 
@@ -308,7 +308,7 @@ chat:
     # 小镇、成员、镇长、治理投票和领地管理消息；{action}=投票创建动作，{town}=小镇名，
     # {count}=批量操作的小镇数量，{detail}=技术详情
     usage-town: '用法: /tianjitown town <view|delete> <小镇代码>'
-    usage-town-delete: '用法: /tianjitown town delete <小镇代码> <原因>'
+    usage-town-delete: '用法: /tianjitown town delete <小镇代码> [原因]'
     town-not-found: '找不到小镇 “{town}”'
     town-delete-confirmation: '删除小镇“{town}”'
     town-action-unsupported: 'town 只支持 view 或 delete'
@@ -323,13 +323,13 @@ chat:
     member-action-unsupported: 'member 只支持 add、remove 或 role'
     member-added: '&a成员已添加'
     member-removed: '&a成员已移除'
-    usage-vote: '用法: /tianjitown vote cancel <小镇代码> <原因>'
-    usage-vote-cancel: '用法: /tianjitown vote cancel <小镇代码> <原因>'
+    usage-vote: '用法: /tianjitown vote cancel <小镇代码> [原因]'
+    usage-vote-cancel: '用法: /tianjitown vote cancel <小镇代码> [原因]'
     vote-action-unsupported: 'vote 只支持 cancel'
     vote-no-open: '&e{town} 当前没有开放投票'
     member-town-not-found: '找不到可操作的小镇 “{town}”'
     vote-cancelled: '&a投票已取消: {id}'
-    usage-mayor: '用法: /tianjitown mayor transfer <小镇代码> <玩家> <原因>'
+    usage-mayor: '用法: /tianjitown mayor transfer <小镇代码> <玩家> [原因]'
     mayor-emergency-transfer: '&a镇长已紧急转移'
     usage-land: '用法: /tianjitown land <preview|reconcile|rebuild> <小镇代码|all>'
     land-player-only: '&c领地粒子预览只能由游戏内玩家执行'
@@ -338,19 +338,18 @@ chat:
     # {permission}=权限节点
     usage-money-root: '用法: /tianjitown money <view|adjust> ...'
     usage-money: '用法: /tianjitown money <view|adjust> <小镇代码> [金额 原因]'
-    usage-money-adjust: '用法: /tianjitown money adjust <小镇代码> <带符号金额> <原因>'
+    usage-money-adjust: '用法: /tianjitown money adjust <小镇代码> <带符号金额> [原因]'
     town-not-found-generic: '小镇不存在'
     money-adjust-zero: '调整金额不能为 0'
     money-action-unsupported: 'money 只支持 view 或 adjust'
-    usage-tax: '用法: /tianjitown tax set <小镇代码> <百分比> <原因>'
+    usage-tax: '用法: /tianjitown tax set <小镇代码> <百分比> [原因]'
     tax-action-unsupported: 'tax 只支持 set'
     usage-ledger: '用法: /tianjitown ledger view <小镇代码>'
     ledger-action-unsupported: 'ledger 只支持 view'
     usage-buff-root: '用法: /tianjitown buff <list|grant> ...'
     usage-buff-list: '用法: /tianjitown buff list <小镇代码>'
     buff-purchase-paused: '公共 Buff 新购买已由功能开关暂停'
-    usage-buff-grant: '用法: /tianjitown buff grant <小镇代码> <buffKey> <原因>'
-    buff-purchase-confirmation: '为小镇“{town}”代购 Buff “{buff}”：一周、一级，覆盖同类效果并扣除公共资金'
+    usage-buff-grant: '用法: /tianjitown buff set <小镇代码> <buffKey> [周数] [等级]'
     buff-action-unsupported: '操作不支持'
     town-archived: '小镇“{town}”已归档，请重试'
     no-operable-town: '没有可操作的小镇'
@@ -363,7 +362,8 @@ chat:
     ledger-record: '&7{created} &f{type} &e{amount} &8余额={balance} {note}'
     buff-title: '&6生效中的公共 Buff: {count}'
     buff-record: '&7{id} &d{key} &f等级={level} 到期={expires}'
-    buff-purchase-complete: '&aBuff 代购完成，公共余额: {balance}'
+    buff-set-complete: '&aBuff 免费设置完成，公共余额: {balance}'
+    buff-set-failed: '&cBuff 设置未能应用，已恢复设置前状态'
     land-rebuild-success: '&a{town}: {detail}'
     land-rebuild-failure: '&c{town}: {detail}'
     land-rebuild-confirmation-all: '移除并重建全部 {count} 个小镇的领地投影'
@@ -392,7 +392,7 @@ chat:
     help-entry-money: '&emoney &7公共资金查询与调整'
     help-entry-tax: '&etax &7QuickShop 税率调整'
     help-entry-ledger: '&eledger &7公共资金账本查询'
-    help-entry-buff: '&ebuff &7公共 Buff 查询与代购'
+    help-entry-buff: '&ebuff &7公共 Buff 查询与免费设置'
     help-system-title: '&6系统与运维'
     help-system-status: '&e/tianjitown status &7查看依赖、SQLite 和玩家入口状态'
     help-system-reload: '&e/tianjitown reload &7重载可热更新的配置'
@@ -402,27 +402,27 @@ chat:
     help-system-diagnose: '&e/tianjitown diagnose [1~180天] &7生成统一对账诊断报告'
     help-economy-title: '&6公共经济管理'
     help-economy-money-view: '&e/tianjitown money view <小镇代码>'
-    help-economy-money-adjust: '&e/tianjitown money adjust <小镇代码> <带符号金额> <原因>'
-    help-economy-tax: '&e/tianjitown tax set <小镇代码> <百分比> <原因>'
+    help-economy-money-adjust: '&e/tianjitown money adjust <小镇代码> <带符号金额> [原因]'
+    help-economy-tax: '&e/tianjitown tax set <小镇代码> <百分比> [原因]'
     help-economy-ledger: '&e/tianjitown ledger view <小镇代码>'
     help-buff-title: '&6公共 Buff 管理'
     help-buff-list: '&e/tianjitown buff list <小镇代码>'
-    help-buff-grant: '&e/tianjitown buff grant <小镇代码> <buffKey> <原因>'
-    help-buff-note: '&7公共 Buff 购买后不接受退款'
+    help-buff-set: '&e/tianjitown buff set <小镇代码> <buffKey> [周数] [等级]'
+    help-buff-note: '&7重购按旧订单剩余时间折算退款；管理员设置免费'
     help-town-title: '&6小镇管理'
-    help-town-list: '&e/tianjitown town list &7列出所有小镇（含已归档）'
-    town-list-title: '&6小镇列表 &7共 {count} 个（含已归档）'
+    help-town-list: '&e/tianjitown town list [active|provisioning|archived] &7默认列出活动小镇'
+    town-list-title: '&6小镇列表 &7共 {count} 个'
     town-list-empty: '&7暂无小镇'
     town-list-entry: '&e{town} &7代号：{code} | 状态：{status}'
     help-town-view: '&e/tianjitown town view <小镇代码> &7查看小镇资料与投影状态'
-    help-town-delete: '&e/tianjitown town delete <小镇代码> <原因> &7随后点击聊天确认按钮'
+    help-town-delete: '&e/tianjitown town delete <小镇代码> [原因] &7随后点击聊天确认按钮'
     help-member-title: '&6成员与镇长管理'
-    help-member-add-remove: '&e/tianjitown member add|remove <小镇代码> <玩家> <原因>'
+    help-member-add-remove: '&e/tianjitown member add|remove <小镇代码> <玩家> [原因]'
     help-member-role: '&e/tianjitown member role <小镇代码> <玩家> <DEPUTY_MAYOR|MEMBER>'
     help-member-note: '&7普通玩家加入小镇使用申请制'
-    help-member-mayor: '&e/tianjitown mayor transfer <小镇代码> <玩家> <原因>'
+    help-member-mayor: '&e/tianjitown mayor transfer <小镇代码> <玩家> [原因]'
     help-vote-title: '&6治理投票管理'
-    help-vote-cancel: '&e/tianjitown vote cancel <小镇代码> <原因>'
+    help-vote-cancel: '&e/tianjitown vote cancel <小镇代码> [原因]'
     help-land-title: '&6领地管理'
     help-land-preview: '&e/tianjitown land preview <小镇代码> &7在游戏内显示边界'
     help-land-reconcile: '&e/tianjitown land reconcile <小镇代码|all> [repair]'
@@ -459,6 +459,7 @@ chat:
   # 领地碰撞和 WorldBorder 校验的详细原因
   # 这些文本通常会作为 Dialog 或操作失败详情显示
   site-validation:
+    territory-missing: '领地信息已失效，请重新选择选址或刷新申请'
     residence-unavailable: '暂时无法检查附近是否已有领地：{detail}'
     residence-collision: '所选范围与已有领地“{name}”重叠'
     residence-name-conflict: '领地名与已存在的领地重复'
@@ -538,6 +539,7 @@ chat:
     diagnostic-summary-failure: '&c统一诊断发现异常，请查看报告'
     diagnostic-not-run: '尚未执行'
     diagnostic-line: '&7- {line}'
+    diagnostic-report: '&7诊断报告：{path}'
 
   # 领地外部命令和领地删除保护提示
   residence:
@@ -1626,7 +1628,9 @@ dialog:
     confirm-consequence: |-
       &7强度: {level}
       &7持续时间: {weeks} 周
-      &7价格 {price}
+      &7新价格 {price}
+      &7预计退款 {refund}
+      &7预计净支出 {net}
     success-title: '&6购买成功'
     success-message: "&f已购买 {name}\n等级: {level}\n到期: {expires}\n公共余额: {balance}"
     health-effect: '&7每级最大生命值 +4（2 颗心）'
@@ -1806,3 +1810,7 @@ dialog:
     message: '&f{player}邀请你共同组建{town}'
     accept: '&a接受邀请'
     reject: '&c拒绝邀请'
+
+residence:
+  enter: '欢迎来到{town}'
+  leave: '你已离开{town}'

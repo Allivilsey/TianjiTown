@@ -73,7 +73,7 @@
 | 组件 | 职责 |
 | --- | --- |
 | `CommerceRepository` | 组装组件、公开入口、保留报价/购买结果和异常类型 |
-| `BuffPurchaseStore` | 报价、角色检查、固定时长/自选周数购买及管理员代购 |
+| `BuffPurchaseStore` | 报价、角色检查、固定时长/自选周数购买及管理员免费设置 |
 | `BuffLifecycleStore` | 玩家/小镇生效 Buff 查询、到期清理、退款与上一层快照恢复 |
 | `CommercePersistence` | 使用调用方连接查询 Buff、校验小镇/账户、写入账本与审计 |
 | `CommerceSqlValues` | JDBC 值转换、更新行数检查 |

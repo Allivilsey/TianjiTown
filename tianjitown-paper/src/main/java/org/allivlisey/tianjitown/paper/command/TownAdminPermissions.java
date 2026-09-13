@@ -9,39 +9,17 @@ public final class TownAdminPermissions {
     static final List<String> HELP_TOPICS = List.of("system", "station", "application", "town",
             "member", "vote", "land", "money", "tax", "ledger", "buff");
     static final String ROOT = "tianjitown.admin";
-    static final String MONEY = "tianjitown.admin.money";
-    static final String TAX = "tianjitown.admin.tax";
-    static final String LEDGER = "tianjitown.admin.ledger";
-    static final String BUFF = "tianjitown.admin.buff";
-    static final String OPERATIONS = "tianjitown.admin.operations";
-
-    private static final Map<String, String> SCOPED_ROOTS = Map.ofEntries(
-            Map.entry("money", MONEY),
-            Map.entry("tax", TAX),
-            Map.entry("ledger", LEDGER),
-            Map.entry("buff", BUFF),
-            Map.entry("status", OPERATIONS),
-            Map.entry("diagnose", OPERATIONS),
-            Map.entry("system", OPERATIONS));
-    private static final List<String> SCOPED_PERMISSIONS = List.copyOf(
-            SCOPED_ROOTS.values());
-
-    private TownAdminPermissions() {
-    }
+    private TownAdminPermissions() {}
 
     public static boolean hasAny(Predicate<String> hasPermission) {
-        return hasPermission.test(ROOT) || SCOPED_PERMISSIONS.stream().anyMatch(hasPermission);
+        return hasPermission.test(ROOT);
     }
 
     public static boolean has(Predicate<String> hasPermission, String permission) {
-        return hasPermission.test(ROOT) || hasPermission.test(permission);
+        return hasPermission.test(ROOT);
     }
 
     public static boolean canViewHelpTopic(Predicate<String> hasPermission, String topic) {
-        if (hasPermission.test(ROOT)) {
-            return true;
-        }
-        String scopedPermission = SCOPED_ROOTS.get(topic.toLowerCase(Locale.ROOT));
-        return scopedPermission != null && hasPermission.test(scopedPermission);
+        return hasPermission.test(ROOT);
     }
 }
