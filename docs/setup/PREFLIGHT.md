@@ -43,4 +43,4 @@
 - 按 [SQLite 备份手册](../operations/SQLITE_AND_BACKUP.md) 完成一次同时间点备份与隔离恢复。
 - 运行环境事实报告可用 `python scripts/inspect_runtime.py /path/to/server --output reports/runtime-report.json` 生成；它只读，不参与启动判定。
 
-人工流程和结果记录见 [测试入口](../../test/README.md)。文档中的验收步骤不是已经通过的测试报告。
+按上述步骤及各功能部署文档完成人工验收，并将结果保存在本地或发布档案中。文档中的验收步骤不是已经通过的测试报告。

@@ -45,6 +45,9 @@ replay_pid*
 /MinecraftConsoleClient/
 /testserver/
 
+# 本地测试资料与历史报告（保留各模块 src/test）
+/test/
+
 # 第 0 阶段回滚备份包含生产配置和数据库快照，禁止提交。
 backups/*
 !backups/.gitkeep

@@ -13,7 +13,7 @@
 | 查详细玩法限制与默认数值 | [完整功能说明](docs/FUNCTIONS_AND_GAMEPLAY.md) |
 | 做日常检查、备份或故障恢复 | [运维手册](docs/operations/OPERATIONS.md) |
 
-全部文档见 [文档导航](docs/README.md)，验证流程和历史报告见 [测试入口](test/README.md)。
+全部文档见 [文档导航](docs/README.md)，开放前验证流程见 [安装与预发检查](docs/setup/PREFLIGHT.md)。
 
 ## 构建与安装
 

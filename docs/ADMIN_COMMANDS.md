@@ -120,6 +120,6 @@ Jobs 汇总为“职业收入”，QuickShop 与 GlobalMarketPlus 合并为“�
 
 `town delete`、`land rebuild` 会先发确认按钮，只有发起者能使用，60 秒后失效；取消后不会执行。删除和重建会再次检查目标记录版本，变化后须重新发起。其他管理写命令通常直接提交，不要假定都会二次确认。
 
-按钮实际使用 `/tianjitown confirm <确认码>` 与 `/tianjitown cancel <确认码>`；确认码由系统生成，不应猜测或复用。控制台无法点击时需使用实际按钮事件中的命令；没有可用确认码时由游戏内管理员重新发起操作。`/tianjitown-callback` 是聊天按钮内部回调入口，不是玩家日常命令。隔离验收流程见 [测试文档](../test/README.md)。
+按钮实际使用 `/tianjitown confirm <确认码>` 与 `/tianjitown cancel <确认码>`；确认码由系统生成，不应猜测或复用。控制台无法点击时需使用实际按钮事件中的命令；没有可用确认码时由游戏内管理员重新发起操作。`/tianjitown-callback` 是聊天按钮内部回调入口，不是玩家日常命令。隔离验收流程见 [告警和故障注入](operations/ALERTS_AND_FAULT_INJECTION.md)。
 
 管理员免费设置不受 Buff 商店或公共消费开关限制。玩家重购的退款按旧订单实际付款和剩余有效时间折算；不提供主动退货命令。统一诊断成功时，启动检查静默，手动命令只回复一行通过提示，完整报告仍写入 diagnostics。

@@ -22,7 +22,7 @@
 | [Buff](deployment/BUFFS_AND_RESOURCES.md) | 玩家购买与管理员免费设置区别、到期、HuskSync 验收 |
 | [定价](deployment/PRICING.md) | 五种属性商品价格及递增扩张公式 |
 | [领地加成](deployment/TERRITORY_BONUSES.md) | 建筑返还和持久信标效果的配置与验证 |
-| [通知与周期](deployment/FEEDBACK_UPGRADE.md) | 补贴周期、身份通知可靠性和消息配置 |
+| [通知与周期](deployment/NOTIFICATIONS_AND_SUBSIDY.md) | 补贴周期、身份通知可靠性和消息配置 |
 
 ## 运维与开发
 
@@ -31,5 +31,7 @@
 - [告警和故障注入](operations/ALERTS_AND_FAULT_INJECTION.md)：隔离环境验收矩阵。
 - [依赖升级检查](operations/DEPENDENCY_UPGRADE_CHECKLIST.md)：替换依赖前后的能力验证。
 - [运行时与存储](architecture/RUNTIME_AND_STORAGE.md)：组件职责和事务边界。
-- [测试入口](../test/README.md)：自动测试、人工验收、隔离环境流程和历史报告。历史报告只表示当时的验证结果。
-- [中文代码扫描历史](CHINESE_CODE_LINES.md)：历史扫描快照，不能作为当前源码行号索引。
+
+## 文档归档约定
+
+`docs/` 存放持续维护的使用、配置、部署、运维和架构说明；根目录 `test/` 存放本地测试资料与历史报告，已被 Git 忽略，不纳入版本控制。各模块 `src/test/` 中的自动化测试源码继续纳入版本控制。Codex 临时笔记、交接记录和过期代码扫描放在本地 `.agents/notes/`（已被 Git 忽略），不列入正式文档导航。
