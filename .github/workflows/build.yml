@@ -27,4 +27,5 @@ jobs:
         with:
           name: TianjiTown
           path: tianjitown-paper/target/TianjiTown-*.jar
+          retention-days: 7
           if-no-files-found: error
