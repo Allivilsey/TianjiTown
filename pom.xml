@@ -12,6 +12,14 @@
     <name>TianjiTown</name>
     <description>天际服小镇系统</description>
 
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
     <modules>
         <module>tianjitown-core</module>
         <module>tianjitown-storage</module>
