@@ -208,10 +208,17 @@ final class TownMembershipStore {
     }
 
     void leaveTown(UUID playerId) {
+        leaveTown(playerId, null);
+    }
+
+    void leaveTown(UUID playerId, UUID expectedTownId) {
         database.requireWorkerThread();
         database.transaction(connection -> {
             UUID townId = TownPersistence.memberTownId(connection, playerId)
                     .orElseThrow(() -> new ConflictException("你不属于任何小镇"));
+            if (expectedTownId != null && !expectedTownId.equals(townId)) {
+                throw new ConflictException("你所属的小镇已改变，请重新打开小镇界面");
+            }
             try (PreparedStatement member = connection.prepareStatement("""
                     DELETE FROM town_members WHERE town_id = ? AND player_uuid = ? AND role <> 'MAYOR'
                     """);

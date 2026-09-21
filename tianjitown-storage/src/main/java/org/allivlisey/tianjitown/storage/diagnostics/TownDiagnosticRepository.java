@@ -63,6 +63,22 @@ public final class TownDiagnosticRepository {
                     SELECT COUNT(*) FROM territory_expansions
                      WHERE status IN ('PREPARED', 'COMPENSATION_REQUIRED')
                     """));
+            counts.put("pendingApplicationFees", scalar(connection, """
+                    SELECT COUNT(*) FROM town_applications a
+                      LEFT JOIN application_fee_operations f ON f.application_id = a.application_id
+                     WHERE a.application_fee_status = 'REFUND_PENDING'
+                        OR (a.town_id IS NULL AND a.application_fee_status = 'ESCROWED')
+                        OR f.state IN ('COLLECTING', 'COLLECTION_UNKNOWN', 'PLAYER_REFUND_PENDING',
+                            'PLAYER_REFUNDING', 'PLAYER_REFUND_UNKNOWN', 'REFUNDING', 'REFUND_UNKNOWN')
+                    """));
+            counts.put("pendingIncomeTaxes", scalar(connection, """
+                    SELECT COUNT(*) FROM income_tax_collections
+                     WHERE status NOT IN ('RECORDED', 'FAILED', 'REFUNDED')
+                    """));
+            counts.put("pendingTaxSubsidies", scalar(connection, """
+                    SELECT COUNT(*) FROM quickshop_subsidy_reservations
+                     WHERE status = 'RESERVED' AND COALESCE(last_error, '') <> ''
+                    """));
             counts.put("accountLedgerMismatches", scalar(connection, """
                     SELECT COUNT(*) FROM town_accounts a
                      WHERE a.balance_minor <> COALESCE((

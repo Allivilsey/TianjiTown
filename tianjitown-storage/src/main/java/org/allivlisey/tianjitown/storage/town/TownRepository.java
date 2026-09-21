@@ -26,6 +26,7 @@ public final class TownRepository {
     private final TownDatabase database;
     private final TownApplicationStore applicationStore;
     private final TownProvisioningStore provisioningStore;
+    private final TownApplicationFeeStore applicationFees;
     private final TownMembershipStore membershipStore;
 
     public TownRepository(DataSource dataSource, BooleanSupplier forbiddenThread) {
@@ -38,6 +39,7 @@ public final class TownRepository {
         this.joinApplications = new TownJoinApplicationStore(database);
         this.applicationStore = new TownApplicationStore(database);
         this.provisioningStore = new TownProvisioningStore(database);
+        this.applicationFees = new TownApplicationFeeStore(database);
         this.membershipStore = new TownMembershipStore(database);
     }
 
@@ -171,6 +173,53 @@ public final class TownRepository {
         return provisioningStore.finishProvision(applicationId, success, detail);
     }
 
+    public Provisioning provisioningForProjection(UUID applicationId) {
+        return provisioningStore.provisioningForProjection(applicationId);
+    }
+
+    public Optional<UUID> applicationIdForTown(UUID townId) {
+        database.requireWorkerThread();
+        return database.query(connection -> {
+            try (var statement = connection.prepareStatement("SELECT application_id FROM town_applications WHERE town_id = ?")) {
+                statement.setBytes(1, uuid(townId));
+                try (var row = statement.executeQuery()) {
+                    return row.next() ? Optional.of(readUuid(row, "application_id")) : Optional.empty();
+                }
+            }
+        });
+    }
+
+    public ApplicationFeeOperation applicationFeeOperation(UUID id) {
+        return applicationFees.find(id);
+    }
+
+    public List<ApplicationFeeOperation> pendingApplicationFees(int limit) {
+        return applicationFees.pending(limit);
+    }
+
+    public ApplicationFeeOperation claimApplicationFeeCollection(UUID id, long expectedVersion,
+            long amount, UUID actor, String actorName) {
+        return applicationFees.claimCollection(id, expectedVersion, amount, actor, actorName);
+    }
+
+    public ApplicationFeeOperation claimApplicationFeeRefund(UUID id, UUID actor, String actorName) {
+        return applicationFees.claimRefund(id, actor, actorName, Long.MIN_VALUE);
+    }
+
+    public ApplicationFeeOperation claimApplicationFeeRefund(UUID id, UUID actor, String actorName, long expectedVersion) {
+        return applicationFees.claimRefund(id, actor, actorName, expectedVersion);
+    }
+
+    public ApplicationFeeOperation completeApplicationFeeOperation(ApplicationFeeOperation claim,
+            ApplicationFeeOperation.Outcome outcome, String detail, UUID actor, String actorName) {
+        return applicationFees.complete(claim, outcome, detail, actor, actorName);
+    }
+
+    public ApplicationFeeOperation resolveApplicationFee(UUID id, long expectedVersion,
+            ApplicationFeeOperation.Resolution resolution, UUID actor, String actorName, String reason) {
+        return applicationFees.resolve(id, expectedVersion, resolution, actor, actorName, reason);
+    }
+
     public Optional<ApplicationSnapshot> findApplication(UUID applicationId) {
         return applicationStore.findApplication(applicationId);
     }
@@ -181,6 +230,15 @@ public final class TownRepository {
 
     public int recoverInterruptedProvisions(String reason) {
         return provisioningStore.recoverInterruptedProvisions(reason);
+    }
+
+    public int clearApplicationCooldown(UUID applicantId, UUID reviewerId, String reviewerName) {
+        return applicationStore.clearApplicationCooldown(applicantId, reviewerId, reviewerName);
+    }
+
+    public ApplicationSnapshot forceDeleteApplication(String townCode, UUID reviewerId,
+                                                         String reviewerName, String reason) {
+        return applicationStore.forceDeleteApplication(townCode, reviewerId, reviewerName, reason);
     }
 
     public Provisioning failedProvision(UUID applicationId) {
@@ -370,6 +428,10 @@ public final class TownRepository {
 
     public void leaveTown(UUID playerId) {
         membershipStore.leaveTown(playerId);
+    }
+
+    public void leaveTown(UUID playerId, UUID expectedTownId) {
+        membershipStore.leaveTown(playerId, expectedTownId);
     }
 
     public void removeMember(UUID townId, UUID playerId, UUID actorId, String actorName,

@@ -41,10 +41,23 @@ final class EconomyOperationStore {
         if ("DONATION".equals(operationType) && actorId == null) {
             throw new IllegalArgumentException("捐款操作必须带玩家身份");
         }
+        if ("DONATION".equals(operationType) && amountMinor < 0) {
+            throw new IllegalArgumentException("捐款金额必须为正数");
+        }
         return database.transaction(connection -> {
             Optional<EconomyOperation> existing = findOperation(connection, businessKey);
             if (existing.isPresent()) {
                 return existing.get();
+            }
+            if ("DONATION".equals(operationType)) {
+                try (PreparedStatement membership = connection.prepareStatement(
+                        "SELECT 1 FROM town_members WHERE town_id = ? AND player_uuid = ?")) {
+                    membership.setBytes(1, EconomyPersistence.uuid(townId));
+                    membership.setBytes(2, EconomyPersistence.uuid(actorId));
+                    try (ResultSet member = membership.executeQuery()) {
+                        if (!member.next()) throw new ConflictException("所属小镇已变化，请重新打开捐款页面");
+                    }
+                }
             }
             AccountState account = EconomyPersistence.requireAccount(connection, townId);
             if (amountMinor < 0) {
@@ -185,29 +198,99 @@ final class EconomyOperationStore {
         });
     }
 
+    /** Called before accepting new work; never repeats an external money operation. */
+    void recoverInterruptedOperations() {
+        database.requireWorkerThread();
+        database.transaction(connection -> {
+            try (PreparedStatement prepared = connection.prepareStatement("""
+                    UPDATE economy_operations SET status = 'CANCELLED',
+                        last_error = '启动恢复：尚未开始外部付款，已取消'
+                     WHERE status = 'PREPARED'
+                    """);
+                 PreparedStatement uncertain = connection.prepareStatement("""
+                    UPDATE economy_operations SET status = 'COMPENSATION_REQUIRED',
+                        last_error = '启动恢复：外部付款结果待管理员核实'
+                     WHERE status = 'EXTERNAL_APPLIED'
+                    """);
+                 PreparedStatement locks = connection.prepareStatement("""
+                    UPDATE town_accounts SET locked = 1,
+                        lock_reason = 'ECONOMY_COMPENSATION: 存在待核实的资金操作', version = version + 1
+                     WHERE EXISTS (SELECT 1 FROM economy_operations o
+                         WHERE o.town_id = town_accounts.town_id AND o.status = 'COMPENSATION_REQUIRED')
+                       AND (locked = 0 OR lock_reason LIKE 'ECONOMY_COMPENSATION:%')
+                    """);
+                 PreparedStatement ledger = connection.prepareStatement("""
+                    UPDATE town_accounts SET locked = 1,
+                        lock_reason = 'LEDGER_RECONCILIATION: 账户余额与最新账本不一致', version = version + 1
+                     WHERE balance_minor <> COALESCE((SELECT l.balance_after_minor FROM ledger_entries l
+                         WHERE l.town_id = town_accounts.town_id
+                         ORDER BY l.created_at DESC, l.rowid DESC LIMIT 1), 0)
+                    """)) {
+                prepared.executeUpdate();
+                uncertain.executeUpdate();
+                locks.executeUpdate();
+                ledger.executeUpdate();
+            }
+            return null;
+        });
+    }
+
+    /** Administrator certifies a complete external outcome; this method only updates SQLite. */
+    EconomyOperation resolveOperation(EconomyOperation expected, boolean applied,
+                                     UUID administrator, String administratorName, String reason) {
+        database.requireWorkerThread();
+        if (reason == null || reason.isBlank()) throw new IllegalArgumentException("必须填写核实依据");
+        return database.transaction(connection -> {
+            EconomyOperation current = requireOperation(connection, expected.operationId());
+            String target = applied ? "COMPLETED" : "CANCELLED";
+            if (current.status().equals(target)) return current;
+            if (!current.status().equals(expected.status())
+                    || !Objects.equals(current.lastError(), expected.lastError())
+                    || !(current.status().equals("COMPENSATION_REQUIRED")
+                    || current.status().equals("EXTERNAL_APPLIED"))) {
+                throw new ConflictException("资金操作状态已变化，请重新查看后核实");
+            }
+            setOperationStatus(connection, current.operationId(), target, reason);
+            if (applied) {
+                if (EconomyPersistence.findLedgerByBusinessKey(connection, current.businessKey()).isEmpty()) {
+                    EconomyPersistence.postLedger(connection, current.townId(), current.operationType(),
+                            current.amountMinor(), current.actorId(), current.actorName(),
+                            current.businessKey(), current.note(), true);
+                }
+            }
+            try (PreparedStatement audit = connection.prepareStatement("""
+                    INSERT INTO audit_logs (actor_uuid, actor_name, action, target_type, target_id, reason, detail)
+                    VALUES (?, ?, 'ECONOMY_OPERATION_RESOLVE', 'ECONOMY_OPERATION', ?, ?, ?)
+                    """);
+                 PreparedStatement unlock = connection.prepareStatement("""
+                    UPDATE town_accounts SET lock_reason = 'SETTLEMENT_RECONCILIATION: 核实完成，等待余额复核',
+                        version = version + 1
+                     WHERE town_id = ? AND lock_reason LIKE 'ECONOMY_COMPENSATION:%'
+                       AND NOT EXISTS (SELECT 1 FROM economy_operations o
+                         WHERE o.town_id = town_accounts.town_id AND o.status = 'COMPENSATION_REQUIRED')
+                    """)) {
+                audit.setBytes(1, administrator == null ? null : EconomyPersistence.uuid(administrator));
+                audit.setString(2, administratorName);
+                audit.setString(3, current.operationId().toString());
+                audit.setString(4, reason);
+                audit.setString(5, current.status() + " -> " + target + "; amount=" + current.amountMinor());
+                audit.executeUpdate();
+                unlock.setBytes(1, EconomyPersistence.uuid(current.townId()));
+                unlock.executeUpdate();
+            }
+            return requireOperation(connection, current.operationId());
+        });
+    }
+
     Reconciliation reconcileSettlement(long externalBalanceMinor) {
         database.requireWorkerThread();
         if (externalBalanceMinor < 0) {
             throw new IllegalArgumentException("结算账户余额不能小于 0");
         }
         return database.transaction(connection -> {
-            long internal;
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT COALESCE(SUM(balance_minor), 0) AS total FROM town_accounts");
-                 ResultSet row = statement.executeQuery()) {
-                row.next();
-                internal = row.getLong("total");
-            }
-            long pending;
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT COALESCE(SUM(amount_minor), 0) AS total
-                      FROM economy_operations WHERE status = 'EXTERNAL_APPLIED'
-                    """); ResultSet row = statement.executeQuery()) {
-                row.next();
-                pending = row.getLong("total");
-            }
-            long required = Math.max(0, Math.addExact(internal, pending));
-            boolean healthy = externalBalanceMinor >= required;
+            Reconciliation snapshot = settlementSnapshot(connection, externalBalanceMinor);
+            long required = snapshot.requiredMinor();
+            boolean healthy = snapshot.healthy();
             String reason = healthy ? null : RECONCILIATION_LOCK
                     + " 外部=" + externalBalanceMinor + ", 应有=" + required;
             try (PreparedStatement statement = connection.prepareStatement(healthy ? """
@@ -225,7 +308,7 @@ final class EconomyOperationStore {
                 }
                 statement.executeUpdate();
             }
-            return new Reconciliation(externalBalanceMinor, internal, pending, required, healthy);
+            return snapshot;
         });
     }
 
@@ -237,12 +320,34 @@ final class EconomyOperationStore {
         return database.query(connection -> settlementSnapshot(connection, externalBalanceMinor));
     }
 
+    void lockSettlementUnavailable() {
+        database.requireWorkerThread();
+        database.transaction(connection -> {
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE town_accounts SET locked = 1,
+                        lock_reason = 'SETTLEMENT_RECONCILIATION: 无法读取清算余额，等待自动复核',
+                        version = version + 1
+                     WHERE locked = 0 OR lock_reason LIKE 'SETTLEMENT_RECONCILIATION:%'
+                    """)) {
+                statement.executeUpdate();
+            }
+            return null;
+        });
+    }
+
     private static Reconciliation settlementSnapshot(Connection connection,
                                                       long externalBalanceMinor)
             throws SQLException {
         long internal;
-        try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT COALESCE(SUM(balance_minor), 0) AS total FROM town_accounts");
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT COALESCE((SELECT SUM(balance_minor) FROM town_accounts), 0)
+                     + COALESCE((SELECT SUM(a.application_fee_minor) FROM town_applications a
+                         WHERE a.town_id IS NULL
+                           AND a.application_fee_status IN ('ESCROWED', 'REFUND_PENDING')
+                           AND NOT EXISTS (SELECT 1 FROM application_fee_operations f
+                               WHERE f.application_id = a.application_id
+                                 AND f.state IN ('REFUNDING', 'REFUND_UNKNOWN'))), 0) AS total
+                """);
              ResultSet row = statement.executeQuery()) {
             row.next();
             internal = row.getLong("total");
@@ -251,6 +356,7 @@ final class EconomyOperationStore {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT COALESCE(SUM(amount_minor), 0) AS total
                   FROM economy_operations WHERE status = 'EXTERNAL_APPLIED'
+                     OR (status = 'COMPENSATION_REQUIRED' AND amount_minor < 0)
                 """); ResultSet row = statement.executeQuery()) {
             row.next();
             pending = row.getLong("total");

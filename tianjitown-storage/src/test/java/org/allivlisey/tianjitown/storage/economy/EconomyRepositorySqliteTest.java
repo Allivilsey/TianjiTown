@@ -609,7 +609,7 @@ class EconomyRepositorySqliteTest {
             }
 
             EconomyRepository.EconomyOperation recovered = repository.prepareOperation(townId,
-                    "DONATION", 100, UUID.randomUUID(), "Recovery",
+                    "ADMIN_ADJUSTMENT", 100, UUID.randomUUID(), "Recovery",
                     "busy-recovery", "写锁恢复测试");
             assertEquals("PREPARED", recovered.status());
         }

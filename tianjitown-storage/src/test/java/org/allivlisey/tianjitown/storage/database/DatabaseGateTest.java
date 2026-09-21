@@ -30,7 +30,7 @@ class DatabaseGateTest {
         try (DatabaseGate gate = new DatabaseGate(config)) {
             DatabaseGate.HealthResult health = gate.verifyAndMigrate();
             assertTrue(health.healthy(), health.detail());
-            assertTrue(health.detail().contains("schema=1.0"), health.detail());
+            assertTrue(health.detail().contains("schema=1.1"), health.detail());
             assertTrue(gate.ping());
             try (Connection connection = gate.dataSource().getConnection();
                  Statement statement = connection.createStatement()) {
@@ -129,7 +129,7 @@ class DatabaseGateTest {
     void rejectsFailedMigrationHistory() throws Exception {
         String url = "jdbc:sqlite:" + temporaryDirectory.resolve("failed-migration.db");
         initializeDatabase(url);
-        insertMigrationHistory(url, "1.1", "V1_1__interrupted_test.sql", false);
+        insertMigrationHistory(url, "1.2", "V1_2__interrupted_test.sql", false);
 
         try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
                 Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
@@ -137,13 +137,36 @@ class DatabaseGateTest {
 
             assertFalse(health.healthy());
             assertTrue(health.detail().contains("失败的 Flyway 迁移"), health.detail());
-            assertTrue(health.detail().contains("1.1"), health.detail());
+            assertTrue(health.detail().contains("1.2"), health.detail());
         }
     }
 
     private static void initializeDatabase(String url) {
         Flyway.configure().dataSource(url, null, null).locations("classpath:db/migration")
                 .load().migrate();
+    }
+
+    @Test
+    void rejectsExistingForeignKeyCorruptionBeforeRecoveryCanRun() throws Exception {
+        String url = "jdbc:sqlite:" + temporaryDirectory.resolve("broken-foreign-key.db");
+        initializeDatabase(url);
+        try (Connection connection = DriverManager.getConnection(url);
+             Statement statement = connection.createStatement()) {
+            statement.execute("PRAGMA foreign_keys = OFF");
+            statement.executeUpdate("INSERT INTO town_accounts (town_id) VALUES (zeroblob(16))");
+        }
+        try (DatabaseGate gate = new DatabaseGate(new DatabaseConfig(url,
+                Duration.ofSeconds(5), Duration.ofSeconds(5)))) {
+            DatabaseGate.HealthResult health = gate.verifyAndMigrate();
+            assertFalse(health.healthy());
+            assertTrue(health.detail().contains("foreign_key_check"), health.detail());
+            try (Connection connection = gate.dataSource().getConnection();
+                 Statement statement = connection.createStatement();
+                 ResultSet rows = statement.executeQuery("SELECT COUNT(*) FROM town_accounts")) {
+                assertTrue(rows.next());
+                assertEquals(1, rows.getInt(1), "门禁只诊断损坏，不静默删除记录");
+            }
+        }
     }
 
     private static void insertMigrationHistory(String url, String version, String script,

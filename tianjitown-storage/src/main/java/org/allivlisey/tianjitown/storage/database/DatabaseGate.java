@@ -13,7 +13,7 @@ import java.sql.Statement;
 
 public final class DatabaseGate implements AutoCloseable {
     private static final MigrationVersion SUPPORTED_SCHEMA_VERSION =
-            MigrationVersion.fromVersion("1.0");
+            MigrationVersion.fromVersion("1.1");
     private final HikariDataSource dataSource;
     private final Flyway flyway;
 
@@ -66,6 +66,7 @@ public final class DatabaseGate implements AutoCloseable {
             return HealthResult.failure(exception.getClass().getSimpleName() + ": " + exception.getMessage());
         }
         try {
+            verifyIntegrity();
             verifyMigrationHistory();
             flyway.migrate();
             flyway.validate();
@@ -95,6 +96,22 @@ public final class DatabaseGate implements AutoCloseable {
                 throw new IllegalStateException("检测到高于当前插件支持范围的 Flyway 迁移: version="
                         + version + "，支持=" + SUPPORTED_SCHEMA_VERSION);
             }
+        }
+    }
+
+    private void verifyIntegrity() {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            try (ResultSet rows = statement.executeQuery("PRAGMA quick_check")) {
+                if (!rows.next() || !"ok".equalsIgnoreCase(rows.getString(1))) {
+                    throw new IllegalStateException("SQLite quick_check 完整性检查失败");
+                }
+            }
+            try (ResultSet rows = statement.executeQuery("PRAGMA foreign_key_check")) {
+                if (rows.next()) throw new IllegalStateException("SQLite foreign_key_check 存在外键损坏");
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("SQLite 完整性检查失败", exception);
         }
     }
 

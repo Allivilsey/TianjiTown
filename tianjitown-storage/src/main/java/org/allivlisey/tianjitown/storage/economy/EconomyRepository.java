@@ -20,6 +20,7 @@ public final class EconomyRepository {
     private final EconomyOperationStore economyOperationStore;
     private final EconomyTaxStore economyTaxStore;
     private final EconomyLedgerStore economyLedgerStore;
+    private final IncomeTaxCollectionStore incomeTaxCollections;
 
     public EconomyRepository(DataSource dataSource, BooleanSupplier forbiddenThread) {
         this.database = new EconomyDatabase(dataSource, forbiddenThread);
@@ -28,6 +29,7 @@ public final class EconomyRepository {
         this.economyOperationStore = new EconomyOperationStore(database);
         this.economyTaxStore = new EconomyTaxStore(database);
         this.economyLedgerStore = new EconomyLedgerStore(database);
+        this.incomeTaxCollections = new IncomeTaxCollectionStore(database);
     }
 
     public void initializeAccounts() {
@@ -46,6 +48,47 @@ public final class EconomyRepository {
 
     public List<MemberTaxPolicy> loadMemberTaxPolicies() {
         return economyTaxStore.loadMemberTaxPolicies();
+    }
+
+    public IncomeTaxCollection prepareIncomeTaxCollection(ExternalIncomeTax tax) {
+        return incomeTaxCollections.prepareIncomeTaxCollection(tax);
+    }
+
+    public IncomeTaxCollection claimIncomeTaxCollection(IncomeTaxCollection expected) {
+        return incomeTaxCollections.claimIncomeTaxCollection(expected);
+    }
+
+    public IncomeTaxCollection finishIncomeTaxCollection(IncomeTaxCollection expected, String status, String detail) {
+        return incomeTaxCollections.finishIncomeTaxCollection(expected, status, detail);
+    }
+
+    public IncomeTaxCollection markIncomeTaxRecorded(UUID id) {
+        return incomeTaxCollections.markIncomeTaxRecorded(id);
+    }
+
+    public List<IncomeTaxCollection> pendingIncomeTaxCollections() {
+        return incomeTaxCollections.pendingIncomeTaxCollections();
+    }
+
+    public void recoverInterruptedIncomeTaxCollections() {
+        incomeTaxCollections.recoverInterruptedIncomeTaxCollections();
+    }
+
+    public IncomeTaxCollection resolveIncomeTaxCollection(IncomeTaxCollection expected,
+            boolean paid, UUID actor, String actorName, String reason) {
+        return incomeTaxCollections.resolveIncomeTaxCollection(expected, paid, actor, actorName, reason);
+    }
+
+    public IncomeTaxCollection claimIncomeTaxRefund(IncomeTaxCollection expected) {
+        return incomeTaxCollections.claimIncomeTaxRefund(expected);
+    }
+
+    public IncomeTaxCollection claimIncomeTaxRefund(IncomeTaxCollection expected, UUID actor, String actorName) {
+        return incomeTaxCollections.claimIncomeTaxRefund(expected, actor, actorName);
+    }
+
+    public IncomeTaxCollection finishIncomeTaxRefund(IncomeTaxCollection expected, String status, String detail) {
+        return incomeTaxCollections.finishIncomeTaxRefund(expected, status, detail);
     }
 
     public Optional<TownFinance> findFinanceByPlayer(UUID playerId) {
@@ -169,12 +212,43 @@ public final class EconomyRepository {
         return economyOperationStore.pendingOperations();
     }
 
+    public void recoverInterruptedOperations() {
+        economyOperationStore.recoverInterruptedOperations();
+    }
+
+    public EconomyOperation resolveOperation(EconomyOperation expected, boolean applied,
+                                             UUID actorId, String actorName, String reason) {
+        return economyOperationStore.resolveOperation(expected, applied, actorId, actorName, reason);
+    }
+
+    public LedgerMutation recordExternalIncomeTaxWithoutSubsidy(ExternalIncomeTax tax, String detail) {
+        return economyTaxStore.recordExternalIncomeTax(tax, false, detail);
+    }
+
+    public List<TaxSubsidyRecovery> pendingTaxSubsidies(int limit) {
+        return economyTaxStore.pendingTaxSubsidies(limit);
+    }
+
+    public LedgerMutation resolveTaxSubsidy(String businessKey, boolean paid,
+                                            UUID actorId, String actorName, String reason) {
+        return economyTaxStore.resolveTaxSubsidy(businessKey, paid, actorId, actorName, reason);
+    }
+
+    public LedgerMutation resolveTaxSubsidy(TaxSubsidyRecovery expected, boolean paid,
+                                            UUID actorId, String actorName, String reason) {
+        return economyTaxStore.resolveTaxSubsidy(expected, paid, actorId, actorName, reason);
+    }
+
     public Reconciliation reconcileSettlement(long externalBalanceMinor) {
         return economyOperationStore.reconcileSettlement(externalBalanceMinor);
     }
 
     public Reconciliation inspectSettlement(long externalBalanceMinor) {
         return economyOperationStore.inspectSettlement(externalBalanceMinor);
+    }
+
+    public void lockSettlementUnavailable() {
+        economyOperationStore.lockSettlementUnavailable();
     }
 
     public List<LedgerEntry> ledger(UUID townId, int page, int pageSize) {
@@ -286,6 +360,11 @@ public final class EconomyRepository {
                                      String status) {
     }
 
+    public record TaxSubsidyRecovery(UUID townId, String businessKey, long taxMinor,
+                                     long subsidyMinor, String status, String lastError,
+                                     boolean taxRecorded) {
+    }
+
     public record SubsidyQuota(long weeklyRemainingMinor, long twelveHourRemainingMinor,
                                Instant weeklyRefreshAt, Instant twelveHourRefreshAt) {
     }
@@ -293,6 +372,10 @@ public final class EconomyRepository {
     public record ExternalIncomeTax(UUID townId, String businessKey, String source,
                                     UUID receiverId, String receiverName, long grossMinor,
                                     int taxRateBps, long taxMinor) {
+    }
+
+    public record IncomeTaxCollection(UUID operationId, ExternalIncomeTax tax,
+                                      String status, String lastError, long version) {
     }
 
     public record LedgerMutation(UUID entryId, UUID townId, long amountMinor,

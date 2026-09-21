@@ -76,6 +76,10 @@ final class TownProvisioningStore {
             }
             ApplicationWorkflow.requireAllowed(application.status(),
                     ApplicationStatus.APPROVED_PROVISIONING, ApplicationActor.ADMINISTRATOR);
+            var feeOperation = TownApplicationFeeStore.read(connection, application);
+            if (feeOperation.version() >= 0 && feeOperation.state() != ApplicationFeeOperation.State.ESCROWED) {
+                throw new ConflictException("申请费尚未确认完整到账，请先处理资金记录：" + feeOperation.state());
+            }
             if (TownPersistence.memberTownId(connection, application.applicantId()).isPresent()) {
                 throw new ConflictException("申请人已经加入其他小镇");
             }
@@ -118,18 +122,38 @@ final class TownProvisioningStore {
         });
     }
 
+    Provisioning provisioningForProjection(UUID applicationId) {
+        database.requireWorkerThread();
+        return database.query(connection -> {
+            var application = TownPersistence.requireApplication(connection, applicationId);
+            if (application.status() != ApplicationStatus.APPROVED_PROVISIONING || application.townId() == null)
+                throw new ConflictException("申请已停止创建，拒绝执行领地投影");
+            return requireProvisioningTownStatus(connection, application, TownStatus.PROVISIONING);
+        });
+    }
+
     ApplicationSnapshot finishProvision(UUID applicationId, boolean success, String detail) {
         database.requireWorkerThread();
         return database.transaction(connection -> {
             ApplicationSnapshot application = TownPersistence.requireApplication(connection, applicationId);
+            if (application.townId() == null) {
+                throw new ConflictException("临时小镇已被清理，拒绝迟到的建镇回调");
+            }
+            TownSnapshot currentTown = TownPersistence.requireTown(connection, application.townId());
+            if (currentTown.status() == TownStatus.ARCHIVED) {
+                throw new ConflictException("小镇已归档，拒绝迟到的建镇回调");
+            }
             if (success && application.status() == ApplicationStatus.ACTIVE) {
+                requireProvisioningTownStatus(connection, application, TownStatus.ACTIVE);
                 return application;
             }
             if (!success && application.status() == ApplicationStatus.PROVISION_FAILED) {
+                requireProvisioningTownStatus(connection, application, TownStatus.PROVISIONING);
                 return application;
             }
             ApplicationStatus target = success ? ApplicationStatus.ACTIVE
                     : ApplicationStatus.PROVISION_FAILED;
+            requireProvisioningTownStatus(connection, application, TownStatus.PROVISIONING);
             ApplicationWorkflow.requireAllowed(application.status(), target, ApplicationActor.SYSTEM);
             TownPersistence.updateStatus(connection, applicationId, application.version(), target, null,
                     success ? null : safeDetail(detail));
@@ -143,14 +167,14 @@ final class TownProvisioningStore {
                 }
             }
             try (PreparedStatement town = connection.prepareStatement(
-                    "UPDATE towns SET status = ?, version = version + 1 WHERE town_id = ?");
+                    "UPDATE towns SET status = ?, version = version + 1 WHERE town_id = ? AND status = 'PROVISIONING'");
                  PreparedStatement unit = connection.prepareStatement("""
                          UPDATE territory_units SET projection_status = ?, projection_error = ?
                           WHERE town_id = ?
                          """)) {
                 town.setString(1, success ? TownStatus.ACTIVE.name() : TownStatus.PROVISIONING.name());
                 town.setBytes(2, uuid(application.townId()));
-                town.executeUpdate();
+                TownPersistence.requireUpdated(town, "小镇已停止创建，拒绝迟到的建镇回调");
                 unit.setString(1, success ? "ACTIVE" : "FAILED");
                 unit.setString(2, success ? null : safeDetail(detail));
                 unit.setBytes(3, uuid(application.townId()));

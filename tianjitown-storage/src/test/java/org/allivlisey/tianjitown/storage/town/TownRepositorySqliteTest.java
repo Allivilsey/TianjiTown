@@ -45,6 +45,7 @@ class TownRepositorySqliteTest {
             applicationId = draft.id(); token = draft.initialMembers().getFirst().invitationToken();
             repository.selectSite(applicationId, applicant, territory, Instant.now().plusSeconds(3600), 0);
             repository.respondInitialMember(applicationId, one, token, false);
+            assertTrue(repository.listPendingInitialMemberApplications(two).isEmpty());
             assertThrows(TownRepository.ConflictException.class,
                     () -> repository.respondInitialMember(applicationId, two, token, true));
             assertThrows(TownRepository.ConflictException.class,
@@ -55,9 +56,12 @@ class TownRepositorySqliteTest {
             var repository = new TownRepository(gate.dataSource(), () -> false);
             var rejected = repository.findApplication(applicationId).orElseThrow();
             assertTrue(rejected.needsInitialMemberReselection());
+            assertTrue(repository.listPendingInitialMemberApplications(two).isEmpty());
             var selected = repository.updateApplicationText(applicationId, applicant, rejected.text(),
                     List.of(one, two), rejected.version());
             assertFalse(selected.needsInitialMemberReselection());
+            assertEquals(List.of(applicationId), repository.listPendingInitialMemberApplications(two)
+                    .stream().map(ApplicationSnapshot::id).toList());
             assertEquals(territory, selected.territory());
             assertTrue(selected.initialMembers().stream().allMatch(member -> member.status() == InitialMemberConfirmation.Status.PENDING));
             UUID newToken = selected.initialMembers().getFirst().invitationToken();
@@ -70,6 +74,8 @@ class TownRepositorySqliteTest {
                 first.get(); second.get();
             }
             assertTrue(repository.findApplication(applicationId).orElseThrow().initialMembersConfirmed());
+            assertTrue(repository.listPendingInitialMemberApplications(one).isEmpty());
+            assertTrue(repository.listPendingInitialMemberApplications(two).isEmpty());
             assertThrows(TownRepository.ConflictException.class,
                     () -> repository.respondInitialMember(applicationId, one, newToken, false));
         }

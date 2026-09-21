@@ -17,6 +17,7 @@ import org.allivlisey.tianjitown.core.application.ApplicationStatus;
 import org.allivlisey.tianjitown.core.application.ApplicationText;
 import org.allivlisey.tianjitown.core.application.ApplicationWorkflow;
 import org.allivlisey.tianjitown.core.land.InitialTerritory;
+import org.allivlisey.tianjitown.core.town.TownStatus;
 import org.allivlisey.tianjitown.storage.town.TownRepository.ConflictException;
 import org.allivlisey.tianjitown.storage.town.TownRepository.MemberConflict;
 import org.allivlisey.tianjitown.storage.town.TownRepository.MemberConflictException;
@@ -46,10 +47,21 @@ final class TownApplicationStore {
             if (TownPersistence.pendingJoinApplicationCount(connection, applicantId) > 0) {
                 throw new ConflictException("你有待处理的入镇申请，请先撤回后再申请建立小镇");
             }
+            // Administrative recovery records its action atomically with cancellation.
+            // Use that durable record so cancellations made before this exemption also qualify.
             try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT 1 FROM town_applications
-                     WHERE applicant_uuid = ? AND status IN ('REJECTED', 'CANCELLED')
-                       AND updated_at > ? LIMIT 1
+                    SELECT 1 FROM town_applications a
+                     WHERE a.applicant_uuid = ? AND a.status IN ('REJECTED', 'CANCELLED')
+                       AND a.updated_at > ?
+                       AND NOT EXISTS (
+                           SELECT 1 FROM audit_logs audit
+                            WHERE (audit.action = 'APPLICATION_CLEAR_COOLDOWN'
+                                   OR (a.status = 'CANCELLED' AND audit.action IN (
+                                       'APPLICATION_CANCEL_ARCHIVED', 'APPLICATION_FORCE_DELETE',
+                                       'PROVISION_FORCE_CLEANUP', 'PROVISION_CANCEL_AND_REFUND')))
+                              AND audit.target_type = 'APPLICATION'
+                              AND lower(replace(audit.target_id, '-', '')) = lower(hex(a.application_id))
+                       ) LIMIT 1
                     """)) {
                 statement.setBytes(1, uuid(applicantId));
                 statement.setTimestamp(2, timestamp(Instant.now().minus(cooldown)));
@@ -240,6 +252,90 @@ final class TownApplicationStore {
         });
     }
 
+    /** Force cancellation retains the application, linked town and all financial history. */
+    ApplicationSnapshot forceDeleteApplication(String target, UUID reviewerId,
+                                               String reviewerName, String reason) {
+        database.requireWorkerThread();
+        TownPersistence.requireReason(reason);
+        return database.transaction(connection -> {
+            UUID applicationId;
+            try {
+                applicationId = UUID.fromString(target.strip());
+            } catch (IllegalArgumentException ignored) {
+                List<UUID> matches = new ArrayList<>();
+                try (PreparedStatement statement = connection.prepareStatement("""
+                        SELECT application_id FROM town_applications
+                         WHERE lower(residence_name) = ? ORDER BY updated_at DESC, application_id
+                        """)) {
+                    statement.setString(1, target.strip().toLowerCase(java.util.Locale.ROOT));
+                    try (ResultSet result = statement.executeQuery()) {
+                        while (result.next()) matches.add(readUuid(result, "application_id"));
+                    }
+                }
+                if (matches.isEmpty()) throw new ConflictException("找不到该代码对应的建镇申请；未执行删除");
+                if (matches.size() > 1) throw new ConflictException(
+                        "该代码对应多份申请，请使用申请 UUID 指定目标：" + matches);
+                applicationId = matches.getFirst();
+            }
+            ApplicationSnapshot current = TownPersistence.requireApplication(connection, applicationId);
+            TownStatus linkedTownStatus = current.townId() == null ? null
+                    : TownPersistence.requireTown(connection, current.townId()).status();
+            if (linkedTownStatus == TownStatus.PROVISIONING
+                    || (linkedTownStatus == null
+                    && (current.status() == ApplicationStatus.APPROVED_PROVISIONING
+                    || current.status() == ApplicationStatus.PROVISION_FAILED))) {
+                throw new ConflictException("申请仍处于建镇创建或失败恢复流程，请先恢复失败建镇，再取消申请");
+            }
+            TownPersistence.updateStatus(connection, applicationId, current.version(),
+                    ApplicationStatus.CANCELLED, reason, null);
+            TownPersistence.releaseReservation(connection, applicationId);
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM application_form_drafts WHERE application_id = ?")) {
+                statement.setBytes(1, uuid(applicationId));
+                statement.executeUpdate();
+            }
+            TownPersistence.insertReview(connection, applicationId, reviewerId, "CANCEL", reason);
+            TownPersistence.audit(connection, null, reviewerId, reviewerName,
+                    "APPLICATION_FORCE_DELETE", "APPLICATION", applicationId.toString(), reason,
+                    "原状态=" + current.status() + "；仅取消申请，不执行退款；关联小镇=" + current.townId()
+                            + "；申请费=" + current.applicationFeeMinor()
+                            + "；费用状态=" + current.applicationFeeStatus());
+            return TownPersistence.requireApplication(connection, applicationId);
+        });
+    }
+
+    /** Exempt only existing terminal applications; later applications retain normal cooldowns. */
+    int clearApplicationCooldown(UUID applicantId, UUID reviewerId, String reviewerName) {
+        database.requireWorkerThread();
+        Objects.requireNonNull(applicantId, "applicantId");
+        return database.transaction(connection -> {
+            List<UUID> applications = new ArrayList<>();
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT a.application_id FROM town_applications a
+                     WHERE a.applicant_uuid = ? AND a.status IN ('CANCELLED', 'REJECTED')
+                       AND NOT EXISTS (
+                           SELECT 1 FROM audit_logs audit
+                            WHERE audit.action = 'APPLICATION_CLEAR_COOLDOWN'
+                              AND audit.target_type = 'APPLICATION'
+                              AND lower(replace(audit.target_id, '-', '')) = lower(hex(a.application_id)))
+                    """)) {
+                statement.setBytes(1, uuid(applicantId));
+                try (ResultSet result = statement.executeQuery()) {
+                    while (result.next()) applications.add(readUuid(result, "application_id"));
+                }
+            }
+            for (UUID applicationId : applications) {
+                TownPersistence.audit(connection, null, reviewerId, reviewerName,
+                        "APPLICATION_CLEAR_COOLDOWN", "APPLICATION", applicationId.toString(),
+                        "管理员清除建镇申请冷却", "申请人=" + applicantId);
+            }
+            TownPersistence.audit(connection, null, reviewerId, reviewerName,
+                    "APPLICATION_CLEAR_COOLDOWN", "PLAYER", applicantId.toString(),
+                    "管理员清除建镇申请冷却", "本次豁免记录数=" + applications.size());
+            return applications.size();
+        });
+    }
+
     ApplicationSnapshot requestChanges(UUID applicationId, UUID reviewerId,
                                               String reviewerName, String reason) {
         TownPersistence.requireReason(reason);
@@ -272,6 +368,11 @@ final class TownApplicationStore {
                      WHERE m.player_uuid = ?
                        AND m.confirmation_status = 'PENDING'
                        AND a.status IN ('DRAFT', 'SITE_SELECTED', 'NEED_CHANGES')
+                       AND NOT EXISTS (
+                           SELECT 1 FROM application_initial_members rejected
+                            WHERE rejected.application_id = a.application_id
+                              AND rejected.confirmation_status = 'REJECTED'
+                       )
                      ORDER BY a.updated_at DESC, a.application_id
                     """)) {
                 statement.setBytes(1, uuid(playerId));
@@ -389,7 +490,6 @@ final class TownApplicationStore {
             List<ApplicationSnapshot> applications = new ArrayList<>();
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT application_id FROM town_applications
-                     WHERE status IN ('SUBMITTED', 'UNDER_REVIEW', 'PROVISION_FAILED')
                      ORDER BY updated_at DESC, application_id LIMIT ?
                     """)) {
                 statement.setInt(1, safeLimit);
