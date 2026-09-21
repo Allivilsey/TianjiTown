@@ -422,6 +422,15 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
 
     @Override
     public Result removeArea(String residenceName, String areaName) {
+        return removeArea(residenceName, areaName, null);
+    }
+
+    @Override
+    public Result removeArea(String residenceName, Area expectedArea) {
+        return removeArea(residenceName, expectedArea.name(), expectedArea.territory());
+    }
+
+    private Result removeArea(String residenceName, String areaName, InitialTerritory expectedTerritory) {
         context.requireMainThread();
         String name = registerManagedName(residenceName);
         try {
@@ -435,6 +444,17 @@ public final class ResidenceLandProtectionService implements LandProtectionServi
             }
             if (residence.getArea(areaName) == residence.getMainArea()) {
                 return Result.failureCode(ResultCode.MAIN_AREA_REMOVAL_REJECTED);
+            }
+            if (expectedTerritory != null) {
+                Bounds bounds = geometry.bounds(expectedTerritory);
+                if (bounds == null) {
+                    return Result.failureCode(ResultCode.WORLD_UNLOADED,
+                            Map.of("world", safeText(expectedTerritory.center().worldName())));
+                }
+                if (!matchesBounds(residence.getArea(areaName), bounds)) {
+                    return Result.failureCode(ResultCode.AREA_BOUNDS_MISMATCH,
+                            Map.of("area", safeText(areaName)));
+                }
             }
             context.removeArea(residence, areaName);
             manager.calculateChunks(residence);

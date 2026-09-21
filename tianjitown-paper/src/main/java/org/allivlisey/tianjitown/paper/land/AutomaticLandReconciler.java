@@ -21,8 +21,14 @@ public final class AutomaticLandReconciler {
             return new Outcome(inspection, false,
                     LandProtectionService.Result.fromHealthyInspection(inspection));
         }
-        return new Outcome(inspection, true,
-                protection.reconcile(residenceName, areas, members, true));
+        LandProtectionService.Result repaired = protection.reconcile(residenceName, areas, members, true);
+        if (repaired.success()) {
+            LandProtectionService.Inspection verified = protection.inspect(residenceName, areas, members);
+            if (verified.state() != LandProtectionService.ProjectionState.HEALTHY) {
+                repaired = LandProtectionService.Result.failureCode(verified.code(), verified.parameters());
+            }
+        }
+        return new Outcome(inspection, true, repaired);
     }
 
     public record Outcome(LandProtectionService.Inspection inspection, boolean repairAttempted,

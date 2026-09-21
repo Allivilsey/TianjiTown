@@ -42,7 +42,9 @@ final class ResidenceGeometry {
     }
 
     static boolean matchesBounds(CuboidArea area, Bounds bounds) {
-        return area.getLowVector().equals(bounds.area().getLowVector())
+        return area.getWorld() != null && bounds.area().getWorld() != null
+                && area.getWorld().getUID().equals(bounds.area().getWorld().getUID())
+                && area.getLowVector().equals(bounds.area().getLowVector())
                 && area.getHighVector().equals(bounds.area().getHighVector());
     }
 

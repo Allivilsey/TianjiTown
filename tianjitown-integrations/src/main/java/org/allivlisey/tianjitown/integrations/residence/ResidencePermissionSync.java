@@ -72,9 +72,10 @@ final class ResidencePermissionSync {
                 }
             }
         }
+        Map<String, FlagPermissions.FlagState> requiredPaddFlags = paddFlags();
         for (UUID member : members) {
             Map<String, Boolean> playerFlags = residence.getPermissions().getPlayerFlags(member);
-            if (!applyPermissions && !residence.isTrusted(member)) {
+            if (!applyPermissions && !matchesPaddFlags(playerFlags, requiredPaddFlags)) {
                 return Result.failureCode(ResultCode.MEMBER_PADD_PERMISSION_MISMATCH,
                         Map.of("member", safeText(member)));
             }
@@ -86,7 +87,7 @@ final class ResidencePermissionSync {
                 return Result.failureCode(ResultCode.MEMBER_VEHICLE_DESTROY_PERMISSION_MISMATCH,
                         Map.of("member", safeText(member)));
             }
-            if (applyPermissions && !applyPaddSilently(residence, member)) {
+            if (applyPermissions && !applyPaddSilently(residence, member, requiredPaddFlags)) {
                 return Result.failureCode(ResultCode.MEMBER_PADD_PERMISSION_WRITE_FAILED,
                         Map.of("member", safeText(member)));
             }
@@ -105,8 +106,27 @@ final class ResidencePermissionSync {
                 Map.of("residence", safeText(name)));
     }
 
-    private boolean applyPaddSilently(ClaimedResidence residence, UUID member) {
-        Map<String, FlagPermissions.FlagState> flags = paddFlags();
+    private static boolean matchesPaddFlags(Map<String, Boolean> playerFlags,
+                                            Map<String, FlagPermissions.FlagState> required) {
+        if (required.isEmpty()) return false;
+        // isTrusted(UUID) also requires a cached ResidencePlayer, even when the stored flags are correct.
+        for (var flag : required.entrySet()) {
+            // These explicit grants are applied after padd and checked separately above.
+            if (flag.getKey().equals(IGNITE_FLAG) || flag.getKey().equals(VEHICLE_DESTROY_FLAG)) continue;
+            Boolean actual = playerFlags.get(flag.getKey());
+            boolean matches = switch (flag.getValue()) {
+                case TRUE -> Boolean.TRUE.equals(actual);
+                case FALSE -> Boolean.FALSE.equals(actual);
+                case NEITHER -> actual == null;
+                case INVALID -> false;
+            };
+            if (!matches) return false;
+        }
+        return true;
+    }
+
+    private boolean applyPaddSilently(ClaimedResidence residence, UUID member,
+                                      Map<String, FlagPermissions.FlagState> flags) {
         if (flags.isEmpty()) return false;
         for (var flag : flags.entrySet()) {
             if (!setGroupedFlagSilently(residence.getPermissions(), member, flag.getKey(), flag.getValue())) {

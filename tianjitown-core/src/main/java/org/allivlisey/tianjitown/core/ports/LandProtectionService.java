@@ -61,16 +61,17 @@ public interface LandProtectionService {
         return Result.failureCode(ResultCode.UNSUPPORTED_ADD_AREA);
     }
 
-    /**
-     * Returns whether the named Residence area already exists.  Batch
-     * projection uses this to avoid deleting an area that pre-dated the
-     * current database operation when a later area fails.
-     */
+    /** Returns whether the named Residence area already exists. */
     default boolean hasArea(String residenceName, String areaName) {
         return false;
     }
 
     default Result removeArea(String residenceName, String areaName) {
+        return Result.failureCode(ResultCode.UNSUPPORTED_REMOVE_AREA);
+    }
+
+    /** Removes only a system-owned area whose world and bounds match the persisted operation. */
+    default Result removeArea(String residenceName, Area expectedArea) {
         return Result.failureCode(ResultCode.UNSUPPORTED_REMOVE_AREA);
     }
 

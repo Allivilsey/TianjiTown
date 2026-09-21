@@ -25,19 +25,29 @@ class ResidencePermissionSyncTest {
     private final Map<String, Boolean> flags = new HashMap<>();
     private ResidencePermissionSync sync;
     private org.mockito.MockedStatic<com.bekvon.bukkit.residence.containers.ResidencePlayer> players;
+    private Map<String, Object> groups;
+    private Object previousGroup;
 
     @org.junit.jupiter.api.AfterEach
-    void tearDown() { players.close(); }
+    void tearDown() {
+        if (previousGroup == null) groups.remove(padd.groupedFlag);
+        else groups.put(padd.groupedFlag, previousGroup);
+        players.close();
+    }
 
 
     @BeforeEach
-    void setUp() {
+    @SuppressWarnings("unchecked")
+    void setUp() throws Exception {
         players = mockStatic(com.bekvon.bukkit.residence.containers.ResidencePlayer.class);
-        FlagPermissions.addFlagToFlagGroup(padd.groupedFlag, "build");
+        var field = FlagPermissions.class.getDeclaredField("validFlagGroups");
+        field.setAccessible(true);
+        groups = (Map<String, Object>) field.get(null);
+        previousGroup = groups.put(padd.groupedFlag, Map.of("build", FlagPermissions.FlagState.TRUE));
         when(server.isPrimaryThread()).thenReturn(true);
         when(residence.getPermissions()).thenReturn(permissions);
-        when(residence.isTrusted(member)).thenReturn(true);
         when(permissions.has("nomobs", false)).thenReturn(true);
+        flags.put("build", true);
         flags.put("ignite", true);
         when(permissions.getPlayerFlags()).thenReturn(Map.of(member, flags));
         when(permissions.getPlayerFlags(member)).thenReturn(flags);
@@ -58,6 +68,74 @@ class ResidencePermissionSyncTest {
     void acceptsExplicitVehiclePermission() {
         flags.put("vehicledestroy", true);
         assertTrue(sync.verifyPermissions("town", residence, List.of(member), false).success());
+    }
+
+    @Test
+    void acceptsStoredTrustedFlagsWithoutCachedResidencePlayerOrAnyWrites() {
+        flags.put("vehicledestroy", true);
+        assertNull(com.bekvon.bukkit.residence.containers.ResidencePlayer.get(member));
+        players.clearInvocations();
+
+        assertTrue(sync.verifyPermissions("town", residence, List.of(member), false).success());
+
+        verify(residence, never()).isTrusted(any(UUID.class));
+        players.verifyNoInteractions();
+        verify(permissions, never()).setPlayerFlag(any(UUID.class), anyString(), any());
+        verify(permissions, never()).setFlag(any(), anyString(), any(), anyBoolean(), anyBoolean());
+    }
+
+    @Test
+    void detectsMissingAndDeniedStoredFlagsEvenWhenEffectiveTrustIsTrue() {
+        when(residence.isTrusted(member)).thenReturn(true);
+        flags.put("vehicledestroy", true);
+        flags.remove("build");
+        assertEquals(ResultCode.MEMBER_PADD_PERMISSION_MISMATCH,
+                sync.verifyPermissions("town", residence, List.of(member), false).code());
+        flags.put("build", false);
+        assertEquals(ResultCode.MEMBER_PADD_PERMISSION_MISMATCH,
+                sync.verifyPermissions("town", residence, List.of(member), false).code());
+    }
+
+    @Test
+    void honorsFalseAndNeitherGroupedFlagsAndExplicitTownGrants() {
+        groups.put(padd.groupedFlag, Map.of("build", FlagPermissions.FlagState.TRUE,
+                "use", FlagPermissions.FlagState.FALSE, "container", FlagPermissions.FlagState.NEITHER,
+                "ignite", FlagPermissions.FlagState.FALSE,
+                "vehicledestroy", FlagPermissions.FlagState.NEITHER));
+        flags.put("use", false);
+        flags.put("vehicledestroy", true);
+        assertTrue(sync.verifyPermissions("town", residence, List.of(member), false).success());
+        flags.put("container", false);
+        assertEquals(ResultCode.MEMBER_PADD_PERMISSION_MISMATCH,
+                sync.verifyPermissions("town", residence, List.of(member), false).code());
+        flags.remove("container");
+        flags.remove("use");
+        assertEquals(ResultCode.MEMBER_PADD_PERMISSION_MISMATCH,
+                sync.verifyPermissions("town", residence, List.of(member), false).code());
+    }
+
+    @Test
+    void reinspectionAcceptsSuccessfulRepairWithoutCreatingPlayerCache() {
+        flags.remove("build");
+        flags.put("vehicledestroy", true);
+        allowWrites();
+        when(permissions.setPlayerFlag(isNull(), eq(member), eq("build"), eq("true"), eq(true), eq(false)))
+                .thenAnswer(call -> { flags.put("build", true); return true; });
+
+        assertFalse(sync.verifyPermissions("town", residence, List.of(member), false).success());
+        assertTrue(sync.verifyPermissions("town", residence, List.of(member), true).success());
+        assertTrue(sync.verifyPermissions("town", residence, List.of(member), false).success());
+        verify(residence, never()).isTrusted(any(UUID.class));
+    }
+
+    @Test
+    void supportsLegacyGroupedFlagSetsAndRejectsEmptyGroup() {
+        flags.put("vehicledestroy", true);
+        groups.put(padd.groupedFlag, java.util.Set.of("build"));
+        assertTrue(sync.verifyPermissions("town", residence, List.of(member), false).success());
+        groups.put(padd.groupedFlag, Map.of());
+        assertEquals(ResultCode.MEMBER_PADD_PERMISSION_MISMATCH,
+                sync.verifyPermissions("town", residence, List.of(member), false).code());
     }
 
     @Test
