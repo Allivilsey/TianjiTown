@@ -1,6 +1,6 @@
 # 文档导航
 
-本目录描述当前 `1.0.0-SNAPSHOT` 的实际功能。默认数值来自仓库配置，服务器可配置项以部署值为准。配置没有版本号，数据库仅维护初始建表脚本，不使用历史发布迁移链。
+本目录描述当前正式版 `1.0.0` 的实际功能。默认数值来自仓库配置，服务器可配置项以部署值为准。配置没有版本号，数据库通过保留的 `V1_0` 与增量 `V1_1` 迁移维护 schema `1.1`；已有生产库升级见 [SQLite 手册](operations/SQLITE_AND_BACKUP.md)。
 
 ## 使用和安装
 
@@ -21,7 +21,7 @@
 | [经济与扩张](deployment/ECONOMY_AND_EXPANSION.md) | 三种收入税、补贴、资金补偿和扩张检查 |
 | [Buff](deployment/BUFFS_AND_RESOURCES.md) | 玩家购买与管理员免费设置区别、到期、HuskSync 验收 |
 | [定价](deployment/PRICING.md) | 五种属性商品价格及递增扩张公式 |
-| [领地加成](deployment/TERRITORY_BONUSES.md) | 建筑返还和持久信标效果的配置与验证 |
+| [领地加成](deployment/TERRITORY_BONUSES.md) | 建筑返还和实时信标扩散的配置与验证 |
 | [通知与周期](deployment/NOTIFICATIONS_AND_SUBSIDY.md) | 补贴周期、身份通知可靠性和消息配置 |
 
 ## 运维与开发

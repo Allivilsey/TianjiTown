@@ -8,7 +8,18 @@
 2. 查看后台清算对账日志和账户锁定状态；对账由后台定时执行。
 3. 需要复核时执行 `/tianjitown diagnose 7`，保留报告并检查 `DIFFERENCE`、`INCOMPLETE`、`WRITE_LOCKED`、`COMPENSATION_REQUIRED` 和 `SEVERE`。
 
-初始化阶段统一诊断通过后才注册业务运行时；失败保持 `LOCKED`。启动失败应根据 `status` 和日志修复后重启插件或服务器，`/tianjitown reload` 不会重新初始化。运行期间统一诊断只在手动命令时执行，不会周期重复。
+初始化阶段先校验必要依赖、账户初始化及 SQLite 完整性，再恢复中断状态并执行统一诊断。数据库损坏、配置或必要依赖不可用仍保持 `LOCKED`；待处理交易、领地差异和外部诊断故障以告警报告，允许业务运行时及恢复入口启动。未核实的资金操作冻结对应小镇账户；清算余额不可读或总体短款暂停公共资金消费，正常对账后自动解除此类锁。启动失败应根据 `status` 和日志修复后重启插件或服务器，`/tianjitown reload` 不会重新初始化。运行期间统一诊断只在手动命令时执行，不会周期重复。
+
+## 付款异常的核实与恢复
+
+先通过 `/tianjitown money pending` 和 `/tianjitown application fee list` 查询持久化记录，核对玩家、清算账户和经济插件交易历史。重启会取消确定尚未执行外部付款的 `PREPARED` 操作，将付款结果不明的记录保留给人工核实；不会为了启动而重复付款。
+
+- 普通资金操作：`/tianjitown money resolve <操作UUID> <applied|cancelled> <核实依据>`。`applied` 表示完整外部资金流已完成，补记一次内部账；`cancelled` 表示未付款或已全额恢复原状。部分扣款不能直接视为任一种完整结果，应先查明并修复外部资金。
+- 申请费：`/tianjitown application fee inspect <申请UUID>` 查询金额、状态和版本；`retry` 仅重新尝试确定未支付的退款。付款结果未知时使用 `resolve <申请UUID> <结论> <核实依据>`，结论含 `COLLECTED`（已扣玩家且清算已收）、`NO_PAYMENT`（双方无净变动）、`PLAYER_DEBIT_ONLY`（只扣玩家）、`REFUNDED`（从正确来源全额退款）、`REFUND_NOT_PAID`（未退玩家且应退资金完整保留）。已取消且不再关联小镇的申请仍可处理退款。
+- 补贴：`/tianjitown money subsidy pending` 查询；`resolve <业务键> <paid|cancelled> <核实依据>` 仅补记已到清算账户的补贴，或确认未付/已撤回并释放额度。补贴失败不会阻止已收税款入账。
+- Jobs/GMP 小镇税款：`/tianjitown money tax pending` 查询；`resolve <操作UUID> <paid|cancelled> <核实依据>` 分别确认完整收税或玩家未扣款/已全额退回。`refund <操作UUID>` 只对 `REFUND_REQUIRED` 明确欠退玩家的记录实际退款，结果未知时必须先核账。重启发现已收成功而未记账时只补税账，不重复扣玩家，也不重新发放补贴；补贴存在未知预留时转独立核实。
+
+上述确认需要完整管理员权限和二次确认，记录审计。`resolve` 不调用 Vault 付款；申请费记录版本变化、运行时更换、权限撤销或对应操作仍在执行时拒绝旧确认。处理完成后等待后台清算复核；不要修改 SQL 状态或仅为解除锁而填写未经核实的结论。
 
 ## PlugMan 热重载
 
@@ -19,7 +30,7 @@ TianjiTown 使用标准 Bukkit 插件启停流程，无需安装 PlugMan API 依
 3. 等待 `/tianjitown status` 从 `CHECKING` 变为 `READY`；若为 `LOCKED`，按日志修复后重新启用。PlugMan 的加载成功提示不代表异步启动诊断已经通过。
 4. 检查服务台、手册、命令补全和在线玩家 Buff；旧界面和聊天按钮在停用时失效，需要重新打开。确认正常后执行 `/tianjitown maintenance off`（如果之前开启了维护模式）。
 
-停用时注销事件和命令、关闭小镇界面、取消定时任务、等待正在执行的后台任务、清理托管效果并关闭 SQLite 连接池（包括尚未完成启动的连接池）。每次启用都会重读配置与消息、重新校验依赖和数据库，并恢复持久业务状态及在线玩家效果。热重载不会删除数据库、重建已有结构或搬运数据。
+停用时注销事件和命令、关闭小镇界面、取消定时任务、等待正在执行的后台任务、清理公共 Buff 的属性修饰符、释放信标来源缓存并关闭 SQLite 连接池（包括尚未完成启动的连接池）；已施加的信标药水效果自然到期。每次启用都会重读配置与消息、重新校验依赖和数据库，并恢复持久业务状态及重新发现有效信标。热重载不会删除数据库、重建已有结构或搬运数据。
 
 支持范围是单独重载 TianjiTown，依赖插件保持启用；`reload all` 或热换 Residence、Vault、经济提供者等依赖不属于此范围。停用最多等待后台任务 30 秒，第三方 API 阻塞导致超时应检查日志并重启服务器；内存中的待重试退款和未保存表单不会跨重载保留，需要按操作 ID 核对未完成交易。插件停用期间小镇税收监听和入口不可用，维护模式本身不会阻止第三方交易。
 
@@ -33,7 +44,7 @@ TianjiTown 使用标准 Bukkit 插件启停流程，无需安装 PlugMan API 依
 | 停止新小镇税 | 配置 `economy.tax.enabled: false` 后 `reload` | 已提交税款处理、查询和对账 |
 | 停止新捐款/扩张/Buff 资金入口 | `economy.consumption.enabled: false` 后 `reload` | 税收、已有补偿和查询 |
 | 仅关 Buff 商店 | `buffs.shop-enabled: false` 后 `reload` | 已有 Buff 生效与到期清理 |
-| 暂停领地福利 | 分别关闭 `territory.building-refund.enabled`、`territory.beacon.enabled` 后 `reload` | Residence 保护及持久记录；托管信标效果会清理 |
+| 暂停领地福利 | 分别关闭 `territory.building-refund.enabled`、`territory.beacon.enabled` 后 `reload` | Residence 保护及持久记录；信标停止续期，已有药水效果自然到期 |
 
 一致性备份必须停服，维护模式不是数据库静止保证。恢复业务前核对开关、数据库和清算状态。
 
@@ -48,8 +59,8 @@ TianjiTown 使用标准 Bukkit 插件启停流程，无需安装 PlugMan API 依
 | Residence 自动对账 | 1 小时，启动约 10 秒后首次 | 按 SQLite 修复领地及访问权限差异 |
 | 到期投票结算 | 1 分钟 | 结算到期开放投票 |
 | 清算对账 | 5 分钟，启动约 20 秒后首次 | 判断公共资金消费是否应锁定 |
-| 领地加成索引刷新 | 30 秒 | 刷新成员、领地及已记录信标效果快照 |
-| 信标效果刷新 | 100 tick | 按玩家位置应用/清理已记录效果，不扫描信标 |
+| 领地加成索引刷新 | 30 秒 | 刷新成员和领地快照，触发已加载来源重新核对 |
+| 信标效果刷新 | 100 tick | 校验当前信标来源并按玩家位置续期原版时长效果，不主动清除药水效果 |
 | 旧建筑返还计数清理 | 1 小时 | 清理超过保留周数的计数，不改变当前周上限 |
 
 ## 故障处置
@@ -64,5 +75,7 @@ TianjiTown 使用标准 Bukkit 插件启停流程，无需安装 PlugMan API 依
 | 诊断 INCOMPLETE | 检查查询失败和 1000 条上限，可缩短回看窗口复核；不能把扫描不完整当成一致 |
 
 `diagnose` 只读，不会修改 QuickShop 或 Residence。后台自动对账会修复领地，手动 `land reconcile ... repair` 可立即触发；两者与诊断是不同操作。
+
+领地权限核对直接读取玩家 UUID 对应的权限条目，按 Residence 当前 `padd` 权限组及小镇额外授权检查，不依赖玩家是否在线或已进入 Residence 玩家缓存。后台自动修复写入成功后会再次检查领地；复查通过才记录“已修复”，仍有差异则报告具体失败原因，API 异常也不会记作修复成功。
 
 备份和恢复见 [SQLite 手册](SQLITE_AND_BACKUP.md)，故障演练见 [告警与验收](ALERTS_AND_FAULT_INJECTION.md)。

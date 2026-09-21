@@ -15,7 +15,7 @@
 | `economy.consumption.enabled` | `true` | 控制捐款、扩张、Buff 等新资金操作；不停止税款入账、已提交补偿或查询 |
 | `buffs.shop-enabled` | `true` | 控制新 Buff 购买；已有 Buff 继续生效到期 |
 | `territory.building-refund.enabled` | `true` | 控制新的建筑返还 |
-| `territory.beacon.enabled` | `true` | 控制领地信标效果；关闭后清理托管效果，数据库记录保留 |
+| `territory.beacon.enabled` | `true` | 控制领地信标扩散；关闭后停止续期，已有药水效果自然到期 |
 
 手册冷却、申请预留时间、选址缓冲和粒子预览参数也会在后续相应操作中读取。其余业务参数建议统一重启生效；不要把重载成功提示当成所有设置已经重建。修改必需依赖或修复启动 `LOCKED` 后应重启。
 
@@ -54,7 +54,7 @@
 
 | 配置键 | 默认值 | 含义 |
 |---|---|---|
-| `economy.settlement-account` | `tax` | Vault 离线玩家清算账户，按 UUID 和实际名称访问；变更需先核对资金并重启 |
+| `economy.settlement-account` | `tianjitown-tax` | 自动隐藏排行和对应总额统计；已有 `tax` 配置启动时自动更名，保留原 UUID/余额，迁移记录必须保留；其他自定义账户不自动迁移 |
 | `economy.money-scale` | `2` | 经济提供者未声明小数位时的后备精度；有效精度按 provider 优先 |
 | `economy.tax.subsidy.weekly-limit` | `'10000.00'` | 每镇三个收入来源共用的每周补贴上限 |
 | `economy.tax.subsidy.twelve-hour-limit` | `'2000.00'` | 每镇共用的 12 小时补贴上限 |
@@ -87,10 +87,10 @@
 | `territory.building-refund.counter-retention-weeks` | `12` | 旧周计数保留周数，不是公共账本保留时间 |
 | `territory.building-refund.reset-zone` | `Asia/Shanghai` | 建筑返还周窗口时区，周一 00:00 切换 |
 | `territory.building-refund.blacklist` | 见模板 | 禁止返还的材料；`REDSTONE_CATEGORY` 展开红石类别，容器/特殊方块等仍受代码校验 |
-| `territory.beacon.refresh-interval-ticks` | `100` | 已记录信标效果的玩家刷新间隔，不是信标区块扫描间隔 |
+| `territory.beacon.refresh-interval-ticks` | `100` | 有效信标来源校验及玩家续期间隔，允许 20~200 tick |
 | `operations.quickshop-diagnostic-days` | `7` | 启动及不带参数手动诊断的 QuickShop 回看天数，允许 1～180 |
 
-上表数值在启动加载，修改后重启。信标只在关闭有效信标界面时记录新增或更强效果，拆掉信标不会撤销数据库记录。
+上表数值在启动加载，修改后重启。信标只依据当前有效且区块正在运算的来源扩散；拆除、遮挡、金字塔失效或来源区块停止运行后停止续期，恢复后重新验证。玩家效果沿用原版 220/260/300/340 tick 持续时间并自然消退。旧历史效果表不再读写；旧刷新间隔若超过 200 tick，必须调整后才能通过启动校验。
 
 ## 消息自定义
 

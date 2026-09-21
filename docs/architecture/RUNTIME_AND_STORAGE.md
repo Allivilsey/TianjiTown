@@ -9,9 +9,11 @@
 | `TownRuntime` | 组装依赖、公开入口、启动恢复与周期任务协调 |
 | `TownRuntimeTasks` | 工作线程执行、主线程回调、共享数据库可用状态和失败处理 |
 | `TownTaxRuntime` | 税率缓存、QuickShop/Jobs/GlobalMarketPlus 税收结算、账本重试队列 |
+| `TownIncomeTaxCollectionRuntime` | Jobs/GMP 收税前持久化、外部付款结果记录、异常税款核实与退款 |
 | `TownEconomyRuntime` | 捐款、管理员调账、税率修改、外部清算与补偿退款 |
 | `TownProvisionRuntime` | 审核扣费、建镇、初始 Residence 投影与传送点 |
 | `TownProvisionRecovery` | 失败建镇的检查、投影清理和申请费退款 |
+| `TownApplicationFeeRuntime` / `TownProvisionDeletionGuard` | 申请费用核实和退款、建镇与删除的共享互斥 |
 | `TownExpansionRuntime` | 扩张预览、单格/批量投影、失败回滚与启动恢复 |
 | `TownLandRuntime` | 领地巡检、自动修复、传送点修改及审计 |
 
@@ -33,10 +35,10 @@
 | --- | --- |
 | `TownBonusRuntime` | 提供公开入口、`DiagnosticResult` 和事件监听，协调共享索引的异步刷新 |
 | `TownBuildingRefunds` | 放置方块校验、每周返还额度预留、物品返还与过期计数清理 |
-| `TownBeaconEffects` | 信标编辑权限、效果记录、玩家效果刷新与托管效果清理 |
+| `TownBeaconEffects` | 信标编辑权限、有效来源发现与校验、原版时长的玩家效果续期 |
 | `TownBonusDiagnostics` | 诊断互斥、SQLite/QuickShop 数据采集、Residence/Vault 检查、结果通知与报告保留 |
 
-建筑返还和信标共享同一份不可变索引；刷新失败保留旧快照，信标关闭界面的延迟回调读取执行时的最新快照。返还通过 `TownRuntime.write` 先预留额度，再在主线程回调中发放物品。
+建筑返还和信标共享成员、角色和领地的不可变索引；刷新失败保留旧快照。信标按已加载领地区块分批发现，以世界 UUID 和方块坐标维护来源，每次校验实时方块状态和区块运算等级；PaperBeaconActivity 通过 Paper 26.2 的公开原生方法读取实际光束，不依赖 Bukkit 状态快照或激活事件缓存。有效来源按小镇合并，玩家效果沿用原版时长续期并自然到期，不追踪或主动移除药水效果。旧历史信标效果表不再读写。返还通过 `TownRuntime.write` 先预留额度，再在主线程回调中发放物品。
 
 诊断在提交前读取 Vault 余额，在工作线程查询 SQLite 与 QuickShop，再回到主线程检查 Residence 和通知调用方；报告写入在工作线程执行，并保留最近 30 份诊断报告。
 
@@ -51,6 +53,7 @@
 | `TownAuditStore` | 最近审计查询及独立审计写入 |
 | `TownApplicationStore` | 申请编辑、选址、提交、审核与申请查询 |
 | `TownProvisioningStore` | 建镇数据准备、完成、失败恢复和退款确认 |
+| `TownApplicationFeeStore` | 建镇费收取/退款的持久状态、版本核验与审计 |
 | `TownMembershipStore` | 成员查询、加入/移除、离镇、管理员镇长转移及访客管理；副镇长任免由治理存储处理 |
 | `TownJoinApplicationStore` | 入镇申请、审批、撤回与过期检查 |
 | `TownInvitationStore` | 邀请创建、接受与拒绝 |
@@ -66,6 +69,7 @@
 | --- | --- |
 | `EconomyTaxStore` | 税率、补贴周期与额度、交易税款入账 |
 | `EconomyOperationStore` | 外部经济操作状态机、补偿和清算对账 |
+| `IncomeTaxCollectionStore` | Jobs/GMP 每次税款收取及退款状态、幂等认领、重启核实 |
 | `EconomyLedgerStore` | 账本分页、展示聚合和操作人名称补全 |
 | `TerritoryExpansionStore` | 领地预留、单格/批量扩张、结算与退款 |
 | `EconomyPersistence` | 同一连接上的账户检查、余额更新、账本写入及审计 |
@@ -92,4 +96,4 @@
 
 `BuffExpirationSchedulerTest` 覆盖到期时间选择、旧回调失效、退出取消本服任务、调度失败恢复与停服取消；`BuffRuntimeTest` 覆盖异步刷新顺序、重生清理与恢复、应用失败退款，以及离线玩家到期清理失败后的重试。
 
-`TownBonusRuntimeTest` 覆盖索引刷新合并与失败重试、信标权限及延迟回调、建筑返还预留与离线处理、热更新开关和周计数清理；`TownBonusDiagnosticsTest` 覆盖线程切换、诊断互斥、执行器拒绝与失败恢复、健康状态判定及报告保留。
+`TownBonusRuntimeTest` 覆盖索引刷新合并与失败重试、信标打开和提交权限、建筑返还预留与离线处理、热更新开关和周计数清理；`TownBeaconEffectsTest` 覆盖远距离访客、主次效果切换、多来源降级、原版时长、光束遮挡、区块停止与恢复、分批发现以及自然消退；`PaperBeaconActivityTest` 覆盖只读光束适配边界和不支持的服务端接口。`TownBonusDiagnosticsTest` 覆盖线程切换、诊断互斥、执行器拒绝与失败恢复、健康状态判定及报告保留。

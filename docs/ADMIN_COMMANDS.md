@@ -1,6 +1,6 @@
 # 管理员命令手册
 
-适用于当前 `1.0.0-SNAPSHOT`。下文按当前工作区的命令注册、参数解析和业务实现核对。玩家日常操作见 [玩家指南](PLAYER_GUIDE.md)，配置生效方式见 [配置说明](setup/CONFIGURATION.md)。
+适用于当前 `1.0.0`。下文按当前工作区的命令注册、参数解析和业务实现核对。玩家日常操作见 [玩家指南](PLAYER_GUIDE.md)，配置生效方式见 [配置说明](setup/CONFIGURATION.md)。
 
 ## 参数、权限与执行环境
 
@@ -51,11 +51,35 @@
 | 命令 | 具体用途与执行后果 | 权限 |
 |---|---|---|
 | `/tianjitown application list` | 显示建镇审核队列，最多 100 项；不是成员入镇申请列表 | 全部 |
+| `/tianjitown application delate <小镇代码或申请UUID>` | 强制取消任意状态的建镇申请，释放申请占用及关联表单草稿；保留申请历史，不退款，不改变关联小镇、领地及费用历史；本次取消不产生申请冷却。同一代码对应多份申请时须使用 UUID | 全部 |
+| `/tianjitown application clearcd <玩家名或UUID>` | 清除指定玩家现有的建镇申请冷却，重启后仍有效；不修改申请状态，不影响后续新申请产生的冷却，也不清除入镇被拒或离镇冷却 | 全部 |
 | `/tianjitown town list [active|provisioning|archived]` | 列出小镇全名、代码和状态，默认仅活动镇；可显式选择 active、provisioning、archived，忽略大小写 | 全部 |
 | `/tianjitown town view <小镇代码>` | 查看状态、镇长 UUID、记录版本、领地中心、Residence 名称及投影状态 | 全部 |
 | `/tianjitown town delete <小镇代码> [原因]` | 发起管理员删除确认。确认后先归档，Residence 确认移除后才释放名称、代码和区块；保留历史和审计 | 全部 |
 
 建镇批准、拒绝、退回修改和失败重试统一通过 GUI 审核。批准时默认收取 `5000.00`，建镇成功后作为该镇初始公共余额。
+
+创建失败后，重试创建沿用已缴费用；解锁修改会清理临时领地与临时小镇，并保留托管申请费；取消并退款、强制清理会清理临时数据后退款。强制清理不产生申请冷却。领地边界和所有权正常不再阻止恢复：默认传送点失败也可能留下正常领地，恢复时仍会核对并清理本申请的受控投影。清理失败会保留失败申请，修复外部问题后可再次处理。重试创建与三个恢复按钮对同一申请互斥，避免同时创建、拆除和退款。
+
+付款异常另有持久化入口，均要求 `tianjitown.admin`：
+
+| 命令 | 作用 |
+|---|---|
+| `/tianjitown application fee list` | 列出最多 100 条待处理费用记录 |
+| `/tianjitown application fee inspect <申请UUID>` | 检查金额、状态、版本与错误 |
+| `/tianjitown application fee retry <申请UUID>` | 二次确认后重试确定未支付的退款 |
+| `/tianjitown application fee resolve <申请UUID> <结论> <核实依据>` | 二次确认后登记费用核实结论，不重复付款 |
+| `/tianjitown money pending` | 查看普通资金操作异常 |
+| `/tianjitown money resolve <操作UUID> <applied\|cancelled> <核实依据>` | 登记外部已完整执行或已恢复原状，修正一次内部记录 |
+| `/tianjitown money subsidy pending` | 查看最多 100 条异常补贴 |
+| `/tianjitown money subsidy resolve <业务键> <paid\|cancelled> <核实依据>` | 补记已付补贴，或确认未付并释放额度 |
+| `/tianjitown money tax pending` | 查看 Jobs/GMP 小镇税款的收取、退款及记账异常 |
+| `/tianjitown money tax resolve <操作UUID> <paid\|cancelled> <核实依据>` | 核实完整收税或玩家无净扣款，不再次外部付款 |
+| `/tianjitown money tax refund <操作UUID>` | 二次确认后向明确欠退的玩家退款 |
+
+费用结论和查账步骤见 [付款异常的核实与恢复](operations/OPERATIONS.md#付款异常的核实与恢复)。结果未知时先核账；这些命令不提供跳过资金检查的强制解锁。
+
+`application delate` 替代原 `application cancel-archived`，无需先归档小镇，也不限申请状态；旧命令留下的取消审计仍享有冷却豁免。该命令仅取消申请，关联小镇的名称、成员和领地占用仍由小镇管理流程处理。
 
 ## 成员、角色和镇长
 

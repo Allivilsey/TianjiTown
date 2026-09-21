@@ -1,6 +1,6 @@
 # 成员治理部署与验收
 
-适用于当前 `1.0.0-SNAPSHOT`，数据库仅维护初始结构。角色为 `MAYOR`（镇长）、`DEPUTY_MAYOR`（副镇长）、`MEMBER`（镇员），没有 OFFICER 角色或角色迁移步骤。
+适用于当前 `1.0.0`，数据库 schema 为 `1.1`。角色为 `MAYOR`（镇长）、`DEPUTY_MAYOR`（副镇长）、`MEMBER`（镇员），没有 OFFICER 角色或角色迁移步骤。
 
 ## 治理规则
 

@@ -1,10 +1,10 @@
 # 安装与预发检查
 
-当前构建为 `1.0.0-SNAPSHOT`。配置不设版本号，Flyway 只执行初始建表和完整性校验；不提供旧开发数据库迁移链。
+当前正式版本为 `1.0.0`。配置不设版本号，Flyway 执行初始建表、增量升级与完整性校验，目标 schema 为 `1.1`。升级支持已发布 `V1_0` 创建且校验值一致的生产数据库；先按 [SQLite 手册](../operations/SQLITE_AND_BACKUP.md) 在备份副本中验证。
 
 ## 环境和依赖
 
-构建要求 Maven 3.9+、JDK 25+，执行 `mvn -B clean verify`，产物为 `tianjitown-paper/target/TianjiTown-1.0.0-SNAPSHOT.jar`。当前 `plugin.yml` 声明 API `26.2`；实际 Paper/Leaf 和 Java 组合必须支持该 API 与 Dialog，不能把“插件不写死版本匹配”理解为支持任意旧服务端。
+构建要求 Maven 3.9+、JDK 25+，执行 `mvn -B clean verify`，产物为 `tianjitown-paper/target/TianjiTown-1.0.0.jar`。当前 `plugin.yml` 声明 API `26.2`；实际 Paper/Leaf 和 Java 组合必须支持该 API 与 Dialog，不能把“插件不写死版本匹配”理解为支持任意旧服务端。
 
 | 依赖 | 用途与启动检查 |
 |---|---|
@@ -24,7 +24,7 @@
 2. 用 WorldBorder `/wb` 为开放选址的世界配置边界；整镇 5×5 单元网格，即 25×25 区块（625 区块）与默认一圈区块缓冲须完整位于边界内。中心 5×5 区块在建镇后自动激活，其余单元先预留。
 3. 放入 TianjiTown JAR 并启动，生成 `config.yml`、`messages.yml` 和默认 `tianjitown.db`。Paper 首次需下载 `libraries` 声明的存储依赖；离线环境提前准备缓存。
 4. 按 [配置说明](CONFIGURATION.md) 调整清算账户、价格和开关。数据库路径、经济参数和商品定义等修改后重启。
-5. 执行 `/tianjitown status`，检查启动状态和所有诊断细节。初始化阶段的 SQLite、Residence、Vault 与 QuickShop 历史统一诊断通过后才注册业务运行时并进入 `READY`。
+5. 执行 `/tianjitown status`，检查启动状态和所有诊断细节。必要依赖、账户初始化及 SQLite 完整性检查失败会阻止启动；待恢复资金、领地差异、余额或历史诊断异常会告警并保留恢复入口，账户按异常范围隔离。`READY` 表示运行时可用，仍需核对诊断中的业务告警。
 6. 在游戏内看向讲台执行 `/tianjitown station create`，测试服务台、手册及玩家 Dialog。
 
 ## LOCKED 时如何处理
