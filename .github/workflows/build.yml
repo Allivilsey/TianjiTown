@@ -2,10 +2,53 @@ name: build
 
 on:
   push:
-  pull_request:
+    branches: ['**']
+    paths:
+      - pom.xml
+
+permissions:
+  contents: read
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.version.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check project version
+        id: version
+        shell: python
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          import os
+          import subprocess
+          import xml.etree.ElementTree as ET
+
+          def version(xml):
+              value = ET.fromstring(xml).findtext('{http://maven.apache.org/POM/4.0.0}version')
+              if not value or not value.strip():
+                  raise ValueError('Missing project version in pom.xml')
+              return value.strip()
+
+          before = os.environ['BEFORE']
+          changed = False
+          # A new branch has no previous pushed version to compare.
+          if before and before != '0' * 40:
+              subprocess.run(['git', 'fetch', '--no-tags', 'origin', before], check=True)
+              previous = subprocess.check_output(['git', 'show', f'{before}:pom.xml'])
+              with open('pom.xml', 'rb') as pom:
+                  changed = version(previous) != version(pom.read())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'changed={str(changed).lower()}\n')
+          print(f'Project version changed: {changed}')
+
   verify:
+    needs: version
+    if: needs.version.outputs.changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,5 +70,4 @@ jobs:
         with:
           name: TianjiTown
           path: tianjitown-paper/target/TianjiTown-*.jar
-          retention-days: 7
           if-no-files-found: error
