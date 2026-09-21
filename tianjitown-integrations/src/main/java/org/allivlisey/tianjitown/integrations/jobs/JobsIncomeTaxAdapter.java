@@ -5,11 +5,10 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.Plugin;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
@@ -20,7 +19,7 @@ import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
-public final class JobsIncomeTaxAdapter {
+public final class JobsIncomeTaxAdapter implements AutoCloseable {
     private static final String PAYMENT_EVENT = "com.gamingmesh.jobs.api.JobsPaymentEvent";
     private final Plugin owner;
     private final Plugin jobs;
@@ -28,6 +27,7 @@ public final class JobsIncomeTaxAdapter {
     private final Function<Earning, TaxResult> processor;
     private final BiFunction<String, Map<String, ?>, String> messageResolver;
     private final AtomicBoolean eventFailureLogged = new AtomicBoolean();
+    private final JobsPaymentObserver paymentObserver;
 
     public JobsIncomeTaxAdapter(Plugin owner, Plugin jobs, BooleanSupplier taxEnabled,
                                 Function<Earning, TaxResult> processor,
@@ -37,24 +37,31 @@ public final class JobsIncomeTaxAdapter {
         this.taxEnabled = Objects.requireNonNull(taxEnabled, "taxEnabled");
         this.processor = Objects.requireNonNull(processor, "processor");
         this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
+        this.paymentObserver = new JobsPaymentObserver((player, gross) -> {
+            if (owner.isEnabled() && taxEnabled.getAsBoolean()) process(new Earning(player, gross));
+        }, exception -> logEventFailure("log.jobs.payment-failure", exception));
     }
 
     public Capability register() {
         try {
             Class<? extends Event> eventType = eventClass(jobs.getClass().getClassLoader(),
                     PAYMENT_EVENT);
-            eventType.getMethod("getPlayer");
-            eventType.getMethod("getAmount");
-            eventType.getMethod("setAmount", double.class);
+            installPaymentObserver();
             Listener listener = new Listener() {
             };
             owner.getServer().getPluginManager().registerEvent(eventType, listener,
-                    EventPriority.HIGHEST, safeExecutor(eventType, this::onPayment), owner,
+                    EventPriority.MONITOR, safeExecutor(eventType, this::onPayment), owner,
                     true);
+            owner.getServer().getPluginManager().registerEvent(PluginDisableEvent.class, listener,
+                    EventPriority.MONITOR, (ignored, event) -> {
+                        Plugin disabled = ((PluginDisableEvent) event).getPlugin();
+                        if (disabled == owner || disabled == jobs) paymentObserver.close();
+                    }, owner, true);
             return Capability.success(resolveMessage(
                     "diagnostic.jobs.capability-success",
                     Map.of("version", String.valueOf(jobs.getPluginMeta().getVersion()))));
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
+            paymentObserver.close();
             return Capability.failure(resolveMessage(
                     "diagnostic.jobs.capability-failure",
                     Map.of("detail", message(exception))));
@@ -63,21 +70,23 @@ public final class JobsIncomeTaxAdapter {
 
     private void onPayment(Event event) {
         try {
-            if (!taxEnabled.getAsBoolean()) {
-                return;
-            }
-            OfflinePlayer player = (OfflinePlayer) call(event, "getPlayer");
-            double gross = ((Number) call(event, "getAmount")).doubleValue();
-            if (player == null || !Double.isFinite(gross) || gross <= 0) {
-                return;
-            }
-            TaxResult result = process(new Earning(player, gross));
-            if (result.applied()) {
-                call(event, "setAmount", double.class, result.netAmount());
-            }
+            // Jobs can replace its buffer on reload. The event only refreshes the observer;
+            // no money or subsidy is created until depositPlayer actually returns success.
+            installPaymentObserver();
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             logEventFailure("log.jobs.payment-failure", exception);
         }
+    }
+
+    private void installPaymentObserver() throws ReflectiveOperationException {
+        Object buffered = jobs.getClass().getMethod("getEconomy").invoke(null);
+        if (buffered == null) throw new IllegalStateException("Jobs economy provider is not ready");
+        paymentObserver.install(buffered);
+    }
+
+    @Override
+    public void close() {
+        paymentObserver.close();
     }
 
     private TaxResult process(Earning earning) {
@@ -85,7 +94,7 @@ public final class JobsIncomeTaxAdapter {
             return processor.apply(earning);
         }
         try {
-            // Jobs 的付款事件固定为异步事件，Vault 操作必须切回服务器主线程。
+            // Jobs may finish a wage on its economy worker; town Vault operations use the main thread.
             JobsTaxCall payment = new JobsTaxCall(() -> processor.apply(earning));
             owner.getServer().getScheduler().callSyncMethod(owner, payment);
             return payment.await(10, TimeUnit.SECONDS);
@@ -135,28 +144,6 @@ public final class JobsIncomeTaxAdapter {
     private static Class<? extends Event> eventClass(ClassLoader loader, String name)
             throws ClassNotFoundException {
         return (Class<? extends Event>) Class.forName(name, true, loader).asSubclass(Event.class);
-    }
-
-    private static Object call(Object target, String name) throws ReflectiveOperationException {
-        return call(target, name, new Class<?>[0], new Object[0]);
-    }
-
-    private static Object call(Object target, String name, Class<?> parameter, Object value)
-            throws ReflectiveOperationException {
-        return call(target, name, new Class<?>[]{parameter}, new Object[]{value});
-    }
-
-    private static Object call(Object target, String name, Class<?>[] parameters, Object[] values)
-            throws ReflectiveOperationException {
-        try {
-            Method method = target.getClass().getMethod(name, parameters);
-            return method.invoke(target, values);
-        } catch (InvocationTargetException exception) {
-            if (exception.getCause() instanceof RuntimeException runtime) {
-                throw runtime;
-            }
-            throw exception;
-        }
     }
 
     private static String message(Throwable throwable) {

@@ -2,6 +2,7 @@ package org.allivlisey.tianjitown.integrations.globalmarketplus;
 
 import org.allivlisey.tianjitown.integrations.ThirdPartyEventExecutor;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -25,6 +26,8 @@ import java.util.function.Consumer;
 public final class GlobalMarketPlusIncomeTaxAdapter {
     private static final String TRANSACTION_RESULT_EVENT =
             "studio.trc.bukkit.globalmarketplus.api.event.TransactionResultEvent";
+    private static final String TRANSACTION_EVENT =
+            "studio.trc.bukkit.globalmarketplus.api.event.TransactionEvent";
     private static final String AUCTION_RESULT_EVENT =
             "studio.trc.bukkit.globalmarketplus.api.event.AuctionResultEvent";
     private final Plugin owner;
@@ -37,6 +40,9 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
     private final UUID startupId = UUID.randomUUID();
     private final AtomicLong sequence = new AtomicLong();
     private final AtomicBoolean eventFailureLogged = new AtomicBoolean();
+    private Method getNativeConfig;
+    private final Map<Object, NativeTaxSnapshot> nativeTaxSnapshots = Collections.synchronizedMap(
+            new WeakHashMap<>());
 
     public GlobalMarketPlusIncomeTaxAdapter(Plugin owner, Plugin globalMarketPlus,
                                             BooleanSupplier taxEnabled,
@@ -54,11 +60,20 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
             ClassLoader loader = globalMarketPlus.getClass().getClassLoader();
             Class<? extends Event> transactionEvent = eventClass(loader,
                     TRANSACTION_RESULT_EVENT);
+            Class<? extends Event> beforeTransactionEvent = eventClass(loader, TRANSACTION_EVENT);
             Class<? extends Event> auctionEvent = eventClass(loader, AUCTION_RESULT_EVENT);
             verifyTransactionApi(transactionEvent);
             verifyAuctionApi(auctionEvent);
+            getNativeConfig = Class.forName("studio.trc.bukkit.globalmarketplus.api.APIUtils", true,
+                    loader).getMethod("getConfig", String.class);
+            nativeTaxPaidOnUpload();
+            beforeTransactionEvent.getMethod("getTransaction");
+            beforeTransactionEvent.getMethod("getMerchandise");
             Listener listener = new Listener() {
             };
+            owner.getServer().getPluginManager().registerEvent(beforeTransactionEvent, listener,
+                    EventPriority.MONITOR, safeExecutor(beforeTransactionEvent,
+                            this::beforeTransaction), owner, true);
             owner.getServer().getPluginManager().registerEvent(transactionEvent, listener,
                     EventPriority.MONITOR, safeExecutor(transactionEvent,
                             this::onTransaction), owner, true);
@@ -76,12 +91,46 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
         }
     }
 
+    private void beforeTransaction(Event event) {
+        try {
+            if (!taxEnabled.getAsBoolean()) return;
+            Object merchandise = call(event, "getMerchandise");
+            if (!usesVault(merchandise)
+                    || !"SELLING".equals(String.valueOf(call(merchandise, "getMerchandiseType")))) return;
+            Object transaction = call(event, "getTransaction");
+            boolean retail = Boolean.TRUE.equals(call(transaction, "isRetail"));
+            int amount = retail ? ((Number) call(transaction, "getAmount")).intValue()
+                    : ((org.bukkit.inventory.ItemStack) call(merchandise, "getItem")).getAmount();
+            double gross = retail ? ((Number) call(merchandise, "getRetailPrice")).doubleValue() * amount
+                    : ((Number) call(merchandise, "getPrice")).doubleValue();
+            boolean prepaid = nativeTaxPaidOnUpload();
+            double paid = ((Number) call(merchandise, "getTaxed")).doubleValue();
+            double rate = prepaid ? 0 : nativeSellingRate(call(merchandise, "getMerchant"), merchandise);
+            double nativeTax;
+            if (prepaid) {
+                if (Boolean.TRUE.equals(call(call(merchandise, "getMerchandiseOption"), "isUnlimited"))) {
+                    throw new IllegalStateException("INCOMPLETE: cannot allocate prepaid tax for unlimited merchandise");
+                }
+                nativeTax = allocatedPrepaidTax(paid,
+                        ((Number) call(merchandise, "getInitialAmount")).intValue(), amount);
+            } else {
+                // GMP 1.4.1.4 Vault uses this exact multiplication without minimum tax or rounding.
+                nativeTax = gross * rate;
+            }
+            nativeTaxSnapshots.put(transaction,
+                    new NativeTaxSnapshot(prepaid, retail, amount, gross, paid, rate, nativeTax));
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
+            logEventFailure("log.global-market-plus.transaction-failure", exception);
+        }
+    }
+
     private void onTransaction(Event event) {
         if (!taxEnabled.getAsBoolean() || !seenEvents.add(event)) {
             return;
         }
         try {
             Object result = call(event, "getResult");
+            NativeTaxSnapshot snapshot = nativeTaxSnapshots.remove(call(result, "getTransaction"));
             if (!"SUCCESSFUL".equals(String.valueOf(call(result, "getResultType")))) {
                 return;
             }
@@ -100,7 +149,7 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
             }
             double gross = ((Number) call(result, "getPrice")).doubleValue();
             double received = "SELLING".equals(type)
-                    ? amountAfterSellingTax(receiver, merchandise, gross) : gross;
+                    ? amountAfterSellingTax(receiver, merchandise, result, gross, snapshot) : gross;
             long merchandiseId = ((Number) call(merchandise, "getMerchandiseUID")).longValue();
             dispatch(receiver, received, "transaction:" + merchandiseId);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
@@ -124,8 +173,9 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
             Object receiver = call(result, "getMerchant");
             double price = ((Number) call(result, "getPrice")).doubleValue();
             double nativeTax = ((Number) call(result, "getExtraTaxed")).doubleValue();
+            double prepaidTax = ((Number) call(auction, "getTaxed")).doubleValue();
             long merchandiseId = ((Number) call(auction, "getMerchandiseUID")).longValue();
-            dispatch(receiver, amountAfterNativeTax(price, nativeTax),
+            dispatch(receiver, amountAfterNativeTax(price, prepaidTax + nativeTax),
                     "auction:" + merchandiseId);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             logEventFailure("log.global-market-plus.auction-failure", exception);
@@ -138,19 +188,65 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
                 call(currency, "getName")));
     }
 
-    private double amountAfterSellingTax(Object receiver, Object merchandise, double gross)
+    private double amountAfterSellingTax(Object receiver, Object merchandise, Object result,
+                                         double gross, NativeTaxSnapshot snapshot)
             throws ReflectiveOperationException {
+        if (snapshot == null || snapshot.prepaid() != nativeTaxPaidOnUpload()
+                || snapshot.amount() != ((Number) call(result, "getAmount")).intValue()
+                || !sameAmount(snapshot.gross(), gross)) {
+            throw new IllegalStateException("INCOMPLETE: GMP transaction changed or tax snapshot is missing");
+        }
+        if (snapshot.prepaid()) return amountAfterNativeTax(gross, snapshot.nativeTax());
+        if (snapshot.retail()) {
+            double actualTax = ((Number) call(merchandise, "getTaxed")).doubleValue() - snapshot.paidBefore();
+            if (!sameAmount(actualTax, snapshot.nativeTax())) {
+                throw new IllegalStateException("INCOMPLETE: GMP retail tax changed during transaction");
+            }
+            return amountAfterNativeTax(gross, actualTax);
+        }
+        if (Double.compare(snapshot.rate(), nativeSellingRate(receiver, merchandise)) != 0) {
+            throw new IllegalStateException("INCOMPLETE: GMP wholesale tax rate changed during transaction");
+        }
+        return amountAfterNativeTax(gross, snapshot.nativeTax());
+    }
+
+    private double nativeSellingRate(Object receiver, Object merchandise) throws ReflectiveOperationException {
         Object currency = call(merchandise, "getCurrency");
         Object group = call(receiver, "getGroup");
         if (group == null || currency == null) {
-            return gross;
+            throw new IllegalStateException("INCOMPLETE: GMP tax policy is unavailable");
         }
         double rate = ((Number) call(group, "getTaxRate_Selling", currency)).doubleValue();
-        double nativeTax = gross * rate;
-        if (nativeTax == 0.0D && rate != 0.0D) {
-            nativeTax = 1.0D;
+        if (!Double.isFinite(rate) || rate < 0) {
+            throw new IllegalStateException("INCOMPLETE: GMP native tax rate is invalid");
         }
-        return amountAfterNativeTax(gross, nativeTax);
+        return rate;
+    }
+
+    private static boolean sameAmount(double expected, double actual) {
+        return Double.isFinite(expected) && Double.isFinite(actual)
+                && Math.abs(expected - actual) <= Math.max(1e-9, Math.abs(expected) * 1e-12);
+    }
+
+    record NativeTaxSnapshot(boolean prepaid, boolean retail, int amount, double gross,
+                             double paidBefore, double rate, double nativeTax) { }
+
+    private boolean nativeTaxPaidOnUpload() throws ReflectiveOperationException {
+        Object config = getNativeConfig.invoke(null, "GlobalMarket.yml");
+        if (!(config instanceof YamlConfiguration yaml)
+                || !yaml.isBoolean("Transaction-After-Taxes")) {
+            throw new IllegalStateException("INCOMPLETE: GMP tax timing is unavailable");
+        }
+        return yaml.getBoolean("Transaction-After-Taxes");
+    }
+
+    static double allocatedPrepaidTax(double paid, int initialAmount, int soldAmount) {
+        if (!Double.isFinite(paid) || paid < 0 || initialAmount <= 0
+                || soldAmount <= 0 || soldAmount > initialAmount) {
+            throw new IllegalArgumentException("INCOMPLETE: invalid GMP prepaid tax allocation");
+        }
+        // Preserve fractional native tax here. Only the final town tax is rounded to money scale.
+        return paid * ((double) soldAmount / initialAmount);
     }
 
     static double amountAfterNativeTax(double gross, double nativeTax) {
@@ -196,6 +292,15 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
         result.getMethod("getMerchant");
         result.getMethod("getTrader");
         result.getMethod("getPrice");
+        result.getMethod("getAmount");
+        Class<?> transaction = result.getMethod("getTransaction").getReturnType();
+        transaction.getMethod("isRetail");
+        transaction.getMethod("getAmount");
+        merchandise.getMethod("getItem");
+        merchandise.getMethod("getPrice");
+        merchandise.getMethod("getRetailPrice");
+        merchandise.getMethod("getMerchandiseType");
+        merchandise.getMethod("getMerchant");
         verifyMerchandise(merchandise);
         Class<?> receiver = result.getMethod("getMerchant").getReturnType();
         Class<?> group = receiver.getMethod("getGroup").getReturnType();
@@ -220,6 +325,9 @@ public final class GlobalMarketPlusIncomeTaxAdapter {
     private static void verifyMerchandise(Class<?> merchandise)
             throws ReflectiveOperationException {
         merchandise.getMethod("getMerchandiseUID");
+        merchandise.getMethod("getTaxed");
+        merchandise.getMethod("getInitialAmount");
+        merchandise.getMethod("getMerchandiseOption").getReturnType().getMethod("isUnlimited");
         Class<?> currency = merchandise.getMethod("getCurrency").getReturnType();
         currency.getMethod("getName");
     }

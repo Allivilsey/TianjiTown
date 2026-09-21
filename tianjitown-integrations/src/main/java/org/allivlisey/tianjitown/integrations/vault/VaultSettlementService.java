@@ -90,6 +90,7 @@ public final class VaultSettlementService {
     private final String accountName;
     private final UUID accountId;
     private final OfflinePlayer account;
+    private final boolean boundAccount;
     private final int scale;
     private final BiFunction<String, Map<String, ?>, String> messageResolver;
 
@@ -99,15 +100,22 @@ public final class VaultSettlementService {
 
     public VaultSettlementService(Server server, String accountName, int configuredScale,
                                   BiFunction<String, Map<String, ?>, String> messageResolver) {
+        this(server, accountName, configuredScale, messageResolver, null);
+    }
+
+    public VaultSettlementService(Server server, String accountName, int configuredScale,
+                                  BiFunction<String, Map<String, ?>, String> messageResolver,
+                                  UUID existingAccountId) {
         this.server = Objects.requireNonNull(server, "server");
         this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
+        this.boundAccount = existingAccountId != null;
         if (accountName == null || accountName.isBlank()) {
             throw new IllegalArgumentException(resolveMessage(ACCOUNT_NAME_REQUIRED, Map.of()));
         }
         try {
-            this.account = server.getOfflinePlayer(accountName);
+            this.account = boundAccount ? server.getOfflinePlayer(existingAccountId) : server.getOfflinePlayer(accountName);
             this.accountId = account.getUniqueId();
-            this.accountName = account.getName() == null ? accountName : account.getName();
+            this.accountName = boundAccount || account.getName() == null ? accountName : account.getName();
         } catch (RuntimeException | LinkageError exception) {
             throw unavailable(ACCOUNT_RESOLVE_FAILURE, exception);
         }
@@ -131,7 +139,7 @@ public final class VaultSettlementService {
             if (economy.hasAccount(account)) {
                 return Result.success(resolveMessage(ACCOUNT_READY, Map.of()));
             }
-            if (economy.createPlayerAccount(account) && economy.hasAccount(account)) {
+            if (!boundAccount && economy.createPlayerAccount(account) && economy.hasAccount(account)) {
                 return Result.success(resolveMessage(ACCOUNT_READY, Map.of()));
             }
             return Result.failure(resolveMessage(ACCOUNT_CREATE_FAILURE,
