@@ -33,6 +33,18 @@ class TownBonusSettingsTest {
     }
 
     @Test
+    void beaconRenewalIntervalMustStayBelowShortestNativeEffectDuration() throws Exception {
+        PluginMessages messages = messages();
+        YamlConfiguration config = configuration("STONE", "0.25");
+        config.set("territory.beacon.refresh-interval-ticks", 200);
+        assertEquals(200, TownBonusSettings.load(config, messages::plainText)
+                .beacon().refreshIntervalTicks());
+        config.set("territory.beacon.refresh-interval-ticks", 201);
+        assertFailure(messages, config, messages.plainText("validation.common.range",
+                Map.of("path", "territory.beacon.refresh-interval-ticks", "minimum", 20, "maximum", 200)));
+    }
+
+    @Test
     void rejectsInvalidBlacklistChanceAndWrongType() throws Exception {
         PluginMessages messages = messages();
         IllegalArgumentException material = assertThrows(IllegalArgumentException.class,
@@ -126,7 +138,7 @@ class TownBonusSettingsTest {
         beaconRefresh.set("territory.beacon.refresh-interval-ticks", 19);
         assertFailure(messages, beaconRefresh,
                 messages.plainText("validation.common.range",
-                        Map.of("path", "territory.beacon.refresh-interval-ticks", "minimum", 20, "maximum", 1_200)));
+                        Map.of("path", "territory.beacon.refresh-interval-ticks", "minimum", 20, "maximum", 200)));
 
         YamlConfiguration diagnosticDays = configuration("STONE", "0.25");
         diagnosticDays.set("operations.quickshop-diagnostic-days", 0);

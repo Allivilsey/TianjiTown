@@ -125,8 +125,9 @@ territory:
       - CRYING_OBSIDIAN
       - ENCHANTING_TABLE
   beacon:
-    # 镇长或副镇长切换信标效果时记录更高等级；数据库内效果覆盖所有小镇领地。
+    # 当前有效且区块正在运行的信标覆盖本镇有效领地；失效后停止续期，沿用原版残留时间。
     enabled: true
+    # 20~200 tick，必须短于一级信标的原版持续时间（220 tick）。
     refresh-interval-ticks: 100
 
 operations:

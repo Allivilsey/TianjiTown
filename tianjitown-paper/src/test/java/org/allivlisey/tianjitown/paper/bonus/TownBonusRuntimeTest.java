@@ -13,7 +13,6 @@ import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.Server;
 import org.bukkit.World;
-import org.bukkit.block.Beacon;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -21,12 +20,12 @@ import org.bukkit.event.Event;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockMultiPlaceEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
-import org.bukkit.event.inventory.InventoryCloseEvent;
+import io.papermc.paper.event.player.PlayerChangeBeaconEffectEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.inventory.BeaconInventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.InventoryHolder;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 
 import java.time.DayOfWeek;
@@ -80,6 +79,7 @@ class TownBonusRuntimeTest {
         World world = mock(World.class);
         when(world.getUID()).thenReturn(worldId);
         when(block.getWorld()).thenReturn(world);
+        when(block.getLocation()).thenReturn(new org.bukkit.Location(world, 0, 0, 0));
         when(block.getChunk()).thenReturn(mock(Chunk.class));
         when(block.getType()).thenReturn(Material.BEACON);
         when(land.contains("res", worldId, 0, 0, 0)).thenReturn(true);
@@ -155,24 +155,19 @@ class TownBonusRuntimeTest {
     }
 
     @Test
-    void delayedBeaconRecordingReadsLatestIndexAndToleratesInvalidBlock() {
-        Beacon beacon = mock(Beacon.class, withSettings().extraInterfaces(InventoryHolder.class));
-        when(beacon.getBlock()).thenReturn(block);
-        when(beacon.getTier()).thenReturn(1);
-        BeaconInventory inventory = mock(BeaconInventory.class);
-        when(inventory.getHolder()).thenReturn((InventoryHolder) beacon);
-        InventoryCloseEvent close = mock(InventoryCloseEvent.class);
-        when(close.getInventory()).thenReturn(inventory);
-        runtime.onBeaconInventoryClose(close);
-        verifyNoInteractions(land);
+    void effectSubmissionChecksCurrentMembershipWithoutInventoryHolder() {
         loadIndex(MemberRole.MAYOR);
-        main.getFirst().run();
-        verify(land).contains("res", worldId, 0, 0, 0);
+        PlayerChangeBeaconEffectEvent allowed = mock(PlayerChangeBeaconEffectEvent.class);
+        when(allowed.getBeacon()).thenReturn(block);
+        when(allowed.getPlayer()).thenReturn(player);
+        runtime.onBeaconEffectChange(allowed);
+        verify(allowed, never()).setCancelled(true);
 
-        when(beacon.getBlock()).thenThrow(new IllegalStateException("unloaded"));
-        runtime.onBeaconInventoryClose(close);
-        assertDoesNotThrow(() -> main.getLast().run());
-        verify(plugin.getLogger()).warning("log.bonus.beacon-record-object-failure");
+        // Losing the leader role after opening the UI must also block the actual submission.
+        loadIndex(MemberRole.MEMBER);
+        runtime.onBeaconEffectChange(allowed);
+        verify(allowed).setCancelled(true);
+        assertTrue(writes.isEmpty());
     }
 
     @Test
@@ -200,7 +195,9 @@ class TownBonusRuntimeTest {
     @Test
     void unsafeOrDisabledBuildingRefundsNeverReserveQuota() {
         loadIndex(MemberRole.MEMBER);
-        runtime.onPlace(mock(BlockMultiPlaceEvent.class));
+        BlockMultiPlaceEvent multi = mock(BlockMultiPlaceEvent.class);
+        when(multi.getBlockPlaced()).thenReturn(block);
+        runtime.onPlace(multi);
         BlockPlaceEvent place = buildingPlacement();
         when(place.getItemInHand().hasItemMeta()).thenReturn(true);
         runtime.onPlace(place);
@@ -211,6 +208,29 @@ class TownBonusRuntimeTest {
         assertFalse(runtime.buildingRefundEnabled());
         runtime.onPlace(place);
         assertTrue(writes.isEmpty());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Material.class, mode = EnumSource.Mode.MATCH_ALL,
+            names = "(?!LEGACY_).*SHULKER_BOX")
+    void everyShulkerVariantIsRejectedRegardlessOfMetadata(Material material) {
+        loadIndex(MemberRole.MEMBER);
+        BlockPlaceEvent place = buildingPlacement();
+        when(block.getType()).thenReturn(material);
+        when(place.getItemInHand().getType()).thenReturn(material);
+        // The fixture blacklist contains only TNT, so the built-in guard must reject boxes.
+        for (boolean hasMetadata : new boolean[]{false, true}) {
+            when(place.getItemInHand().hasItemMeta()).thenReturn(hasMetadata);
+            runtime.onPlace(place);
+            assertTrue(writes.isEmpty(), material + " metadata=" + hasMetadata);
+        }
+        verify(player, never()).getInventory();
+        verify(repository, never()).reserveBuildingRefund(any(), any(), any(), anyInt(), anyInt(),
+                any(), anyString(), anyInt());
+
+        // A normal block at the same location must still reach the quota reservation.
+        runtime.onPlace(buildingPlacement());
+        assertEquals(1, writes.size());
     }
 
     @Test
@@ -231,7 +251,7 @@ class TownBonusRuntimeTest {
     private TownBonusRepository.BonusIndex index(MemberRole role) {
         return new TownBonusRepository.BonusIndex(Map.of(playerId, townId), Map.of(playerId, role),
                 Map.of(new TownBonusRepository.ChunkKey(worldId, 0, 0), townId),
-                Map.of(townId, "res"), Map.of());
+                Map.of(townId, "res"));
     }
 
     private void loadIndex(MemberRole role) {

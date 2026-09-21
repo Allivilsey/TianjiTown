@@ -104,10 +104,11 @@ public record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement
         String root = "territory.beacon";
         long refreshTicks = ConfigurationValues.longInteger(config,
                 root + ".refresh-interval-ticks", 100L, messageResolver);
-        if (refreshTicks < 20 || refreshTicks > 20L * 60) {
+        // A tier-one beacon lasts 220 ticks; renewal must finish before it expires.
+        if (refreshTicks < 20 || refreshTicks > 200) {
             throw invalid(messageResolver, BEACON_REFRESH_INTERVAL_RANGE,
                     Map.of("path", root + ".refresh-interval-ticks", "minimum", 20,
-                            "maximum", 1_200));
+                            "maximum", 200));
         }
         return new BeaconEnhancement(ConfigurationValues.bool(config, root + ".enabled", true,
                 messageResolver), refreshTicks);

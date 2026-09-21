@@ -58,46 +58,8 @@ public final class TownBonusRepository {
                     residences.putIfAbsent(townId, rows.getString("residence_name"));
                 }
             }
-            Map<UUID, Map<String, Integer>> beaconEffects = new HashMap<>();
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT e.town_id, e.effect_key, e.amplifier
-                      FROM town_beacon_effects e JOIN towns t ON t.town_id = e.town_id
-                     WHERE t.status = 'ACTIVE'
-                    """); ResultSet rows = statement.executeQuery()) {
-                while (rows.next()) {
-                    beaconEffects.computeIfAbsent(readUuid(rows, "town_id"),
-                                    ignored -> new HashMap<>())
-                            .put(rows.getString("effect_key"), rows.getInt("amplifier"));
-                }
-            }
-            return new BonusIndex(memberships, roles, territories, residences, beaconEffects);
-        });
-    }
-
-    public boolean recordBeaconEffect(UUID townId, String effectKey, int amplifier) {
-        requireWorkerThread();
-        Objects.requireNonNull(townId, "townId");
-        if (effectKey == null || effectKey.isBlank() || effectKey.length() > 128) {
-            throw new IllegalArgumentException("信标效果键无效");
-        }
-        if (amplifier < 0) {
-            throw new IllegalArgumentException("信标效果等级不能小于 0");
-        }
-        return transaction(connection -> {
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    INSERT INTO town_beacon_effects (town_id, effect_key, amplifier)
-                    SELECT ?, ?, ?
-                     WHERE EXISTS (SELECT 1 FROM towns WHERE town_id = ? AND status = 'ACTIVE')
-                    ON CONFLICT (town_id, effect_key) DO UPDATE SET
-                        amplifier = excluded.amplifier
-                    WHERE excluded.amplifier > town_beacon_effects.amplifier
-                    """)) {
-                statement.setBytes(1, uuid(townId));
-                statement.setString(2, effectKey);
-                statement.setInt(3, amplifier);
-                statement.setBytes(4, uuid(townId));
-                return statement.executeUpdate() > 0;
-            }
+            // Legacy town_beacon_effects rows are intentionally ignored. Live sources come from the world.
+            return new BonusIndex(memberships, roles, territories, residences);
         });
     }
 
@@ -256,17 +218,12 @@ public final class TownBonusRepository {
     }
 
     public record BonusIndex(Map<UUID, UUID> memberships, Map<UUID, MemberRole> roles,
-                             Map<ChunkKey, UUID> territories, Map<UUID, String> residenceNames,
-                             Map<UUID, Map<String, Integer>> beaconEffects) {
+                             Map<ChunkKey, UUID> territories, Map<UUID, String> residenceNames) {
         public BonusIndex {
             memberships = Map.copyOf(memberships);
             roles = Map.copyOf(roles);
             territories = Map.copyOf(territories);
             residenceNames = Map.copyOf(residenceNames);
-            Map<UUID, Map<String, Integer>> immutableEffects = new HashMap<>();
-            beaconEffects.forEach((townId, effects) -> immutableEffects.put(townId,
-                    Map.copyOf(effects)));
-            beaconEffects = Map.copyOf(immutableEffects);
         }
     }
 

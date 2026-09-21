@@ -70,13 +70,17 @@ class TownBonusRepositorySqliteTest {
             assertEquals(MemberRole.MAYOR, index.roles().get(playerId));
             assertEquals(townId, index.territories().get(
                     new TownBonusRepository.ChunkKey(worldId, 10, 20)));
-            assertTrue(repository.recordBeaconEffect(townId, "minecraft:speed", 0));
-            assertFalse(repository.recordBeaconEffect(townId, "minecraft:speed", 0));
-            assertThrows(IllegalArgumentException.class,
-                    () -> repository.recordBeaconEffect(townId, "minecraft:speed", -1));
-            assertTrue(repository.recordBeaconEffect(townId, "minecraft:speed", 1));
-            assertEquals(1, repository.loadBonusIndex().beaconEffects().get(townId)
-                    .get("minecraft:speed"));
+            // Old persistent unlocks remain in SQLite for compatibility, but are not runtime inputs.
+            try (Connection connection = gate.dataSource().getConnection();
+                 PreparedStatement statement = connection.prepareStatement(
+                         "INSERT INTO town_beacon_effects (town_id, effect_key, amplifier) VALUES (?, ?, ?)")) {
+                statement.setBytes(1, uuid(townId));
+                statement.setString(2, "minecraft:speed");
+                statement.setInt(3, 1);
+                statement.executeUpdate();
+            }
+            assertEquals(index, repository.loadBonusIndex());
+            assertEquals(1, countRows(gate, "town_beacon_effects"));
             LocalDate day = LocalDate.of(2026, 8, 10);
             assertTrue(repository.reserveBuildingRefund(townId, playerId, worldId, 10, 20,
                     day, "minecraft:stone", 2).granted());

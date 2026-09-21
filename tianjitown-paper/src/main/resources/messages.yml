@@ -707,7 +707,7 @@ log:
     ui-close-failure: '停服关闭玩家界面失败: {detail}'
     ui-viewer-close-failure: '关闭玩家小镇界面失败 {player}: {detail}'
     async-shutdown-timeout: '等待异步任务结束超时，仍有 {active} 个任务'
-    beacon-cleanup-failure: '停服清理信标效果失败: {detail}'
+    beacon-cleanup-failure: '停服释放信标来源缓存失败: {detail}'
     buff-cleanup-failure: '停服清理公共 Buff 失败: {detail}'
     database-close-failure: '关闭 SQLite 数据源失败: {detail}'
     residence-names-load-failure: '读取系统领地名称清单失败: {detail}'
@@ -785,9 +785,7 @@ log:
   bonus:
     index-refresh-failure: '刷新领地加成缓存失败，将继续使用旧快照: {detail}'
     refund-counter-cleanup-failure: '清理建筑返还周计数失败: {detail}'
-    beacon-refresh-object-failure: '信标刷新遇到已失效的玩家、世界或依赖对象，已跳过该对象: {detail}'
-    beacon-record-object-failure: '信标对象在延迟回调前已失效，已跳过记录: {detail}'
-    beacon-cleanup-object-failure: '清理托管信标效果时对象已失效: {detail}'
+    beacon-refresh-object-failure: '信标来源校验或玩家效果刷新失败，已跳过该对象，后续周期将重试: {detail}'
     diagnostic-report-write-failure: '写入一键诊断报告失败: {detail}'
   global-market-plus:
     transaction-failure: 'GlobalMarketPlus 成交收入税处理失败: {detail}'
