@@ -51,6 +51,25 @@ public final class MessageContract {
 
     private static Map<String, Entry> entries() {
         Map<String, Entry> entries = new LinkedHashMap<>();
+        text(entries, "chat.admin.application-fee-list", "count");
+        text(entries, "chat.admin.application-fee-entry", "id", "player", "amount", "state", "version", "detail");
+        text(entries, "chat.admin.application-fee-help");
+        text(entries, "chat.admin.application-fee-refund-confirmation", "id", "amount", "state");
+        text(entries, "chat.admin.application-fee-resolve-confirmation", "id", "state", "resolution", "version", "reason");
+        text(entries, "chat.admin.application-fee-result", "state", "detail", "action");
+        text(entries, "chat.admin.recovery-list", "count");
+        text(entries, "chat.admin.recovery-entry", "id", "town", "type", "amount", "state", "detail");
+        text(entries, "chat.admin.recovery-help");
+        text(entries, "chat.admin.recovery-confirmation", "id", "state", "resolution", "reason");
+        text(entries, "chat.admin.recovery-result", "id", "state");
+        text(entries, "chat.admin.subsidy-recovery-entry", "id", "town", "tax", "subsidy", "state", "recorded", "detail");
+        text(entries, "chat.admin.subsidy-recovery-help");
+        text(entries, "chat.admin.subsidy-recovery-running");
+        text(entries, "chat.admin.income-tax-recovery-help");
+        text(entries, "chat.admin.income-tax-recovery-entry", "id", "town", "player", "source", "amount", "state", "version", "detail");
+        text(entries, "chat.admin.income-tax-refund-confirmation", "id", "amount", "player", "state");
+        text(entries, "log.external-income-tax.collection-pending", "businessKey", "status", "detail");
+        text(entries, "log.external-income-tax.collection-failure", "source", "businessKey", "detail");
         // Startup and runtime-gate messages are intentionally required: without them a
         // locked server cannot explain why player-facing features are unavailable.
         required(entries, List.of(
@@ -135,10 +154,18 @@ public final class MessageContract {
         // Existing customized role messages may omit the new optional player placeholder.
         text(entries, "dialog.confirmation.change-role-consequence", "player", "role");
         text(entries, "dialog.application.reselect-site");
+        text(entries, "chat.admin.help-application-delate");
+        text(entries, "chat.admin.help-application-clearcd");
+        text(entries, "chat.admin.application-cooldown-cleared", "player", "count");
         // These entries are used directly by rendering boundaries and therefore have a
         // strict placeholder contract as well as a required-key contract.
         text(entries, "system.missing-message", "key");
         text(entries, "system.operation-failed", "detail");
+        text(entries, "chat.finance.account-unavailable");
+        text(entries, "diagnostic.vault.settlement.privacy-failure", "account", "detail");
+        text(entries, "diagnostic.vault.settlement.migration-failure", "detail");
+        text(entries, "log.vault.settlement.migration-complete", "account", "uuid");
+        text(entries, "log.scheduler.periodic.settlement-privacy-failure", "detail");
         text(entries, "validation.application.name-length", "minimum", "maximum");
         text(entries, "validation.application.rule-length", "index", "maximum");
         text(entries, "validation.application.rule-format", "index");

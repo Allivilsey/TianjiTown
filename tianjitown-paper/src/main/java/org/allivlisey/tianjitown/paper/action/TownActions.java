@@ -180,6 +180,11 @@ public final class TownActions {
         economy.donate(actor, amountMinor, completion);
     }
 
+    public void donate(Player actor, UUID expectedTownId, long amountMinor,
+                Consumer<TownActionOutcome<EconomyRepository.LedgerMutation>> completion) {
+        economy.donate(actor, expectedTownId, amountMinor, completion);
+    }
+
     public void expandTown(Player actor, ExpansionDirection direction,
                     Consumer<TownActionOutcome<EconomyRepository.ExpansionOperation>> completion) {
         expansion.expandTown(actor, direction, completion);

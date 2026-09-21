@@ -1,6 +1,9 @@
 package org.allivlisey.tianjitown.paper;
 
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
+import org.allivlisey.tianjitown.paper.action.TownActions;
+import org.allivlisey.tianjitown.paper.bonus.TownBonusRuntime;
+import org.allivlisey.tianjitown.integrations.residence.ResidenceLandProtectionService;
 import org.allivlisey.tianjitown.paper.runtime.GateStatus;
 import org.allivlisey.tianjitown.paper.config.RuntimeConfigurationValidator.DatabaseSettings;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
@@ -26,6 +29,8 @@ import revxrsal.commands.bukkit.actor.BukkitCommandActor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
+import java.time.Instant;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -60,7 +65,7 @@ class TownStartupCoordinatorTest {
         when(plugin.getConfig()).thenReturn(new YamlConfiguration());
         startup.messages = new PluginMessages(directory.toFile());
         try (var pools = mockConstruction(DatabaseGate.class, (pool, context) ->
-                when(pool.verifyAndMigrate()).thenReturn(DatabaseGate.HealthResult.success("1.0")))) {
+                when(pool.verifyAndMigrate()).thenReturn(DatabaseGate.HealthResult.success("1.1")))) {
             startup.checkDatabase(List.of(), new DatabaseSettings(5000, 5000), generation);
             DatabaseGate candidate = pools.constructed().getFirst();
             ArgumentCaptor<Runnable> callback = ArgumentCaptor.forClass(Runnable.class);
@@ -107,6 +112,60 @@ class TownStartupCoordinatorTest {
         verifyNoInteractions(current);
         startup.onDisable();
         verify(current).close();
+    }
+
+    @Test
+    void degradedBusinessDiagnosticsActivateComponentsWithoutClosingDatabase() throws Exception {
+        try (var registrars = mockConstruction(TownComponentRegistrar.class)) {
+            startup = new TownStartupCoordinator(plugin);
+            startup.messages = new PluginMessages(directory.toFile());
+            long generation = startup.scheduler.start();
+            DatabaseGate candidate = mock(DatabaseGate.class);
+            assertTrue(startup.trackDatabaseCandidate(candidate, generation));
+            TownRuntime runtime = mock(TownRuntime.class, RETURNS_DEEP_STUBS);
+
+            completeActivation(candidate, generation, runtime,
+                    new TownBonusRuntime.DiagnosticResult(false, Instant.now(), "待处理资金和扩张", null, true));
+
+            verify(registrars.constructed().getFirst()).activateRuntimeComponents(eq(candidate),
+                    eq(List.of()), eq("database ok"), eq(generation), eq(runtime), any(), any(),
+                    any(), eq(Set.of()), eq(Set.of()));
+            verify(candidate, never()).close();
+            assertNotEquals(GateStatus.State.LOCKED, startup.gateStatus().state());
+        }
+    }
+
+    @Test
+    void failedIntegrityDiagnosticsCloseDatabaseBeforeAnyBusinessComponentStarts() throws Exception {
+        try (var registrars = mockConstruction(TownComponentRegistrar.class)) {
+            startup = new TownStartupCoordinator(plugin);
+            startup.messages = new PluginMessages(directory.toFile());
+            long generation = startup.scheduler.start();
+            DatabaseGate candidate = mock(DatabaseGate.class);
+            assertTrue(startup.trackDatabaseCandidate(candidate, generation));
+            TownRuntime runtime = mock(TownRuntime.class, RETURNS_DEEP_STUBS);
+
+            completeActivation(candidate, generation, runtime,
+                    new TownBonusRuntime.DiagnosticResult(false, Instant.now(), "SQLite integrity failure", null, false));
+
+            verifyNoInteractions(registrars.constructed().getFirst());
+            verify(candidate).close();
+            assertEquals(GateStatus.State.LOCKED, startup.gateStatus().state());
+            assertNull(startup.townRuntime());
+            verify(runtime, never()).recoverStartupState();
+        }
+    }
+
+    private void completeActivation(DatabaseGate candidate, long generation, TownRuntime runtime,
+                                    TownBonusRuntime.DiagnosticResult diagnostic) throws Exception {
+        var method = TownStartupCoordinator.class.getDeclaredMethod("completeRuntimeActivation",
+                DatabaseGate.class, List.class, String.class, long.class, TownRuntime.class,
+                TownActions.class, TownUiController.class, ResidenceLandProtectionService.class,
+                Set.class, Set.class, TownBonusRuntime.DiagnosticResult.class);
+        method.setAccessible(true);
+        method.invoke(startup, candidate, List.of(), "database ok", generation, runtime,
+                mock(TownActions.class), mock(TownUiController.class),
+                mock(ResidenceLandProtectionService.class), Set.of(), Set.of(), diagnostic);
     }
 
     @Test

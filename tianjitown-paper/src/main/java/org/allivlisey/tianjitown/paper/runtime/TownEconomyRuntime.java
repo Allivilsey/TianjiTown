@@ -64,6 +64,8 @@ final class TownEconomyRuntime {
     private final java.util.function.BooleanSupplier consumptionEnabled;
     private final DonationRefundCoordinator donationRefunds;
     private final RetryingWorkQueue<Finalization> finalizations;
+    private final Object operationLifecycle = new Object();
+    private final java.util.Set<UUID> activeOperations = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private Consumer<Player> taxChangeNotifier = player -> { };
 
     TownEconomyRuntime(TianjiTownPlugin plugin,
@@ -97,6 +99,7 @@ final class TownEconomyRuntime {
             }
         }, 20L * 5, 20L * 30, pending -> {
             EconomyRepository.LedgerMutation mutation = finance.completeOperation(pending.operationId);
+            activeOperations.remove(pending.operationId);
             databaseAvailable.set(true);
             plugin.runMain(() -> pending.success.accept(mutation));
         }, (pending, exception) -> {
@@ -149,6 +152,7 @@ final class TownEconomyRuntime {
                     @Override
                     public void recovered(EconomyRepository.EconomyOperation operation,
                                           int attempts) {
+                        activeOperations.remove(operation.operationId());
                         plugin.getLogger().info(plugin.messages().plainText(
                                 DONATION_REFUND_RECOVERED, Map.of(
                                         "operation", operation.operationId(),
@@ -159,6 +163,7 @@ final class TownEconomyRuntime {
                     @Override
                     public void exhausted(EconomyRepository.EconomyOperation operation,
                                           String detail) {
+                        activeOperations.remove(operation.operationId());
                         plugin.getLogger().severe(plugin.messages().plainText(
                                 DONATION_REFUND_EXHAUSTED, Map.of(
                                         "operation", operation.operationId(),
@@ -235,6 +240,12 @@ final class TownEconomyRuntime {
     void donateAction(Player player, long amountMinor,
                       Consumer<EconomyRepository.LedgerMutation> success,
                       Consumer<RuntimeException> failure) {
+        donateAction(player, null, amountMinor, success, failure);
+    }
+
+    void donateAction(Player player, UUID expectedTownId, long amountMinor,
+                      Consumer<EconomyRepository.LedgerMutation> success,
+                      Consumer<RuntimeException> failure) {
         if (!consumptionEnabled.getAsBoolean()) {
             failure.accept(new IllegalStateException(
                     plugin.messages().plainText(CONSUMPTION_PAUSED)));
@@ -245,7 +256,10 @@ final class TownEconomyRuntime {
                     player.getUniqueId()).orElseThrow(() ->
                     new IllegalArgumentException(plugin.messages().plainText(TOWN_REQUIRED)));
             String key = "donation:" + UUID.randomUUID();
-            return finance.prepareOperation(account.townId(), "DONATION", amountMinor,
+            // The persisted operation checks membership in this town in its own transaction.
+            // A confirmation from an older town must never select the player's new town.
+            UUID townId = expectedTownId == null ? account.townId() : expectedTownId;
+            return finance.prepareOperation(townId, "DONATION", amountMinor,
                     player.getUniqueId(), player.getName(), key,
                     plugin.messages().plainText(DONATION_OPERATION_REASON));
         }, operation -> settlement.transferFromPlayer(player, operation.amountMinor()), success,
@@ -319,7 +333,11 @@ final class TownEconomyRuntime {
         }
         plugin.runAsync(() -> {
             try {
-                EconomyRepository.EconomyOperation operation = prepare.get();
+                EconomyRepository.EconomyOperation operation;
+                synchronized (operationLifecycle) {
+                    operation = prepare.get();
+                    activeOperations.add(operation.operationId());
+                }
                 plugin.runMain(
                         () -> preflightExternalOperation(sender, operation, external, success,
                                 failure));
@@ -356,6 +374,7 @@ final class TownEconomyRuntime {
                         () -> applyExternalOperation(sender, operation, external, success,
                                 failure));
             } catch (RuntimeException exception) {
+                activeOperations.remove(operation.operationId());
                 tasks.reportActionFailure(exception, failure);
             }
         });
@@ -404,6 +423,7 @@ final class TownEconomyRuntime {
                                                VaultSettlementService.Result result,
                                                Consumer<RuntimeException> failure) {
         plugin.runAsync(() -> {
+            boolean refundScheduled = false;
             try {
                 if (result.compensationRequired()) {
                     finance.requireCompensation(operation.operationId(), result.message());
@@ -412,6 +432,7 @@ final class TownEconomyRuntime {
                             && operation.actorId() != null;
                     if (automaticRefund) {
                         donationRefunds.submit(operation);
+                        refundScheduled = true;
                         plugin.getLogger().warning(plugin.messages().plainText(
                                 EXTERNAL_OPERATION_REFUND_AUTO,
                                 Map.of("operation", safeText(operation.operationId()),
@@ -432,7 +453,25 @@ final class TownEconomyRuntime {
                                 + refundHint(operation, result))));
             } catch (RuntimeException exception) {
                 tasks.reportActionFailure(exception, failure);
+            } finally {
+                if (!refundScheduled) activeOperations.remove(operation.operationId());
             }
+        });
+    }
+
+    void resolveOperation(CommandSender sender, EconomyRepository.EconomyOperation expected,
+                          boolean applied, String reason,
+                          Consumer<EconomyRepository.EconomyOperation> success) {
+        tasks.write(sender, () -> {
+            synchronized (operationLifecycle) {
+                if (activeOperations.contains(expected.operationId())) {
+                    throw new IllegalStateException("该资金操作仍在执行或自动恢复，不能同时人工核实");
+                }
+                return finance.resolveOperation(expected, applied, actorId(sender), sender.getName(), reason);
+            }
+        }, resolved -> {
+            reconcileSettlement();
+            success.accept(resolved);
         });
     }
 

@@ -58,6 +58,11 @@ final class TownEconomyActions {
 
     public void donate(Player actor, long amountMinor,
                 Consumer<TownActionOutcome<EconomyRepository.LedgerMutation>> completion) {
+        donate(actor, null, amountMinor, completion);
+    }
+
+    public void donate(Player actor, UUID expectedTownId, long amountMinor,
+                Consumer<TownActionOutcome<EconomyRepository.LedgerMutation>> completion) {
         String action = "TOWN_DONATE";
         if (support.rejectBeforeWrite(action, completion)) {
             return;
@@ -73,7 +78,7 @@ final class TownEconomyActions {
                     "FEATURE_DISABLED")));
             return;
         }
-        runtime.donateAction(actor, amountMinor, mutation -> completion.accept(
+        runtime.donateAction(actor, expectedTownId, amountMinor, mutation -> completion.accept(
                         TownActionOutcome.success(TownActionResult.success(action,
                                 Map.of("town_id", mutation.townId(), "amount_minor", amountMinor,
                                         "balance_minor", mutation.balanceAfterMinor())), mutation)),

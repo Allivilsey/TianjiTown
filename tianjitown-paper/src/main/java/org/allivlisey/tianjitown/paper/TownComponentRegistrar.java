@@ -47,9 +47,11 @@ final class TownComponentRegistrar {
         runtime.setQuickShopTaxAvailable(quickShopCapability.available());
         Plugin jobs = java.util.Objects.requireNonNull(
                 plugin.getServer().getPluginManager().getPlugin("Jobs"), "Jobs");
-        JobsIncomeTaxAdapter.Capability jobsCapability = new JobsIncomeTaxAdapter(plugin, jobs,
+        JobsIncomeTaxAdapter jobsAdapter = new JobsIncomeTaxAdapter(plugin, jobs,
                 runtime::taxEnabled, runtime::acceptJobsIncomeTax,
-                startup.messages()::plainText).register();
+                startup.messages()::plainText);
+        startup.ownRuntimeHook(jobsAdapter);
+        JobsIncomeTaxAdapter.Capability jobsCapability = jobsAdapter.register();
         Plugin globalMarketPlus = java.util.Objects.requireNonNull(
                 plugin.getServer().getPluginManager().getPlugin("GlobalMarketPlus"),
                 "GlobalMarketPlus");
@@ -101,7 +103,10 @@ final class TownComponentRegistrar {
         startup.scheduler.registerPeriodic(runtime);
         List<String> details = new ArrayList<>(previousDetails);
         details.add("OK " + databaseDetail);
-        details.add(startup.messages().plainText(STARTUP_DIAGNOSTIC_PASSED));
+        details.add(runtime.bonuses().lastDiagnostic().healthy()
+                ? startup.messages().plainText(STARTUP_DIAGNOSTIC_PASSED)
+                : "WARN " + runtime.bonuses().lastDiagnostic().detail()
+                    + "；运行时已启用，待处理记录可通过诊断和恢复入口处理");
         details.add((quickShopCapability.available() ? "OK " : "WARN ")
                 + quickShopCapability.detail());
         details.add((jobsCapability.available() ? "OK " : "WARN ")

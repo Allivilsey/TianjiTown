@@ -359,7 +359,7 @@ public final class TownFinanceDialogs {
                                             ActionButton.create(presentation.dialogComponent("donation.confirm"),
                                                     presentation.dialogComponent("donation.confirm-tooltip"),
                                                     170, presentation.dialogAction(player, session,
-                                                            response -> applyDonationDialog(player, response))),
+                                                            response -> applyDonationDialog(player, account.townId(), response))),
                                             ActionButton.create(presentation.dialogComponent("common.cancel"),
                                                     null, 170,
                                                     presentation.dialogAction(player, session, "FINANCE", "0"))))
@@ -369,7 +369,7 @@ public final class TownFinanceDialogs {
         });
     }
 
-    private void applyDonationDialog(Player player, DialogResponseView response) {
+    private void applyDonationDialog(Player player, UUID expectedTownId, DialogResponseView response) {
         String value = Objects.requireNonNullElse(response.getText("donation_amount"), "").strip();
         try {
             BigDecimal decimal = new BigDecimal(value);
@@ -378,7 +378,7 @@ public final class TownFinanceDialogs {
                 throw new IllegalArgumentException(plugin.messages().plainText(
                         "validation.vault.donation-amount-positive"));
             }
-            actions.donate(player, amount.minorUnits(), outcome ->
+            actions.donate(player, expectedTownId, amount.minorUnits(), outcome ->
                     facade.handleOutcome(player, outcome, mutation ->
                             presentation.openNotice(player, presentation.dialogText("notice.donation-success-title"),
                                     presentation.dialogText("notice.donation-success-message", Map.of(

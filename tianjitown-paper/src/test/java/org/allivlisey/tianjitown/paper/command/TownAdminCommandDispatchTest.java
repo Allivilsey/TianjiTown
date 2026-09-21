@@ -111,7 +111,7 @@ class TownAdminCommandDispatchTest {
         prepareHelp();
         when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
         execute();
-        verify(messages).send(sender, "chat.admin.help-title", Map.of("version", "1.0.0-SNAPSHOT"));
+        verify(messages).send(sender, "chat.admin.help-title", Map.of("version", "1.0.0"));
     }
 
     @Test
@@ -205,7 +205,7 @@ class TownAdminCommandDispatchTest {
     private void prepareHelp() {
         PluginMeta meta = mock(PluginMeta.class);
         when(plugin.getPluginMeta()).thenReturn(meta);
-        when(meta.getVersion()).thenReturn("1.0.0-SNAPSHOT");
+        when(meta.getVersion()).thenReturn("1.0.0");
         when(messages.component(anyString())).thenAnswer(invocation ->
                 Component.text((String) invocation.getArgument(0)));
         when(messages.component(anyString(), anyMap())).thenAnswer(invocation ->
@@ -291,7 +291,7 @@ class TownAdminCommandDispatchTest {
         when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
         assertEquals(List.of("money"), lamp.autoCompleter().complete(actor, "tianjitown mo"));
         assertEquals(List.of(), lamp.autoCompleter().complete(actor, "tianjitown money rec"));
-        assertEquals(java.util.Set.of("view", "adjust"),
+        assertEquals(java.util.Set.of("view", "adjust", "pending", "resolve", "subsidy", "tax"),
                 java.util.Set.copyOf(lamp.autoCompleter().complete(actor, "tianjitown money ")));
         verifyNoInteractions(completer);
     }
@@ -461,6 +461,80 @@ class TownAdminCommandDispatchTest {
         } else {
             verify(governance, never()).cancelVote(any(), any(), anyString(), anyString());
         }
+    }
+
+    @Test
+    void forceDeleteApplicationDispatchesWithoutExternalRecoveryOrRefund() {
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
+        when(sender.getName()).thenReturn("Console");
+        TownRepository repository = mock(TownRepository.class);
+        when(runtime.repository()).thenReturn(repository);
+        var application = mock(org.allivlisey.tianjitown.storage.town.ApplicationSnapshot.class);
+        UUID applicationId = UUID.randomUUID();
+        when(application.id()).thenReturn(applicationId);
+        when(application.text()).thenReturn(new org.allivlisey.tianjitown.core.application.ApplicationText(
+                "测试小镇", "sky", "简介", List.of("规则")));
+        when(repository.forceDeleteApplication(eq("sky"), eq(new UUID(0, 0)), eq("Console"), anyString()))
+                .thenReturn(application);
+        doAnswer(invocation -> {
+            Supplier<?> operation = invocation.getArgument(1);
+            java.util.function.Consumer<Object> success = invocation.getArgument(2);
+            success.accept(operation.get());
+            return null;
+        }).when(runtime).write(eq(sender), any(), any());
+
+        execute("application", "delate", "sky");
+
+        verify(repository).forceDeleteApplication(eq("sky"), eq(new UUID(0, 0)), eq("Console"), anyString());
+        verifyNoMoreInteractions(repository);
+        verify(messages).send(sender, "chat.admin.application-cancelled-without-cooldown",
+                Map.of("code", "sky", "id", applicationId));
+    }
+
+    @Test
+    void forceDeleteApplicationRequiresAdministratorPermission() {
+        execute("application", "delate", "sky");
+        verify(messages).send(sender, "chat.admin.no-permission");
+        verifyNoInteractions(runtime);
+    }
+
+    @Test
+    void clearCooldownDispatchesForUuidAndReportsResult() {
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
+        when(sender.getName()).thenReturn("Console");
+        UUID playerId = UUID.randomUUID();
+        TownRepository repository = mock(TownRepository.class);
+        when(runtime.repository()).thenReturn(repository);
+        when(repository.clearApplicationCooldown(playerId, new UUID(0, 0), "Console")).thenReturn(2);
+        doAnswer(invocation -> {
+            Supplier<?> operation = invocation.getArgument(1);
+            java.util.function.Consumer<Object> success = invocation.getArgument(2);
+            success.accept(operation.get());
+            return null;
+        }).when(runtime).write(eq(sender), any(), any());
+
+        execute("application", "clearcd", playerId.toString());
+
+        verify(repository).clearApplicationCooldown(playerId, new UUID(0, 0), "Console");
+        verifyNoMoreInteractions(repository);
+        verify(messages).send(sender, "chat.admin.application-cooldown-cleared",
+                Map.of("player", playerId.toString(), "count", 2));
+    }
+
+    @Test
+    void clearCooldownRequiresAdministratorPermission() {
+        execute("application", "clearcd", "Steve");
+        verify(messages).send(sender, "chat.admin.no-permission");
+        verifyNoInteractions(runtime);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"delate", "delate sky extra", "clearcd", "clearcd Steve extra"})
+    void applicationManagementRequiresExactlyOneTarget(String command) {
+        when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
+        lamp.dispatch(actor, "tianjitown application " + command);
+        verify(messages).send(eq(sender), eq("chat.admin.argument-error"), anyMap());
+        verify(runtime, never()).write(any(), any(), any());
     }
 
     private void execute(String... args) {

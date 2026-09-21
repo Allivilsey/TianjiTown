@@ -29,7 +29,7 @@ class TownAdminCompletionEngineTest {
     private PluginMessages messages;
     private TownAdminCompletionEngine engine;
     private final TownAdminCompletionEngine.Snapshot snapshot = new TownAdminCompletionEngine.Snapshot(
-            List.of(new TownAdminCompletionEngine.TownCandidate(town, "sky", TownStatus.ACTIVE)),
+            List.of(new TownAdminCompletionEngine.TownCandidate(town, "sky", TownStatus.ACTIVE, true)),
             Map.of(town, List.of(member)));
     private final TownAdminCompletionEngine.Dynamic dynamic = new TownAdminCompletionEngine.Dynamic(
             List.of(new TownAdminCompletionEngine.PlayerCandidate(member, "MemberOne", true)),
@@ -72,6 +72,42 @@ class TownAdminCompletionEngineTest {
         assertEquals(List.of(messages.plainText("chat.admin.completion.reason-hint")), engine.complete(
                 new String[]{"town", "delete", "sky", ""}, snapshot, dynamic));
 
+    }
+
+    @Test
+    void deleteExcludesReleasedArchivesButKeepsPendingCleanupAndHistoryCommands() {
+        var towns = new TownAdminCompletionEngine.Snapshot(List.of(
+                new TownAdminCompletionEngine.TownCandidate(UUID.randomUUID(), "active", TownStatus.ACTIVE, true),
+                new TownAdminCompletionEngine.TownCandidate(UUID.randomUUID(), "creating", TownStatus.PROVISIONING, true),
+                new TownAdminCompletionEngine.TownCandidate(UUID.randomUUID(), "pending", TownStatus.ARCHIVED, true),
+                new TownAdminCompletionEngine.TownCandidate(UUID.randomUUID(), "test", TownStatus.ARCHIVED, false)),
+                Map.of());
+
+        assertEquals(List.of("active", "creating", "pending"), engine.complete(
+                new String[]{"town", "delete", ""}, towns, dynamic));
+        assertEquals(List.of(), engine.complete(
+                new String[]{"town", "delete", "test", ""}, towns, dynamic));
+        assertEquals(List.of(messages.plainText("chat.admin.completion.reason-hint")), engine.complete(
+                new String[]{"town", "delete", "pending", ""}, towns, dynamic));
+        assertEquals(List.of("active", "creating", "pending", "test"), engine.complete(
+                new String[]{"town", "view", ""}, towns, dynamic));
+        assertEquals(List.of(), engine.complete(
+                new String[]{"application", "cancel-archived", ""}, towns, dynamic));
+    }
+
+    @Test
+    void applicationCommandsCompleteApplicationsAndOfflineApplicants() {
+        var applications = new TownAdminCompletionEngine.Snapshot(List.of(), Map.of(), Map.of(),
+                List.of(new TownAdminCompletionEngine.ApplicationCandidate(submitted, "draft", member),
+                        new TownAdminCompletionEngine.ApplicationCandidate(failed, "failed", member)));
+        assertEquals(List.of("draft"), engine.complete(
+                new String[]{"application", "delate", "d"}, applications, dynamic));
+        assertEquals(List.of(submitted.toString(), failed.toString()), engine.complete(
+                new String[]{"application", "delate", "0000"}, applications, dynamic));
+        var offline = new TownAdminCompletionEngine.Dynamic(List.of(
+                new TownAdminCompletionEngine.PlayerCandidate(member, "OfflineApplicant", false)), false);
+        assertEquals(List.of("OfflineApplicant"), engine.complete(
+                new String[]{"application", "clearcd", "off"}, applications, offline));
     }
 
     @Test

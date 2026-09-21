@@ -9,6 +9,7 @@ import org.allivlisey.tianjitown.paper.message.LandProtectionMessages;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
+import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 
 import java.io.IOException;
@@ -21,6 +22,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -97,7 +99,8 @@ final class TownBonusDiagnostics {
         Instant since = Instant.now().minus(java.time.Duration.ofDays(days));
         boolean submitted = plugin.runAsync(() -> {
             try {
-                DiagnosticData data = collectDiagnosticData(days, since, capturedExternal);
+                DiagnosticData data = collectDiagnosticData(days, since, capturedExternal,
+                        completion != null);
                 if (!plugin.runMain(() -> completeDiagnostic(sender, data, completion))) {
                     diagnosticRunning.set(false);
                 }
@@ -115,12 +118,21 @@ final class TownBonusDiagnostics {
     }
 
     private DiagnosticData collectDiagnosticData(int days, Instant since,
-                                                 long capturedExternal) {
+                                                 long capturedExternal, boolean startup) {
         TownDiagnosticRepository.DiagnosticSnapshot database = repository.diagnose(since);
         String schemaVersion = host.database().schemaVersion();
+        if (startup && capturedExternal < 0) {
+            host.finance().lockSettlementUnavailable();
+        }
         EconomyRepository.Reconciliation settlement = capturedExternal < 0 ? null
+                : startup ? host.finance().reconcileSettlement(capturedExternal)
                 : host.finance().inspectSettlement(capturedExternal);
-        QuickShopHistoryProbe.Result history = quickShopHistory.inspect(since, database.purchases());
+        QuickShopHistoryProbe.Result history;
+        try {
+            history = quickShopHistory.inspect(since, database.purchases());
+        } catch (RuntimeException | LinkageError exception) {
+            history = QuickShopHistoryProbe.Result.unavailable(safeMessage(exception));
+        }
         return new DiagnosticData(days, database, schemaVersion, settlement, history);
     }
 
@@ -168,6 +180,9 @@ final class TownBonusDiagnostics {
         List<String> lines = new ArrayList<>();
         boolean healthy = database.quickCheck().equalsIgnoreCase("ok")
                 && database.foreignKeyViolations() == 0;
+        // Business recovery and external reconciliation must remain available when the
+        // database is usable. An unfinished payment is not a database integrity failure.
+        boolean startupAllowed = healthy;
         lines.add("TianjiTown " + plugin.getPluginMeta().getVersion()
                 + " unified diagnostic @ " + org.allivlisey.tianjitown.core.time.TownTime.display(Instant.now()));
         lines.add("SQLite quick_check=" + database.quickCheck()
@@ -176,14 +191,22 @@ final class TownBonusDiagnostics {
         database.counts().entrySet().stream().sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> lines.add("SQLite " + entry.getKey() + "=" + entry.getValue()));
         for (String key : List.of("failedProjections", "accountLedgerMismatches",
-                "pendingEconomy", "pendingExpansions")) {
+                "pendingEconomy", "pendingExpansions", "pendingApplicationFees",
+                "pendingIncomeTaxes", "pendingTaxSubsidies")) {
             healthy &= database.counts().getOrDefault(key, 0L) == 0;
         }
+        healthy &= inspectWorldReferences(database.landStates(), lines);
         int healthyResidence = 0;
         List<String> residenceErrors = new ArrayList<>();
         for (TownDiagnosticRepository.LandState state : database.landStates()) {
-            LandProtectionService.Inspection inspection = host.landProtection().inspect(
-                    state.residenceName(), state.areas(), state.members());
+            LandProtectionService.Inspection inspection;
+            try {
+                inspection = host.landProtection().inspect(
+                        state.residenceName(), state.areas(), state.members());
+            } catch (RuntimeException | LinkageError exception) {
+                residenceErrors.add(state.townName() + "=" + safeMessage(exception));
+                continue;
+            }
             if (inspection.state() == LandProtectionService.ProjectionState.HEALTHY) {
                 healthyResidence++;
             } else {
@@ -225,7 +248,8 @@ final class TownBonusDiagnostics {
         String summaryKey = healthy ? "chat.bonus.diagnostic-summary-success"
                 : "chat.bonus.diagnostic-summary-failure";
         String detail = plugin.messages().text(summaryKey);
-        DiagnosticResult result = new DiagnosticResult(healthy, Instant.now(), detail, null);
+        DiagnosticResult result = new DiagnosticResult(healthy, Instant.now(), detail, null,
+                startupAllowed);
         lastDiagnostic.set(result);
         diagnosticRunning.set(false);
         if (sender != null && (!startup || !healthy)) {
@@ -237,6 +261,40 @@ final class TownBonusDiagnostics {
         return result;
     }
 
+    private boolean inspectWorldReferences(List<TownDiagnosticRepository.LandState> states,
+                                           List<String> lines) {
+        int checked = 0;
+        int healthy = 0;
+        List<String> details = new ArrayList<>();
+        for (var state : states) {
+            var references = state.areas().stream().map(area -> area.territory().center())
+                    .map(center -> new WorldReference(center.worldId(), center.worldName()))
+                    .distinct().toList();
+            for (var reference : references) {
+                checked++;
+                World world = plugin.getServer().getWorld(reference.id());
+                String context = "town=" + state.townName() + ", storedName=" + reference.name()
+                        + ", expected=" + reference.id();
+                if (world != null) {
+                    healthy++;
+                    details.add("World UUID OK " + context + ", loadedName=" + world.getName()
+                            + ", actual=" + world.getUID());
+                } else {
+                    // A same-name world explains the mismatch, but cannot validate UUID-based indexes.
+                    World sameName = plugin.getServer().getWorld(reference.name());
+                    details.add("World UUID ERROR " + context + (sameName == null
+                            ? ", actual=UNAVAILABLE, reason=WORLD_NOT_LOADED"
+                            : ", actual=" + sameName.getUID() + ", reason=UUID_MISMATCH"));
+                }
+            }
+        }
+        lines.add("World UUID healthy=" + healthy + "/" + checked);
+        lines.addAll(details);
+        return healthy == checked;
+    }
+
+    private record WorldReference(UUID id, String name) {}
+
     private void writeDiagnosticReport(CommandSender sender, List<String> lines, DiagnosticResult base) {
         plugin.runAsync(() -> {
             Path directory = plugin.getDataFolder().toPath().resolve("diagnostics")
@@ -247,7 +305,7 @@ final class TownBonusDiagnostics {
                 Files.createDirectories(directory);
                 Files.write(report, lines);
                 lastDiagnostic.set(new DiagnosticResult(base.healthy(), base.completedAt(),
-                        base.detail(), report));
+                        base.detail(), report, base.startupAllowed()));
                 pruneReports(directory);
                 if (!base.healthy()) {
                     plugin.getLogger().warning("统一诊断报告: " + report);

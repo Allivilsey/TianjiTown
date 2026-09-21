@@ -26,7 +26,7 @@ class EconomySettingsTest {
 
         assertTrue(settings.taxEnabled());
         assertTrue(settings.consumptionEnabled());
-        assertEquals("tax", settings.settlementAccount());
+        assertEquals("tianjitown-tax", settings.settlementAccount());
         assertEquals(2, settings.fallbackScale());
         assertEquals(2500, settings.maximumTaxBps());
         assertEquals(new BigDecimal("5000.00"), settings.expansionCost());

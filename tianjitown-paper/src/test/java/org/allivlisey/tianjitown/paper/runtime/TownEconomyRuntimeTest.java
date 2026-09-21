@@ -15,6 +15,74 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 
 class TownEconomyRuntimeTest {
+    @Test void manualResolutionCannotRaceAQueuedExternalPayment() {
+        var plugin = mock(TianjiTownPlugin.class);
+        var finance = mock(EconomyRepository.class);
+        var vault = mock(VaultSettlementService.class);
+        var sender = mock(CommandSender.class);
+        var messages = mock(PluginMessages.class);
+        Queue<Runnable> workers = new ArrayDeque<>(), main = new ArrayDeque<>();
+        when(plugin.messages()).thenReturn(messages);
+        when(plugin.runAsync(any())).thenAnswer(c -> workers.add(c.getArgument(0)));
+        when(plugin.runMain(any())).thenAnswer(c -> main.add(c.getArgument(0)));
+        when(sender.getName()).thenReturn("Admin");
+        UUID town = UUID.randomUUID();
+        var operation = mock(EconomyRepository.EconomyOperation.class);
+        when(operation.operationId()).thenReturn(UUID.randomUUID());
+        when(finance.prepareOperation(eq(town), eq("ADMIN_ADJUSTMENT"), eq(100L),
+                isNull(), eq("Admin"), anyString(), eq("audit"))).thenReturn(operation);
+        var available = new AtomicBoolean(true);
+        var runtime = new TownEconomyRuntime(plugin, finance, mock(EconomySettings.class), vault,
+                available, new TownRuntimeTasks(plugin, available), mock(TownTaxRuntime.class), () -> true);
+
+        runtime.adjustFunds(sender, town, 100, "audit");
+        workers.remove().run(); // Prepared and published; the main-thread payment is still queued.
+        runtime.resolveOperation(sender, operation, false, "manual", ignored -> fail("must reject"));
+        workers.remove().run();
+
+        verify(finance, never()).resolveOperation(any(), anyBoolean(), any(), any(), any());
+        verifyNoInteractions(vault);
+        main.remove(); // Do not execute the unrelated, previously queued payment preflight.
+        main.remove().run();
+        verify(messages).send(eq(sender), eq("chat.runtime.operation-failed"), argThat(values ->
+                values.get("detail").toString().contains("仍在执行")));
+        assertTrue(available.get());
+    }
+
+    @Test void donationKeepsTheTownFromTheConfirmationAndNeverDebitsWhenItsMembershipCheckFails() {
+        var plugin = mock(TianjiTownPlugin.class);
+        var finance = mock(EconomyRepository.class);
+        var vault = mock(VaultSettlementService.class);
+        var player = mock(org.bukkit.entity.Player.class);
+        var server = mock(org.bukkit.Server.class);
+        var messages = mock(PluginMessages.class);
+        UUID playerId = UUID.randomUUID(), confirmedTown = UUID.randomUUID(), currentTown = UUID.randomUUID();
+        when(plugin.messages()).thenReturn(messages);
+        when(plugin.getServer()).thenReturn(server);
+        when(server.isPrimaryThread()).thenReturn(true);
+        when(plugin.runAsync(any())).thenAnswer(c -> { ((Runnable) c.getArgument(0)).run(); return true; });
+        when(player.getUniqueId()).thenReturn(playerId);
+        when(player.getName()).thenReturn("Player");
+        var account = mock(EconomyRepository.TownFinance.class);
+        when(account.townId()).thenReturn(currentTown);
+        when(finance.findFinanceByPlayer(playerId)).thenReturn(Optional.of(account));
+        var conflict = new EconomyRepository.ConflictException("membership changed");
+        when(finance.prepareOperation(eq(confirmedTown), eq("DONATION"), eq(100L),
+                eq(playerId), eq("Player"), anyString(), any())).thenThrow(conflict);
+        var failure = new java.util.concurrent.atomic.AtomicReference<RuntimeException>();
+        AtomicBoolean available = new AtomicBoolean(true);
+        var runtime = new TownEconomyRuntime(plugin, finance, mock(EconomySettings.class), vault,
+                available, new TownRuntimeTasks(plugin, available), mock(TownTaxRuntime.class), () -> true);
+
+        runtime.donateAction(player, confirmedTown, 100, ignored -> fail("must not succeed"), failure::set);
+
+        assertSame(conflict, failure.get());
+        verify(finance).prepareOperation(eq(confirmedTown), eq("DONATION"), eq(100L),
+                eq(playerId), eq("Player"), anyString(), any());
+        verifyNoInteractions(vault);
+        assertTrue(available.get());
+    }
+
     @Test void retriesConfirmedExternalPaymentWithoutRepeatingVaultDebit() {
         var plugin = mock(TianjiTownPlugin.class);
         var finance = mock(EconomyRepository.class);

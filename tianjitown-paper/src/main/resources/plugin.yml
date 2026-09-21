@@ -8,7 +8,7 @@ libraries:
   - 'com.zaxxer:HikariCP:${hikari.version}'
   - 'org.flywaydb:flyway-core:${flyway.version}'
   - 'org.xerial:sqlite-jdbc:${sqlite.version}'
-softdepend: [Vault, Residence, QuickShop-Hikari, Jobs, GlobalMarketPlus, XConomy, WorldBorder, HuskSync]
+softdepend: [Vault, Residence, QuickShop-Hikari, Jobs, GlobalMarketPlus, XConomy, WorldBorder, HuskSync, CMI]
 commands:
   tianjitown-callback:
     description: 小镇聊天按钮回调

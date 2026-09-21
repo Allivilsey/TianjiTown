@@ -135,6 +135,8 @@ application:
 # 通过聊天栏、ActionBar 和管理员命令发送的消息
 # 本分组中的消息支持 & 颜色码；花括号占位符会由程序替换为实际值
 chat:
+  finance:
+    account-unavailable: '&c该账户不可查询或操作。'
   # 聊天栏中的可点击按钮文本；按钮的具体行为由程序决定
   buttons:
     teleport: '&b[传送]'
@@ -341,6 +343,23 @@ chat:
     usage-money-adjust: '用法: /tianjitown money adjust <小镇代码> <带符号金额> [原因]'
     town-not-found-generic: '小镇不存在'
     money-adjust-zero: '调整金额不能为 0'
+    application-fee-list: '&e申请费用待处理记录（最多 100 条）：{count}'
+    application-fee-entry: '&7申请 {id} / 玩家 {player} / 金额 {amount} / 状态 {state} / 版本 {version} / {detail}'
+    application-fee-help: '&e/tianjitown application fee <list|inspect|retry|resolve>；inspect/retry 指定申请 UUID；resolve 还需结论及核实依据。COLLECTED=玩家扣款且清算已收；NO_PAYMENT=双方均无净变动；PLAYER_DEBIT_ONLY=仅玩家扣款；REFUNDED=已从正确来源全额退款；REFUND_NOT_PAID=玩家未收到退款且应退资金仍完整保留。未知结果必须先查账，resolve 只登记核实结论，retry 才实际退款。'
+    application-fee-refund-confirmation: '重新尝试申请 {id} 的退款：金额 {amount}，当前状态 {state}；仅确定未退款的记录允许执行'
+    application-fee-resolve-confirmation: '登记申请 {id} 的费用核实结论：{state} → {resolution}，版本 {version}；依据：{reason}。本操作不会付款'
+    application-fee-result: '&e申请费用处理：{state}；{detail}；{action}'
+    recovery-list: '&e待核实记录：{count}'
+    subsidy-recovery-running: '&e该补贴仍在处理中或原税款尚未入账，请等待处理完成后重新查询，当前不能确认。'
+    recovery-entry: '&7操作 {id} / 小镇 {town} / 类型 {type} / 金额 {amount} / 状态 {state} / {detail}'
+    recovery-help: '&e/tianjitown money pending；/tianjitown money resolve <操作UUID> <applied|cancelled> <核实依据>。applied=外部款项已完整到账或扣除；cancelled=外部未付款或已完整退回原状。必须先核对双方账目，命令只修正内部状态，不再次付款。补贴入口：/tianjitown money subsidy pending'
+    recovery-confirmation: '登记 {id} 的资金核实结论：{state} → {resolution}；依据：{reason}。本操作不会付款，请先核对完整外部资金流'
+    recovery-result: '&a已登记 {id} 的资金状态：{state}'
+    subsidy-recovery-entry: '&7业务键 {id} / 小镇 {town} / 已收税 {tax} / 补贴 {subsidy} / 状态 {state} / 税款已记账 {recorded} / {detail}'
+    subsidy-recovery-help: '&e/tianjitown money subsidy resolve <业务键> <paid|cancelled> <核实依据>。paid=补贴已完整进入清算账户，补记内部补贴；cancelled=补贴未付或已完整撤回，释放补贴额度。命令不会再次付款。'
+    income-tax-recovery-help: '&e/tianjitown money tax pending；resolve <操作UUID> <paid|cancelled> <核实依据>。paid=玩家已扣且清算已收，补记税款；cancelled=未扣玩家或已全额退回。refund <操作UUID> 仅退款给确定被扣款而清算未收到的玩家。未知付款或退款先查账，不能直接重试。'
+    income-tax-recovery-entry: '&7收税 {id} / 小镇 {town} / 玩家 {player} / 来源 {source} / 金额 {amount} / 状态 {state} / 版本 {version} / {detail}'
+    income-tax-refund-confirmation: '退还税款 {id}：向玩家 {player} 退回 {amount}，当前状态 {state}；仅明确玩家已扣款且退款未成功时可执行'
     money-action-unsupported: 'money 只支持 view 或 adjust'
     usage-tax: '用法: /tianjitown tax set <小镇代码> <百分比> [原因]'
     tax-action-unsupported: 'tax 只支持 set'
@@ -372,6 +391,10 @@ chat:
 
     # 管理帮助文本；{version}=插件版本，{topic}=输入的帮助分类；修改命令用法时请同步检查 Tab 补全和权限逻辑
     help-application-list: '&e/tianjitown application list'
+    help-application-delate: '&e/tianjitown application delate <小镇代码|申请UUID> &7强制取消任意状态的建镇申请，保留历史，不退款，不产生申请冷却'
+    help-application-clearcd: '&e/tianjitown application clearcd <玩家名|UUID> &7清除指定玩家当前的建镇申请冷却'
+    application-cooldown-cleared: '&a已清除玩家 {player} 的建镇申请冷却，本次豁免 {count} 条历史记录。'
+    application-cancelled-without-cooldown: '&a已取消小镇 {code} 的建镇申请（{id}），未执行退款，本次取消不产生申请冷却。'
     help-title: '&6TianjiTown {version} 管理帮助'
     help-usage: '&7点击分类或输入 &f/tianjitown help <分类> &7查看命令'
     help-placeholder-hint: '&8<参数> 为必填，[参数] 为可选，| 表示任选其一'
@@ -653,6 +676,8 @@ diagnostic:
     # 清算服务结果；{account}=清算账户名，{detail}=Vault 或第三方返回的安全详情
     settlement:
       account-resolve-failure: '无法解析 Vault 离线清算账户: {detail}'
+      privacy-failure: '清算账户 {account} 隐藏失败: {detail}'
+      migration-failure: '旧清算账户自动改名未完成，小镇写入保持锁定；请保留 settlement-account-migration.properties 并核对后重启: {detail}'
       scale-read-failure: '无法读取 Vault 金额精度: {detail}'
       account-ready: '清算账户已就绪'
       account-create-failure: 'Vault provider 无法创建或重新读取离线清算账户 {account}'
@@ -778,6 +803,7 @@ log:
       residence-reconciliation-failure: '领地对账失败，后续周期仍会继续尝试: {detail}'
       vote-settlement-failure: '投票结算失败，后续周期仍会继续尝试: {detail}'
       settlement-reconciliation-failure: '清算对账失败，后续周期仍会继续尝试: {detail}'
+      settlement-privacy-failure: '清算账户隐藏检查失败，后续周期仍会继续尝试: {detail}'
       territory-bonus-index-refresh-failure: '领地加成索引刷新失败，后续周期仍会继续尝试: {detail}'
       beacon-effect-refresh-failure: '信标效果刷新失败，后续周期仍会继续尝试: {detail}'
       refund-counter-cleanup-failure: '返还计数清理失败，后续周期仍会继续尝试: {detail}'
@@ -805,8 +831,10 @@ log:
     income-tax-settlement-failure: 'Jobs 收入税转入清算账户失败，已保留玩家原始收入: {detail}'
   # 外部收入税账本写入重试日志；{source}=稳定来源标识，{businessKey}=业务键，{detail}=异常详情
   external-income-tax:
-    subsidy-settlement-failure: '收入税补贴清算失败，已保留额度并等待重试'
-    subsidy-settlement-ambiguous: '收入税补贴清算结果不明，已保留额度并停止该笔付款与入账，需人工核查'
+    collection-failure: '{source} 税款 {businessKey} 收取或恢复处理失败，请以持久记录核实付款阶段，已知付款不会重复执行: {detail}'
+    collection-pending: '收入税 {businessKey} 收取状态为 {status}，已保留持久记录，可用 /tianjitown money tax pending 核实: {detail}'
+    subsidy-settlement-failure: '收入税补贴 {businessKey} 清算失败，原税款已入账，补贴待人工核实，不自动重复付款: {detail}'
+    subsidy-settlement-ambiguous: '收入税补贴 {businessKey} 清算结果不明，原税款已入账，补贴额度保留待核实: {detail}'
     ledger-write-failure: '{source} 税款 {businessKey} 已进入清算账户但账本暂未写入，将自动重试: {detail}'
   # QuickShop 税务事件和 TownRuntime 入账日志；{detail}=异常详情，{businessKey}=交易业务键
   quick-shop:
@@ -815,7 +843,7 @@ log:
     success-settlement-failure: 'QuickShop 成功交易入账事件处理失败: {detail}'
     boundary-failure: 'QuickShop 事件边界捕获异常: {detail}'
     subsidy-quota-exhausted: '本周期补贴额度已用完'
-    subsidy-settlement-failure: 'QuickShop 税收服务器补贴入账失败，税款账本暂不写入: {detail}'
+    subsidy-settlement-failure: 'QuickShop 服务器补贴失败或结果不明，原税款已入账；未知补贴需人工核实: {detail}'
     tax-ledger-write-failure: 'QuickShop 税款 {businessKey} 已进入清算账户但账本暂未写入，将自动重试: {detail}'
   # Residence 命令、成员同步和删除保护日志；{detail}=异常详情，{residence}=领地名，
   # {town}=小镇 UUID，同类错误只记录一次
@@ -847,6 +875,7 @@ log:
   # Vault 清算调用日志；{detail}=第三方异常详情，同类空结果和异常结果需要人工复核
   vault:
     settlement:
+      migration-complete: '清算账户已自动更名为 {account}，保留原 UUID {uuid} 与余额；请备份 settlement-account-migration.properties'
       player-debit-ambiguous: 'Vault 玩家扣款调用异常，资金结果需要人工复核: {detail}'
       settlement-credit-ambiguous: 'Vault 清算账户入账调用异常，资金结果需要人工复核: {detail}'
       player-refund-ambiguous: 'Vault 玩家退款调用异常，资金结果需要人工复核: {detail}'

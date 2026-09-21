@@ -32,8 +32,6 @@ final class TownExpansionRuntime {
             "validation.territory.batch-already-refunded";
     private static final String EXPANSION_FAILED_REFUNDED =
             "chat.lifecycle.expansion-failed-refunded";
-    private static final String EXPANSION_AREA_PRESENCE_CHECK_FAILED =
-            "chat.lifecycle.expansion-area-presence-check-failed";
     private static final String EXPANSION_BATCH_FAILED =
             "chat.lifecycle.expansion-batch-failed";
     private static final String EXPANSION_BATCH_ROLLBACK_FAILED =
@@ -280,7 +278,7 @@ final class TownExpansionRuntime {
             try {
                 List<UUID> members = repository.listLandAccessIds(batch.townId());
                 plugin.runMain(() -> addExpansionBatchAreas(mayor, batch, members, 0,
-                        new ArrayList<>(), success, failure));
+                        success, failure));
             } catch (RuntimeException exception) {
                 tasks.reportActionFailure(exception, failure);
             }
@@ -289,7 +287,7 @@ final class TownExpansionRuntime {
 
     private void addExpansionBatchAreas(CommandSender mayor,
                                         EconomyRepository.ExpansionBatchOperation batch,
-                                        List<UUID> members, int index, List<String> addedAreas,
+                                        List<UUID> members, int index,
                                         Consumer<EconomyRepository.ExpansionBatchOperation> success,
                                         Consumer<RuntimeException> failure) {
         if (index >= batch.expansions().size()) {
@@ -299,23 +297,14 @@ final class TownExpansionRuntime {
                             finance.completeExpansionBatch(batch.batchId());
                     plugin.runMain(() -> success.accept(completed));
                 } catch (RuntimeException exception) {
-                    rollbackExpansionBatchAreas(mayor, batch, addedAreas, exception, failure);
+                    // External projection is complete; retain it while database finalization
+                    // is retried on recovery, including when the commit result is unknown.
+                    tasks.reportActionFailure(exception, failure);
                 }
             });
             return;
         }
         EconomyRepository.ExpansionOperation expansion = batch.expansions().get(index);
-        boolean alreadyPresent;
-        try {
-            alreadyPresent = landProtection.hasArea(expansion.residenceName(),
-                    expansion.residenceAreaName());
-        } catch (RuntimeException | LinkageError exception) {
-            rollbackExpansionBatchAreas(mayor, batch, addedAreas,
-                    new IllegalStateException(plugin.messages().plainText(
-                            EXPANSION_AREA_PRESENCE_CHECK_FAILED,
-                            Map.of("detail", safeText(safeMessage(exception)))), exception), failure);
-            return;
-        }
         LandProtectionService.Result result;
         try {
             result = landProtection.addArea(expansion.residenceName(),
@@ -327,35 +316,37 @@ final class TownExpansionRuntime {
                     Map.of("detail", safeText(safeMessage(exception))));
         }
         if (!result.success()) {
-            rollbackExpansionBatchAreas(mayor, batch, addedAreas,
+            rollbackExpansionBatchAreas(mayor, batch,
                     new IllegalStateException(plugin.messages().plainText(
                             EXPANSION_BATCH_FAILED,
                             Map.of("detail", safeText(
                                     LandProtectionMessages.detail(plugin.messages(), result))))), failure);
             return;
         }
-        if (!alreadyPresent) {
-            addedAreas.add(expansion.residenceAreaName());
-        }
-        addExpansionBatchAreas(mayor, batch, members, index + 1, addedAreas, success, failure);
+        addExpansionBatchAreas(mayor, batch, members, index + 1, success, failure);
     }
 
     private void rollbackExpansionBatchAreas(CommandSender mayor,
                                               EconomyRepository.ExpansionBatchOperation batch,
-                                              List<String> addedAreas, RuntimeException cause,
+                                              RuntimeException cause,
                                               Consumer<RuntimeException> failure) {
         if (!plugin.getServer().isPrimaryThread()) {
-            plugin.runMain(() -> rollbackExpansionBatchAreas(mayor, batch, addedAreas, cause,
+            plugin.runMain(() -> rollbackExpansionBatchAreas(mayor, batch, cause,
                     failure));
             return;
         }
-        List<String> remaining = new ArrayList<>(addedAreas);
+        // Include all persisted areas, even those projected before a restart or
+        // not reached during this recovery attempt. The adapter verifies ownership
+        // and exact geometry before removing any existing area.
+        List<EconomyRepository.ExpansionOperation> remaining = new ArrayList<>(batch.expansions());
         java.util.Collections.reverse(remaining);
         List<String> cleanupErrors = new ArrayList<>();
-        for (String area : remaining) {
+        for (EconomyRepository.ExpansionOperation expansion : remaining) {
+            String area = expansion.residenceAreaName();
             try {
                 LandProtectionService.Result cleanup = landProtection.removeArea(
-                        batch.expansions().getFirst().residenceName(), area);
+                        expansion.residenceName(),
+                        new LandProtectionService.Area(area, expansion.unit().territory()));
                 if (!cleanup.success()) {
                     cleanupErrors.add(area + ": " + safeText(
                             LandProtectionMessages.detail(plugin.messages(), cleanup)));

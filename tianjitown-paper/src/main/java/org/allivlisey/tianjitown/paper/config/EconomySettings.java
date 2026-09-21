@@ -52,7 +52,7 @@ public record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, St
                                 BiFunction<String, Map<String, ?>, String> messageResolver) {
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(messageResolver, "messageResolver");
-        String account = ConfigurationValues.text(config, "economy.settlement-account", "tax",
+        String account = ConfigurationValues.text(config, "economy.settlement-account", "tianjitown-tax",
                 messageResolver);
         int scale = ConfigurationValues.integer(config, "economy.money-scale", 2,
                 messageResolver);

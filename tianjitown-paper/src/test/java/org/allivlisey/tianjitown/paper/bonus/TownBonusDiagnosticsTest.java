@@ -1,6 +1,8 @@
 package org.allivlisey.tianjitown.paper.bonus;
 
 import io.papermc.paper.plugin.configuration.PluginMeta;
+import org.allivlisey.tianjitown.core.land.ChunkPosition;
+import org.allivlisey.tianjitown.core.land.InitialTerritory;
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
 import org.allivlisey.tianjitown.integrations.quickshop.QuickShopHistoryProbe;
 import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
@@ -12,6 +14,7 @@ import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
 import org.allivlisey.tianjitown.storage.database.DatabaseGate;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.bukkit.Server;
+import org.bukkit.World;
 import org.bukkit.command.ConsoleCommandSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -65,6 +69,7 @@ class TownBonusDiagnosticsTest {
         when(plugin.getServer()).thenReturn(server);
         when(server.getConsoleSender()).thenReturn(sender);
         when(plugin.getDataFolder()).thenReturn(directory.toFile());
+        when(plugin.getLogger()).thenReturn(mock(Logger.class));
         when(plugin.messages()).thenReturn(new PluginMessages(directory.toFile()));
         PluginMeta meta = mock(PluginMeta.class);
         when(plugin.getPluginMeta()).thenReturn(meta);
@@ -81,6 +86,7 @@ class TownBonusDiagnosticsTest {
         EconomyRepository.Reconciliation reconciliation = mock(EconomyRepository.Reconciliation.class);
         when(reconciliation.healthy()).thenReturn(true);
         when(finance.inspectSettlement(100)).thenReturn(reconciliation);
+        when(finance.reconcileSettlement(100)).thenReturn(reconciliation);
         when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
                 "ok", 0, Map.of(), 2, 50, List.of(), List.of()));
         when(history.inspect(any(), any())).thenReturn(QuickShopHistoryProbe.Result.available(2, 50, false, "ok"));
@@ -103,17 +109,184 @@ class TownBonusDiagnosticsTest {
         verify(settlement).balanceMinor();
         verifyNoInteractions(repository, history, land, finance);
         async.getFirst().run();
-        verify(finance).inspectSettlement(100);
+        verify(finance).reconcileSettlement(100);
+        verify(finance, never()).inspectSettlement(anyLong());
         verifyNoInteractions(land);
         assertNull(completed.get());
         main.getFirst().run();
         verify(land).inspect("res", List.of(), List.of());
         assertTrue(completed.get().healthy());
+        assertTrue(completed.get().startupAllowed());
         assertNull(completed.get().report());
         async.getLast().run();
         Path report = diagnostics.lastDiagnostic().report();
         assertTrue(Files.isRegularFile(report));
         assertTrue(Files.readString(report).contains("QuickShop purchase reconciliation=MATCH"));
+    }
+
+    @Test
+    void pendingBusinessRecoveryDoesNotBlockStartupOrLoseItsWarningAfterReportWrite() {
+        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
+                "ok", 0, Map.of("pendingEconomy", 1L, "pendingExpansions", 2L,
+                        "failedProjections", 1L, "accountLedgerMismatches", 1L),
+                2, 50, List.of(), List.of()));
+
+        TownBonusRuntime.DiagnosticResult result = startupDiagnostic();
+
+        assertFalse(result.healthy());
+        assertTrue(result.startupAllowed());
+        async.getLast().run();
+        assertFalse(diagnostics.lastDiagnostic().healthy());
+        assertTrue(diagnostics.lastDiagnostic().startupAllowed());
+        assertNotNull(diagnostics.lastDiagnostic().report());
+    }
+
+    @Test
+    void sameNameWorldWithDifferentUuidFailsDiagnosticsEvenWhenResidenceIsHealthy() throws Exception {
+        UUID expected = UUID.randomUUID();
+        UUID actual = UUID.randomUUID();
+        worldState(expected);
+        World replacement = mock(World.class);
+        when(replacement.getUID()).thenReturn(actual);
+        when(plugin.getServer().getWorld("world")).thenReturn(replacement);
+
+        TownBonusRuntime.DiagnosticResult result = startupDiagnostic();
+
+        assertFalse(result.healthy());
+        assertTrue(result.startupAllowed());
+        async.getLast().run();
+        String report = Files.readString(diagnostics.lastDiagnostic().report());
+        assertTrue(report.contains("World UUID healthy=0/1"));
+        assertTrue(report.contains("expected=" + expected + ", actual=" + actual
+                + ", reason=UUID_MISMATCH"));
+        assertTrue(report.contains("Residence healthy=1/1"));
+        assertFalse(diagnostics.lastDiagnostic().healthy());
+    }
+
+    @Test
+    void missingWorldIsReportedWithoutTreatingItAsDatabaseCorruption() throws Exception {
+        worldState(UUID.randomUUID());
+
+        TownBonusRuntime.DiagnosticResult result = startupDiagnostic();
+
+        assertFalse(result.healthy());
+        assertTrue(result.startupAllowed());
+        async.getLast().run();
+        String report = Files.readString(diagnostics.lastDiagnostic().report());
+        assertTrue(report.contains("actual=UNAVAILABLE, reason=WORLD_NOT_LOADED"));
+    }
+
+    @Test
+    void matchingUuidAcceptsRenamedWorldAndChecksExpandedTownOnlyOnceOnMainThread() throws Exception {
+        UUID expected = UUID.randomUUID();
+        worldState(expected);
+        World world = mock(World.class);
+        when(world.getUID()).thenReturn(expected);
+        when(world.getName()).thenReturn("renamed_world");
+        when(plugin.getServer().getWorld(expected)).thenReturn(world);
+
+        diagnostics.diagnose(sender, 7);
+        async.getFirst().run();
+        verify(plugin.getServer(), never()).getWorld(any(UUID.class));
+        main.getFirst().run();
+
+        assertTrue(diagnostics.lastDiagnostic().healthy());
+        verify(plugin.getServer(), times(1)).getWorld(expected);
+        verify(plugin.getServer(), never()).getWorld(anyString());
+        async.getLast().run();
+        String report = Files.readString(diagnostics.lastDiagnostic().report());
+        assertTrue(report.contains("World UUID healthy=1/1"));
+        assertTrue(report.contains("loadedName=renamed_world, actual=" + expected));
+    }
+
+    private void worldState(UUID worldId) {
+        var areas = List.of(
+                new LandProtectionService.Area("main",
+                        new InitialTerritory(new ChunkPosition(worldId, "world", 0, 0))),
+                new LandProtectionService.Area("expansion",
+                        new InitialTerritory(new ChunkPosition(worldId, "world", 5, 0))));
+        var state = new TownDiagnosticRepository.LandState(UUID.randomUUID(), "town", "res",
+                List.of(), areas);
+        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
+                "ok", 0, Map.of(), 2, 50, List.of(state), List.of()));
+        LandProtectionService.Inspection inspection = mock(LandProtectionService.Inspection.class);
+        when(inspection.state()).thenReturn(LandProtectionService.ProjectionState.HEALTHY);
+        when(land.inspect("res", areas, List.of())).thenReturn(inspection);
+    }
+
+    @Test
+    void settlementShortfallStillAllowsStartupAfterAccountReconciliation() {
+        when(finance.reconcileSettlement(100)).thenReturn(mock(EconomyRepository.Reconciliation.class));
+
+        TownBonusRuntime.DiagnosticResult result = startupDiagnostic();
+
+        assertFalse(result.healthy());
+        assertTrue(result.startupAllowed());
+        verify(finance).reconcileSettlement(100);
+        verify(finance, never()).inspectSettlement(anyLong());
+    }
+
+    @Test
+    void unavailableExternalChecksLeaveRecoveryRuntimeAccessible() {
+        var state = new TownDiagnosticRepository.LandState(UUID.randomUUID(), "town", "res",
+                List.of(), List.of());
+        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
+                "ok", 0, Map.of(), 2, 50, List.of(state), List.of()));
+        when(settlement.balanceMinor()).thenThrow(new IllegalStateException("balance temporarily unavailable"));
+        when(history.inspect(any(), any())).thenThrow(new LinkageError("history API unavailable"));
+        when(land.inspect("res", List.of(), List.of())).thenThrow(new IllegalStateException("Residence unavailable"));
+
+        TownBonusRuntime.DiagnosticResult result = startupDiagnostic();
+
+        assertFalse(result.healthy());
+        assertTrue(result.startupAllowed());
+        verify(finance, never()).reconcileSettlement(anyLong());
+        verify(finance, never()).inspectSettlement(anyLong());
+        verify(land).inspect("res", List.of(), List.of());
+    }
+
+    @Test
+    void databaseIntegrityFailureStillBlocksStartup() {
+        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
+                "database disk image is malformed", 0, Map.of(), 2, 50, List.of(), List.of()));
+
+        TownBonusRuntime.DiagnosticResult result = startupDiagnostic();
+
+        assertFalse(result.healthy());
+        assertFalse(result.startupAllowed());
+    }
+
+    @Test
+    void foreignKeyViolationsStillBlockStartup() {
+        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
+                "ok", 1, Map.of(), 2, 50, List.of(), List.of()));
+
+        TownBonusRuntime.DiagnosticResult result = startupDiagnostic();
+
+        assertFalse(result.healthy());
+        assertFalse(result.startupAllowed());
+    }
+
+    @Test
+    void manualDiagnosticsOnlyInspectSettlementWithoutMutatingAccountLocks() {
+        diagnostics.diagnose(sender, 7);
+        async.getFirst().run();
+        main.getFirst().run();
+
+        verify(finance).inspectSettlement(100);
+        verify(finance, never()).reconcileSettlement(anyLong());
+        assertTrue(diagnostics.lastDiagnostic().healthy());
+    }
+
+    private TownBonusRuntime.DiagnosticResult startupDiagnostic() {
+        AtomicReference<TownBonusRuntime.DiagnosticResult> completed = new AtomicReference<>();
+        int workerIndex = async.size();
+        int mainIndex = main.size();
+        diagnostics.diagnoseAtStartup(completed::set);
+        async.get(workerIndex).run();
+        main.get(mainIndex).run();
+        assertNotNull(completed.get());
+        return completed.get();
     }
 
     @Test
@@ -138,6 +311,7 @@ class TownBonusDiagnosticsTest {
         assertNull(completed.get());
         main.getFirst().run();
         assertFalse(completed.get().healthy());
+        assertFalse(completed.get().startupAllowed());
         assertTrue(completed.get().detail().contains("offline"));
         assertSame(completed.get(), diagnostics.lastDiagnostic());
         diagnostics.diagnose(sender, 7);

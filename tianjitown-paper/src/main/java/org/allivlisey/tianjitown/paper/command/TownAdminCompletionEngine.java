@@ -35,6 +35,7 @@ public final class TownAdminCompletionEngine {
             return List.of();
         }
         return switch (args[0].toLowerCase(Locale.ROOT)) {
+            case "application" -> application(args, snapshot, dynamic);
             case "town" -> town(args, snapshot);
             case "member" -> member(args, snapshot, dynamic);
             case "mayor" -> mayor(args, snapshot, dynamic);
@@ -44,6 +45,20 @@ public final class TownAdminCompletionEngine {
             case "buff" -> buffs(args, snapshot);
             default -> List.of();
         };
+    }
+
+    private List<String> application(String[] args, Snapshot snapshot, Dynamic dynamic) {
+        if (args.length != 3) return List.of();
+        if (args[1].equalsIgnoreCase("delate")) {
+            return filter(snapshot.applications().stream()
+                    .flatMap(candidate -> java.util.stream.Stream.of(candidate.code(), candidate.id().toString()))
+                    .toList(), current(args));
+        }
+        if (args[1].equalsIgnoreCase("clearcd")) {
+            List<String> players = dynamic.players().stream().map(PlayerCandidate::label).toList();
+            return filter(players.isEmpty() ? List.of(playerHint()) : players, current(args));
+        }
+        return List.of();
     }
 
     private List<String> town(String[] args, Snapshot snapshot) {
@@ -56,7 +71,7 @@ public final class TownAdminCompletionEngine {
             return completePhrase(args, 2, names);
         }
         if (args[1].equalsIgnoreCase("delete")) {
-            return nameThenHint(args, 2, names, reasonHint());
+            return nameThenHint(args, 2, townNames(snapshot, TownCandidate::reuseBlocked), reasonHint());
         }
         return List.of();
     }
@@ -146,7 +161,8 @@ public final class TownAdminCompletionEngine {
     private List<String> economyCommands(String[] args, Snapshot snapshot) {
         String root = args[0].toLowerCase(Locale.ROOT);
 
-        if (root.equals("money") && args[1].equalsIgnoreCase("reconcile")) {
+        if (root.equals("money") && Set.of("reconcile", "resolve", "pending", "subsidy", "tax")
+                .contains(args[1].toLowerCase(Locale.ROOT))) {
             return List.of();
         }
         List<String> names = townNames(snapshot, town -> town.status() == TownStatus.ACTIVE);
@@ -304,7 +320,12 @@ public final class TownAdminCompletionEngine {
     }
 
     public record Snapshot(List<TownCandidate> towns,
-                    Map<UUID, List<UUID>> membersByTown, Map<String, Integer> buffLevels) {
+                    Map<UUID, List<UUID>> membersByTown, Map<String, Integer> buffLevels,
+                    List<ApplicationCandidate> applications) {
+        public Snapshot(List<TownCandidate> towns, Map<UUID, List<UUID>> membersByTown,
+                        Map<String, Integer> buffLevels) {
+            this(towns, membersByTown, buffLevels, List.of());
+        }
         public Snapshot(List<TownCandidate> towns, Map<UUID, List<UUID>> membersByTown) {
             this(towns, membersByTown, Map.of());
         }
@@ -312,6 +333,7 @@ public final class TownAdminCompletionEngine {
             towns = List.copyOf(towns);
             membersByTown = Map.copyOf(membersByTown);
             buffLevels = Map.copyOf(buffLevels);
+            applications = List.copyOf(applications);
         }
 
         static Snapshot empty() {
@@ -319,7 +341,10 @@ public final class TownAdminCompletionEngine {
         }
     }
 
-    public record TownCandidate(UUID id, String code, TownStatus status) {
+    public record ApplicationCandidate(UUID id, String code, UUID applicantId) {
+    }
+
+    public record TownCandidate(UUID id, String code, TownStatus status, boolean reuseBlocked) {
     }
 
     public record PlayerCandidate(UUID id, String name, boolean online) {

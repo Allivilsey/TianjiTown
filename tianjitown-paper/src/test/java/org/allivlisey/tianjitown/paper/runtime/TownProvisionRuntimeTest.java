@@ -37,6 +37,7 @@ class TownProvisionRuntimeTest {
     private final TownSnapshot town = mock(TownSnapshot.class);
     private final Runnable refresh = mock(Runnable.class);
     private final TownProvisionRuntime runtime;
+    private final ProvisionCoordinator coordinator = new ProvisionCoordinator();
 
     TownProvisionRuntimeTest() {
         var messages = mock(PluginMessages.class);
@@ -55,11 +56,16 @@ class TownProvisionRuntimeTest {
         when(town.profile()).thenReturn(new ApplicationText("amu", "amu", "测试简介", List.of("友善交流")));
         when(town.territory()).thenReturn(territory);
         when(repository.findTown(townId)).thenReturn(Optional.of(town));
+        when(repository.provisioningForProjection(appId)).thenReturn(new TownRepository.Provisioning(appId, town, List.of(applicant)));
         when(sites.validateReservationEnvironment(territory)).thenReturn(SitePolicy.Validation.success(territory));
         when(land.findNameCollision("amu")).thenReturn(LandProtectionService.Collision.none());
         when(settlement.transferFromPlayer(offline, 100)).thenReturn(VaultSettlementService.Result.success("paid"));
+        when(repository.claimApplicationFeeCollection(eq(appId), anyLong(), eq(100L), any(), anyString()))
+                .thenReturn(new ApplicationFeeOperation(appId, applicant, 100, ApplicationFeeOperation.State.COLLECTING, "claim", 0));
+        when(repository.completeApplicationFeeOperation(any(), eq(ApplicationFeeOperation.Outcome.SUCCESS), anyString(), any(), anyString()))
+                .thenReturn(new ApplicationFeeOperation(appId, applicant, 100, ApplicationFeeOperation.State.ESCROWED, "paid", 1));
         runtime = new TownProvisionRuntime(plugin, repository, land, sites, settlement, available,
-                new HashSet<>(), new TownRuntimeTasks(plugin, available), refresh, () -> 100);
+                new HashSet<>(), new TownRuntimeTasks(plugin, available), refresh, () -> 100, coordinator);
     }
 
     private ApplicationSnapshot application(ApplicationStatus status, boolean reserved) {
@@ -165,5 +171,120 @@ class TownProvisionRuntimeTest {
         approve(); drain();
         verify(settlement, times(1)).transferFromPlayer(any(), anyLong());
         assertFalse(results.getLast().notifyDecision());
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "world", "height", "space", "set-failure", "set-exception", "cleanup-failure", "cleanup-exception"})
+    void everyTeleportFailureAttemptsCleanupAndLeavesRecoverableFailedApplication(String failure) {
+        var failed = application(ApplicationStatus.PROVISION_FAILED, false);
+        when(repository.findApplication(appId)).thenReturn(Optional.of(failed));
+        when(town.status()).thenReturn(TownStatus.PROVISIONING);
+        when(repository.beginProvision(any(), any(), any(), any(), any(), anyLong(), any()))
+                .thenReturn(new TownRepository.Provisioning(appId, town, List.of(applicant)));
+        var ok = LandProtectionService.Result.successCode(LandProtectionService.ResultCode.PROJECTION_HEALTHY);
+        when(land.create("amu", territory, List.of(applicant))).thenReturn(ok);
+        when(land.setMessages(anyString(), anyString(), anyString())).thenReturn(ok);
+        when(land.remove("amu", territory)).thenReturn(ok);
+        if (!failure.equals("world")) {
+            var world = mock(World.class);
+            when(plugin.getServer().getWorld(territory.center().worldId())).thenReturn(world);
+            when(world.getUID()).thenReturn(territory.center().worldId());
+            when(world.getName()).thenReturn("world");
+            when(world.getHighestBlockYAt(anyInt(), anyInt())).thenReturn(failure.equals("height") ? 319 : 64);
+            when(world.getMaxHeight()).thenReturn(320);
+            when(world.getMinHeight()).thenReturn(-64);
+            var block = mock(Block.class);
+            when(world.getBlockAt(any(Location.class))).thenReturn(block);
+            when(world.getBlockAt(anyInt(), anyInt(), anyInt())).thenReturn(block);
+            when(block.isPassable()).thenReturn(!failure.equals("space"));
+            when(block.getRelative(anyInt(), anyInt(), anyInt())).thenReturn(block);
+            var solid = mock(Material.class);
+            when(solid.isSolid()).thenReturn(true);
+            when(block.getType()).thenReturn(solid);
+        }
+        when(land.setTeleportPoint(anyString(), any(), anyString(), anyDouble(), anyDouble(), anyDouble(), anyFloat(), anyFloat()))
+                .thenReturn(LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROVISION_OPERATION_FAILED));
+        if (failure.equals("set-exception")) {
+            when(land.setTeleportPoint(anyString(), any(), anyString(), anyDouble(), anyDouble(), anyDouble(), anyFloat(), anyFloat()))
+                    .thenThrow(new IllegalStateException("teleport API failed"));
+        }
+        if (failure.equals("cleanup-failure")) when(land.remove("amu", territory))
+                .thenReturn(LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROJECTION_STILL_PRESENT));
+        if (failure.equals("cleanup-exception")) when(land.remove("amu", territory))
+                .thenThrow(new IllegalStateException("cleanup API failed"));
+        when(repository.finishProvision(eq(appId), eq(false), anyString())).thenReturn(failed);
+        approve(); drain();
+        verify(land).remove("amu", territory);
+        verify(repository).finishProvision(eq(appId), eq(false), anyString());
+        verifyNoInteractions(settlement);
+        assertEquals(1, results.size());
+        assertEquals(ProvisionResult.Status.FAILED, results.getFirst().status());
+        assertTrue(coordinator.tryBegin(appId));
+    }
+
+    @Test void retrySucceedsAfterUnsafeLandingSpaceIsRepairedWithoutChargingAgain() {
+        var failed = application(ApplicationStatus.PROVISION_FAILED, false);
+        when(repository.findApplication(appId)).thenReturn(Optional.of(failed));
+        when(town.status()).thenReturn(TownStatus.PROVISIONING);
+        when(repository.beginProvision(any(), any(), any(), any(), any(), anyLong(), any()))
+                .thenReturn(new TownRepository.Provisioning(appId, town, List.of(applicant)));
+        var ok = LandProtectionService.Result.successCode(LandProtectionService.ResultCode.PROJECTION_HEALTHY);
+        when(land.findNameCollision("amu")).thenReturn(new LandProtectionService.Collision(true, "amu"));
+        when(land.inspect("amu", territory, List.of(applicant)))
+                .thenReturn(LandProtectionService.Inspection.healthyCode(LandProtectionService.ResultCode.PROJECTION_HEALTHY));
+        when(land.create("amu", territory, List.of(applicant))).thenReturn(ok);
+        when(land.setMessages(anyString(), anyString(), anyString())).thenReturn(ok);
+        when(land.remove("amu", territory)).thenReturn(ok);
+        var world = mock(World.class);
+        when(plugin.getServer().getWorld(territory.center().worldId())).thenReturn(world);
+        when(world.getUID()).thenReturn(territory.center().worldId());
+        when(world.getName()).thenReturn("world");
+        when(world.getHighestBlockYAt(anyInt(), anyInt())).thenReturn(64);
+        when(world.getMaxHeight()).thenReturn(320);
+        when(world.getMinHeight()).thenReturn(-64);
+        var block = mock(Block.class);
+        when(world.getBlockAt(any(Location.class))).thenReturn(block);
+        when(world.getBlockAt(anyInt(), anyInt(), anyInt())).thenReturn(block);
+        when(block.getRelative(anyInt(), anyInt(), anyInt())).thenReturn(block);
+        var material = mock(Material.class);
+        when(material.isSolid()).thenReturn(true);
+        when(block.getType()).thenReturn(material);
+        when(block.isPassable()).thenReturn(false);
+        when(repository.finishProvision(eq(appId), eq(false), anyString())).thenReturn(failed);
+        approve(); drain();
+        assertEquals(ProvisionResult.Status.FAILED, results.getFirst().status());
+
+        when(block.isPassable()).thenReturn(true);
+        when(land.setTeleportPoint(anyString(), any(), anyString(), anyDouble(), anyDouble(), anyDouble(), anyFloat(), anyFloat()))
+                .thenReturn(ok);
+        when(repository.finishProvision(eq(appId), eq(true), anyString()))
+                .thenReturn(application(ApplicationStatus.ACTIVE, false));
+        approve(); drain();
+        assertEquals(ProvisionResult.Status.SUCCESS, results.getLast().status());
+        verify(land, times(1)).remove("amu", territory);
+        verify(land, times(1)).setTeleportPoint(eq("amu"), any(), eq("world"),
+                eq(8.5), eq(65.0), eq(8.5), eq(0.0F), eq(0.0F));
+        verifyNoInteractions(settlement);
+    }
+
+    @Test void recoveryInFlightPreventsApprovalFromTouchingDatabaseOrLand() {
+        assertTrue(coordinator.tryBegin(appId));
+        approve(); drain();
+        assertEquals(ProvisionResult.Status.BUSY, results.getFirst().status());
+        verifyNoInteractions(repository, sites, settlement, land);
+        assertFalse(coordinator.tryBegin(appId));
+    }
+
+    @Test void archivedTownDetectedBeforeQueuedProjectionNeverTouchesResidence() {
+        var failed = application(ApplicationStatus.PROVISION_FAILED, false);
+        when(repository.findApplication(appId)).thenReturn(Optional.of(failed));
+        when(town.status()).thenReturn(TownStatus.PROVISIONING);
+        when(repository.provisioningForProjection(appId)).thenThrow(new TownRepository.ConflictException("小镇已归档"));
+        approve(); drain();
+        verify(land, never()).create(anyString(), any(), anyList());
+        verify(land, never()).remove(anyString(), any(InitialTerritory.class));
+        assertEquals(ProvisionResult.Status.FAILED, results.getFirst().status());
+        assertTrue(coordinator.tryBegin(appId));
     }
 }

@@ -15,7 +15,6 @@ import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.config.EconomySettings;
 import org.allivlisey.tianjitown.paper.task.RetryingWorkQueue;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
-import org.bukkit.entity.Player;
 
 import static org.allivlisey.tianjitown.paper.runtime.RuntimeText.safeMessage;
 import static org.allivlisey.tianjitown.paper.runtime.RuntimeText.safeText;
@@ -44,10 +43,13 @@ final class TownTaxRuntime {
     private final VaultSettlementService settlement;
     private final AtomicBoolean databaseAvailable;
     private final Map<UUID, QuickShopTaxAdapter.TaxPolicy> taxPolicies = new ConcurrentHashMap<>();
+    private final java.util.Set<UUID> archivedTowns = ConcurrentHashMap.newKeySet();
+    private final Object taxPolicyLock = new Object();
+    private final TownIncomeTaxCollectionRuntime incomeCollections;
     private final RetryingWorkQueue<PendingQuickShopTax> pendingTaxes;
     private final RetryingWorkQueue<PendingQuickShopTax> pendingQuickShopPreparations;
     private final RetryingWorkQueue<PendingQuickShopTax> pendingQuickShopPayments;
-    private final RetryingWorkQueue<EconomyRepository.ExternalIncomeTax> pendingIncomeTaxes;
+    private final RetryingWorkQueue<PendingIncomeSubsidy> pendingIncomeTaxes;
     private final RetryingWorkQueue<PendingIncomeSubsidy> pendingIncomeSubsidies;
     private final RetryingWorkQueue<PendingIncomeSubsidy> pendingIncomeSubsidyPayments;
     private final AtomicBoolean quickShopTaxAvailable = new AtomicBoolean(false);
@@ -83,7 +85,7 @@ final class TownTaxRuntime {
                 }, (pending, exception) -> handleQuickShopTaxFailure(pending.tax, exception));
         this.pendingIncomeTaxes = new RetryingWorkQueue<>(asyncScheduler,
                 20L * 5, 20L * 30, this::recordExternalIncomeTax,
-                this::handleExternalIncomeTaxFailure);
+                (pending, exception) -> handleExternalIncomeTaxFailure(pending.tax, exception));
         this.pendingIncomeSubsidyPayments = new RetryingWorkQueue<>(taxScheduler(true),
                 20L * 5, 20L * 30, this::payExternalSubsidy,
                 (pending, exception) -> plugin.getLogger().severe(plugin.messages().plainText(
@@ -101,6 +103,10 @@ final class TownTaxRuntime {
                     }
                     pendingIncomeSubsidyPayments.submit(pending);
                 }, (pending, exception) -> handleExternalIncomeTaxFailure(pending.tax, exception));
+        this.incomeCollections = new TownIncomeTaxCollectionRuntime(plugin, finance, settlement,
+                databaseAvailable, collection -> pendingIncomeSubsidies.submit(
+                        new PendingIncomeSubsidy(collection.tax(), collection.operationId())),
+                townId -> !archivedTowns.contains(townId));
     }
 
     private RetryingWorkQueue.Scheduler taxScheduler(boolean mainThread) {
@@ -125,40 +131,38 @@ final class TownTaxRuntime {
     }
 
     private void payExternalSubsidy(PendingIncomeSubsidy pending) {
-        // Preserve successful and ambiguous Vault results across queue retries.
-        // Only definite failures may safely invoke Vault again.
-        if (pending.result == null || (!pending.result.success()
-                && !pending.result.compensationRequired())) {
-            pending.result = pending.reservation.grantedMinor() == 0
-                    ? VaultSettlementService.Result.success(plugin.messages().plainText(
-                            QUICK_SHOP_TAX_SUBSIDY_QUOTA_EXHAUSTED))
-                    : settlement.adjustSettlement(pending.reservation.grantedMinor());
+        if (pending.result == null) {
+            try {
+                pending.result = pending.reservation.grantedMinor() == 0
+                        ? VaultSettlementService.Result.success("No subsidy payable")
+                        : settlement.adjustSettlement(pending.reservation.grantedMinor());
+            } catch (RuntimeException | LinkageError exception) {
+                pending.result = VaultSettlementService.Result.failure(safeMessage(exception), false, true);
+            }
+            if (pending.result == null) {
+                pending.result = VaultSettlementService.Result.failure("Missing subsidy response", false, true);
+            }
         }
-        if (pending.result.compensationRequired()) {
-            // Keep the reservation for manual reconciliation; do not block unrelated payments.
-            plugin.getLogger().severe(plugin.messages().plainText(EXTERNAL_SUBSIDY_SETTLEMENT_AMBIGUOUS,
-                    Map.of("businessKey", safeText(pending.tax.businessKey()),
-                            "detail", safeText(pending.result.message()))));
-            return;
-        }
-        if (!pending.result.success()) {
-            throw new IllegalStateException(pending.result.message());
-        }
-        pendingIncomeTaxes.submit(pending.tax);
+        // The tax already belongs to the town. A subsidy failure must not hold it hostage.
+        // Preserve the external result across database retries; reconciliation never repeats Vault.
+        pendingIncomeTaxes.submit(pending);
     }
 
     private static final class PendingIncomeSubsidy {
         private final EconomyRepository.ExternalIncomeTax tax;
         private EconomyRepository.SubsidyReservation reservation;
         private VaultSettlementService.Result result;
+        private final UUID collectionId;
 
-        private PendingIncomeSubsidy(EconomyRepository.ExternalIncomeTax tax) {
+        private PendingIncomeSubsidy(EconomyRepository.ExternalIncomeTax tax, UUID collectionId) {
             this.tax = tax;
+            this.collectionId = collectionId;
         }
     }
 
     QuickShopTaxAdapter.TaxPolicy taxPolicy(UUID receiverId) {
-        return taxEnabled() ? taxPolicies.get(receiverId) : null;
+        QuickShopTaxAdapter.TaxPolicy policy = taxEnabled() ? taxPolicies.get(receiverId) : null;
+        return policy != null && !archivedTowns.contains(policy.townId()) ? policy : null;
     }
 
     boolean taxEnabled() {
@@ -206,6 +210,7 @@ final class TownTaxRuntime {
     }
 
     void flushPendingTaxes() {
+        incomeCollections.flush();
         pendingQuickShopPreparations.flush();
         pendingQuickShopPayments.flush();
         pendingTaxes.flush();
@@ -260,17 +265,9 @@ final class TownTaxRuntime {
         if (tax == null) {
             return JobsIncomeTaxAdapter.TaxResult.unchanged(earning.grossAmount());
         }
-        VaultSettlementService.Result transferred = settlement.adjustSettlement(tax.taxMinor());
-        if (!transferred.success()) {
-            plugin.getLogger().severe(plugin.messages().plainText(
-                    JOBS_INCOME_TAX_SETTLEMENT_FAILURE,
-                    Map.of("detail", safeText(transferred.message()))));
-            return JobsIncomeTaxAdapter.TaxResult.unchanged(earning.grossAmount());
-        }
-        pendingIncomeSubsidies.submit(new PendingIncomeSubsidy(tax));
-        double net = BigDecimal.valueOf(tax.grossMinor() - tax.taxMinor(),
-                settlement.scale()).doubleValue();
-        return JobsIncomeTaxAdapter.TaxResult.taxed(net);
+        // The wage is already deposited. Persist the collection before asynchronously debiting tax.
+        incomeCollections.collect(tax, earning.player());
+        return JobsIncomeTaxAdapter.TaxResult.unchanged(earning.grossAmount());
     }
 
     void acceptGlobalMarketPlusIncomeTax(GlobalMarketPlusIncomeTaxAdapter.Earning earning) {
@@ -280,21 +277,7 @@ final class TownTaxRuntime {
         if (tax == null) {
             return;
         }
-        VaultSettlementService.Result transferred = settlement.transferFromPlayer(
-                earning.player(), tax.taxMinor());
-        if (!transferred.success()) {
-            plugin.getLogger().severe(plugin.messages().plainText(
-                    GLOBAL_MARKET_PLUS_INCOME_TAX_DEBIT_FAILURE,
-                    Map.of("detail", safeText(transferred.message()))));
-            return;
-        }
-        pendingIncomeSubsidies.submit(new PendingIncomeSubsidy(tax));
-        Player receiver = earning.player().getPlayer();
-        if (receiver != null) {
-            plugin.messages().send(receiver, "chat.runtime.global-market-income", Map.of(
-                    "gross", settlement.formatMinor(tax.grossMinor()), "tax", settlement.formatMinor(tax.taxMinor()),
-                    "net", settlement.formatMinor(tax.grossMinor() - tax.taxMinor())));
-        }
+        incomeCollections.collect(tax, earning.player());
     }
 
     private EconomyRepository.ExternalIncomeTax externalIncomeTax(
@@ -303,7 +286,7 @@ final class TownTaxRuntime {
         if (!taxEnabled() || !Double.isFinite(gross) || gross <= 0) {
             return null;
         }
-        QuickShopTaxAdapter.TaxPolicy policy = taxPolicies.get(receiver.getUniqueId());
+        QuickShopTaxAdapter.TaxPolicy policy = taxPolicy(receiver.getUniqueId());
         if (policy == null || policy.basisPoints() <= 0) {
             return null;
         }
@@ -321,8 +304,20 @@ final class TownTaxRuntime {
                 receiver.getUniqueId(), safeName, grossMinor, policy.basisPoints(), taxMinor);
     }
 
-    private void recordExternalIncomeTax(EconomyRepository.ExternalIncomeTax tax) {
-        finance.recordExternalIncomeTax(tax);
+    private void recordExternalIncomeTax(PendingIncomeSubsidy pending) {
+        EconomyRepository.ExternalIncomeTax tax = pending.tax;
+        if (pending.result.success() && !pending.result.compensationRequired()) {
+            finance.recordExternalIncomeTax(tax);
+        } else {
+            finance.recordExternalIncomeTaxWithoutSubsidy(tax, pending.result.message());
+            plugin.getLogger().severe(plugin.messages().plainText(
+                    pending.result.compensationRequired() ? EXTERNAL_SUBSIDY_SETTLEMENT_AMBIGUOUS
+                            : EXTERNAL_SUBSIDY_SETTLEMENT_FAILURE,
+                    Map.of("businessKey", safeText(tax.businessKey()),
+                            "detail", safeText(pending.result.message()))));
+        }
+        finance.markIncomeTaxRecorded(pending.collectionId);
+        incomeCollections.recorded(pending.collectionId);
         databaseAvailable.set(true);
     }
 
@@ -344,7 +339,33 @@ final class TownTaxRuntime {
             loaded.put(policy.playerId(), new QuickShopTaxAdapter.TaxPolicy(policy.townId(),
                     policy.taxRateBps()));
         }
-        taxPolicies.clear();
-        taxPolicies.putAll(loaded);
+        synchronized (taxPolicyLock) {
+            loaded.values().removeIf(policy -> archivedTowns.contains(policy.townId()));
+            taxPolicies.clear();
+            taxPolicies.putAll(loaded);
+        }
+    }
+
+    void townArchived(UUID townId) {
+        synchronized (taxPolicyLock) {
+            archivedTowns.add(townId);
+            taxPolicies.values().removeIf(policy -> policy.townId().equals(townId));
+        }
+    }
+
+    void prepareStartupRecovery() { incomeCollections.prepareStartupRecovery(); }
+    void recoverStartupState() { incomeCollections.recoverStartupState(); }
+    void recordConfirmedIncomeTax(EconomyRepository.IncomeTaxCollection collection) {
+        incomeCollections.recordConfirmedCollection(collection);
+    }
+    void resolveIncomeTaxCollection(org.bukkit.command.CommandSender sender,
+            EconomyRepository.IncomeTaxCollection expected, boolean paid, String reason,
+            java.util.function.Consumer<EconomyRepository.IncomeTaxCollection> completed) {
+        incomeCollections.resolve(sender, expected, paid, reason, completed);
+    }
+    void refundIncomeTaxCollection(org.bukkit.command.CommandSender sender,
+            EconomyRepository.IncomeTaxCollection expected,
+            java.util.function.Consumer<EconomyRepository.IncomeTaxCollection> completed) {
+        incomeCollections.refund(sender, expected, completed);
     }
 }

@@ -167,6 +167,9 @@ final class LifecycleTaskScheduler {
     }
 
     void registerPeriodic(TownRuntime runtime) {
+        registerPeriodicTask(
+                () -> runPeriodic("log.scheduler.periodic.settlement-privacy-failure",
+                        runtime.settlementPrivacy()::enforce), 20L * 60, 20L * 60);
         registerPeriodicTask(() -> {
             if (plugin.townUi() != null) plugin.townUi().deliverPlayerChanges();
         }, 20L, 20L);

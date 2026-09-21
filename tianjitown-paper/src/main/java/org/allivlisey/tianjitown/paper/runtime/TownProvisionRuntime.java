@@ -92,7 +92,8 @@ final class TownProvisionRuntime {
     private final TownRuntimeTasks tasks;
     private final Runnable refreshTaxPolicies;
     private final java.util.function.LongSupplier applicationFeeMinor;
-    private final ProvisionCoordinator provisions = new ProvisionCoordinator();
+    private final ProvisionCoordinator provisions;
+    private final TownApplicationFeeRuntime applicationFees;
 
     TownProvisionRuntime(TianjiTownPlugin plugin,
             TownRepository repository,
@@ -103,7 +104,8 @@ final class TownProvisionRuntime {
             Set<String> activeResidenceNames,
             TownRuntimeTasks tasks,
             Runnable refreshTaxPolicies,
-            java.util.function.LongSupplier applicationFeeMinor) {
+            java.util.function.LongSupplier applicationFeeMinor,
+            ProvisionCoordinator provisions) {
         this.plugin = plugin;
         this.repository = repository;
         this.landProtection = landProtection;
@@ -114,6 +116,8 @@ final class TownProvisionRuntime {
         this.tasks = tasks;
         this.refreshTaxPolicies = refreshTaxPolicies;
         this.applicationFeeMinor = applicationFeeMinor;
+        this.provisions = provisions;
+        this.applicationFees = new TownApplicationFeeRuntime(plugin, repository, settlement, provisions);
     }
 
     void provision(CommandSender sender, UUID applicationId, UUID reviewerId,
@@ -274,40 +278,40 @@ final class TownProvisionRuntime {
                 return;
             }
         }
-        boolean needsCharge = application.applicationFeeMinor() == 0;
+        boolean needsCharge = application.applicationFeeStatus() == ApplicationSnapshot.FeeStatus.UNPAID
+                || application.applicationFeeStatus() == ApplicationSnapshot.FeeStatus.REFUNDED;
         if (needsCharge) {
-            VaultSettlementService.Result payment = settlement.transferFromPlayer(
-                    plugin.getServer().getOfflinePlayer(application.applicantId()), feeMinor);
-            if (!payment.success()) {
-                provisions.finish(application.id());
-                String paymentDetail = safeText(payment.message());
-                plugin.messages().send(sender, "chat.runtime.fee-failed", Map.of(
-                        "amount", settlement.formatMinor(feeMinor), "detail", paymentDetail));
-                completion.accept(ProvisionResult.failure(application,
-                        ProvisionResult.MessageRef.configured(PROVISION_FEE_FAILURE_DETAIL,
-                                Map.of("detail", paymentDetail)),
-                        ProvisionResult.MessageRef.configured(PROVISION_FEE_FAILURE_ACTION)));
-                return;
-            }
+            applicationFees.collectWhileLocked(sender, application, feeMinor, reviewerId, reviewerName,
+                    () -> beginPaidProvision(sender, application, reviewerId, reviewerName, reason,
+                            idempotencyKey, feeMinor, completion), result -> {
+                        provisions.finish(application.id());
+                        completion.accept(result);
+                    });
+        } else if (application.applicationFeeStatus() == ApplicationSnapshot.FeeStatus.ESCROWED) {
+            beginPaidProvision(sender, application, reviewerId, reviewerName, reason,
+                    idempotencyKey, feeMinor, completion);
+        } else {
+            throw new IllegalStateException("申请费正在退款或需要核实，请先处理资金记录");
         }
+    }
+
+    private void beginPaidProvision(CommandSender sender, ApplicationSnapshot application,
+            UUID reviewerId, String reviewerName, String reason, String idempotencyKey,
+            long feeMinor, Consumer<ProvisionResult> completion) {
+        String applicantName = playerName(application.applicantId());
         if (!plugin.runAsync(() -> {
             TownRepository.Provisioning provisioning;
             try {
-                provisioning = repository.beginProvision(
+                repository.beginProvision(
                         application.id(), reviewerId, reviewerName, reason, idempotencyKey,
-                        feeMinor, playerName(application.applicantId()));
+                        feeMinor, applicantName);
+                // Read authoritative state before queueing external projection. Administrative
+                // deletion uses the same coordinator until the complete projection lifecycle ends.
+                provisioning = repository.provisioningForProjection(application.id());
             } catch (RuntimeException exception) {
                 Runnable failed = () -> {
-                    if (needsCharge) {
-                        VaultSettlementService.Result refund = settlement.transferToPlayer(
-                                plugin.getServer().getOfflinePlayer(application.applicantId()),
-                                feeMinor);
-                        if (!refund.success()) {
-                            plugin.getLogger().severe(plugin.messages().plainText(
-                                    PROVISION_REFUND_FAILURE,
-                                    Map.of("detail", safeText(refund.message()))));
-                        }
-                    }
+                    // The fee is durably escrowed. Keep it for retry or explicit recovery;
+                    // a database failure cannot safely trigger an unrecorded compensating payment.
                     provisions.finish(application.id());
                     tasks.handleFailure(sender, exception);
                     completion.accept(ProvisionResult.failure(application,
@@ -336,12 +340,6 @@ final class TownProvisionRuntime {
                         ProvisionResult.MessageRef.configured(PROVISION_LIFECYCLE_RETRY_ACTION)));
             }
         })) {
-            if (needsCharge) {
-                VaultSettlementService.Result refund = settlement.transferToPlayer(
-                        plugin.getServer().getOfflinePlayer(application.applicantId()), feeMinor);
-                if (!refund.success()) plugin.getLogger().severe(plugin.messages().plainText(
-                        PROVISION_REFUND_FAILURE, Map.of("detail", safeText(refund.message()))));
-            }
             provisions.finish(application.id());
             completion.accept(ProvisionResult.failure(application,
                 ProvisionResult.MessageRef.configured(
@@ -418,6 +416,39 @@ final class TownProvisionRuntime {
 
     private LandProtectionService.Result setDefaultTeleportPoint(TownSnapshot town,
                                                                   LandProtectionService.Result land) {
+        LandProtectionService.Result teleport;
+        try {
+            teleport = initializeDefaultTeleportPoint(town, land);
+        } catch (RuntimeException | LinkageError exception) {
+            teleport = LandProtectionService.Result.failureCode(
+                    LandProtectionService.ResultCode.PROVISION_OPERATION_FAILED,
+                    Map.of("detail", safeText(safeMessage(exception))));
+        }
+        if (teleport.success()) return teleport;
+
+        // Every default-teleport failure must compensate the already-created projection,
+        // including the world, height and space checks that run before setTeleportPoint.
+        LandProtectionService.Result cleanup;
+        try {
+            cleanup = landProtection.remove(town.residenceName(), town.territory());
+        } catch (RuntimeException | LinkageError exception) {
+            cleanup = LandProtectionService.Result.failureCode(
+                    LandProtectionService.ResultCode.RESIDENCE_API_UNAVAILABLE,
+                    Map.of("detail", safeText(safeMessage(exception))));
+        }
+        String detail = safeText(LandProtectionMessages.detail(plugin.messages(), teleport));
+        return cleanup.success()
+                ? LandProtectionService.Result.failureCode(
+                        LandProtectionService.ResultCode.PROVISION_DEFAULT_TELEPORT_ROLLED_BACK_DETAIL,
+                        Map.of("detail", detail))
+                : LandProtectionService.Result.failureCode(
+                        LandProtectionService.ResultCode.PROVISION_DEFAULT_TELEPORT_ROLLBACK_FAILED_DETAIL,
+                        Map.of("detail", detail, "cleanup", safeText(
+                                LandProtectionMessages.detail(plugin.messages(), cleanup))));
+    }
+
+    private LandProtectionService.Result initializeDefaultTeleportPoint(TownSnapshot town,
+                                                                         LandProtectionService.Result land) {
         org.allivlisey.tianjitown.core.land.ChunkPosition center = town.territory().center();
         org.bukkit.World world = plugin.getServer().getWorld(center.worldId());
         if (world == null) {
@@ -442,17 +473,7 @@ final class TownProvisionRuntime {
                 town.residenceName(), world.getUID(), world.getName(), location.getX(),
                 location.getY(), location.getZ(), 0.0F, 0.0F);
         if (!teleport.success()) {
-            LandProtectionService.Result cleanup = landProtection.remove(town.residenceName(),
-                    town.territory());
-            String teleportDetail = safeText(LandProtectionMessages.detail(plugin.messages(), teleport));
-            if (cleanup.success()) {
-                return LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROVISION_DEFAULT_TELEPORT_ROLLED_BACK_DETAIL,
-                        Map.of("detail", teleportDetail));
-            }
-            return LandProtectionService.Result.failureCode(LandProtectionService.ResultCode.PROVISION_DEFAULT_TELEPORT_ROLLBACK_FAILED_DETAIL,
-                    Map.of("detail", teleportDetail,
-                            "cleanup", safeText(LandProtectionMessages.detail(
-                                    plugin.messages(), cleanup))));
+            return teleport;
         }
         return LandProtectionService.Result.successCode(LandProtectionService.ResultCode.PROVISION_LAND_WITH_TELEPORT_DETAIL,
                 Map.of("detail", safeText(LandProtectionMessages.detail(plugin.messages(), land))));

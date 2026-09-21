@@ -136,6 +136,22 @@ final class TownStartupCoordinator {
     volatile TownAdminTabCompleter townAdminTabCompleter;
     volatile PluginMessages messages;
     private Lamp<BukkitCommandActor> commandLamp;
+    private final List<AutoCloseable> runtimeHooks = new ArrayList<>();
+
+    void ownRuntimeHook(AutoCloseable hook) {
+        runtimeHooks.add(hook);
+    }
+
+    private void closeRuntimeHooks() {
+        for (AutoCloseable hook : runtimeHooks.reversed()) {
+            try {
+                hook.close();
+            } catch (Exception | LinkageError exception) {
+                plugin.getLogger().warning("运行时集成卸载失败: " + safeMessage(exception));
+            }
+        }
+        runtimeHooks.clear();
+    }
     // Own pools before queuing activation: Bukkit may cancel that callback during unload.
     private final Set<DatabaseGate> databaseCandidates = new java.util.HashSet<>();
 
@@ -180,6 +196,7 @@ final class TownStartupCoordinator {
 
     public void onDisable() {
         scheduler.stopAccepting();
+        closeRuntimeHooks();
         java.util.function.Consumer<CleanupFailure> failures = failure -> plugin.getLogger().warning(
                 plainText(failure.key(), Map.of("detail", safeMessage(failure.cause()))));
         cleanupEffect(() -> HandlerList.unregisterAll(plugin),
@@ -406,14 +423,18 @@ final class TownStartupCoordinator {
         ResidenceLandProtectionService residenceProtection =
                 new ResidenceLandProtectionService(plugin.getServer(), managedResidenceNames);
         try {
+            var accountBinding = org.allivlisey.tianjitown.paper.runtime.SettlementAccountMigrationStartup.run(plugin);
             runtime = new TownRuntime(plugin, candidate,
                     residenceProtection,
-                    worldBoundaryService(), activeResidenceNames);
+                    worldBoundaryService(), activeResidenceNames, accountBinding);
             org.allivlisey.tianjitown.integrations.vault.VaultSettlementService.Result settlement =
                     runtime.settlement().ensureAccount();
             if (!settlement.success()) {
                 throw new IllegalStateException(settlement.message());
             }
+            runtime.settlementPrivacy().enforce();
+            // Keep the bank identity protected even while asynchronous startup diagnostics run.
+            plugin.getServer().getPluginManager().registerEvents(runtime.settlementPrivacy(), plugin);
             actions = new TownActions(plugin, runtime);
             ui = new TownUiController(plugin, runtime, actions);
         } catch (RuntimeException | LinkageError exception) {
@@ -428,6 +449,7 @@ final class TownStartupCoordinator {
         databaseGate = candidate;
         scheduler.runAsync(() -> {
             try {
+                runtime.prepareStartupRecovery();
                 runtime.stations().load();
                 scheduler.runMain(() -> {
                     if (!scheduler.isCurrentLifecycle(generation)) return;
@@ -467,7 +489,7 @@ final class TownStartupCoordinator {
                 closeDatabaseCandidate(candidate);
                 return;
             }
-            if (!java.util.Objects.requireNonNull(diagnostic, "diagnostic").healthy()) {
+            if (!java.util.Objects.requireNonNull(diagnostic, "diagnostic").startupAllowed()) {
                 closeDatabaseCandidate(candidate);
                 List<String> details = new ArrayList<>(previousDetails);
                 details.add(messages().plainText(STARTUP_DIAGNOSTIC_FAILED,
@@ -489,6 +511,7 @@ final class TownStartupCoordinator {
 
     private void cleanupFailedRuntimeActivation(DatabaseGate candidate, TownRuntime runtime,
                                                  Throwable failure) {
+        closeRuntimeHooks();
         HandlerList.unregisterAll(plugin);
         plugin.getServer().getScheduler().cancelTasks(plugin);
         cleanupRuntimeEffects(runtime, cleanup -> failure.addSuppressed(cleanup.cause()));

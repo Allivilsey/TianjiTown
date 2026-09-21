@@ -36,6 +36,8 @@ public final class TownAdminCommand {
     private final TownAdminGovernanceCommands townAdminGovernanceCommands;
     private final TownAdminEconomyCommands townAdminEconomyCommands;
     private final TownAdminLandCommands townAdminLandCommands;
+    private final TownAdminApplicationFeeCommands applicationFeeCommands;
+    private final TownAdminRecoveryCommands recoveryCommands;
     private final TianjiTownPlugin plugin;
     private final CommandConfirmationManager confirmations = new CommandConfirmationManager();
 
@@ -45,6 +47,8 @@ public final class TownAdminCommand {
         this.townAdminGovernanceCommands = new TownAdminGovernanceCommands(this, plugin);
         this.townAdminEconomyCommands = new TownAdminEconomyCommands(this, plugin);
         this.townAdminLandCommands = new TownAdminLandCommands(this, plugin);
+        this.applicationFeeCommands = new TownAdminApplicationFeeCommands(this, plugin);
+        this.recoveryCommands = new TownAdminRecoveryCommands(this, plugin);
     }
 
     public void send(CommandSender recipient, String key) {
@@ -57,7 +61,7 @@ public final class TownAdminCommand {
 
     public void register(revxrsal.commands.Lamp<BukkitCommandActor> lamp) {
         lamp.register(this, townAdminApplicationCommands, townAdminGovernanceCommands,
-                townAdminEconomyCommands, townAdminLandCommands);
+                townAdminEconomyCommands, townAdminLandCommands, applicationFeeCommands, recoveryCommands);
     }
 
     @Command("tianjitown")
@@ -226,6 +230,15 @@ public final class TownAdminCommand {
         sender.sendMessage(message);
     }
 
+    void requireRecoveryAccess(CommandSender sender, TownRuntime expected) {
+        if (!sender.hasPermission(TownAdminPermissions.ROOT)) {
+            throw messageArgument("chat.admin.no-permission");
+        }
+        if (plugin.townRuntime() != expected) {
+            throw new IllegalStateException("运行时已变化，请重新查询后确认");
+        }
+    }
+
     @Command("tianjitown audit")
     @Usage("/tianjitown audit [1~200]")
     @AdminAccess(TownAdminPermissions.ROOT)
@@ -376,6 +389,9 @@ public final class TownAdminCommand {
     public void applicationHelp(CommandSender sender) {
         send(sender, "chat.admin.help-application-title");
         send(sender, "chat.admin.help-application-list");
+        send(sender, "chat.admin.help-application-delate");
+        send(sender, "chat.admin.help-application-clearcd");
+        send(sender, "chat.admin.application-fee-help");
     }
 
     private void help(CommandSender sender, String topic) {
@@ -447,6 +463,8 @@ public final class TownAdminCommand {
             case "money" -> {
                 send(sender, "chat.admin.help-economy-money-view");
                 send(sender, "chat.admin.help-economy-money-adjust");
+                send(sender, "chat.admin.recovery-help");
+                send(sender, "chat.admin.income-tax-recovery-help");
             }
             case "tax" -> send(sender, "chat.admin.help-economy-tax");
             case "ledger" -> send(sender, "chat.admin.help-economy-ledger");

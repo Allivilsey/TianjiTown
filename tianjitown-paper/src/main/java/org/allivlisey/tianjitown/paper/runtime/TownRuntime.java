@@ -66,6 +66,8 @@ public final class TownRuntime {
     private final TownTaxRuntime taxes;
     private final TownProvisionRuntime provisioning;
     private final TownProvisionRecovery provisionRecovery;
+    private final TownApplicationFeeRuntime applicationFees;
+    private final TownProvisionDeletionGuard provisionDeletion;
     private final TownExpansionRuntime expansions;
     private final TownRuntimeTasks tasks;
     private final TianjiTownPlugin plugin;
@@ -79,15 +81,26 @@ public final class TownRuntime {
     private final TerritoryPreviewService territoryPreviews;
     private final EconomySettings economySettings;
     private final VaultSettlementService settlement;
+    private final SettlementAccountPrivacy settlementPrivacy;
     private final BuffRuntime buffs;
     private final TownBonusRuntime bonuses;
     private final AtomicBoolean databaseAvailable = new AtomicBoolean(true);
     private final Set<String> activeResidenceNames;
+    private List<EconomyRepository.ExpansionOperation> startupExpansions = List.of();
+    private List<EconomyRepository.ExpansionBatchOperation> startupExpansionBatches = List.of();
 
     public TownRuntime(TianjiTownPlugin plugin, DatabaseGate database,
                     LandProtectionService landProtection,
                     WorldBoundaryService worldBoundaries,
                     Set<String> activeResidenceNames) {
+        this(plugin, database, landProtection, worldBoundaries, activeResidenceNames, null);
+    }
+
+    public TownRuntime(TianjiTownPlugin plugin, DatabaseGate database,
+                    LandProtectionService landProtection,
+                    WorldBoundaryService worldBoundaries,
+                    Set<String> activeResidenceNames,
+                    org.allivlisey.tianjitown.integrations.vault.SettlementAccountMigration.Binding accountBinding) {
         this.plugin = plugin;
         this.database = database;
         this.landProtection = landProtection;
@@ -108,18 +121,23 @@ public final class TownRuntime {
                 plugin.messages()::plainText);
         this.settlement = new VaultSettlementService(plugin.getServer(),
                 economySettings.settlementAccount(), economySettings.fallbackScale(),
-                plugin.messages()::plainText);
+                plugin.messages()::plainText, accountBinding == null ? null : accountBinding.id());
+        this.settlementPrivacy = new SettlementAccountPrivacy(plugin, settlement,
+                accountBinding == null ? null : accountBinding.formerName());
         applicationFeeMinor();
         TerritoryService territories = new TerritoryService(finance, sitePolicy, plugin.messages(),
                 economySettings, settlement.scale());
         this.tasks = new TownRuntimeTasks(plugin, databaseAvailable);
         this.taxes = new TownTaxRuntime(plugin, finance, economySettings, settlement,
                 databaseAvailable);
+        var provisionCoordinator = new org.allivlisey.tianjitown.paper.land.ProvisionCoordinator();
+        this.provisionDeletion = new TownProvisionDeletionGuard(repository, provisionCoordinator);
+        this.applicationFees = new TownApplicationFeeRuntime(plugin, repository, settlement, provisionCoordinator);
         this.provisioning = new TownProvisionRuntime(plugin, repository, landProtection,
                 sitePolicy, settlement, databaseAvailable, activeResidenceNames, tasks,
-                taxes::refreshTaxPolicies, this::applicationFeeMinor);
+                taxes::refreshTaxPolicies, this::applicationFeeMinor, provisionCoordinator);
         this.provisionRecovery = new TownProvisionRecovery(plugin, repository,
-                landProtection, settlement);
+                landProtection, settlement, provisionCoordinator);
         this.expansions = new TownExpansionRuntime(plugin, repository, finance,
                 landProtection, territories, tasks, this::consumptionEnabled);
         this.buffs = new BuffRuntime(plugin, this,
@@ -163,6 +181,10 @@ public final class TownRuntime {
 
     public VaultSettlementService settlement() {
         return settlement;
+    }
+
+    public SettlementAccountPrivacy settlementPrivacy() {
+        return settlementPrivacy;
     }
 
     /**
@@ -254,27 +276,35 @@ public final class TownRuntime {
         });
     }
 
+    /** Worker-thread preparation before the runtime accepts any business operations. */
+    public void prepareStartupRecovery() {
+        finance.initializeAccounts();
+        finance.recoverInterruptedOperations();
+        taxes.prepareStartupRecovery();
+        int recovered = repository.recoverInterruptedProvisions(
+                plugin.messages().plainText(INTERRUPTED_PROVISION_REASON));
+        if (recovered > 0) {
+            plugin.getLogger().warning(plugin.messages().plainText(INTERRUPTED_PROVISIONS_RECOVERED,
+                    Map.of("count", recovered)));
+        }
+        startupExpansions = List.copyOf(finance.pendingExpansions());
+        startupExpansionBatches = List.copyOf(finance.pendingExpansionBatches());
+        refreshTaxPolicies();
+        databaseAvailable.set(true);
+    }
+
     public void recoverStartupState() {
+        taxes.recoverStartupState();
         plugin.runAsync(() -> {
             try {
-                finance.initializeAccounts();
-                refreshTaxPolicies();
-                int recovered = repository.recoverInterruptedProvisions(
-                        plugin.messages().plainText(INTERRUPTED_PROVISION_REASON));
-                databaseAvailable.set(true);
-                if (recovered > 0) {
-                    plugin.getLogger().warning(plugin.messages().plainText(
-                            INTERRUPTED_PROVISIONS_RECOVERED,
-                            Map.of("count", recovered)));
-                }
                 List<EconomyRepository.ExpansionOperation> expansions =
-                        finance.pendingExpansions();
+                        startupExpansions;
                 if (!expansions.isEmpty()) {
                     plugin.runMain(
                             () -> this.expansions.recoverExpansions(expansions));
                 }
                 List<EconomyRepository.ExpansionBatchOperation> batches =
-                        finance.pendingExpansionBatches();
+                        startupExpansionBatches;
                 if (!batches.isEmpty()) {
                     plugin.runMain(() -> this.expansions.recoverExpansionBatches(batches));
                 }
@@ -351,6 +381,7 @@ public final class TownRuntime {
     }
 
     public void townArchived(TownSnapshot town) {
+        taxes.townArchived(town.id());
         deactivateResidence(town.residenceName());
         buffs.refreshAllPlayers();
     }
@@ -403,6 +434,37 @@ public final class TownRuntime {
                       Consumer<EconomyRepository.LedgerMutation> success,
                       Consumer<RuntimeException> failure) {
         economy.donateAction(player, amountMinor, success, failure);
+    }
+
+    public void resolveIncomeTaxCollection(CommandSender sender, EconomyRepository.IncomeTaxCollection expected,
+            boolean paid, String reason, Consumer<EconomyRepository.IncomeTaxCollection> success) {
+        taxes.resolveIncomeTaxCollection(sender, expected, paid, reason, success);
+    }
+
+    public void refundIncomeTaxCollection(CommandSender sender, EconomyRepository.IncomeTaxCollection expected,
+            Consumer<EconomyRepository.IncomeTaxCollection> success) {
+        taxes.refundIncomeTaxCollection(sender, expected, success);
+    }
+
+    public TownSnapshot deleteTownGuarded(UUID townId, long expectedVersion, UUID actor,
+            String actorName, String reason) {
+        return provisionDeletion.delete(townId, expectedVersion, actor, actorName, reason);
+    }
+
+    public void donateAction(Player player, UUID expectedTownId, long amountMinor,
+                             Consumer<EconomyRepository.LedgerMutation> success,
+                             Consumer<RuntimeException> failure) {
+        economy.donateAction(player, expectedTownId, amountMinor, success, failure);
+    }
+
+    public TownApplicationFeeRuntime applicationFees() {
+        return applicationFees;
+    }
+
+    public void resolveEconomyOperation(CommandSender sender, EconomyRepository.EconomyOperation expected,
+                                        boolean applied, String reason,
+                                        Consumer<EconomyRepository.EconomyOperation> success) {
+        economy.resolveOperation(sender, expected, applied, reason, success);
     }
 
     public void adjustFunds(CommandSender sender, UUID townId, long amountMinor, String reason) {

@@ -118,7 +118,7 @@ final class TownMembershipActions {
     public void leaveTown(Player actor, UUID townId,
                    Consumer<TownActionOutcome<UUID>> completion) {
         support.write("TOWN_LEAVE", actor, () -> {
-            runtime.repository().leaveTown(actor.getUniqueId());
+            runtime.repository().leaveTown(actor.getUniqueId(), townId);
             return townId;
         }, changedTown -> {
             runtime.buffs().refreshPlayer(actor);

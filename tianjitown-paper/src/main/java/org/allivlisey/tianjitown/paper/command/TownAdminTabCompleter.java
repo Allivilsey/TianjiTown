@@ -86,13 +86,20 @@ public final class TownAdminTabCompleter {
         TownRuntime currentRuntime = runtime;
         try {
             List<TownSnapshot> towns = currentRuntime.repository().listTowns(true);
+            var reservedTownIds = currentRuntime.repository().listReservedTowns().stream()
+                    .map(TownSnapshot::id).collect(java.util.stream.Collectors.toSet());
             Map<UUID, List<UUID>> members = currentRuntime.repository().listMemberIdsByTown();
             snapshot.set(new TownAdminCompletionEngine.Snapshot(
                     towns.stream().map(town -> new TownAdminCompletionEngine.TownCandidate(
-                            town.id(), town.profile().residenceName(), town.status())).toList(), members,
+                            town.id(), town.profile().residenceName(), town.status(),
+                            reservedTownIds.contains(town.id()))).toList(), members,
                     currentRuntime.buffs().settings().buffs().values().stream().collect(
                             java.util.stream.Collectors.toMap(definition -> definition.key(),
-                                    definition -> Math.min(5, definition.maximumLevel())))));
+                                    definition -> Math.min(5, definition.maximumLevel()))),
+                    currentRuntime.repository().listApplicationsForCompletion(500).stream()
+                            .map(application -> new TownAdminCompletionEngine.ApplicationCandidate(
+                                    application.id(), application.text().residenceName(), application.applicantId()))
+                            .toList()));
             refreshedAt.set(System.nanoTime());
             if (refreshFailureLogged.compareAndSet(true, false)) {
                 plugin.getLogger().info(plugin.messages().plainText(COMPLETION_CACHE_RESTORED));
@@ -116,7 +123,10 @@ public final class TownAdminTabCompleter {
                     online.getUniqueId(), online.getName(), true));
         }
         if (plugin.getServer().isPrimaryThread()) {
-            current.membersByTown().values().stream().flatMap(List::stream).distinct()
+            java.util.stream.Stream.concat(
+                    current.membersByTown().values().stream().flatMap(List::stream),
+                    current.applications().stream().map(TownAdminCompletionEngine.ApplicationCandidate::applicantId))
+                    .distinct()
                     .filter(playerId -> !players.containsKey(playerId))
                     .forEach(playerId -> {
                         OfflinePlayer offline = Bukkit.getOfflinePlayer(playerId);

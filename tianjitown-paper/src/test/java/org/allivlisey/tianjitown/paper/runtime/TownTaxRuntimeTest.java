@@ -59,12 +59,24 @@ class TownTaxRuntimeTest {
                 .thenAnswer(call -> new EconomyRepository.SubsidyReservation(UUID.randomUUID(),
                         call.getArgument(0), call.getArgument(1), call.getArgument(2), 500,
                         Instant.now(), Instant.now(), "RESERVED"));
+        when(finance.prepareIncomeTaxCollection(any())).thenAnswer(call ->
+                new EconomyRepository.IncomeTaxCollection(UUID.randomUUID(), call.getArgument(0), "PREPARED", null, 0));
+        when(finance.claimIncomeTaxCollection(any())).thenAnswer(call -> {
+            var previous = (EconomyRepository.IncomeTaxCollection) call.getArgument(0);
+            return new EconomyRepository.IncomeTaxCollection(previous.operationId(), previous.tax(), "ATTEMPTED", null, 1);
+        });
+        when(finance.finishIncomeTaxCollection(any(), anyString(), anyString())).thenAnswer(call -> {
+            var previous = (EconomyRepository.IncomeTaxCollection) call.getArgument(0);
+            return new EconomyRepository.IncomeTaxCollection(previous.operationId(), previous.tax(),
+                    call.getArgument(1), call.getArgument(2), 2);
+        });
         taxes = new TownTaxRuntime(plugin, finance, EconomySettings.load(config), settlement, available);
         taxes.refreshTaxPolicies();
     }
 
     @Test
     void retriesLedgerWriteWithoutRepeatingExternalSettlement() {
+        when(settlement.transferFromPlayer(player, 500)).thenReturn(VaultSettlementService.Result.success("paid"));
         when(settlement.adjustSettlement(500)).thenReturn(VaultSettlementService.Result.success("paid"));
         when(finance.recordExternalIncomeTax(any()))
                 .thenThrow(new EconomyRepository.StorageUnavailableException("offline", null))
@@ -72,8 +84,9 @@ class TownTaxRuntimeTest {
 
         JobsIncomeTaxAdapter.TaxResult result = taxes.acceptJobsIncomeTax(
                 new JobsIncomeTaxAdapter.Earning(player, 100.0));
-        assertTrue(result.applied());
-        assertEquals(95.0, result.netAmount());
+        assertFalse(result.applied());
+        assertEquals(100.0, result.netAmount());
+        finishCollection();
         verify(finance, never()).recordExternalIncomeTax(any());
 
         worker.remove().run(); // Reserve on worker.
@@ -91,7 +104,8 @@ class TownTaxRuntimeTest {
         assertEquals(posted.getAllValues().getFirst(), posted.getAllValues().getLast());
         assertEquals(500, posted.getValue().taxMinor());
         assertEquals(townId, posted.getValue().townId());
-        verify(settlement, times(2)).adjustSettlement(500);
+        verify(settlement).transferFromPlayer(player, 500);
+        verify(settlement).adjustSettlement(500);
         assertTrue(worker.isEmpty());
         assertTrue(delayed.isEmpty());
     }
@@ -104,12 +118,13 @@ class TownTaxRuntimeTest {
         verify(settlement, never()).adjustSettlement(anyLong());
 
         config.set("economy.tax.enabled", true);
-        when(settlement.adjustSettlement(500))
+        when(settlement.transferFromPlayer(player, 500))
                 .thenReturn(VaultSettlementService.Result.failure("unavailable", false, false));
         JobsIncomeTaxAdapter.TaxResult result = taxes.acceptJobsIncomeTax(
                 new JobsIncomeTaxAdapter.Earning(player, 100));
         assertFalse(result.applied());
         assertEquals(100.0, result.netAmount());
+        finishCollection();
         assertTrue(worker.isEmpty());
         verify(finance, never()).recordExternalIncomeTax(any());
     }
@@ -131,15 +146,9 @@ class TownTaxRuntimeTest {
                 eq(org.allivlisey.tianjitown.core.time.TownTime.ZONE));
         main.remove().run();
         worker.remove().run();
-        if (source.equals("JOBS")) {
-            verify(settlement).adjustSettlement(500);
-            verify(settlement, never()).transferFromPlayer(any(), anyLong());
-        } else {
-            verify(settlement).transferFromPlayer(player, 500);
-        }
+        verify(settlement).transferFromPlayer(player, 500);
         verify(settlement, times(granted == 0 ? 0 : 1)).adjustSettlement(granted);
-        verify(settlement, times((source.equals("JOBS") ? 1 : 0) + (granted > 0 ? 1 : 0)))
-                .adjustSettlement(anyLong());
+        verify(settlement, times(granted > 0 ? 1 : 0)).adjustSettlement(anyLong());
         verify(finance).recordExternalIncomeTax(argThat(tax -> tax.source().equals(source)
                 && tax.taxMinor() == 500));
         assertTrue(worker.isEmpty());
@@ -148,55 +157,59 @@ class TownTaxRuntimeTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"JOBS", "GLOBALMARKETPLUS"})
-    void retriesReservationAndSubsidyWithoutRepeatingTaxCollection(String source) {
+    void failedSubsidyRecordsTaxAndLeavesRecoverableReservation(String source) {
         when(settlement.transferFromPlayer(player, 500)).thenReturn(VaultSettlementService.Result.success("tax"));
-        when(settlement.adjustSettlement(500)).thenReturn(VaultSettlementService.Result.success("tax"));
         var reservation = new EconomyRepository.SubsidyReservation(UUID.randomUUID(), townId,
                 "retry", 500, 200, Instant.now(), Instant.now(), "RESERVED");
         when(finance.reserveTaxSubsidy(any(), anyString(), anyLong(), anyLong(), anyLong(), any(), any()))
                 .thenThrow(new EconomyRepository.StorageUnavailableException("offline", null))
                 .thenReturn(reservation);
         when(settlement.adjustSettlement(200))
-                .thenReturn(VaultSettlementService.Result.failure("temporarily unavailable", false, false))
-                .thenReturn(VaultSettlementService.Result.success("subsidy"));
+                .thenReturn(VaultSettlementService.Result.failure("temporarily unavailable", false, false));
         acceptIncome(source);
         worker.remove().run();
         assertFalse(available.get());
         delayed.remove().run();
         worker.remove().run();
         main.remove().run();
-        verify(finance, never()).recordExternalIncomeTax(any());
-        delayed.remove().run();
-        main.remove().run();
         worker.remove().run();
         assertTrue(available.get());
-        verify(settlement, times(source.equals("JOBS") ? 1 : 0)).adjustSettlement(500);
-        verify(settlement, times(source.equals("GLOBALMARKETPLUS") ? 1 : 0)).transferFromPlayer(player, 500);
-        verify(settlement, times(2)).adjustSettlement(200);
-        verify(finance).recordExternalIncomeTax(any());
+        verify(settlement).transferFromPlayer(player, 500);
+        verify(settlement).adjustSettlement(200);
+        verify(finance).recordExternalIncomeTaxWithoutSubsidy(any(), eq("temporarily unavailable"));
+        verify(finance, never()).cancelTaxSubsidy(anyString(), anyString());
         verify(finance, times(2)).reserveTaxSubsidy(any(), anyString(), anyLong(), anyLong(), anyLong(), any(), any());
+        assertTrue(delayed.isEmpty());
     }
 
-    @Test
-    void ambiguousSubsidyDoesNotRepeatVaultPayment() {
+    @ParameterizedTest
+    @ValueSource(strings = {"ambiguous", "exception", "null"})
+    void uncertainSubsidyStillRecordsTaxAndDatabaseRetryNeverRepeatsVault(String outcome) {
         when(settlement.transferFromPlayer(player, 500)).thenReturn(VaultSettlementService.Result.success("tax"));
-        when(settlement.adjustSettlement(500))
+        if (outcome.equals("exception")) when(settlement.adjustSettlement(500))
+                .thenThrow(new IllegalStateException("lost response"));
+        else if (outcome.equals("ambiguous")) when(settlement.adjustSettlement(500))
                 .thenReturn(VaultSettlementService.Result.failure("unknown result", false, true));
+        when(finance.recordExternalIncomeTaxWithoutSubsidy(any(), anyString()))
+                .thenThrow(new EconomyRepository.StorageUnavailableException("offline", null))
+                .thenReturn(null);
         acceptIncome("GLOBALMARKETPLUS");
         worker.remove().run();
         main.remove().run();
+        worker.remove().run();
+        assertFalse(available.get());
+        delayed.remove().run();
+        worker.remove().run();
         taxes.flushPendingTaxes();
-        assertTrue(delayed.isEmpty());
-        assertTrue(main.isEmpty());
+        assertTrue(available.get());
         verify(settlement).adjustSettlement(500);
+        verify(settlement).transferFromPlayer(player, 500);
+        verify(finance, times(2)).recordExternalIncomeTaxWithoutSubsidy(any(), anyString());
         verify(finance, never()).recordExternalIncomeTax(any());
         verify(finance, never()).cancelTaxSubsidy(anyString(), anyString());
-        when(settlement.adjustSettlement(500)).thenReturn(VaultSettlementService.Result.success("paid"));
-        acceptIncome("GLOBALMARKETPLUS");
-        worker.remove().run();
-        main.remove().run();
-        worker.remove().run();
-        verify(finance).recordExternalIncomeTax(any());
+        assertTrue(delayed.isEmpty());
+        assertTrue(main.isEmpty());
+        assertTrue(worker.isEmpty());
     }
 
     @ParameterizedTest
@@ -276,13 +289,32 @@ class TownTaxRuntimeTest {
     private void acceptIncome(String source) {
         if (source.equals("JOBS")) {
             var result = taxes.acceptJobsIncomeTax(new JobsIncomeTaxAdapter.Earning(player, 100));
-            assertTrue(result.applied());
-            assertEquals(95, result.netAmount());
+            assertFalse(result.applied());
+            assertEquals(100, result.netAmount());
         } else {
             taxes.acceptGlobalMarketPlusIncomeTax(
                     new GlobalMarketPlusIncomeTaxAdapter.Earning(
                             player, "Member", 100, "gmp:" + UUID.randomUUID()));
         }
+        finishCollection();
+    }
+
+    private void finishCollection() {
+        worker.remove().run(); // Persist context and claim the single debit attempt.
+        main.remove().run();   // Vault debit only after the claim is durable.
+        worker.remove().run(); // Persist the outcome before starting the subsidy pipeline.
+    }
+
+    @Test
+    void archivedTownCannotBeReintroducedByStalePolicyRefresh() {
+        assertNotNull(taxes.taxPolicy(playerId));
+        taxes.townArchived(townId);
+        // Repository response can have been read just before the archive committed.
+        taxes.refreshTaxPolicies();
+        assertNull(taxes.taxPolicy(playerId));
+        taxes.acceptJobsIncomeTax(new JobsIncomeTaxAdapter.Earning(player, 100));
+        assertTrue(worker.isEmpty());
+        verify(finance, never()).prepareIncomeTaxCollection(any());
     }
 
 }

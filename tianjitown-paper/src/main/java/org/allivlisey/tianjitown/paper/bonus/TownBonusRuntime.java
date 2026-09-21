@@ -171,6 +171,10 @@ public final class TownBonusRuntime implements Listener {
         return value == null || value.isBlank() ? throwable.getClass().getSimpleName() : value;
     }
 
-    public record DiagnosticResult(boolean healthy, Instant completedAt, String detail, Path report) {
+    public record DiagnosticResult(boolean healthy, Instant completedAt, String detail, Path report,
+                                   boolean startupAllowed) {
+        public DiagnosticResult(boolean healthy, Instant completedAt, String detail, Path report) {
+            this(healthy, completedAt, detail, report, healthy);
+        }
     }
 }
