@@ -21,6 +21,8 @@ public final class TownApplicationUi {
         try {
             switch (action) {
                 case "APPLICATION" -> facade.loadApplication(player, ApplicationTarget.parse(target).id());
+                case "INITIAL_MEMBER_INVITATION" -> facade.openInitialMemberInvitation(player,
+                        ApplicationTarget.parse(target).id());
                 case "SELECT_SITE" -> facade.selectApplicationSite(player, ApplicationTarget.parse(target).id());
                 case "PREVIEW_SITE" -> facade.previewApplicationSite(player, ApplicationTarget.parse(target).id());
                 case "REMIND_INITIAL_MEMBERS" -> facade.remindInitialMembers(player, ApplicationTarget.parse(target).id());

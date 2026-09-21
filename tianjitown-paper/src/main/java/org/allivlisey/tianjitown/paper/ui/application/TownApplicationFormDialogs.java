@@ -64,6 +64,10 @@ public final class TownApplicationFormDialogs {
         if (form == null) {
             return;
         }
+        if (form.purpose() == FormPurpose.TOWN_PROFILE) {
+            renderTownProfileDialog(player, form);
+            return;
+        }
         switch (stage) {
             case 1 -> renderApplicationBasicsDialog(player, form);
             case 2 -> renderApplicationContentDialog(player, form);

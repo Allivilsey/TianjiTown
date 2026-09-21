@@ -1108,6 +1108,8 @@ dialog:
     count-title: '&6待办中心 · {count}'
     empty-title: '&7当前没有待办'
     decisions-only: '&7这里会显示你需要做出的决策'
+    summary: '&7入镇申请 {joins} · 投票 {votes} · 镇长转让 {transfers} · 建镇邀请 {invitations}'
+    invitation: '&e建镇邀请 · {town}'
     transfer: '&e镇长转让邀请'
 
   # 个人中心菜单文本；{player}/{town}=已过滤颜色代码的玩家名/小镇名
@@ -1835,6 +1837,8 @@ dialog:
   invitation:
     title: '&6小镇初始成员邀请'
     message: '&f{player}邀请你共同组建{town}'
+    pending-hint: '&7此邀请已保存在待办中心，关闭后可从小镇主界面再次进入处理'
+    unavailable: '&7此邀请已处理或失效，请返回待办中心查看其他消息'
     accept: '&a接受邀请'
     reject: '&c拒绝邀请'
 

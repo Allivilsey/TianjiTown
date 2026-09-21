@@ -176,7 +176,8 @@ public final class TownApplicationDrafts {
         } catch (ApplicationText.ValidationException exception) {
             presentation.openNotice(player, presentation.dialogText("notice.draft-incomplete-title"),
                     ApplicationTextMessages.join(plugin.messages(), exception.issues()),
-                    presentation.dialogText("common.back"), "APPLICATION_MEMBERS_FORM",
+                    presentation.dialogText("common.back"), form.purpose() == FormPurpose.TOWN_PROFILE
+                            ? "APPLICATION_BASICS_FORM" : "APPLICATION_MEMBERS_FORM",
                     form.id().toString());
             return;
         }

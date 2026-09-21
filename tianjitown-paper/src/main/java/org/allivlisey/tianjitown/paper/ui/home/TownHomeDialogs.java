@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import org.allivlisey.tianjitown.paper.ui.TownUiLegacyFacade.GovernanceCenterView;
 import org.allivlisey.tianjitown.paper.ui.TownUiPresentation.MenuItem;
 
 /** Loads dashboards and town details, and handles leaving or disbanding a town. */
@@ -59,7 +58,8 @@ public final class TownHomeDialogs {
             return new MainView(dashboard,
                     runtime.governance().dashboard(player.getUniqueId()).orElse(null), finance,
                     player.hasPermission("tianjitown.admin")
-                            ? runtime.repository().listReviewQueue(100) : List.of());
+                            ? runtime.repository().listReviewQueue(100) : List.of(),
+                    runtime.repository().listPendingInitialMemberApplications(player.getUniqueId()));
         }, view -> {
             if (facade.isCurrent(player, request)) {
                 renderMain(player, view);
@@ -108,7 +108,7 @@ public final class TownHomeDialogs {
         });
         runtime.read(player, () -> runtime.repository()
                 .listPendingInitialMemberApplications(player.getUniqueId()), applications ->
-                applications.forEach(application -> facade.sendInitialMemberReminder(
+                applications.stream().findFirst().ifPresent(application -> facade.sendInitialMemberReminder(
                         player, application)));
     }
 
@@ -120,15 +120,15 @@ public final class TownHomeDialogs {
             return;
         }
         List<MenuItem> items = new ArrayList<>();
+        int pendingVotes = governance == null ? 0 : (int) governance.votes().stream()
+                .filter(vote -> vote.viewerEligible() && !vote.viewerVoted()).count();
+        int pendingJoins = governance != null && governance.canReviewApplications()
+                ? dashboard.incomingJoinApplications().size() : 0;
+        int pendingTransfer = governance != null && governance.pendingTransfer() != null ? 1 : 0;
+        int pendingTotal = pendingVotes + pendingJoins + pendingTransfer + view.invitations().size();
         if (dashboard.town() != null) {
             TownSnapshot town = dashboard.town();
             EconomyRepository.TownFinance finance = view.finance();
-            int pendingVotes = governance == null ? 0 : (int) governance.votes().stream()
-                    .filter(vote -> vote.viewerEligible() && !vote.viewerVoted()).count();
-            int pendingJoins = governance != null && governance.canReviewApplications()
-                    ? dashboard.incomingJoinApplications().size() : 0;
-            int pendingTransfer = governance != null && governance.pendingTransfer() != null ? 1 : 0;
-            int pendingTotal = pendingVotes + pendingJoins + pendingTransfer;
             List<String> summary = new ArrayList<>();
             summary.add(presentation.dialogText("member-role.identity", Map.of("role", governance == null
                     ? presentation.dialogText("member-role.member") : facade.memberRoleText(governance.role()))));
@@ -141,8 +141,9 @@ public final class TownHomeDialogs {
                         "maximum", runtime.economySettings().maximumUnits())));
             }
             summary.add(pendingTotal > 0
-                    ? presentation.dialogText("votes.main-pending", Map.of("total", pendingTotal,
-                    "joins", pendingJoins, "votes", pendingVotes, "transfers", pendingTransfer))
+                    ? presentation.dialogText("pending.summary", Map.of(
+                    "joins", pendingJoins, "votes", pendingVotes, "transfers", pendingTransfer,
+                    "invitations", view.invitations().size()))
                     : presentation.dialogText("main.no-pending"));
             items.add(new MenuItem(0, presentation.button(Material.BELL, presentation.dialogText("common.town-name", Map.of(
                     "town", town.profile().name())),
@@ -153,10 +154,6 @@ public final class TownHomeDialogs {
                     List.of(presentation.dialogText("tooltip.main.finance")), "FINANCE", "0")));
             items.add(new MenuItem(14, presentation.button(Material.GOLDEN_HELMET, presentation.dialogText("main.governance"),
                     List.of(presentation.dialogText("tooltip.main.governance")), "GOVERNANCE_CENTER", null)));
-            items.add(new MenuItem(16, presentation.button(pendingTotal > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
-                    pendingTotal > 0 ? presentation.dialogText("main.pending-count",
-                            Map.of("count", pendingTotal)) : presentation.dialogText("main.pending"),
-                    List.of(presentation.dialogText("tooltip.main.pending")), "PENDING_CENTER", null)));
             items.add(new MenuItem(18, presentation.button(Material.PLAYER_HEAD, presentation.dialogText("main.personal"),
                     List.of(presentation.dialogText("tooltip.main.personal")), "PERSONAL_CENTER", null)));
         } else if (dashboard.application() != null) {
@@ -195,6 +192,10 @@ public final class TownHomeDialogs {
             items.add(new MenuItem(31, presentation.button(Material.WRITTEN_BOOK, presentation.dialogText("common.handbook"),
                     List.of(presentation.dialogText("tooltip.main.handbook")), "GIVE_HANDBOOK", null)));
         }
+        items.add(new MenuItem(16, presentation.button(pendingTotal > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
+                pendingTotal > 0 ? presentation.dialogText("main.pending-count",
+                        Map.of("count", pendingTotal)) : presentation.dialogText("main.pending"),
+                List.of(presentation.dialogText("tooltip.main.pending")), "PENDING_CENTER", null)));
         if (player.hasPermission("tianjitown.admin")) {
             boolean pending = !view.reviewQueue().isEmpty();
             items.add(new MenuItem(30, presentation.button(pending ? Material.ENCHANTED_BOOK : Material.BOOK,
@@ -209,28 +210,31 @@ public final class TownHomeDialogs {
     }
 
     public void openPendingCenter(Player player) {
-        runtime.read(player, () -> new GovernanceCenterView(
+        openPendingCenter(player, 0);
+    }
+
+    public void openPendingCenter(Player player, int requestedPage) {
+        runtime.read(player, () -> new PendingView(
                 runtime.repository().dashboard(player.getUniqueId()),
-                runtime.governance().dashboard(player.getUniqueId()).orElse(null)), view -> {
+                runtime.governance().dashboard(player.getUniqueId()).orElse(null),
+                runtime.repository().listPendingInitialMemberApplications(player.getUniqueId())), view -> {
+            if (!player.isOnline()) return;
             TownSnapshot town = view.dashboard().town();
             MemberGovernanceSnapshot governance = view.governance();
-            if (town == null || governance == null) {
-                openMain(player);
-                return;
-            }
-            int pendingJoins = governance.canReviewApplications()
+            int pendingJoins = town != null && governance != null && governance.canReviewApplications()
                     ? view.dashboard().incomingJoinApplications().size() : 0;
-            int pendingVotes = (int) governance.votes().stream()
+            int pendingVotes = governance == null ? 0 : (int) governance.votes().stream()
                     .filter(vote -> vote.viewerEligible() && !vote.viewerVoted()).count();
-            int pendingTransfer = governance.pendingTransfer() == null ? 0 : 1;
-            int total = pendingJoins + pendingVotes + pendingTransfer;
+            int pendingTransfer = governance == null || governance.pendingTransfer() == null ? 0 : 1;
+            int total = pendingJoins + pendingVotes + pendingTransfer + view.invitations().size();
             List<MenuItem> items = new ArrayList<>();
             items.add(new MenuItem(0, presentation.button(total > 0 ? Material.ENCHANTED_BOOK : Material.BOOK,
                     total > 0 ? presentation.dialogText("pending.count-title", Map.of("count", total))
                             : presentation.dialogText("pending.empty-title"),
                     total > 0 ? List.of(presentation.dialogText("pending.decisions-only"),
-                            presentation.dialogText("votes.pending-summary", Map.of("joins", pendingJoins,
-                                    "votes", pendingVotes, "transfers", pendingTransfer)))
+                                    presentation.dialogText("pending.summary", Map.of("joins", pendingJoins,
+                                    "votes", pendingVotes, "transfers", pendingTransfer,
+                                    "invitations", view.invitations().size())))
                             : List.of(presentation.dialogText("votes.pending-empty-hint")), null, null)));
             if (pendingJoins > 0) {
                 items.add(new MenuItem(10, presentation.button(Material.ENCHANTED_BOOK,
@@ -238,19 +242,40 @@ public final class TownHomeDialogs {
                         List.of(presentation.dialogText("tooltip.pending.applications")),
                         "JOIN_APPLICATIONS", town.id().toString())));
             }
-            if (pendingVotes > 0) {
+            if (pendingVotes > 0 && town != null) {
                 items.add(new MenuItem(12, presentation.button(Material.ENCHANTED_BOOK,
                         presentation.dialogText("votes.pending-title"),
                         List.of(presentation.dialogText("tooltip.pending.votes")),
                         "VOTES", town.id().toString())));
             }
-            if (governance.pendingTransfer() != null) {
+            if (pendingTransfer > 0) {
                 items.add(new MenuItem(14, presentation.button(Material.NETHER_STAR,
                         presentation.dialogText("pending.transfer"),
                         List.of(presentation.dialogText("tooltip.pending.transfer")),
                         "TRANSFER_REQUEST", governance.pendingTransfer().id().toString())));
             }
-            presentation.openMenu(player, 27, presentation.dialogText("pending.title"),
+            int page = Math.max(0, Math.min(requestedPage, (view.invitations().size() - 1) / 8));
+            int slot = 27;
+            for (ApplicationSnapshot invitation : TownUiLegacyFacade.page(view.invitations(), page, 8)) {
+                items.add(new MenuItem(slot++, presentation.button(Material.WRITABLE_BOOK,
+                        presentation.dialogText("pending.invitation", Map.of("town",
+                                TownUiLegacyFacade.safeText(invitation.text().name()))),
+                        List.of(presentation.dialogText("invitation.message", Map.of("player",
+                                TownUiLegacyFacade.safeText(facade.displayName(invitation.applicantId())),
+                                "town", TownUiLegacyFacade.safeText(invitation.text().name())))),
+                        "INITIAL_MEMBER_INVITATION", invitation.id().toString())));
+            }
+            if (page > 0) {
+                items.add(new MenuItem(45, presentation.button(Material.ARROW,
+                        presentation.dialogText("common.previous"), List.of(), "PENDING_CENTER",
+                        Integer.toString(page - 1))));
+            }
+            if (TownUiLegacyFacade.hasNext(view.invitations(), page, 8)) {
+                items.add(new MenuItem(53, presentation.button(Material.ARROW,
+                        presentation.dialogText("common.next"), List.of(), "PENDING_CENTER",
+                        Integer.toString(page + 1))));
+            }
+            presentation.openMenu(player, 54, presentation.dialogText("pending.title"),
                     new DialogRoute("MAIN", null), items);
         });
     }
@@ -355,7 +380,13 @@ public final class TownHomeDialogs {
     private record MainView(TownRepository.PlayerDashboard dashboard,
                             MemberGovernanceSnapshot governance,
                             EconomyRepository.TownFinance finance,
-                            List<ApplicationSnapshot> reviewQueue) {
+                            List<ApplicationSnapshot> reviewQueue,
+                            List<ApplicationSnapshot> invitations) {
+    }
+
+    private record PendingView(TownRepository.PlayerDashboard dashboard,
+                               MemberGovernanceSnapshot governance,
+                               List<ApplicationSnapshot> invitations) {
     }
 
     private record TownDetailsView(TownSnapshot town, MemberGovernanceSnapshot governance) {

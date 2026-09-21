@@ -95,6 +95,25 @@ public final class TownInitialMemberDialogs {
     }
 
     public void sendInitialMemberReminder(Player member, ApplicationSnapshot application) {
+        openInvitation(member, application.id());
+    }
+
+    public void openInvitation(Player member, UUID applicationId) {
+        runtime.read(member, () -> runtime.repository()
+                .listPendingInitialMemberApplications(member.getUniqueId()).stream()
+                .filter(application -> application.id().equals(applicationId)).findFirst(), invitation -> {
+            if (!member.isOnline()) return;
+            if (invitation.isEmpty()) {
+                presentation.openNotice(member, presentation.dialogText("invitation.title"),
+                        presentation.dialogText("invitation.unavailable"),
+                        presentation.dialogText("common.back"), "PENDING_CENTER", null);
+                return;
+            }
+            renderInvitation(member, invitation.get());
+        });
+    }
+
+    private void renderInvitation(Player member, ApplicationSnapshot application) {
         if (application.needsInitialMemberReselection()) return;
         UUID token = application.initialMembers().stream()
                 .filter(entry -> entry.playerId().equals(member.getUniqueId()))
@@ -105,7 +124,8 @@ public final class TownInitialMemberDialogs {
                 "player", facade.displayName(application.applicantId()),
                 "town", TownUiLegacyFacade.safeText(application.text().name())));
         presentation.openDialogPage(member, presentation.dialogText("invitation.title"),
-                List.of(DialogBody.plainMessage(message, 400)), List.of(),
+                List.of(DialogBody.plainMessage(message, 400),
+                        DialogBody.plainMessage(presentation.dialogComponent("invitation.pending-hint"), 400)), List.of(),
                 DialogBase.DialogAfterAction.WAIT_FOR_RESPONSE, session ->
                         DialogType.multiAction(List.of(
                                 ActionButton.create(presentation.dialogComponent("invitation.accept"),
@@ -116,8 +136,8 @@ public final class TownInitialMemberDialogs {
                                         null, 170, presentation.dialogAction(member, session,
                                                 response -> respondInitialMember(member,
                                                          application.id(), token, false)))))
-                                .exitAction(presentation.returnButton(member, session, DialogRoute.ROOT))
-                                .columns(2).build(), DialogRoute.ROOT);
+                                .exitAction(presentation.returnButton(member, session, new DialogRoute("PENDING_CENTER", null)))
+                                .columns(2).build(), new DialogRoute("PENDING_CENTER", null));
     }
 
     private void respondInitialMember(Player member, UUID applicationId, UUID token, boolean confirm) {
@@ -128,7 +148,7 @@ public final class TownInitialMemberDialogs {
                                     : presentation.dialogText("notice.invitation-rejected-title"),
                             confirm ? presentation.dialogText("notice.invitation-accepted-message")
                                     : presentation.dialogText("notice.invitation-rejected-message"),
-                            presentation.dialogText("common.close"), "CLOSE", null);
+                            presentation.dialogText("common.back"), "PENDING_CENTER", null);
                     Player applicant = Bukkit.getPlayer(application.applicantId());
                     if (applicant != null) {
                         plugin.messages().send(applicant, confirm

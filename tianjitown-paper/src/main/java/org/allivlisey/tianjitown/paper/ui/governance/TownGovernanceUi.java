@@ -21,7 +21,15 @@ public final class TownGovernanceUi {
         try {
             switch (action) {
                 case "GOVERNANCE_CENTER" -> facade.openGovernanceCenter(player);
-                case "PENDING_CENTER" -> facade.openPendingCenter(player);
+                case "PENDING_CENTER" -> {
+                    if (target == null) {
+                        facade.openPendingCenter(player);
+                    } else {
+                        int page = Integer.parseInt(target);
+                        if (page < 0) throw new IllegalArgumentException("invalid pending page");
+                        facade.openPendingCenter(player, page);
+                    }
+                }
                 case "TOWN_RULES" -> facade.openTownRules(player, townId(target));
                 case "JOIN_TOWN_RULES" -> facade.openJoinTownRules(player, townId(target));
                 case "EDIT_TOWN_RULES" -> facade.openTownRuleEditor(player, townId(target));

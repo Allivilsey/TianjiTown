@@ -109,7 +109,7 @@ public final class TownUiController implements Listener {
                         "CONFIRM_ADMIN_CHANGE", "ADMIN_APPROVE", "CONFIRM_FAILED_RECOVERY",
                         "RECOVER_FAILED", "ADMIN_PREVIEW_SITE")
                 .registerAll(applicationUi::route, "APPLICATION", "SELECT_SITE", "PREVIEW_SITE",
-                        "REMIND_INITIAL_MEMBERS", "CONFIRM_SUBMIT", "SUBMIT", "CONFIRM_CANCEL", "CANCEL")
+                        "REMIND_INITIAL_MEMBERS", "INITIAL_MEMBER_INVITATION", "CONFIRM_SUBMIT", "SUBMIT", "CONFIRM_CANCEL", "CANCEL")
                 .registerAll(applicationFormUi::route, "CREATE_APPLICATION", "EDIT_APPLICATION",
                         "EDIT_TOWN", "EDIT_TOWN_DESCRIPTION", "APPLICATION_BASICS_FORM",
                         "APPLICATION_CONTENT_FORM", "APPLICATION_MEMBERS_FORM", "SELECT_INITIAL_MEMBER",

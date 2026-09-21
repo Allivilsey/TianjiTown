@@ -157,6 +157,10 @@ public final class MessageContract {
         text(entries, "chat.admin.help-application-delate");
         text(entries, "chat.admin.help-application-clearcd");
         text(entries, "chat.admin.application-cooldown-cleared", "player", "count");
+        text(entries, "dialog.pending.summary", "joins", "votes", "transfers", "invitations");
+        text(entries, "dialog.pending.invitation", "town");
+        text(entries, "dialog.invitation.pending-hint");
+        text(entries, "dialog.invitation.unavailable");
         // These entries are used directly by rendering boundaries and therefore have a
         // strict placeholder contract as well as a required-key contract.
         text(entries, "system.missing-message", "key");

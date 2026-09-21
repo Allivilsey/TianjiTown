@@ -81,6 +81,21 @@ class TownApplicationDraftsTest {
                 "notice.edit-expired-message", "common.reopen", "MAIN", null);
     }
 
+    @Test
+    void invalidProfileReturnsToItsExistingEditor() {
+        ApplicationFormSession form = new ApplicationFormSession(UUID.randomUUID(),
+                FormPurpose.TOWN_PROFILE, UUID.randomUUID(), 7,
+                new ApplicationText("测试镇", "town", "", List.of("友善交流")), List.of());
+        forms.putSession(playerId, form);
+
+        drafts.saveApplicationForm(player, form.id());
+
+        assertSame(form, forms.session(playerId));
+        verifyNoInteractions(actions, runtime);
+        verify(presentation).openNotice(eq(player), eq("notice.draft-incomplete-title"), any(),
+                eq("common.back"), eq("APPLICATION_BASICS_FORM"), eq(form.id().toString()));
+    }
+
     private static ApplicationFormSession newForm() {
         return new ApplicationFormSession(UUID.randomUUID(), FormPurpose.APPLICATION, null, 0,
                 new ApplicationText("", "", "", List.of()), List.of());

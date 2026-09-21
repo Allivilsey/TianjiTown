@@ -175,6 +175,10 @@ public final class TownUiLegacyFacade implements Listener {
         townHomeDialogs.openPendingCenter(player);
     }
 
+    public void openPendingCenter(Player player, int page) {
+        townHomeDialogs.openPendingCenter(player, page);
+    }
+
     public void openPersonalCenter(Player player) {
         townHomeDialogs.openPersonalCenter(player);
     }
@@ -544,6 +548,10 @@ public final class TownUiLegacyFacade implements Listener {
 
     public void sendInitialMemberReminder(Player member, ApplicationSnapshot application) {
         townInitialMemberDialogs.sendInitialMemberReminder(member, application);
+    }
+
+    public void openInitialMemberInvitation(Player member, UUID applicationId) {
+        townInitialMemberDialogs.openInvitation(member, applicationId);
     }
 
     public static String preview(String value, int maximum) {
