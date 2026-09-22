@@ -18,7 +18,6 @@ class LegacyTaxAccountCleanupTest {
     final Account account = new Account(id, "tax", new BigDecimal("123.45"));
 
     private void existing(Account value) {
-        when(accounts.byName(value.name())).thenReturn(value);
         when(accounts.byId(value.id())).thenReturn(value);
         when(accounts.resolveId(value.name())).thenReturn(value.id());
     }
@@ -36,7 +35,6 @@ class LegacyTaxAccountCleanupTest {
         doAnswer(call -> {
             assertEquals("PREPARED", audit().getProperty("state"));
             assertEquals("123.45", audit().getProperty("original-balance"));
-            when(accounts.byName("tax")).thenReturn(null);
             when(accounts.byId(id)).thenReturn(null);
             return null;
         }).when(accounts).delete(account);
@@ -66,7 +64,7 @@ class LegacyTaxAccountCleanupTest {
         when(accounts.hasPlayed(id)).thenReturn(true);
         assertThrows(IllegalStateException.class, () -> LegacyTaxAccountCleanup.run(directory, "tax", accounts));
         when(accounts.hasPlayed(id)).thenReturn(false);
-        when(accounts.resolveId("tax")).thenReturn(UUID.randomUUID());
+        when(accounts.byId(id)).thenReturn(new Account(UUID.randomUUID(), "tax", account.balance()));
         assertThrows(IllegalStateException.class, () -> LegacyTaxAccountCleanup.run(directory, "tax", accounts));
         verify(accounts, never()).delete(any());
         assertFalse(Files.exists(directory.resolve(LegacyTaxAccountCleanup.JOURNAL)));
@@ -78,7 +76,6 @@ class LegacyTaxAccountCleanupTest {
         Files.writeString(directory.resolve(SettlementAccountMigration.JOURNAL),
                 "version=1\nformer-name=tax\ntarget-name=tianjitown-tax\nstate=COMPLETE\naccount-uuid=" + id);
         doAnswer(call -> {
-            when(accounts.byName(renamed.name())).thenReturn(null);
             when(accounts.byId(id)).thenReturn(null);
             return null;
         }).when(accounts).delete(renamed);
@@ -93,7 +90,6 @@ class LegacyTaxAccountCleanupTest {
         assertEquals("PREPARED", audit().getProperty("state"));
         assertThrows(IllegalStateException.class, () -> LegacyTaxAccountCleanup.run(directory, "tax", accounts));
         verify(accounts, times(1)).delete(account);
-        when(accounts.byName("tax")).thenReturn(null);
         when(accounts.byId(id)).thenReturn(null);
         assertEquals("COMPLETE", LegacyTaxAccountCleanup.run(directory, "tax", accounts));
         verify(accounts, times(1)).delete(account);
@@ -111,6 +107,32 @@ class LegacyTaxAccountCleanupTest {
         when(accounts.resolveId("tax")).thenReturn(id);
         when(accounts.byId(id)).thenReturn(new Account(id, "someone", account.balance()));
         assertThrows(IllegalStateException.class, () -> LegacyTaxAccountCleanup.run(directory, "tax", accounts));
+        verify(accounts, never()).delete(any());
+    }
+
+    @Test void deletesOnlyPaperBoundTaxAndLeavesOfflineTaxUntouched() throws Exception {
+        UUID offlineId = UUID.fromString("333350c9-c230-30e4-b0a8-7c25bd88bf54");
+        UUID paperId = UUID.fromString("2c5f00ba-902c-411b-b9b9-9261cf43aee1");
+        Account offline = new Account(offlineId, "tax", new BigDecimal("1104515.06"));
+        Account paper = new Account(paperId, "Tax", new BigDecimal("50.00"));
+        existing(offline);
+        existing(paper);
+        when(accounts.resolveId("tax")).thenReturn(paperId);
+        doAnswer(call -> {
+            when(accounts.byId(paperId)).thenReturn(null);
+            return null;
+        }).when(accounts).delete(paper);
+        assertTrue(LegacyTaxAccountCleanup.run(directory, "tax", accounts).startsWith("DELETED Tax"));
+        verify(accounts).delete(paper);
+        verify(accounts, never()).delete(offline);
+        assertEquals(offline, accounts.byId(offlineId));
+        assertEquals(paperId.toString(), audit().getProperty("account-uuid"));
+    }
+
+    @Test void missingPaperAccountDoesNotFallBackToOfflineTax() throws Exception {
+        existing(account);
+        when(accounts.resolveId("tax")).thenReturn(UUID.randomUUID());
+        assertEquals("ABSENT", LegacyTaxAccountCleanup.run(directory, "tax", accounts));
         verify(accounts, never()).delete(any());
     }
 }

@@ -13,7 +13,6 @@ public final class LegacyTaxAccountCleanup {
     public static final String JOURNAL = "legacy-tax-account-cleanup.properties";
 
     public interface Accounts {
-        Account byName(String name);
         Account byId(UUID id);
         UUID resolveId(String name);
         boolean hasPlayed(UUID id);
@@ -36,7 +35,7 @@ public final class LegacyTaxAccountCleanup {
             UUID id = UUID.fromString(audit.getProperty("account-uuid"));
             String name = audit.getProperty("account-name");
             require(applies(name), "Invalid cleanup account name");
-            require(accounts.byId(id) == null && accounts.byName(name) == null,
+            require(accounts.byId(id) == null,
                     "Interrupted tax cleanup requires manual verification; account still exists");
             complete(file, audit);
             return "COMPLETE";
@@ -53,20 +52,16 @@ public final class LegacyTaxAccountCleanup {
                         || "COMPLETE".equals(migration.getProperty("state"))), "Invalid old migration journal");
             UUID id = UUID.fromString(migration.getProperty("account-uuid"));
             account = accounts.byId(id);
-            if (account == null) {
-                require(accounts.byName(configuredName) == null
-                        && accounts.byName("tax") == null && accounts.byName("tianjitown-tax") == null,
-                        "Old migration identity does not match existing account");
-            } else {
+            if (account != null) {
                 require(id.equals(account.id()) && applies(account.name()),
                         "Old migration account identity changed externally");
             }
         } else {
-            account = accounts.byName(configuredName);
+            // Match VaultSettlementService: Paper's OfflinePlayer UUID was the identity used
+            // for all wallet calls. A similarly named XConomy row can belong to another plugin.
             UUID expected = accounts.resolveId(configuredName);
-            if (account == null) {
-                require(accounts.byId(expected) == null, "Legacy account identity mismatch");
-            } else {
+            account = accounts.byId(expected);
+            if (account != null) {
                 require(account.id().equals(expected) && configuredName.equalsIgnoreCase(account.name()),
                         "Legacy account identity mismatch");
             }
@@ -76,8 +71,6 @@ public final class LegacyTaxAccountCleanup {
             complete(file, audit);
             return "ABSENT";
         }
-        Account named = accounts.byName(account.name());
-        require(named != null && named.id().equals(account.id()), "Legacy account name/UUID mismatch");
         require(!accounts.hasPlayed(account.id()), "Legacy tax account belongs to a real player");
         audit.setProperty("state", "PREPARED");
         audit.setProperty("account-uuid", account.id().toString());
@@ -85,7 +78,7 @@ public final class LegacyTaxAccountCleanup {
         audit.setProperty("original-balance", account.balance().toPlainString());
         write(file, audit);
         accounts.delete(account);
-        require(accounts.byId(account.id()) == null && accounts.byName(account.name()) == null,
+        require(accounts.byId(account.id()) == null,
                 "Tax account deletion could not be verified; manual verification required");
         audit.setProperty("result", "DELETED");
         complete(file, audit);

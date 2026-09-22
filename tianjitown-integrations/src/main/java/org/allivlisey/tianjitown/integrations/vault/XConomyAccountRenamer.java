@@ -33,7 +33,7 @@ public final class XConomyAccountRenamer implements SettlementAccountMigration.A
         }
     }
 
-    private static Object loadApi(Plugin provider) {
+    static Object loadApi(Plugin provider) {
         try {
             return Class.forName("me.yic.xconomy.api.XConomyAPI", true,
                     provider.getClass().getClassLoader()).getConstructor().newInstance();
