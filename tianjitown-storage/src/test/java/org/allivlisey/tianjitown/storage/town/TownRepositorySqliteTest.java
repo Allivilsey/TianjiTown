@@ -21,6 +21,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.execute;
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.installAuditFailure;
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.scalar;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -806,22 +809,8 @@ class TownRepositorySqliteTest {
         }
     }
 
-    private static void installAuditFailure(DatabaseGate gate, String triggerName, String action)
-            throws Exception {
-        execute(gate, "CREATE TRIGGER " + triggerName + " BEFORE INSERT ON audit_logs "
-                + "WHEN NEW.action = '" + action + "' BEGIN "
-                + "SELECT RAISE(ABORT, 'injected audit failure'); END");
-    }
-
     private static void dropTrigger(DatabaseGate gate, String triggerName) throws Exception {
         execute(gate, "DROP TRIGGER " + triggerName);
-    }
-
-    private static void execute(DatabaseGate gate, String sql) throws Exception {
-        try (var connection = gate.dataSource().getConnection();
-             var statement = connection.createStatement()) {
-            statement.execute(sql);
-        }
     }
 
     private static void renameTown(DatabaseGate gate, UUID townId, String name) throws Exception {
@@ -833,15 +822,6 @@ class TownRepositorySqliteTest {
                     .putLong(townId.getMostSignificantBits())
                     .putLong(townId.getLeastSignificantBits()).array());
             assertEquals(1, statement.executeUpdate());
-        }
-    }
-
-    private static long scalar(DatabaseGate gate, String sql) throws Exception {
-        try (var connection = gate.dataSource().getConnection();
-             var statement = connection.createStatement();
-             var rows = statement.executeQuery(sql)) {
-            assertTrue(rows.next());
-            return rows.getLong(1);
         }
     }
 

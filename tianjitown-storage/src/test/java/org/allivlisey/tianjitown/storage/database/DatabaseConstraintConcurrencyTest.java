@@ -11,7 +11,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -22,6 +21,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.scalar;
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.uuid;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -251,22 +252,8 @@ class DatabaseConstraintConcurrencyTest {
         }
     }
 
-    private static long scalar(DatabaseGate gate, String sql) throws Exception {
-        try (Connection connection = gate.dataSource().getConnection();
-             var statement = connection.createStatement();
-             var rows = statement.executeQuery(sql)) {
-            assertTrue(rows.next());
-            return rows.getLong(1);
-        }
-    }
-
     private static String hex(UUID value) {
         return java.util.HexFormat.of().formatHex(uuid(value));
-    }
-
-    private static byte[] uuid(UUID value) {
-        return ByteBuffer.allocate(16).putLong(value.getMostSignificantBits())
-                .putLong(value.getLeastSignificantBits()).array();
     }
 
     private record Attempt(Object result, RuntimeException failure) {

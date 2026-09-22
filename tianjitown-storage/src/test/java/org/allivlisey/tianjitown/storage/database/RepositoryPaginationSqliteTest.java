@@ -8,7 +8,6 @@ import org.allivlisey.tianjitown.storage.town.TownSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -18,6 +17,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.uuid;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -196,10 +196,5 @@ class RepositoryPaginationSqliteTest {
 
     private static UUID id(long value) {
         return new UUID(0L, value);
-    }
-
-    private static byte[] uuid(UUID value) {
-        return ByteBuffer.allocate(16).putLong(value.getMostSignificantBits())
-                .putLong(value.getLeastSignificantBits()).array();
     }
 }

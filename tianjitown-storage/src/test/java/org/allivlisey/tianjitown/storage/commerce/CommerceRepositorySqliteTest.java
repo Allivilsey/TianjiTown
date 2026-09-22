@@ -14,7 +14,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import javax.sql.DataSource;
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -25,6 +24,11 @@ import java.util.Set;
 import java.util.List;
 import java.util.UUID;
 
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.execute;
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.installAuditFailure;
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.scalar;
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.scalarText;
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.uuid;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -539,43 +543,6 @@ class CommerceRepositorySqliteTest {
                 balance.setBytes(1, uuid(townId));
                 balance.executeUpdate();
             }
-        }
-    }
-
-    private static byte[] uuid(UUID value) {
-        return ByteBuffer.allocate(16).putLong(value.getMostSignificantBits())
-                .putLong(value.getLeastSignificantBits()).array();
-    }
-
-    private static void installAuditFailure(DatabaseGate gate, String triggerName, String action)
-            throws Exception {
-        execute(gate, "CREATE TRIGGER " + triggerName + " BEFORE INSERT ON audit_logs "
-                + "WHEN NEW.action = '" + action + "' BEGIN "
-                + "SELECT RAISE(ABORT, 'injected audit failure'); END");
-    }
-
-    private static void execute(DatabaseGate gate, String sql) throws Exception {
-        try (Connection connection = gate.dataSource().getConnection();
-             var statement = connection.createStatement()) {
-            statement.execute(sql);
-        }
-    }
-
-    private static long scalar(DatabaseGate gate, String sql) throws Exception {
-        try (Connection connection = gate.dataSource().getConnection();
-             var statement = connection.createStatement();
-             ResultSet rows = statement.executeQuery(sql)) {
-            assertTrue(rows.next());
-            return rows.getLong(1);
-        }
-    }
-
-    private static String scalarText(DatabaseGate gate, String sql) throws Exception {
-        try (Connection connection = gate.dataSource().getConnection();
-             var statement = connection.createStatement();
-             ResultSet rows = statement.executeQuery(sql)) {
-            assertTrue(rows.next());
-            return rows.getString(1);
         }
     }
 }

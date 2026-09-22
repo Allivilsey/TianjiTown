@@ -9,7 +9,6 @@ import org.allivlisey.tianjitown.core.town.MemberRole;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -18,6 +17,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.uuid;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -208,11 +208,6 @@ class TownBonusRepositorySqliteTest {
             chunk.setBytes(2, uuid(worldId));
             chunk.executeUpdate();
         }
-    }
-
-    private static byte[] uuid(UUID value) {
-        return ByteBuffer.allocate(16).putLong(value.getMostSignificantBits())
-                .putLong(value.getLeastSignificantBits()).array();
     }
 
     private static int countRows(DatabaseGate gate, String table) throws Exception {

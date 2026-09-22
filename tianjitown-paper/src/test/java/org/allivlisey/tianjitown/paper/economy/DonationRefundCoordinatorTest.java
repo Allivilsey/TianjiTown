@@ -18,6 +18,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 class DonationRefundCoordinatorTest {
     @TempDir
@@ -28,7 +30,7 @@ class DonationRefundCoordinatorTest {
         TestScheduler scheduler = new TestScheduler();
         AtomicInteger refundAttempts = new AtomicInteger();
         AtomicInteger storageAttempts = new AtomicInteger();
-        TestListener listener = new TestListener();
+        var listener = mock(DonationRefundCoordinator.Listener.class);
         EconomyRepository.EconomyOperation operation = operation();
         DonationRefundCoordinator coordinator = new DonationRefundCoordinator(
                 scheduler, (playerId, amountMinor) -> refundAttempts.incrementAndGet() < 3
@@ -52,10 +54,10 @@ class DonationRefundCoordinatorTest {
         assertEquals(2, storageAttempts.get());
         assertEquals(0, coordinator.pendingCount());
         assertEquals(List.of(5L, 10L, 20L, 5L), scheduler.delays);
-        assertEquals(2, listener.refundFailures);
-        assertEquals(1, listener.storageFailures);
-        assertEquals(3, listener.recoveredAttempts);
-        assertEquals(0, listener.exhausted);
+        verify(listener, times(2)).retryFailed(any(), anyInt(), any());
+        verify(listener).finalizationFailed(any(), anyInt(), any());
+        verify(listener).recovered(operation, 3);
+        verify(listener, never()).exhausted(any(), any());
     }
 
     @Test
@@ -63,7 +65,7 @@ class DonationRefundCoordinatorTest {
         TestScheduler scheduler = new TestScheduler();
         AtomicInteger refundAttempts = new AtomicInteger();
         AtomicInteger storageAttempts = new AtomicInteger();
-        TestListener listener = new TestListener();
+        var listener = mock(DonationRefundCoordinator.Listener.class);
         DonationRefundCoordinator coordinator = new DonationRefundCoordinator(
                 scheduler, (playerId, amountMinor) -> {
                     refundAttempts.incrementAndGet();
@@ -79,14 +81,14 @@ class DonationRefundCoordinatorTest {
         assertEquals(3, refundAttempts.get());
         assertEquals(0, storageAttempts.get());
         assertEquals(0, coordinator.pendingCount());
-        assertEquals(1, listener.exhausted);
+        verify(listener).exhausted(any(), eq("OUTAGE"));
         assertEquals(List.of(5L, 10L, 20L), scheduler.delays);
     }
 
     @Test
     void resolvesInvalidOperationAndRefundExceptionThroughInjectedMessages() {
         TestScheduler scheduler = new TestScheduler();
-        TestListener listener = new TestListener();
+        var listener = mock(DonationRefundCoordinator.Listener.class);
         DonationRefundCoordinator coordinator = new DonationRefundCoordinator(
                 scheduler, (playerId, amountMinor) -> {
                     throw new IllegalStateException("refund&failure");
@@ -104,8 +106,8 @@ class DonationRefundCoordinatorTest {
 
         coordinator.submit(operation());
         scheduler.runNextDelayed();
-        assertEquals("自定义退款调用失败: refund＆failure", listener.lastRetryDetail);
-        assertEquals("自定义退款调用失败: refund＆failure", listener.lastExhaustedDetail);
+        verify(listener).retryFailed(any(), eq(1), eq("自定义退款调用失败: refund＆failure"));
+        verify(listener).exhausted(any(), eq("自定义退款调用失败: refund＆failure"));
     }
 
     @Test
@@ -116,7 +118,8 @@ class DonationRefundCoordinatorTest {
         DonationRefundCoordinator coordinator = new DonationRefundCoordinator(
                 scheduler, (playerId, amountMinor) -> VaultPlayerEconomyService.Result.success(
                         "RECOVERED"),
-                (operationId, detail) -> resolvedDetails.add(detail), new TestListener(),
+                (operationId, detail) -> resolvedDetails.add(detail),
+                mock(DonationRefundCoordinator.Listener.class),
                 1, 5, 20, messages::plainText);
 
         YamlConfiguration configuration = new YamlConfiguration();
@@ -160,39 +163,6 @@ class DonationRefundCoordinatorTest {
 
         private void runNextDelayed() {
             delayed.remove().run();
-        }
-    }
-
-    private static final class TestListener implements DonationRefundCoordinator.Listener {
-        private int refundFailures;
-        private int storageFailures;
-        private int recoveredAttempts;
-        private int exhausted;
-        private String lastRetryDetail;
-        private String lastExhaustedDetail;
-
-        @Override
-        public void retryFailed(EconomyRepository.EconomyOperation operation, int attempt,
-                                String detail) {
-            refundFailures++;
-            lastRetryDetail = detail;
-        }
-
-        @Override
-        public void finalizationFailed(EconomyRepository.EconomyOperation operation, int attempt,
-                                       String detail) {
-            storageFailures++;
-        }
-
-        @Override
-        public void recovered(EconomyRepository.EconomyOperation operation, int attempts) {
-            recoveredAttempts = attempts;
-        }
-
-        @Override
-        public void exhausted(EconomyRepository.EconomyOperation operation, String detail) {
-            exhausted++;
-            lastExhaustedDetail = detail;
         }
     }
 }

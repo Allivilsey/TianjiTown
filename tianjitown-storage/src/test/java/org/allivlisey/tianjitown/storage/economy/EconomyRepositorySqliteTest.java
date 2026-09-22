@@ -10,12 +10,10 @@ import org.allivlisey.tianjitown.storage.database.DatabaseGate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +21,10 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.execute;
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.scalar;
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.scalarText;
+import static org.allivlisey.tianjitown.storage.SqliteTestSupport.uuid;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -848,36 +850,6 @@ class EconomyRepositorySqliteTest {
             statement.setBytes(2, uuid(playerId));
             statement.setString(3, role);
             statement.executeUpdate();
-        }
-    }
-
-    private static byte[] uuid(UUID value) {
-        return ByteBuffer.allocate(16).putLong(value.getMostSignificantBits())
-                .putLong(value.getLeastSignificantBits()).array();
-    }
-
-    private static void execute(DatabaseGate gate, String sql) throws Exception {
-        try (Connection connection = gate.dataSource().getConnection();
-             var statement = connection.createStatement()) {
-            statement.execute(sql);
-        }
-    }
-
-    private static long scalar(DatabaseGate gate, String sql) throws Exception {
-        try (Connection connection = gate.dataSource().getConnection();
-             var statement = connection.createStatement();
-             ResultSet rows = statement.executeQuery(sql)) {
-            assertTrue(rows.next());
-            return rows.getLong(1);
-        }
-    }
-
-    private static String scalarText(DatabaseGate gate, String sql) throws Exception {
-        try (Connection connection = gate.dataSource().getConnection();
-             var statement = connection.createStatement();
-             ResultSet rows = statement.executeQuery(sql)) {
-            assertTrue(rows.next());
-            return rows.getString(1);
         }
     }
 }
