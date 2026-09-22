@@ -19,7 +19,7 @@
 
 ## 构建与安装
 
-升级前正常停服并备份 TianjiTown 与依赖数据。公共资金现由小镇数据库独立管理，玩家钱包继续通过 Vault 接入；不再创建或迁移 tax 账户，也不导入旧账户余额。旧配置兼容与 schema 1.1 升级见 [经济部署说明](docs/deployment/ECONOMY_AND_EXPANSION.md)。
+升级前正常停服并备份 TianjiTown 与依赖数据。公共资金现由小镇数据库独立管理，玩家钱包继续通过 Vault 接入；临时升级逻辑会依据旧配置一次性删除经身份核实的 XConomy tax 账户及其余额，不导入旧账户余额。清理条件与 schema 1.1 升级见 [经济部署说明](docs/deployment/ECONOMY_AND_EXPANSION.md)。
 
 GitHub Actions 仅在分支 push 涉及根目录 `pom.xml` 时检查项目版本号；与本次 push 前相比，只有项目 `<version>` 变化才执行构建、测试、可复现性检查并上传 JAR。普通代码提交、PR 事件和新建分支不会构建；只修改依赖版本也不会构建。升级项目版本时应同步更新各子模块的父项目版本。构建产物使用仓库默认保留期限，不再单独设置 7 天；这不表示永久保存。
 

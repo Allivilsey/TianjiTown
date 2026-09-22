@@ -18,6 +18,8 @@ import org.allivlisey.tianjitown.paper.ui.TownUiController;
 import org.allivlisey.tianjitown.core.ports.WorldBoundaryService;
 import org.allivlisey.tianjitown.integrations.residence.ResidenceLandProtectionService;
 import org.allivlisey.tianjitown.integrations.vault.VaultEconomyProbe;
+import org.allivlisey.tianjitown.integrations.vault.LegacyTaxAccountCleanup;
+import org.allivlisey.tianjitown.integrations.vault.XConomyLegacyTaxAccounts;
 import org.allivlisey.tianjitown.integrations.worldborder.WorldBorderBoundaryService;
 import org.allivlisey.tianjitown.storage.database.DatabaseConfig;
 import org.allivlisey.tianjitown.storage.database.DatabaseGate;
@@ -415,6 +417,7 @@ final class TownStartupCoordinator {
             closeDatabaseCandidate(candidate);
             return;
         }
+        cleanupLegacyTaxAccount();
         Set<String> managedResidenceNames = ConcurrentHashMap.newKeySet();
         Set<String> activeResidenceNames = ConcurrentHashMap.newKeySet();
         TownRuntime runtime;
@@ -457,6 +460,27 @@ final class TownStartupCoordinator {
                 scheduler.runMain(() -> failStartupDiagnostic(candidate, previousDetails, exception));
             }
         });
+    }
+
+    private void cleanupLegacyTaxAccount() {
+        String account = plugin.getConfig().getString("economy.settlement-account");
+        if (!LegacyTaxAccountCleanup.applies(account)) return;
+        try {
+            Plugin provider = plugin.getServer().getPluginManager().getPlugin("XConomy");
+            var economy = new VaultEconomyProbe(plugin.getServer()).verify();
+            if (provider == null || !provider.isEnabled() || !economy.healthy()
+                    || !"XConomy".equalsIgnoreCase(economy.provider())) {
+                throw new IllegalStateException("旧 tax 账户自动清理仅支持当前 Vault 提供方为 XConomy");
+            }
+            String result = LegacyTaxAccountCleanup.run(
+                    plugin.getDataFolder().toPath(), account,
+                    new XConomyLegacyTaxAccounts(
+                            plugin.getServer(), provider));
+            plugin.getLogger().info("旧 tax 账户清理: " + result);
+        } catch (IOException | RuntimeException | LinkageError exception) {
+            plugin.getLogger().warning("旧 tax 账户未完成自动清理，请人工核实（小镇继续启动）: "
+                    + safeMessage(exception));
+        }
     }
 
     private void failStartupDiagnostic(DatabaseGate candidate, List<String> previousDetails,

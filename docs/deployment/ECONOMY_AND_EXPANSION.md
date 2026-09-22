@@ -15,15 +15,25 @@
 
 QuickShop-Hikari 要求至少 `6.3.0.0` 并通过事件/API 能力检查。本项目核查过 `6.3.0.1` 的配置及字节码：税后收入与税款接收方独立，`taxer(null)` 跳过税款存入账户。适配器仅对匹配的小镇交易清空税款接收方，继续使用 QuickShop 原生扣税和成功事件；不修改 QuickShop 全局配置，也不在成功后再次扣玩家钱。例：成交 100，税率 5%，买家扣 100、卖家得 95、小镇税款入账 5（如有补贴另记）。
 
-QuickShop 的 `shop-tax.account: ""` 可全局关闭税款存入账户，但小镇适配不依赖该配置。若希望彻底退役旧 tax 账户，应检查其他插件及非小镇交易是否仍使用它，再由运维清理；插件不会清空其历史余额。
+QuickShop 的 `shop-tax.account: ""` 可全局关闭税款存入账户，但小镇适配不依赖该配置。升级前应解除其他插件及非小镇交易对旧 tax 账户的引用，避免清理后再次创建或继续使用它。
 
 ## 从托管账户版本升级
 
 1. 正常停服，保存同一时间点的 TianjiTown、Residence、QuickShop、玩家经济数据和配置/JAR。共享玩家经济数据库时，暂停其他服务器写入以获得一致备份。在隔离服先验证恢复。
 2. 替换 JAR，沿用原小镇数据库。Flyway `V1_1` 新增申请费与收入税操作表，同时保留各镇余额、流水、申请费和经济操作记录，只移除旧 `SETTLEMENT_RECONCILIATION` 锁；若仍有待核实资金操作，转换为该镇操作锁。其他原因的锁保留。
-3. 不导入、不分配旧 tax / tianjitown-tax 余额，也不需要账户改名。旧 `economy.settlement-account`、`economy.reconciliation-interval-minutes` 配置不再生效。旧 `settlement-account-migration.properties` 不再参与启动，备份中可保留供回退使用。
+3. 不导入、不分配旧 tax / tianjitown-tax 余额，也不需要账户改名。旧 `economy.settlement-account` 仅用于下述一次性账户清理，不再作为清算账户；`economy.reconciliation-interval-minutes` 不再生效。保留旧 `settlement-account-migration.properties`，供清理时核对已改名账户的 UUID。
 4. 执行 `status`、`diagnose` 和 `money pending`、`money tax pending`、`money subsidy pending`，核对余额及遗留操作。结果未知的旧付款不自动重放；通过现有恢复命令核实。已确认待退的申请费直接退入玩家钱包。
 5. 验收捐款、申请费退款、三种税源、补贴、消费及调账后再开放。新版本不再维护旧账户的隐藏、命令屏蔽或登录保护；清理旧账户前应先解除它在其他系统中的引用。
+
+### 临时旧 tax 账户清理
+
+启动时，只有旧配置 `economy.settlement-account` 明确为 `tax` 或 `tianjitown-tax` 才执行清理；新安装、缺少该配置或自定义账户均跳过。不扫描或删除其他同名候选账户。
+
+要求当前 Vault 提供方为 XConomy、UUID-mode 为 Default，且服务器没有在线玩家。存在旧迁移文件时按其中的 UUID 定位；否则核对配置名称与 Bukkit 解析的 UUID。身份不一致、迁移文件异常或账户有玩家登录记录时停止清理并记录警告，小镇继续启动。
+
+删除前将名称、UUID、原余额写入 `legacy-tax-account-cleanup.properties`，再调用 XConomy 的 `deldata` 命令，检查账户不存在后标记 `COMPLETE`。账户及余额会被永久删除，不转入小镇；记录文件仅用于审计，不是经济数据库备份。账户原本不存在也标记完成。保留完成标记，后续启动不再删除后来创建的同名账户。
+
+若记录停在 `PREPARED`，重启只检查账户是否已消失，不重复发送删除命令。仍存在时需人工核实并处理，再重启确认完成；不要直接删除该记录来重试。XConomy 不支持命令执行的部署模式或删除失败同样需要人工处理。
 
 ## 税收与补贴验收
 

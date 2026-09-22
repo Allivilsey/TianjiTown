@@ -13,7 +13,7 @@
 支持从提交 `027107a` 的 `V1_0`（schema `1.0`）创建的生产数据库升级。Flyway 中该迁移的 checksum 为 `-142058434`；已手工修改结构、迁移历史或使用其他开发脚本建库的数据库，必须先在副本中单独核对，不能直接改 checksum 或运行 `repair`。
 
 1. 停服，在同一时间点备份下述全部数据，保留旧 JAR 与配置。先在隔离副本验证完整升级流程。
-2. 保留原配置和旧 JAR，替换插件；旧清算账户配置及身份绑定文件不再参与运行，无需先改名或调整 UUID 模式。
+2. 保留原配置和旧 JAR，替换插件；旧清算账户配置及身份绑定文件用于一次性 tax 账户清理，无需先改名。清理条件见经济部署说明，升级前先解除其他插件对旧账户的引用。
 3. 启动校验既有 `V1_0` 并执行 `V1_1`；新库依次执行两份脚本。申请费、历史税款和未决操作保留，不重放历史付款，不导入旧 tax 余额。
 4. 执行 `status`、`diagnose`，确认 schema `1.1`，核对各镇余额、流水、申请费、待核实资金及三种税源。
 5. 再次重启验证不重复迁移，并保存升级后备份。详细验收见 [经济部署说明](../deployment/ECONOMY_AND_EXPANSION.md)。
@@ -24,7 +24,7 @@
 
 维护模式只暂停玩家入口，税收和后台任务仍会运行。需要一致性备份时停止 Paper，在同一时间点保存 TianjiTown 数据、配置/JAR、Residence、QuickShop-Hikari 和 XConomy 数据，并记录小镇余额及待处理付款。
 
-旧版本的 `settlement-account-migration.properties` 可随备份保留供回退使用；新版本不再读取它，也不访问旧税收账户。
+旧版本的 `settlement-account-migration.properties` 用于核对待删除旧账户的 UUID，须随备份保留。升级生成的 `legacy-tax-account-cleanup.properties` 也须保留，避免重复清理；恢复已删除账户须使用 XConomy 的完整备份，不能只恢复此记录文件。
 
 仓库提供 SQLite 独立快照脚本，需要 Bash、sqlite3 和 shasum 或 sha256sum：
 
