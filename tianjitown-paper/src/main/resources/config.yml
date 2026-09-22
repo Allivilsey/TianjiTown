@@ -127,8 +127,3 @@ territory:
     enabled: true
     # 20~200 tick，必须短于一级信标的原版持续时间（220 tick）。
     refresh-interval-ticks: 100
-
-operations:
-  # 插件初始化阶段执行一次统一诊断；校验失败时保持 LOCKED，不注册业务运行时。
-  # 运行期间可使用 /tianjitown diagnose 手动执行。
-  quickshop-diagnostic-days: 7

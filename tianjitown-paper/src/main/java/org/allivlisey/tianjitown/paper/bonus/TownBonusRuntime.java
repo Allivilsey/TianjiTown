@@ -3,7 +3,6 @@ package org.allivlisey.tianjitown.paper.bonus;
 import io.papermc.paper.event.block.BeaconActivatedEvent;
 import io.papermc.paper.event.block.BeaconDeactivatedEvent;
 import io.papermc.paper.event.player.PlayerChangeBeaconEffectEvent;
-import org.allivlisey.tianjitown.integrations.quickshop.QuickShopHistoryProbe;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.config.TownBonusSettings;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
@@ -19,7 +18,6 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
-import org.bukkit.plugin.Plugin;
 
 import java.nio.file.Path;
 import java.time.Instant;
@@ -44,8 +42,7 @@ public final class TownBonusRuntime implements Listener {
     private final TownBonusDiagnostics diagnostics;
 
     public TownBonusRuntime(TianjiTownPlugin plugin, TownRuntime host,
-                            TownBonusRepository repository, TownDiagnosticRepository diagnosticRepository, TownBonusSettings settings,
-                            Plugin quickShop) {
+                            TownBonusRepository repository, TownDiagnosticRepository diagnosticRepository, TownBonusSettings settings) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         Objects.requireNonNull(host, "host");
         this.repository = Objects.requireNonNull(repository, "repository");
@@ -53,9 +50,7 @@ public final class TownBonusRuntime implements Listener {
         this.buildingRefunds = new TownBuildingRefunds(plugin, host, repository,
                 settings.buildingRefund());
         this.beaconEffects = new TownBeaconEffects(plugin, host, settings.beacon(), index::get);
-        this.diagnostics = new TownBonusDiagnostics(plugin, host, diagnosticRepository, settings.operations(),
-                new QuickShopHistoryProbe(quickShop,
-                        host.wallet().scale(), plugin.messages()::plainText));
+        this.diagnostics = new TownBonusDiagnostics(plugin, host, diagnosticRepository);
     }
 
     public TownBonusSettings settings() {
@@ -98,8 +93,8 @@ public final class TownBonusRuntime implements Listener {
         buildingRefunds.cleanupCounters();
     }
 
-    public void diagnose(CommandSender sender, int days) {
-        diagnostics.diagnose(sender, days);
+    public void diagnose(CommandSender sender) {
+        diagnostics.diagnose(sender);
     }
 
     public void diagnoseAtStartup(Consumer<DiagnosticResult> completion) {

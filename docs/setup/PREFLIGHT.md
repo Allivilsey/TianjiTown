@@ -11,7 +11,7 @@
 | Residence | 领地创建、边界、成员及访客权限、保护对账 |
 | Vault 与玩家经济插件（如 XConomy） | 玩家钱包扣款与退款；Vault 必须已注册可用 Economy provider |
 | WorldBorder | 验证选址和扩张边界；需通过公开 API 能力检查 |
-| QuickShop-Hikari | 商店收入税和历史诊断；税务适配要求至少 `6.3.0.0`，并检查事件及交易账户 API |
+| QuickShop-Hikari | 商店收入税；税务适配要求至少 `6.3.0.0`，并检查事件及交易账户 API |
 | Jobs | 职业收入税 |
 | GlobalMarketPlus | 市场成交收入税 |
 | HuskSync（可选） | 回服后在同步完成时校正公共 Buff |
@@ -39,7 +39,7 @@
 
 - 使用申请人、两名初始成员和管理员，完成成员确认、整镇 25×25 区块选址检查、审核和初始 5×5 区块的 Residence 创建；确认其余 24 个单元预留且禁止圈地。
 - 验证入镇申请、退出、访客权限、投票、捐款、三种收入税、扩张与 Buff；检查失败操作没有重复扣款。
-- 执行 `/tianjitown land reconcile all` 和 `/tianjitown diagnose 7`，保存结果。
+- 执行 `/tianjitown land reconcile all` 和 `/tianjitown diagnose`，保存结果。
 - 按 [SQLite 备份手册](../operations/SQLITE_AND_BACKUP.md) 完成一次同时间点备份与隔离恢复。
 - 运行环境事实报告可用 `python scripts/inspect_runtime.py /path/to/server --output reports/runtime-report.json` 生成；它只读，不参与启动判定。
 

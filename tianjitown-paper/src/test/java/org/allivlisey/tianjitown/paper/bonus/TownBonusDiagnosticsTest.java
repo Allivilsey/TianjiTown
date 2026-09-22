@@ -4,10 +4,8 @@ import io.papermc.paper.plugin.configuration.PluginMeta;
 import org.allivlisey.tianjitown.core.land.ChunkPosition;
 import org.allivlisey.tianjitown.core.land.InitialTerritory;
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
-import org.allivlisey.tianjitown.integrations.quickshop.QuickShopHistoryProbe;
 import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
-import org.allivlisey.tianjitown.paper.config.TownBonusSettings;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
@@ -38,7 +36,7 @@ class TownBonusDiagnosticsTest {
     void manualSuccessOnlySendsSummaryAndStartupSuccessIsSilent() {
         PluginMessages messages = spy(plugin.messages());
         when(plugin.messages()).thenReturn(messages);
-        diagnostics.diagnose(sender, 7);
+        diagnostics.diagnose(sender);
         async.getFirst().run();
         main.getFirst().run();
         verify(messages).send(sender, "chat.bonus.diagnostic-summary-success");
@@ -54,7 +52,6 @@ class TownBonusDiagnosticsTest {
     private final TianjiTownPlugin plugin = mock(TianjiTownPlugin.class);
     private final TownRuntime host = mock(TownRuntime.class);
     private final TownDiagnosticRepository repository = mock(TownDiagnosticRepository.class);
-    private final QuickShopHistoryProbe history = mock(QuickShopHistoryProbe.class);
     private final VaultPlayerEconomyService wallet = mock(VaultPlayerEconomyService.class);
     private final EconomyRepository finance = mock(EconomyRepository.class);
     private final LandProtectionService land = mock(LandProtectionService.class);
@@ -86,19 +83,17 @@ class TownBonusDiagnosticsTest {
         when(reconciliation.healthy()).thenReturn(true);
         when(finance.inspectSettlement(100)).thenReturn(reconciliation);
         when(finance.reconcileSettlement(100)).thenReturn(reconciliation);
-        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
-                "ok", 0, Map.of(), 2, 50, List.of(), List.of()));
-        when(history.inspect(any(), any())).thenReturn(QuickShopHistoryProbe.Result.available(2, 50, false, "ok"));
-        diagnostics = new TownBonusDiagnostics(plugin, host, repository,
-                new TownBonusSettings.Operations(7), history);
+        when(repository.diagnose()).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
+                "ok", 0, Map.of(), List.of()));
+        diagnostics = new TownBonusDiagnostics(plugin, host, repository);
     }
 
     @Test
-    void capturesBalanceBeforeAsyncCollectionAndInspectsLandOnMainBeforeWritingReport() throws Exception {
+    void collectsDatabaseAsyncAndInspectsLandOnMainBeforeWritingReport() throws Exception {
         var state = new TownDiagnosticRepository.LandState(UUID.randomUUID(), "town", "res",
                 List.of(), List.of());
-        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
-                "ok", 0, Map.of(), 2, 50, List.of(state), List.of()));
+        when(repository.diagnose()).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
+                "ok", 0, Map.of(), List.of(state)));
         LandProtectionService.Inspection inspection = mock(LandProtectionService.Inspection.class);
         when(inspection.state()).thenReturn(LandProtectionService.ProjectionState.HEALTHY);
         when(land.inspect("res", List.of(), List.of())).thenReturn(inspection);
@@ -106,7 +101,7 @@ class TownBonusDiagnosticsTest {
 
         diagnostics.diagnoseAtStartup(completed::set);
         verifyNoInteractions(wallet);
-        verifyNoInteractions(repository, history, land, finance);
+        verifyNoInteractions(repository, land, finance);
         async.getFirst().run();
         verify(finance, never()).reconcileSettlement(anyLong());
         verify(finance, never()).inspectSettlement(anyLong());
@@ -120,15 +115,16 @@ class TownBonusDiagnosticsTest {
         async.getLast().run();
         Path report = diagnostics.lastDiagnostic().report();
         assertTrue(Files.isRegularFile(report));
-        assertTrue(Files.readString(report).contains("QuickShop purchase reconciliation=MATCH"));
+        assertTrue(Files.readString(report).contains("SQLite quick_check=ok"));
+        assertFalse(Files.readString(report).contains("QuickShop"));
     }
 
     @Test
     void pendingBusinessRecoveryDoesNotBlockStartupOrLoseItsWarningAfterReportWrite() {
-        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
+        when(repository.diagnose()).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
                 "ok", 0, Map.of("pendingEconomy", 1L, "pendingExpansions", 2L,
                         "failedProjections", 1L, "accountLedgerMismatches", 1L),
-                2, 50, List.of(), List.of()));
+                List.of()));
 
         TownBonusRuntime.DiagnosticResult result = startupDiagnostic();
 
@@ -184,7 +180,7 @@ class TownBonusDiagnosticsTest {
         when(world.getName()).thenReturn("renamed_world");
         when(plugin.getServer().getWorld(expected)).thenReturn(world);
 
-        diagnostics.diagnose(sender, 7);
+        diagnostics.diagnose(sender);
         async.getFirst().run();
         verify(plugin.getServer(), never()).getWorld(any(UUID.class));
         main.getFirst().run();
@@ -206,8 +202,8 @@ class TownBonusDiagnosticsTest {
                         new InitialTerritory(new ChunkPosition(worldId, "world", 5, 0))));
         var state = new TownDiagnosticRepository.LandState(UUID.randomUUID(), "town", "res",
                 List.of(), areas);
-        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
-                "ok", 0, Map.of(), 2, 50, List.of(state), List.of()));
+        when(repository.diagnose()).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
+                "ok", 0, Map.of(), List.of(state)));
         LandProtectionService.Inspection inspection = mock(LandProtectionService.Inspection.class);
         when(inspection.state()).thenReturn(LandProtectionService.ProjectionState.HEALTHY);
         when(land.inspect("res", areas, List.of())).thenReturn(inspection);
@@ -226,12 +222,11 @@ class TownBonusDiagnosticsTest {
     }
 
     @Test
-    void unavailableExternalChecksLeaveRecoveryRuntimeAccessible() {
+    void unavailableResidenceLeavesRecoveryRuntimeAccessible() {
         var state = new TownDiagnosticRepository.LandState(UUID.randomUUID(), "town", "res",
                 List.of(), List.of());
-        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
-                "ok", 0, Map.of(), 2, 50, List.of(state), List.of()));
-        when(history.inspect(any(), any())).thenThrow(new LinkageError("history API unavailable"));
+        when(repository.diagnose()).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
+                "ok", 0, Map.of(), List.of(state)));
         when(land.inspect("res", List.of(), List.of())).thenThrow(new IllegalStateException("Residence unavailable"));
 
         TownBonusRuntime.DiagnosticResult result = startupDiagnostic();
@@ -245,8 +240,8 @@ class TownBonusDiagnosticsTest {
 
     @Test
     void databaseIntegrityFailureStillBlocksStartup() {
-        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
-                "database disk image is malformed", 0, Map.of(), 2, 50, List.of(), List.of()));
+        when(repository.diagnose()).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
+                "database disk image is malformed", 0, Map.of(), List.of()));
 
         TownBonusRuntime.DiagnosticResult result = startupDiagnostic();
 
@@ -256,8 +251,8 @@ class TownBonusDiagnosticsTest {
 
     @Test
     void foreignKeyViolationsStillBlockStartup() {
-        when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
-                "ok", 1, Map.of(), 2, 50, List.of(), List.of()));
+        when(repository.diagnose()).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
+                "ok", 1, Map.of(), List.of()));
 
         TownBonusRuntime.DiagnosticResult result = startupDiagnostic();
 
@@ -267,7 +262,7 @@ class TownBonusDiagnosticsTest {
 
     @Test
     void manualDiagnosticsOnlyInspectSettlementWithoutMutatingAccountLocks() {
-        diagnostics.diagnose(sender, 7);
+        diagnostics.diagnose(sender);
         async.getFirst().run();
         main.getFirst().run();
 
@@ -288,11 +283,9 @@ class TownBonusDiagnosticsTest {
     }
 
     @Test
-    void rejectsConcurrentAndOutOfRangeRequestsWithoutStartingMoreWork() {
-        assertThrows(IllegalArgumentException.class, () -> diagnostics.diagnose(sender, 0));
-        assertThrows(IllegalArgumentException.class, () -> diagnostics.diagnose(sender, 181));
-        diagnostics.diagnose(sender, 7);
-        diagnostics.diagnose(sender, 7);
+    void rejectsConcurrentRequestsWithoutStartingMoreWork() {
+        diagnostics.diagnose(sender);
+        diagnostics.diagnose(sender);
         AtomicReference<TownBonusRuntime.DiagnosticResult> rejected = new AtomicReference<>();
         diagnostics.diagnoseAtStartup(rejected::set);
         assertFalse(rejected.get().healthy());
@@ -302,7 +295,7 @@ class TownBonusDiagnosticsTest {
 
     @Test
     void failedCollectionCompletesOnMainAndAllowsRetry() {
-        when(repository.diagnose(any())).thenThrow(new IllegalStateException("offline"));
+        when(repository.diagnose()).thenThrow(new IllegalStateException("offline"));
         AtomicReference<TownBonusRuntime.DiagnosticResult> completed = new AtomicReference<>();
         diagnostics.diagnoseAtStartup(completed::set);
         async.getFirst().run();
@@ -312,7 +305,7 @@ class TownBonusDiagnosticsTest {
         assertFalse(completed.get().startupAllowed());
         assertTrue(completed.get().detail().contains("offline"));
         assertSame(completed.get(), diagnostics.lastDiagnostic());
-        diagnostics.diagnose(sender, 7);
+        diagnostics.diagnose(sender);
         assertEquals(2, async.size());
     }
 
@@ -323,27 +316,17 @@ class TownBonusDiagnosticsTest {
         diagnostics.diagnoseAtStartup(completed::set);
         assertFalse(completed.get().healthy());
         doAnswer(call -> async.add(call.getArgument(0))).when(plugin).runAsync(any());
-        diagnostics.diagnose(sender, 7);
+        diagnostics.diagnose(sender);
         assertEquals(1, async.size());
     }
 
     @Test
     void rejectedMainSubmissionReleasesDiagnosticGate() {
         doReturn(false).when(plugin).runMain(any());
-        diagnostics.diagnose(sender, 7);
+        diagnostics.diagnose(sender);
         async.getFirst().run();
-        diagnostics.diagnose(sender, 7);
+        diagnostics.diagnose(sender);
         assertEquals(2, async.size());
-    }
-
-    @Test
-    void unavailableSettlementOrIncompleteHistoryCannotReportHealthy() {
-        when(history.inspect(any(), any())).thenReturn(QuickShopHistoryProbe.Result.available(2, 50, true, "limit"));
-        diagnostics.diagnose(sender, 7);
-        async.getFirst().run();
-        main.getFirst().run();
-        assertFalse(diagnostics.lastDiagnostic().healthy());
-        verifyNoInteractions(finance);
     }
 
     @Test
@@ -353,7 +336,7 @@ class TownBonusDiagnosticsTest {
             Files.writeString(reports.resolve("diagnostic-200001%02d-000000.txt".formatted(i)), "old");
         }
         Path unrelated = Files.writeString(reports.resolve("notes.txt"), "keep");
-        diagnostics.diagnose(sender, 7);
+        diagnostics.diagnose(sender);
         async.getFirst().run();
         main.getFirst().run();
         async.getLast().run();

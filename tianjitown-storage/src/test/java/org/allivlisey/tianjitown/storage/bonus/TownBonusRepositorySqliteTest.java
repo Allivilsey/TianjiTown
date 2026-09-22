@@ -41,13 +41,13 @@ class TownBonusRepositorySqliteTest {
             towns.addVisitor(townId, visitorId, mayorId, "Mayor");
             TownDiagnosticRepository diagnostics = new TownDiagnosticRepository(
                     gate.dataSource(), () -> false);
-            var added = diagnostics.diagnose(Instant.EPOCH);
+            var added = diagnostics.diagnose();
             assertEquals(java.util.Set.of(mayorId, visitorId),
                     java.util.Set.copyOf(added.landStates().getFirst().members()));
             assertEquals(1, added.counts().get("members"));
             towns.removeVisitor(townId, visitorId, mayorId, "Mayor");
             assertEquals(java.util.List.of(mayorId),
-                    diagnostics.diagnose(Instant.EPOCH).landStates().getFirst().members());
+                    diagnostics.diagnose().landStates().getFirst().members());
         }
     }
 
@@ -91,14 +91,13 @@ class TownBonusRepositorySqliteTest {
             assertFalse(repository.reserveBuildingRefund(townId, playerId, worldId, 11, 20,
                     day, "minecraft:stone", 2).granted());
 
-            TownDiagnosticRepository.DiagnosticSnapshot diagnostic = new TownDiagnosticRepository(gate.dataSource(), () -> false).diagnose(
-                    Instant.EPOCH);
+            TownDiagnosticRepository.DiagnosticSnapshot diagnostic = new TownDiagnosticRepository(gate.dataSource(), () -> false).diagnose();
             assertEquals("ok", diagnostic.quickCheck());
             assertEquals(0, diagnostic.foreignKeyViolations());
             assertEquals(1, diagnostic.counts().get("activeTowns"));
             assertEquals(0, diagnostic.counts().get("failedProjections"));
             failTownProjection(gate, townId);
-            assertEquals(1, new TownDiagnosticRepository(gate.dataSource(), () -> false).diagnose(Instant.EPOCH).counts()
+            assertEquals(1, new TownDiagnosticRepository(gate.dataSource(), () -> false).diagnose().counts()
                     .get("failedProjections"));
             assertEquals(1, repository.cleanupRefundCounters(day.plusWeeks(1)));
         }

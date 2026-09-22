@@ -76,7 +76,7 @@
 
 玩家商店按自选周数和等级覆盖同类效果；管理员免费设置默认一周、一级，可选 1～4 周及合法等级，覆盖同类效果且余额不变。玩家购买角色固定为镇长和副镇长，当前没有每商品角色配置键。商品价目、默认等级见 [定价说明](../deployment/PRICING.md)。
 
-## 领地加成和诊断
+## 领地加成
 
 | 配置键 | 默认值 | 含义 |
 |---|---|---|
@@ -86,7 +86,6 @@
 | `territory.building-refund.reset-zone` | `Asia/Shanghai` | 建筑返还周窗口时区，周一 00:00 切换 |
 | `territory.building-refund.blacklist` | 见模板 | 禁止返还的材料；`REDSTONE_CATEGORY` 展开红石类别，容器/特殊方块等仍受代码校验 |
 | `territory.beacon.refresh-interval-ticks` | `100` | 有效信标来源校验及玩家续期间隔，允许 20~200 tick |
-| `operations.quickshop-diagnostic-days` | `7` | 启动及不带参数手动诊断的 QuickShop 回看天数，允许 1～180 |
 
 上表数值在启动加载，修改后重启。信标只依据当前有效且区块正在运算的来源扩散；拆除、遮挡、金字塔失效或来源区块停止运行后停止续期，恢复后重新验证。玩家效果沿用原版 220/260/300/340 tick 持续时间并自然消退。旧历史效果表不再读写；旧刷新间隔若超过 200 tick，必须调整后才能通过启动校验。
 
@@ -94,4 +93,4 @@
 
 修改 `messages.yml` 后执行 `reload`。保留占位符名称，例如 `{town}`、`{player}`、`{reason}`；它们由调用处填入，改名会造成信息缺失。已有自定义值不会被内置文案覆盖，缺少的消息使用内置默认值。配置开关和提示文字是两回事，改提示不能改变业务限制。
 
-旧 `economy.settlement-account` 和 `economy.reconciliation-interval-minutes` 已停用，升级时可保留但不再读取。公共资金仅存于小镇数据库。
+旧 `economy.settlement-account`、`economy.reconciliation-interval-minutes` 和 `operations.quickshop-diagnostic-days` 已停用，升级时可保留但不再读取。公共资金仅存于小镇数据库。

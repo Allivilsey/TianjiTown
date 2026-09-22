@@ -1,7 +1,6 @@
 package org.allivlisey.tianjitown.storage.diagnostics;
 
 import org.allivlisey.tianjitown.core.land.ChunkPosition;
-import org.allivlisey.tianjitown.core.economy.QuickShopPurchase;
 import org.allivlisey.tianjitown.core.land.InitialTerritory;
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
 
@@ -13,7 +12,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.Statement;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,9 +29,8 @@ public final class TownDiagnosticRepository {
         this.forbiddenThread = Objects.requireNonNull(forbiddenThread, "forbiddenThread");
     }
 
-    public DiagnosticSnapshot diagnose(Instant quickShopSince) {
+    public DiagnosticSnapshot diagnose() {
         requireWorkerThread();
-        Objects.requireNonNull(quickShopSince, "quickShopSince");
         return query(connection -> {
             String quickCheck;
             try (Statement statement = connection.createStatement();
@@ -87,25 +84,8 @@ public final class TownDiagnosticRepository {
                           ORDER BY l.created_at DESC, l.rowid DESC LIMIT 1
                      ), 0)
                     """));
-            List<QuickShopPurchase> purchases = new ArrayList<>();
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT shop_id, shop_type, interacting_uuid, gross_minor, tax_minor, created_at
-                      FROM quickshop_tax_records WHERE created_at >= ?
-                     ORDER BY created_at
-                    """)) {
-                statement.setLong(1, quickShopSince.toEpochMilli());
-                try (ResultSet rows = statement.executeQuery()) {
-                    while (rows.next()) {
-                        purchases.add(new QuickShopPurchase(rows.getLong("shop_id"),
-                                rows.getString("shop_type"), readUuid(rows, "interacting_uuid"),
-                                rows.getLong("gross_minor"), rows.getLong("tax_minor"),
-                                Instant.ofEpochMilli(rows.getLong("created_at"))));
-                    }
-                }
-            }
             return new DiagnosticSnapshot(quickCheck, foreignKeyViolations, counts,
-                    purchases.size(), purchases.stream().mapToLong(QuickShopPurchase::taxMinor)
-                            .reduce(0, Math::addExact), loadLandStates(connection), purchases);
+                    loadLandStates(connection));
         });
     }
 
@@ -192,13 +172,10 @@ public final class TownDiagnosticRepository {
     }
 
     public record DiagnosticSnapshot(String quickCheck, int foreignKeyViolations,
-                                     Map<String, Long> counts, long internalTaxCount,
-                                     long internalTaxMinor, List<LandState> landStates,
-                                     List<QuickShopPurchase> purchases) {
+                                     Map<String, Long> counts, List<LandState> landStates) {
         public DiagnosticSnapshot {
             counts = Map.copyOf(counts);
             landStates = List.copyOf(landStates);
-            purchases = List.copyOf(purchases);
         }
     }
 

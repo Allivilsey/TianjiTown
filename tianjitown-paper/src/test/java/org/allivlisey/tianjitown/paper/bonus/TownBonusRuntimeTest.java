@@ -89,9 +89,8 @@ class TownBonusRuntimeTest {
         }).when(host).write(any(), any(), any());
         var settings = new TownBonusSettings(
                 new TownBonusSettings.BuildingRefund(true, 1, 3000, 12, zone, Set.of(Material.TNT)),
-                new TownBonusSettings.BeaconEnhancement(true, 100),
-                new TownBonusSettings.Operations(7));
-        runtime = new TownBonusRuntime(plugin, host, repository, mock(org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository.class), settings, mock(org.bukkit.plugin.Plugin.class));
+                new TownBonusSettings.BeaconEnhancement(true, 100));
+        runtime = new TownBonusRuntime(plugin, host, repository, mock(org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository.class), settings);
     }
 
     @Test

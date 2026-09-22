@@ -20,7 +20,7 @@ class TownBonusSettingsTest {
     Path temporaryDirectory;
 
     @Test
-    void loadsSafeRefundBeaconAndOperationsSettings() throws Exception {
+    void loadsSafeRefundAndBeaconSettings() throws Exception {
         PluginMessages messages = messages();
         TownBonusSettings settings = TownBonusSettings.load(configuration("REDSTONE_CATEGORY, CHEST",
                 "0.25"), messages::plainText);
@@ -88,8 +88,7 @@ class TownBonusSettingsTest {
                 "validation.bonus.building-refund-reset-zone-invalid",
                 "validation.bonus.building-refund-blacklist-required",
                 "validation.bonus.building-refund-blacklist-material-invalid",
-                "validation.common.range",
-                "validation.bonus.diagnostic-days-range");
+                "validation.common.range");
 
         for (String key : keys) {
             String rendered = messages.plainText(key, placeholders);
@@ -139,12 +138,6 @@ class TownBonusSettingsTest {
         assertFailure(messages, beaconRefresh,
                 messages.plainText("validation.common.range",
                         Map.of("path", "territory.beacon.refresh-interval-ticks", "minimum", 20, "maximum", 200)));
-
-        YamlConfiguration diagnosticDays = configuration("STONE", "0.25");
-        diagnosticDays.set("operations.quickshop-diagnostic-days", 0);
-        assertFailure(messages, diagnosticDays,
-                messages.plainText("validation.bonus.diagnostic-days-range",
-                        Map.of("path", "operations.quickshop-diagnostic-days", "minimum", 1, "maximum", 180)));
     }
 
     @Test
@@ -192,8 +185,6 @@ class TownBonusSettingsTest {
                   beacon:
                     enabled: true
                     refresh-interval-ticks: 100
-                  operations:
-                    quickshop-diagnostic-days: 7
                 """.formatted(chance, material));
         return config;
     }

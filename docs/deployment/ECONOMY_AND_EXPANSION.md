@@ -22,7 +22,7 @@ QuickShop 的 `shop-tax.account: ""` 可全局关闭税款存入账户，但小�
 1. 正常停服，保存同一时间点的 TianjiTown、Residence、QuickShop、玩家经济数据和配置/JAR。共享玩家经济数据库时，暂停其他服务器写入以获得一致备份。在隔离服先验证恢复。
 2. 替换 JAR，沿用原小镇数据库。Flyway `V1_1` 新增申请费与收入税操作表，同时保留各镇余额、流水、申请费和经济操作记录，只移除旧 `SETTLEMENT_RECONCILIATION` 锁；若仍有待核实资金操作，转换为该镇操作锁。其他原因的锁保留。
 3. 不导入、不分配旧 tax / tianjitown-tax 余额，也不需要账户改名。旧 `economy.settlement-account`、`economy.reconciliation-interval-minutes` 配置不再生效。旧 `settlement-account-migration.properties` 不再参与启动，备份中可保留供回退使用。
-4. 执行 `status`、`diagnose 7` 和 `money pending`、`money tax pending`、`money subsidy pending`，核对余额及遗留操作。结果未知的旧付款不自动重放；通过现有恢复命令核实。已确认待退的申请费直接退入玩家钱包。
+4. 执行 `status`、`diagnose` 和 `money pending`、`money tax pending`、`money subsidy pending`，核对余额及遗留操作。结果未知的旧付款不自动重放；通过现有恢复命令核实。已确认待退的申请费直接退入玩家钱包。
 5. 验收捐款、申请费退款、三种税源、补贴、消费及调账后再开放。新版本不再维护旧账户的隐藏、命令屏蔽或登录保护；清理旧账户前应先解除它在其他系统中的引用。
 
 ## 税收与补贴验收
@@ -40,7 +40,7 @@ Jobs 5.2.6.6 仅包装自身付款委托，在工资 `depositPlayer` 成功后�
 
 GMP 1.4.1.4 按 `Transaction-After-Taxes` 及交易类型核实税后收入，缺少可靠税额快照时报告 `INCOMPLETE`，不估算扣税。GMP 成功事件可能不能证明玩家实际到账，离线延迟发款仍需按 `Change-Balance-Only-When-Online` 配置验收。
 
-QuickShop 历史诊断仅检查本地已记录税款对应的交易，不能证明全部外部交易均未漏记；查询异常或超过 1000 条扫描上限标记 `INCOMPLETE`。Jobs/GMP 另查收入记录。
+QuickShop 仅在交易时应用小镇税并在成功后入账，不执行历史对账或自动补账。旧 `operations.quickshop-diagnostic-days` 配置不再读取，`diagnose` 不再接受天数参数。
 
 ## 公共资金和异常恢复
 

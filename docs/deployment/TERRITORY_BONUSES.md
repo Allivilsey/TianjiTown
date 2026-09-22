@@ -37,7 +37,7 @@
 
 ## 诊断与数据恢复
 
-`diagnose [天数]` 同时检查 SQLite 完整性及业务异常、Residence 投影、公共账本和 QuickShop 历史，报告保存在插件目录 `diagnostics`，保留最近 30 份。它不在线备份、不自动修复，历史核对的范围和限制见 [命令手册](../ADMIN_COMMANDS.md)。
+`diagnose` 同时检查 SQLite 完整性及业务异常、Residence 投影和公共账本，报告保存在插件目录 `diagnostics`，保留最近 30 份。它不在线备份、不自动修复，命令说明见 [命令手册](../ADMIN_COMMANDS.md)。
 
 启动和手动诊断还会检查有效小镇领地引用的世界 UUID。报告中的 `World UUID` 行列出小镇、数据库世界名、预期 UUID 与实际 UUID；同名世界 UUID 不一致时报告 `UUID_MISMATCH`，世界未加载且找不到同名世界时报告 `WORLD_NOT_LOADED`。世界仅改名而 UUID 不变仍视为有效。此检查不会按名称替换世界或修改数据，也不会阻止恢复入口启动；UUID 异常会让诊断结果显示告警，即使 Residence 几何检查通过。
 

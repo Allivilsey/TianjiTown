@@ -124,12 +124,10 @@ public final class TownAdminCommand {
     }
 
     @Command("tianjitown diagnose")
-    @Usage("/tianjitown diagnose [1~180天]")
+    @Usage("/tianjitown diagnose")
     @AdminAccess(TownAdminPermissions.ROOT)
-    public void diagnose(CommandSender sender, TownRuntime runtime,
-                         @Optional @Range(min = 1, max = 180) @Suggest({"1", "7", "14", "30", "90", "180"}) Integer days) {
-        runtime.bonuses().diagnose(sender, days == null
-                ? runtime.bonuses().settings().operations().quickShopDiagnosticDays() : days);
+    public void diagnose(CommandSender sender, TownRuntime runtime) {
+        runtime.bonuses().diagnose(sender);
     }
 
     @Command({"tianjitown maintenance", "tianjitown maintenance status"})

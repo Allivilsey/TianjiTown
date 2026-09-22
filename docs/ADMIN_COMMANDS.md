@@ -27,11 +27,11 @@
 | `/tianjitown maintenance on` | 暂停服务台、手册、玩家菜单和表单；写回配置并跨重启保留 | 全部 |
 | `/tianjitown maintenance off` | 关闭维护模式，恢复玩家入口；写回配置 | 全部 |
 | `/tianjitown audit [条数]` | 查看最近管理审计，包含操作者、动作、对象、时间和原因；默认 20 条，允许 1～200 条 | 全部 |
-| `/tianjitown diagnose [天数]` | 提交统一诊断，检查 SQLite、Residence、Vault 清算余额和指定天数内的 QuickShop 历史；允许 1～180，省略时使用启动加载的 `operations.quickshop-diagnostic-days`，默认 7 | 全部 |
+| `/tianjitown diagnose` | 提交统一诊断，检查 SQLite 完整性、未决业务、公共账本和 Residence 投影 | 全部 |
 
 维护模式只暂停玩家入口；税收、后台任务、管理员命令和已有 Residence 保护仍运行。停经济写入还需使用 [运维手册](operations/OPERATIONS.md) 的功能开关；一致性备份需要停服。
 
-诊断本身只读，不修复领地或补账。报告写入 `plugins/TianjiTown/diagnostics`，保留最近 30 份。QuickShop 核对只覆盖本地已有税记录；查询异常或扫描达到 1000 条时为 `INCOMPLETE`。它不能证明所有外部交易均未漏记，也不能证明历史税款最终收款账户。
+诊断本身只读，不修复领地或补账。报告写入 `plugins/TianjiTown/diagnostics`，保留最近 30 份。诊断不读取 QuickShop 交易历史。
 
 ## 服务台与手册
 

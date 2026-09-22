@@ -6,7 +6,7 @@
 
 1. 执行 `/tianjitown status`：确认启动状态和 SQLite 状态为 `READY`，检查玩家入口、Buff/返还/信标开关以及最近诊断。
 2. 查看公共账本、待核实资金操作及账户锁定状态。
-3. 需要复核时执行 `/tianjitown diagnose 7`，保留报告并检查 `DIFFERENCE`、`INCOMPLETE`、`WRITE_LOCKED`、`COMPENSATION_REQUIRED` 和 `SEVERE`。
+3. 需要复核时执行 `/tianjitown diagnose`，保留报告并检查 `WRITE_LOCKED`、`COMPENSATION_REQUIRED` 和 `SEVERE`。
 
 初始化阶段先校验必要依赖、玩家经济服务及 SQLite 完整性，再恢复中断状态并执行统一诊断。数据库损坏、配置或必要依赖不可用仍保持 `LOCKED`；待处理交易、领地差异和外部诊断故障以告警报告，允许业务运行时及恢复入口启动。未核实的资金操作冻结对应小镇账户；不再检查外部清算余额。启动失败应根据 `status` 和日志修复后重启插件或服务器，`/tianjitown reload` 不会重新初始化。运行期间统一诊断只在手动命令时执行，不会周期重复。
 
@@ -69,10 +69,10 @@ TianjiTown 使用标准 Bukkit 插件启停流程，无需安装 PlugMan API 依
 | SQLite 不可用 | 暂停玩家入口，检查磁盘、空间和权限；不删除 WAL/SHM。运行期恢复后等待探测并诊断；启动 LOCKED 修复后重启 |
 | Residence 缺失或权限不符 | 先 `land reconcile <小镇代码>` 只读检查，排除世界未加载、同名外部领地和 API 故障，再显式加 `repair`；`rebuild` 会先删除投影，需要确认 |
 | 捐款退款失败 | 当前进程有界自动重试，成功后完成数据库收尾并解除对应操作锁；不要重复手工入账。重试耗尽或中途停服时，按操作 ID 核对玩家、小镇账户与流水 |
-| QuickShop 诊断差异 | 保留只读历史副本及报告，按交易方向、玩家、金额、税额和时间核对，不能直接改外部历史以消除差异 |
+| QuickShop 收税异常 | 查看税务适配和入账错误日志，核实交易方向、收款人、税额及本地账本；需要纠正时使用管理员调账 |
 | 诊断 INCOMPLETE | 检查查询失败和 1000 条上限，可缩短回看窗口复核；不能把扫描不完整当成一致 |
 
-`diagnose` 只读，不会修改 QuickShop 或 Residence。后台自动对账会修复领地，手动 `land reconcile ... repair` 可立即触发；两者与诊断是不同操作。
+`diagnose` 只读，检查 SQLite 和 Residence，不读取 QuickShop 历史。后台自动对账会修复领地，手动 `land reconcile ... repair` 可立即触发；两者与诊断是不同操作。
 
 领地权限核对直接读取玩家 UUID 对应的权限条目，按 Residence 当前 `padd` 权限组及小镇额外授权检查，不依赖玩家是否在线或已进入 Residence 玩家缓存。后台自动修复写入成功后会再次检查领地；复查通过才记录“已修复”，仍有差异则报告具体失败原因，API 异常也不会记作修复成功。
 

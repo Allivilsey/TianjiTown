@@ -36,11 +36,11 @@
 | `TownBonusRuntime` | 提供公开入口、`DiagnosticResult` 和事件监听，协调共享索引的异步刷新 |
 | `TownBuildingRefunds` | 放置方块校验、每周返还额度预留、物品返还与过期计数清理 |
 | `TownBeaconEffects` | 信标编辑权限、有效来源发现与校验、原版时长的玩家效果续期 |
-| `TownBonusDiagnostics` | 诊断互斥、SQLite/QuickShop 数据采集、Residence/Vault 检查、结果通知与报告保留 |
+| `TownBonusDiagnostics` | 诊断互斥、SQLite 完整性与业务检查、Residence 检查、结果通知与报告保留 |
 
 建筑返还和信标共享成员、角色和领地的不可变索引；刷新失败保留旧快照。信标按已加载领地区块分批发现，以世界 UUID 和方块坐标维护来源，每次校验实时方块状态和区块运算等级；PaperBeaconActivity 通过 Paper 26.2 的公开原生方法读取实际光束，不依赖 Bukkit 状态快照或激活事件缓存。有效来源按小镇合并，玩家效果沿用原版时长续期并自然到期，不追踪或主动移除药水效果。旧历史信标效果表不再读写。返还通过 `TownRuntime.write` 先预留额度，再在主线程回调中发放物品。
 
-诊断在提交前读取 Vault 余额，在工作线程查询 SQLite 与 QuickShop，再回到主线程检查 Residence 和通知调用方；报告写入在工作线程执行，并保留最近 30 份诊断报告。
+诊断在工作线程查询 SQLite，再回到主线程检查世界引用、Residence 和通知调用方；报告写入在工作线程执行，并保留最近 30 份诊断报告。
 
 ## 小镇存储
 

@@ -33,7 +33,7 @@ import java.util.Map;
 class TownAdminCommandDispatchTest {
     @ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
-            "operations,diagnose 7", "money,money view sky", "tax,tax set sky 10 permission-check",
+            "operations,diagnose", "money,money view sky", "tax,tax set sky 10 permission-check",
             "ledger,ledger view sky", "buff,buff set sky health"})
     void scopedPermissionCannotReachRuntimeGate(String scope, String command) {
         when(sender.hasPermission("tianjitown.admin." + scope)).thenReturn(true);
@@ -48,7 +48,7 @@ class TownAdminCommandDispatchTest {
     void scopedPermissionCannotDispatchOtherBusinessCommands(String scope) {
         when(sender.hasPermission("tianjitown.admin." + scope)).thenReturn(true);
         Map<String, String> commands = Map.of(
-                "operations", "diagnose 7",
+                "operations", "diagnose",
                 "money", "money adjust sky 100 permission-check",
                 "tax", "tax set sky 25 permission-check",
                 "ledger", "ledger view sky",
@@ -409,9 +409,13 @@ class TownAdminCommandDispatchTest {
     }
 
     @Test
-    void numericSuggestionsComeFromLampAnnotations() {
+    void diagnoseDispatchesWithoutHistoryWindow() {
         when(sender.hasPermission(TownAdminPermissions.ROOT)).thenReturn(true);
-        assertEquals(Set.of("1", "7", "14", "30", "90", "180"),
+        var bonuses = mock(org.allivlisey.tianjitown.paper.bonus.TownBonusRuntime.class);
+        when(runtime.bonuses()).thenReturn(bonuses);
+        lamp.dispatch(actor, "tianjitown diagnose");
+        verify(bonuses).diagnose(sender);
+        assertEquals(Set.of(),
                 Set.copyOf(lamp.autoCompleter().complete(actor, "tianjitown diagnose ")));
         verifyNoInteractions(completer);
     }

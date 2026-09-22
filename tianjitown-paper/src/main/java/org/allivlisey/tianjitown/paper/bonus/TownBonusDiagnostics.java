@@ -1,14 +1,11 @@
 package org.allivlisey.tianjitown.paper.bonus;
 
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
-import org.allivlisey.tianjitown.integrations.quickshop.QuickShopHistoryProbe;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.bonus.TownBonusRuntime.DiagnosticResult;
-import org.allivlisey.tianjitown.paper.config.TownBonusSettings;
 import org.allivlisey.tianjitown.paper.message.LandProtectionMessages;
 import org.allivlisey.tianjitown.paper.runtime.TownRuntime;
 import org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository;
-import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 
@@ -29,8 +26,6 @@ import java.util.function.Consumer;
 
 /** Coordinates database diagnostics, main-thread inspections and report retention. */
 final class TownBonusDiagnostics {
-    private static final String QUICKSHOP_HISTORY_INCOMPLETE =
-            "diagnostic.bonus.quick-shop-reconciliation-incomplete";
     private static final String DIAGNOSTIC_REPORT_WRITE_FAILURE =
             "log.bonus.diagnostic-report-write-failure";
     private static final DateTimeFormatter REPORT_STAMP = DateTimeFormatter
@@ -38,19 +33,14 @@ final class TownBonusDiagnostics {
     private final TianjiTownPlugin plugin;
     private final TownRuntime host;
     private final TownDiagnosticRepository repository;
-    private final TownBonusSettings.Operations settings;
-    private final QuickShopHistoryProbe quickShopHistory;
     private final AtomicBoolean diagnosticRunning = new AtomicBoolean();
     private final AtomicReference<DiagnosticResult> lastDiagnostic;
 
     TownBonusDiagnostics(TianjiTownPlugin plugin, TownRuntime host,
-                         TownDiagnosticRepository repository, TownBonusSettings.Operations settings,
-                         QuickShopHistoryProbe quickShopHistory) {
+                         TownDiagnosticRepository repository) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.host = Objects.requireNonNull(host, "host");
         this.repository = Objects.requireNonNull(repository, "repository");
-        this.settings = Objects.requireNonNull(settings, "settings");
-        this.quickShopHistory = Objects.requireNonNull(quickShopHistory, "quickShopHistory");
         this.lastDiagnostic = new AtomicReference<>(new DiagnosticResult(false, null,
                 plugin.messages().text("chat.bonus.diagnostic-not-run"), null));
     }
@@ -59,36 +49,29 @@ final class TownBonusDiagnostics {
         return lastDiagnostic.get();
     }
 
-    void diagnose(CommandSender sender, int days) {
-        if (days < 1 || days > 180) {
-            throw new IllegalArgumentException(plugin.messages().plainText(
-                    "chat.bonus.diagnostic-range"));
-        }
+    void diagnose(CommandSender sender) {
         if (!diagnosticRunning.compareAndSet(false, true)) {
             plugin.messages().send(sender, "chat.bonus.diagnostic-running");
             return;
         }
-        submitDiagnostic(sender, days, null);
+        submitDiagnostic(sender, null);
     }
 
     void diagnoseAtStartup(Consumer<DiagnosticResult> completion) {
         Objects.requireNonNull(completion, "completion");
-        int days = settings.quickShopDiagnosticDays();
         if (!diagnosticRunning.compareAndSet(false, true)) {
             completion.accept(failedDiagnostic(new IllegalStateException(
                     plugin.messages().plainText("chat.bonus.diagnostic-running"))));
             return;
         }
-        submitDiagnostic(plugin.getServer().getConsoleSender(), days,
-                completion);
+        submitDiagnostic(plugin.getServer().getConsoleSender(), completion);
     }
 
-    private void submitDiagnostic(CommandSender sender, int days,
+    private void submitDiagnostic(CommandSender sender,
                                   Consumer<DiagnosticResult> completion) {
-        Instant since = Instant.now().minus(java.time.Duration.ofDays(days));
         boolean submitted = plugin.runAsync(() -> {
             try {
-                DiagnosticData data = collectDiagnosticData(days, since);
+                DiagnosticData data = collectDiagnosticData();
                 if (!plugin.runMain(() -> completeDiagnostic(sender, data, completion))) {
                     diagnosticRunning.set(false);
                 }
@@ -105,16 +88,10 @@ final class TownBonusDiagnostics {
         }
     }
 
-    private DiagnosticData collectDiagnosticData(int days, Instant since) {
-        TownDiagnosticRepository.DiagnosticSnapshot database = repository.diagnose(since);
+    private DiagnosticData collectDiagnosticData() {
+        TownDiagnosticRepository.DiagnosticSnapshot database = repository.diagnose();
         String schemaVersion = host.database().schemaVersion();
-        QuickShopHistoryProbe.Result history;
-        try {
-            history = quickShopHistory.inspect(since, database.purchases());
-        } catch (RuntimeException | LinkageError exception) {
-            history = QuickShopHistoryProbe.Result.unavailable(safeMessage(exception));
-        }
-        return new DiagnosticData(days, database, schemaVersion, history);
+        return new DiagnosticData(database, schemaVersion);
     }
 
     private void completeDiagnostic(CommandSender sender, DiagnosticData data,
@@ -153,10 +130,8 @@ final class TownBonusDiagnostics {
     }
 
     private DiagnosticResult finishDiagnostic(CommandSender sender, DiagnosticData data, boolean startup) {
-        int days = data.days();
         TownDiagnosticRepository.DiagnosticSnapshot database = data.database();
         String schemaVersion = data.schemaVersion();
-        QuickShopHistoryProbe.Result history = data.history();
         List<String> lines = new ArrayList<>();
         boolean healthy = database.quickCheck().equalsIgnoreCase("ok")
                 && database.foreignKeyViolations() == 0;
@@ -198,23 +173,6 @@ final class TownBonusDiagnostics {
         lines.add("Residence healthy=" + healthyResidence + "/" + database.landStates().size());
         residenceErrors.forEach(error -> lines.add("Residence ERROR " + error));
         lines.add("Town economy: SQLite account/ledger; no external settlement account");
-        lines.add("QuickShop purchase history available=" + history.available()
-                + ", records=" + history.successfulTaxRecords()
-                + ", taxMinor=" + history.taxMinor() + ", truncated=" + history.truncated()
-                + ", detail=" + history.detail());
-        lines.add("TianjiTown QuickShop records(" + days + "d)=" + database.internalTaxCount()
-                + ", taxMinor=" + database.internalTaxMinor());
-        boolean comparable = history.available() && !history.truncated();
-        boolean historyMatches = comparable
-                && history.successfulTaxRecords() == database.internalTaxCount()
-                && history.taxMinor() == database.internalTaxMinor();
-        if (comparable) {
-            healthy &= historyMatches;
-            lines.add("QuickShop purchase reconciliation=" + (historyMatches ? "MATCH" : "DIFFERENCE"));
-        } else {
-            healthy = false;
-            lines.add(plugin.messages().plainText(QUICKSHOP_HISTORY_INCOMPLETE));
-        }
         String summaryKey = healthy ? "chat.bonus.diagnostic-summary-success"
                 : "chat.bonus.diagnostic-summary-failure";
         String detail = plugin.messages().text(summaryKey);
@@ -316,9 +274,7 @@ final class TownBonusDiagnostics {
         return value == null || value.isBlank() ? throwable.getClass().getSimpleName() : value;
     }
 
-    private record DiagnosticData(int days,
-                                  TownDiagnosticRepository.DiagnosticSnapshot database,
-                                  String schemaVersion,
-                                  QuickShopHistoryProbe.Result history) {
+    private record DiagnosticData(TownDiagnosticRepository.DiagnosticSnapshot database,
+                                  String schemaVersion) {
     }
 }

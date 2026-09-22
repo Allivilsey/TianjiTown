@@ -74,14 +74,13 @@ validation:
     expansion-cost-overflow: '&c金额超过上限'
     expansion-cost-range: '&c{path} 价格超出次级货币单位范围'
   # 建筑返还、信标增强和统一诊断校验消息；{path}=配置路径，{value}=非法材料值，
-  # {minimum}/{maximum}=允许范围；refresh-interval-ticks 的范围单位为 tick，diagnostic-days 为天
+  # {minimum}/{maximum}=允许范围；refresh-interval-ticks 的范围单位为 tick
   bonus:
     building-refund-chance-range: '&c{path} 必须在 (0, 1] 范围内'
     integer-range: '&c{path} 超出整数范围'
     building-refund-reset-zone-invalid: '&c{path} 不是有效时区'
     building-refund-blacklist-required: '&c{path} 至少需要一个方块或分组'
     building-refund-blacklist-material-invalid: '&c建筑返还黑名单材料无效: {value}'
-    diagnostic-days-range: '&c{path} 必须在 {minimum}~{maximum} 天之间'
   # SitePolicy 预览参数校验
   site:
     areas-required: '领地预览至少需要一个区域'
@@ -287,7 +286,7 @@ chat:
       amount-hint: '<金额>'
 
     # 系统操作参数；这些消息会作为参数错误详情嵌入 argument-error
-    usage-diagnose: '用法: /tianjitown diagnose [1~180天]'
+    usage-diagnose: '用法: /tianjitown diagnose'
     usage-maintenance: '用法: /tianjitown maintenance <on|off|status>'
     usage-audit: '用法: /tianjitown audit [1~200]'
     audit-limit-integer: 'audit 数量必须是 1~200 的整数'
@@ -422,7 +421,7 @@ chat:
     help-system-open: '&e/tianjitown open <玩家> &7为指定在线玩家打开小镇主界面'
     help-system-maintenance: '&e/tianjitown maintenance <on|off|status> &7管理维护模式'
     help-system-audit: '&e/tianjitown audit [1~200] &7查看最近审计记录'
-    help-system-diagnose: '&e/tianjitown diagnose [1~180天] &7生成统一对账诊断报告'
+    help-system-diagnose: '&e/tianjitown diagnose &7生成统一对账诊断报告'
     help-economy-title: '&6公共经济管理'
     help-economy-money-view: '&e/tianjitown money view <小镇代码>'
     help-economy-money-adjust: '&e/tianjitown money adjust <小镇代码> <带符号金额> [原因]'
@@ -553,9 +552,8 @@ chat:
 
   # 建筑返还、信标加成和统一诊断相关消息
   bonus:
-    diagnostic-range: '诊断范围必须在 1~180 天之间'
     diagnostic-running: '&e已有统一诊断正在运行，请稍后查看结果'
-    diagnostic-started: '&e正在检查 SQLite、Residence、Vault 与 QuickShop 历史……'
+    diagnostic-started: '&e正在检查 SQLite、Residence 与公共账本……'
     diagnostic-failed: '&c{detail}'
     beacon-edit-forbidden: '&c只有本镇镇长或副镇长可以编辑信标效果'
     diagnostic-summary-success: '&a统一诊断通过'
@@ -650,14 +648,7 @@ diagnostic:
   jobs:
     capability-success: 'Jobs {version} 收入事件、异步转主线程结算与可变付款金额已通过能力检查'
     capability-failure: 'Jobs 收入税 API 能力检查失败: {detail}'
-  # QuickShop 历史探针诊断详情；{detail}=反射或第三方异常详情，{type}=API 类型名
   quick-shop:
-    history-version-unsupported: 'QuickShop 版本未通过交易历史适配器验证'
-    history-query-constructor-missing: 'MetricQuery 构造器不存在'
-    history-result-type-invalid: 'QuickShop 交易历史返回类型异常'
-    history-read-failure: 'QuickShop 交易历史读取失败: {detail}'
-    api-target-type-mismatch: '目标对象未实现 QuickShop API: {type}'
-    history-success: '已核对 QuickShop log_purchase 中的本地税收对应记录'
     # QuickShop 税务能力检查；{minimum}/{version}=版本，{detail}=技术异常详情
     tax-version-unsupported: 'QuickShop-Hikari 版本至少为 {minimum}，当前为 {version}，小镇税收已关闭'
     tax-capability-success: 'QuickShop {version} 税率、交易账户、精确事件分流和成功事件签名已通过能力检查'
@@ -708,7 +699,6 @@ diagnostic:
   # TownBonusRuntime 统一诊断报告中的固定行；无占位符
   bonus:
     settlement-account-unavailable: 'Vault ERROR 清算账户不可读取'
-    quick-shop-reconciliation-incomplete: 'QuickShop purchase reconciliation=INCOMPLETE（历史不可用或达到 1000 条上限）'
   # WorldBorder 反射适配器诊断；这些文本可能作为选址失败详情或启动门禁详情显示
   world-border:
     main-thread-required: 'WorldBorder API 必须在 Paper 主线程调用'

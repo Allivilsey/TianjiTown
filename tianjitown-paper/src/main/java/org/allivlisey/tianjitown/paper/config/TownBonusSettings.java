@@ -13,8 +13,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
 
-public record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon,
-                         Operations operations) {
+public record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement beacon) {
     private static final String REFUND_CHANCE_RANGE =
             "validation.bonus.building-refund-chance-range";
     private static final String INTEGER_RANGE = "validation.bonus.integer-range";
@@ -30,8 +29,6 @@ public record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement
             "validation.bonus.building-refund-blacklist-material-invalid";
     private static final String BEACON_REFRESH_INTERVAL_RANGE =
             "validation.common.range";
-    private static final String DIAGNOSTIC_DAYS_RANGE =
-            "validation.bonus.diagnostic-days-range";
     public static TownBonusSettings load(ConfigurationSection config) {
         return load(config, ConfigurationValues::fallbackMessage);
     }
@@ -41,7 +38,7 @@ public record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(messageResolver, "messageResolver");
         return new TownBonusSettings(loadBuildingRefund(config, messageResolver),
-                loadBeacon(config, messageResolver), loadOperations(config, messageResolver));
+                loadBeacon(config, messageResolver));
     }
 
     private static BuildingRefund loadBuildingRefund(
@@ -112,20 +109,6 @@ public record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement
         }
         return new BeaconEnhancement(ConfigurationValues.bool(config, root + ".enabled", true,
                 messageResolver), refreshTicks);
-    }
-
-    private static Operations loadOperations(
-            ConfigurationSection config,
-            BiFunction<String, Map<String, ?>, String> messageResolver) {
-        String root = "operations";
-        int diagnosticsDays = integer(config, root + ".quickshop-diagnostic-days", 7,
-                messageResolver);
-        if (diagnosticsDays < 1 || diagnosticsDays > 180) {
-            throw invalid(messageResolver, DIAGNOSTIC_DAYS_RANGE,
-                    Map.of("path", root + ".quickshop-diagnostic-days", "minimum", 1,
-                            "maximum", 180));
-        }
-        return new Operations(diagnosticsDays);
     }
 
     private static double decimal(ConfigurationSection config, String path, double defaultValue,
@@ -225,6 +208,4 @@ public record TownBonusSettings(BuildingRefund buildingRefund, BeaconEnhancement
     public record BeaconEnhancement(boolean enabled, long refreshIntervalTicks) {
     }
 
-    public record Operations(int quickShopDiagnosticDays) {
-    }
 }

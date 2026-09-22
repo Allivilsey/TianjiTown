@@ -137,10 +137,7 @@ public final class TownRuntime {
                         plugin.getServer()::isPrimaryThread),
                 new TownDiagnosticRepository(database.dataSource(),
                         plugin.getServer()::isPrimaryThread),
-                TownBonusSettings.load(plugin.getConfig(), plugin.messages()::plainText),
-                java.util.Objects.requireNonNull(
-                plugin.getServer().getPluginManager().getPlugin("QuickShop-Hikari"),
-                "QuickShop-Hikari"));
+                TownBonusSettings.load(plugin.getConfig(), plugin.messages()::plainText));
         this.economy = new TownEconomyRuntime(plugin, finance, economySettings, wallet,
                 databaseAvailable, tasks, taxes, this::consumptionEnabled);
         this.land = new TownLandRuntime(plugin, repository, finance, landProtection,
