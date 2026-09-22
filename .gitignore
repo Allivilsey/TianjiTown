@@ -45,6 +45,7 @@ replay_pid*
 /MinecraftConsoleClient/
 /testserver/
 /RemoteTestServerData/
+/scripts/
 
 # 本地测试资料与历史报告（保留各模块 src/test）
 /test/
