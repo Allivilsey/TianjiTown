@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.allivlisey.tianjitown.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
 import org.allivlisey.tianjitown.integrations.jobs.JobsIncomeTaxAdapter;
 import org.allivlisey.tianjitown.integrations.quickshop.QuickShopTaxAdapter;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.config.EconomySettings;
 import org.allivlisey.tianjitown.paper.task.RetryingWorkQueue;
@@ -19,92 +19,45 @@ import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import static org.allivlisey.tianjitown.paper.runtime.RuntimeText.safeMessage;
 import static org.allivlisey.tianjitown.paper.runtime.RuntimeText.safeText;
 
-/** Tax policy cache, external tax settlement and retry queues. */
+/** Tax policy cache, player deductions and atomic town tax posting. */
 final class TownTaxRuntime {
-    private static final String QUICK_SHOP_TAX_SUBSIDY_QUOTA_EXHAUSTED =
-            "log.quick-shop.subsidy-quota-exhausted";
-    private static final String QUICK_SHOP_TAX_SUBSIDY_SETTLEMENT_FAILURE =
-            "log.quick-shop.subsidy-settlement-failure";
     private static final String QUICK_SHOP_TAX_LEDGER_WRITE_FAILURE =
             "log.quick-shop.tax-ledger-write-failure";
-    private static final String GLOBAL_MARKET_PLUS_INCOME_TAX_DEBIT_FAILURE =
-            "log.global-market-plus.income-tax-debit-failure";
-    private static final String EXTERNAL_SUBSIDY_SETTLEMENT_FAILURE =
-            "log.external-income-tax.subsidy-settlement-failure";
-    private static final String EXTERNAL_SUBSIDY_SETTLEMENT_AMBIGUOUS =
-            "log.external-income-tax.subsidy-settlement-ambiguous";
-    private static final String JOBS_INCOME_TAX_SETTLEMENT_FAILURE =
-            "log.jobs.income-tax-settlement-failure";
     private static final String EXTERNAL_INCOME_TAX_LEDGER_WRITE_FAILURE =
             "log.external-income-tax.ledger-write-failure";
     private final TianjiTownPlugin plugin;
     private final EconomyRepository finance;
     private final EconomySettings economySettings;
-    private final VaultSettlementService settlement;
+    private final VaultPlayerEconomyService wallet;
     private final AtomicBoolean databaseAvailable;
     private final Map<UUID, QuickShopTaxAdapter.TaxPolicy> taxPolicies = new ConcurrentHashMap<>();
     private final java.util.Set<UUID> archivedTowns = ConcurrentHashMap.newKeySet();
     private final Object taxPolicyLock = new Object();
     private final TownIncomeTaxCollectionRuntime incomeCollections;
     private final RetryingWorkQueue<PendingQuickShopTax> pendingTaxes;
-    private final RetryingWorkQueue<PendingQuickShopTax> pendingQuickShopPreparations;
-    private final RetryingWorkQueue<PendingQuickShopTax> pendingQuickShopPayments;
     private final RetryingWorkQueue<PendingIncomeSubsidy> pendingIncomeTaxes;
-    private final RetryingWorkQueue<PendingIncomeSubsidy> pendingIncomeSubsidies;
-    private final RetryingWorkQueue<PendingIncomeSubsidy> pendingIncomeSubsidyPayments;
     private final AtomicBoolean quickShopTaxAvailable = new AtomicBoolean(false);
     private static final String SCHEDULER_LIFECYCLE_STOPPED = "log.scheduler.lifecycle-stopped";
 
     TownTaxRuntime(TianjiTownPlugin plugin,
             EconomyRepository finance,
             EconomySettings economySettings,
-            VaultSettlementService settlement,
+            VaultPlayerEconomyService wallet,
             AtomicBoolean databaseAvailable) {
         this.plugin = plugin;
         this.finance = finance;
         this.economySettings = economySettings;
-        this.settlement = settlement;
+        this.wallet = wallet;
         this.databaseAvailable = databaseAvailable;
         RetryingWorkQueue.Scheduler asyncScheduler = taxScheduler(false);
         this.pendingTaxes = new RetryingWorkQueue<>(asyncScheduler,
                 20L * 5, 20L * 30, this::recordQuickShopTax,
                 (pending, exception) -> handleQuickShopTaxFailure(pending.tax, exception));
-        this.pendingQuickShopPayments = new RetryingWorkQueue<>(taxScheduler(true),
-                20L * 5, 20L * 30, this::applyQuickShopSubsidy,
-                (pending, exception) -> handleQuickShopTaxFailure(pending.tax, exception));
-        this.pendingQuickShopPreparations = new RetryingWorkQueue<>(asyncScheduler,
-                20L * 5, 20L * 30, pending -> {
-                    if (pending.reservation == null) {
-                        pending.reservation = finance.reserveTaxSubsidy(pending.tax.townId(),
-                                pending.tax.businessKey(), pending.tax.taxMinor(),
-                                economySettings.weeklySubsidyLimitMinor(settlement.scale()),
-                                economySettings.twelveHourSubsidyLimitMinor(settlement.scale()),
-                                Instant.now(), org.allivlisey.tianjitown.core.time.TownTime.ZONE);
-                    }
-                    pendingQuickShopPayments.submit(pending);
-                }, (pending, exception) -> handleQuickShopTaxFailure(pending.tax, exception));
         this.pendingIncomeTaxes = new RetryingWorkQueue<>(asyncScheduler,
                 20L * 5, 20L * 30, this::recordExternalIncomeTax,
                 (pending, exception) -> handleExternalIncomeTaxFailure(pending.tax, exception));
-        this.pendingIncomeSubsidyPayments = new RetryingWorkQueue<>(taxScheduler(true),
-                20L * 5, 20L * 30, this::payExternalSubsidy,
-                (pending, exception) -> plugin.getLogger().severe(plugin.messages().plainText(
-                        EXTERNAL_SUBSIDY_SETTLEMENT_FAILURE,
-                        Map.of("businessKey", safeText(pending.tax.businessKey()),
-                                "detail", safeText(safeMessage(exception))))));
-        this.pendingIncomeSubsidies = new RetryingWorkQueue<>(asyncScheduler,
-                20L * 5, 20L * 30, pending -> {
-                    if (pending.reservation == null) {
-                        pending.reservation = finance.reserveTaxSubsidy(pending.tax.townId(),
-                                pending.tax.businessKey(), pending.tax.taxMinor(),
-                                economySettings.weeklySubsidyLimitMinor(settlement.scale()),
-                                economySettings.twelveHourSubsidyLimitMinor(settlement.scale()),
-                                Instant.now(), org.allivlisey.tianjitown.core.time.TownTime.ZONE);
-                    }
-                    pendingIncomeSubsidyPayments.submit(pending);
-                }, (pending, exception) -> handleExternalIncomeTaxFailure(pending.tax, exception));
-        this.incomeCollections = new TownIncomeTaxCollectionRuntime(plugin, finance, settlement,
-                databaseAvailable, collection -> pendingIncomeSubsidies.submit(
+        this.incomeCollections = new TownIncomeTaxCollectionRuntime(plugin, finance, wallet,
+                databaseAvailable, collection -> pendingIncomeTaxes.submit(
                         new PendingIncomeSubsidy(collection.tax(), collection.operationId())),
                 townId -> !archivedTowns.contains(townId));
     }
@@ -130,28 +83,9 @@ final class TownTaxRuntime {
         };
     }
 
-    private void payExternalSubsidy(PendingIncomeSubsidy pending) {
-        if (pending.result == null) {
-            try {
-                pending.result = pending.reservation.grantedMinor() == 0
-                        ? VaultSettlementService.Result.success("No subsidy payable")
-                        : settlement.adjustSettlement(pending.reservation.grantedMinor());
-            } catch (RuntimeException | LinkageError exception) {
-                pending.result = VaultSettlementService.Result.failure(safeMessage(exception), false, true);
-            }
-            if (pending.result == null) {
-                pending.result = VaultSettlementService.Result.failure("Missing subsidy response", false, true);
-            }
-        }
-        // The tax already belongs to the town. A subsidy failure must not hold it hostage.
-        // Preserve the external result across database retries; reconciliation never repeats Vault.
-        pendingIncomeTaxes.submit(pending);
-    }
-
     private static final class PendingIncomeSubsidy {
+        private final Instant receivedAt = Instant.now();
         private final EconomyRepository.ExternalIncomeTax tax;
-        private EconomyRepository.SubsidyReservation reservation;
-        private VaultSettlementService.Result result;
         private final UUID collectionId;
 
         private PendingIncomeSubsidy(EconomyRepository.ExternalIncomeTax tax, UUID collectionId) {
@@ -179,30 +113,12 @@ final class TownTaxRuntime {
     }
 
     void acceptQuickShopTax(QuickShopTaxAdapter.SuccessfulTax tax) {
-        pendingQuickShopPreparations.submit(new PendingQuickShopTax(tax));
-    }
-
-    private void applyQuickShopSubsidy(PendingQuickShopTax pending) {
-        if (pending.result == null) {
-            try {
-                pending.result = pending.reservation.grantedMinor() == 0
-                        ? VaultSettlementService.Result.success("No subsidy payable")
-                        : settlement.adjustSettlement(pending.reservation.grantedMinor());
-            } catch (RuntimeException | LinkageError exception) {
-                pending.result = VaultSettlementService.Result.failure(safeMessage(exception), false, true);
-            }
-            if (pending.result == null) {
-                pending.result = VaultSettlementService.Result.failure("Missing subsidy response", false, true);
-            }
-        }
-        // Even failed or uncertain subsidies must not discard the already collected tax.
-        pendingTaxes.submit(pending);
+        pendingTaxes.submit(new PendingQuickShopTax(tax));
     }
 
     private static final class PendingQuickShopTax {
+        private final Instant receivedAt = Instant.now();
         private final QuickShopTaxAdapter.SuccessfulTax tax;
-        private EconomyRepository.SubsidyReservation reservation;
-        private VaultSettlementService.Result result;
 
         private PendingQuickShopTax(QuickShopTaxAdapter.SuccessfulTax tax) {
             this.tax = tax;
@@ -211,11 +127,7 @@ final class TownTaxRuntime {
 
     void flushPendingTaxes() {
         incomeCollections.flush();
-        pendingQuickShopPreparations.flush();
-        pendingQuickShopPayments.flush();
         pendingTaxes.flush();
-        pendingIncomeSubsidies.flush();
-        pendingIncomeSubsidyPayments.flush();
         pendingIncomeTaxes.flush();
     }
 
@@ -225,24 +137,17 @@ final class TownTaxRuntime {
                 tax.townId(), tax.businessKey(), tax.shopId(), tax.shopType(),
                 tax.receiverId(), tax.receiverName(), tax.interactingId(), tax.grossMinor(),
                 tax.basisPoints(), tax.taxMinor(), tax.worldName());
-        if (pending.result.success() && !pending.result.compensationRequired()) {
-            finance.recordQuickShopTax(record);
-        } else {
-            if (!pending.result.compensationRequired()) {
-                finance.cancelTaxSubsidy(tax.businessKey(), pending.result.message());
-            }
-            finance.recordQuickShopTaxWithoutSubsidy(record, pending.result.message());
-            plugin.getLogger().severe(plugin.messages().plainText(
-                    QUICK_SHOP_TAX_SUBSIDY_SETTLEMENT_FAILURE,
-                    Map.of("detail", safeText(pending.result.message()))));
-        }
+        finance.recordQuickShopTax(record,
+                economySettings.weeklySubsidyLimitMinor(wallet.scale()),
+                economySettings.twelveHourSubsidyLimitMinor(wallet.scale()),
+                pending.receivedAt, org.allivlisey.tianjitown.core.time.TownTime.ZONE);
         databaseAvailable.set(true);
     }
 
     EconomyRepository.SubsidyQuota taxSubsidyQuota(UUID townId) {
         return finance.taxSubsidyQuota(townId,
-                economySettings.weeklySubsidyLimitMinor(settlement.scale()),
-                economySettings.twelveHourSubsidyLimitMinor(settlement.scale()),
+                economySettings.weeklySubsidyLimitMinor(wallet.scale()),
+                economySettings.twelveHourSubsidyLimitMinor(wallet.scale()),
                 Instant.now(), org.allivlisey.tianjitown.core.time.TownTime.ZONE);
     }
 
@@ -290,7 +195,7 @@ final class TownTaxRuntime {
         if (policy == null || policy.basisPoints() <= 0) {
             return null;
         }
-        long grossMinor = BigDecimal.valueOf(gross).movePointRight(settlement.scale())
+        long grossMinor = BigDecimal.valueOf(gross).movePointRight(wallet.scale())
                 .setScale(0, RoundingMode.HALF_UP).longValueExact();
         long taxMinor = BigDecimal.valueOf(grossMinor)
                 .multiply(BigDecimal.valueOf(policy.basisPoints()))
@@ -306,16 +211,10 @@ final class TownTaxRuntime {
 
     private void recordExternalIncomeTax(PendingIncomeSubsidy pending) {
         EconomyRepository.ExternalIncomeTax tax = pending.tax;
-        if (pending.result.success() && !pending.result.compensationRequired()) {
-            finance.recordExternalIncomeTax(tax);
-        } else {
-            finance.recordExternalIncomeTaxWithoutSubsidy(tax, pending.result.message());
-            plugin.getLogger().severe(plugin.messages().plainText(
-                    pending.result.compensationRequired() ? EXTERNAL_SUBSIDY_SETTLEMENT_AMBIGUOUS
-                            : EXTERNAL_SUBSIDY_SETTLEMENT_FAILURE,
-                    Map.of("businessKey", safeText(tax.businessKey()),
-                            "detail", safeText(pending.result.message()))));
-        }
+        finance.recordExternalIncomeTax(tax,
+                economySettings.weeklySubsidyLimitMinor(wallet.scale()),
+                economySettings.twelveHourSubsidyLimitMinor(wallet.scale()),
+                pending.receivedAt, org.allivlisey.tianjitown.core.time.TownTime.ZONE);
         finance.markIncomeTaxRecorded(pending.collectionId);
         incomeCollections.recorded(pending.collectionId);
         databaseAvailable.set(true);

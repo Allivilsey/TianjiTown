@@ -1,7 +1,7 @@
 package org.allivlisey.tianjitown.paper.economy;
 import org.allivlisey.tianjitown.paper.action.TownActionFailures;
 
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 
 import java.util.Map;
@@ -99,12 +99,12 @@ public final class DonationRefundCoordinator {
             return;
         }
         recovery.externalAttempts++;
-        VaultSettlementService.Result result;
+        VaultPlayerEconomyService.Result result;
         try {
             result = playerRefund.refund(recovery.operation.actorId(),
                     recovery.operation.amountMinor());
         } catch (RuntimeException | LinkageError exception) {
-            result = VaultSettlementService.Result.failure(
+            result = VaultPlayerEconomyService.Result.failure(
                     resolveMessage(REFUND_CALL_FAILURE, Map.of("detail",
                             safeText(TownActionFailures.safeMessage(exception)))),
                     false, true);
@@ -192,7 +192,7 @@ public final class DonationRefundCoordinator {
 
     @FunctionalInterface
     public interface PlayerRefund {
-        VaultSettlementService.Result refund(UUID playerId, long amountMinor);
+        VaultPlayerEconomyService.Result refund(UUID playerId, long amountMinor);
     }
 
     @FunctionalInterface

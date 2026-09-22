@@ -42,8 +42,7 @@ final class TownComponentRegistrar {
         QuickShopTaxAdapter.Capability quickShopCapability = new QuickShopTaxAdapter(plugin,
                 java.util.Objects.requireNonNull(quickShop, "QuickShop-Hikari"),
                 runtime::quickShopTaxEnabled, runtime::taxPolicy, runtime::acceptQuickShopTax,
-                runtime.settlement().accountName(), runtime.settlement().accountId(),
-                runtime.settlement().scale(), startup.messages()::plainText).register();
+                runtime.wallet().scale(), startup.messages()::plainText).register();
         runtime.setQuickShopTaxAvailable(quickShopCapability.available());
         Plugin jobs = java.util.Objects.requireNonNull(
                 plugin.getServer().getPluginManager().getPlugin("Jobs"), "Jobs");

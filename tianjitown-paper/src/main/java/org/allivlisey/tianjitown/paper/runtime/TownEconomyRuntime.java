@@ -5,7 +5,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.config.EconomySettings;
 import org.allivlisey.tianjitown.paper.economy.DonationRefundCoordinator;
@@ -19,13 +19,8 @@ import static org.allivlisey.tianjitown.paper.runtime.RuntimeText.percent;
 import static org.allivlisey.tianjitown.paper.runtime.RuntimeText.safeMessage;
 import static org.allivlisey.tianjitown.paper.runtime.RuntimeText.safeText;
 
-/** Donations, external settlement, compensation and tax-rate commands. */
+/** Player donations, database adjustments, recovery and tax-rate commands. */
 final class TownEconomyRuntime {
-    private static final String SETTLEMENT_BALANCE_READ_FAILURE =
-            "log.settlement.balance-read-failure";
-    private static final String SETTLEMENT_SHORTFALL = "log.settlement.shortfall";
-    private static final String SETTLEMENT_RECONCILIATION_FAILURE =
-            "log.settlement.reconciliation-failure";
     private static final String CONSUMPTION_PAUSED = "chat.runtime.consumption-paused";
     private static final String STORAGE_UNAVAILABLE = "chat.lifecycle.storage-unavailable";
     private static final String EXTERNAL_PREFLIGHT_FAILED =
@@ -48,16 +43,10 @@ final class TownEconomyRuntime {
             "log.donation.refund-recovered";
     private static final String DONATION_REFUND_EXHAUSTED =
             "log.donation.refund-exhausted";
-    private static final String DONATION_SETTLEMENT_BALANCE_READ_FAILURE =
-            "log.donation.settlement-balance-read-failure";
-    private static final String DONATION_SETTLEMENT_SHORTFALL =
-            "log.donation.settlement-shortfall";
-    private static final String DONATION_SETTLEMENT_RECONCILIATION_FAILURE =
-            "log.donation.settlement-reconciliation-failure";
     private final TianjiTownPlugin plugin;
     private final EconomyRepository finance;
     private final EconomySettings economySettings;
-    private final VaultSettlementService settlement;
+    private final VaultPlayerEconomyService wallet;
     private final AtomicBoolean databaseAvailable;
     private final TownRuntimeTasks tasks;
     private final TownTaxRuntime taxes;
@@ -71,7 +60,7 @@ final class TownEconomyRuntime {
     TownEconomyRuntime(TianjiTownPlugin plugin,
             EconomyRepository finance,
             EconomySettings economySettings,
-            VaultSettlementService settlement,
+            VaultPlayerEconomyService wallet,
             AtomicBoolean databaseAvailable,
             TownRuntimeTasks tasks,
             TownTaxRuntime taxes,
@@ -79,7 +68,7 @@ final class TownEconomyRuntime {
         this.plugin = plugin;
         this.finance = finance;
         this.economySettings = economySettings;
-        this.settlement = settlement;
+        this.wallet = wallet;
         this.databaseAvailable = databaseAvailable;
         this.tasks = tasks;
         this.taxes = taxes;
@@ -125,7 +114,7 @@ final class TownEconomyRuntime {
             public void runAsync(Runnable task) {
                 plugin.runAsync(task);
             }
-        }, (playerId, amountMinor) -> settlement.refundDebitedPlayer(
+        }, (playerId, amountMinor) -> wallet.refundDebitedPlayer(
                 plugin.getServer().getOfflinePlayer(playerId), amountMinor),
                 (operationId, detail) -> finance.resolveCompensation(operationId, detail),
                 new DonationRefundCoordinator.Listener() {
@@ -157,7 +146,6 @@ final class TownEconomyRuntime {
                                 DONATION_REFUND_RECOVERED, Map.of(
                                         "operation", operation.operationId(),
                                         "attempts", attempts)));
-                        reconcileSettlementAfterRefund(operation);
                     }
 
                     @Override
@@ -172,69 +160,8 @@ final class TownEconomyRuntime {
                 }, plugin.messages()::plainText);
     }
 
-    private void reconcileSettlementAfterRefund(
-            EconomyRepository.EconomyOperation operation) {
-        plugin.runMain(() -> {
-            long externalBalance;
-            try {
-                externalBalance = settlement.balanceMinor();
-            } catch (RuntimeException exception) {
-                plugin.getLogger().severe(plugin.messages().plainText(
-                        DONATION_SETTLEMENT_BALANCE_READ_FAILURE, Map.of(
-                                "operation", operation.operationId(),
-                                "detail", safeText(safeMessage(exception)))));
-                return;
-            }
-            plugin.runAsync(() -> {
-                try {
-                    EconomyRepository.Reconciliation reconciliation =
-                            finance.reconcileSettlement(externalBalance);
-                    if (!reconciliation.healthy()) {
-                        plugin.runMain(() -> plugin.getLogger().severe(plugin.messages().plainText(
-                                DONATION_SETTLEMENT_SHORTFALL, Map.of(
-                                        "operation", operation.operationId(),
-                                        "external", settlement.formatMinor(reconciliation.externalBalanceMinor()),
-                                        "required", settlement.formatMinor(reconciliation.requiredMinor())))));
-                    }
-                } catch (RuntimeException exception) {
-                    plugin.getLogger().severe(plugin.messages().plainText(
-                            DONATION_SETTLEMENT_RECONCILIATION_FAILURE, Map.of(
-                                    "operation", operation.operationId(),
-                                    "detail", safeText(safeMessage(exception)))));
-                }
-            });
-        });
-    }
-
     void setTaxChangeNotifier(Consumer<Player> notifier) {
         this.taxChangeNotifier = java.util.Objects.requireNonNull(notifier, "notifier");
-    }
-
-    void reconcileSettlement() {
-        long external;
-        try {
-            external = settlement.balanceMinor();
-        } catch (RuntimeException exception) {
-            plugin.getLogger().severe(plugin.messages().plainText(
-                    SETTLEMENT_BALANCE_READ_FAILURE,
-                    Map.of("detail", safeText(safeMessage(exception)))));
-            return;
-        }
-        plugin.runAsync(() -> {
-            try {
-                EconomyRepository.Reconciliation result = finance.reconcileSettlement(external);
-                if (!result.healthy()) {
-                    plugin.runMain(() -> plugin.getLogger().severe(plugin.messages().plainText(
-                            SETTLEMENT_SHORTFALL, Map.of(
-                                    "external", settlement.formatMinor(result.externalBalanceMinor()),
-                                    "required", settlement.formatMinor(result.requiredMinor())))));
-                }
-            } catch (RuntimeException exception) {
-                plugin.getLogger().severe(plugin.messages().plainText(
-                        SETTLEMENT_RECONCILIATION_FAILURE,
-                        Map.of("detail", safeText(safeMessage(exception)))));
-            }
-        });
     }
 
     void donateAction(Player player, long amountMinor,
@@ -262,17 +189,16 @@ final class TownEconomyRuntime {
             return finance.prepareOperation(townId, "DONATION", amountMinor,
                     player.getUniqueId(), player.getName(), key,
                     plugin.messages().plainText(DONATION_OPERATION_REASON));
-        }, operation -> settlement.transferFromPlayer(player, operation.amountMinor()), success,
+        }, operation -> wallet.withdrawPlayer(player, operation.amountMinor()), success,
                 failure);
     }
 
     void adjustFunds(CommandSender sender, UUID townId, long amountMinor, String reason) {
-        executeExternalOperation(sender, () -> finance.prepareOperation(townId,
-                        "ADMIN_ADJUSTMENT", amountMinor, actorId(sender), sender.getName(),
-                        "admin-adjustment:" + UUID.randomUUID(), reason),
-                operation -> settlement.adjustSettlement(operation.amountMinor()),
+        String businessKey = "admin-adjustment:" + UUID.randomUUID();
+        tasks.write(sender, () -> finance.adjustFunds(townId, amountMinor, actorId(sender),
+                        sender.getName(), businessKey, reason),
                 mutation -> plugin.messages().send(sender, "chat.runtime.funds-adjusted",
-                        Map.of("balance", settlement.formatMinor(mutation.balanceAfterMinor()))));
+                        Map.of("balance", wallet.formatMinor(mutation.balanceAfterMinor()))));
     }
 
     void changeTaxRate(Player mayor, UUID townId, int basisPoints) {
@@ -314,7 +240,7 @@ final class TownEconomyRuntime {
     private void executeExternalOperation(CommandSender sender,
                                           Supplier<EconomyRepository.EconomyOperation> prepare,
                                           java.util.function.Function<EconomyRepository.EconomyOperation,
-                                                  VaultSettlementService.Result> external,
+                                                  VaultPlayerEconomyService.Result> external,
                                           Consumer<EconomyRepository.LedgerMutation> success) {
         executeExternalOperation(sender, prepare, external, success,
                 exception -> tasks.handleFailure(sender, exception));
@@ -323,7 +249,7 @@ final class TownEconomyRuntime {
     private void executeExternalOperation(CommandSender sender,
                                           Supplier<EconomyRepository.EconomyOperation> prepare,
                                           java.util.function.Function<EconomyRepository.EconomyOperation,
-                                                  VaultSettlementService.Result> external,
+                                                  VaultPlayerEconomyService.Result> external,
                                           Consumer<EconomyRepository.LedgerMutation> success,
                                           Consumer<RuntimeException> failure) {
         if (!databaseAvailable.get()) {
@@ -351,14 +277,14 @@ final class TownEconomyRuntime {
                                             EconomyRepository.EconomyOperation operation,
                                             java.util.function.Function<
                                                     EconomyRepository.EconomyOperation,
-                                                    VaultSettlementService.Result> external,
+                                                    VaultPlayerEconomyService.Result> external,
                                             Consumer<EconomyRepository.LedgerMutation> success,
                                             Consumer<RuntimeException> failure) {
-        VaultSettlementService.Result availability;
+        VaultPlayerEconomyService.Result availability;
         try {
-            availability = settlement.checkAvailability();
+            availability = wallet.checkAvailability();
         } catch (RuntimeException exception) {
-            availability = VaultSettlementService.Result.failure(
+            availability = VaultPlayerEconomyService.Result.failure(
                     plugin.messages().plainText(EXTERNAL_PREFLIGHT_FAILED,
                             Map.of("detail", safeText(safeMessage(exception)))),
                     false, false);
@@ -384,14 +310,14 @@ final class TownEconomyRuntime {
                                         EconomyRepository.EconomyOperation operation,
                                         java.util.function.Function<
                                                 EconomyRepository.EconomyOperation,
-                                                VaultSettlementService.Result> external,
+                                                VaultPlayerEconomyService.Result> external,
                                         Consumer<EconomyRepository.LedgerMutation> success,
                                         Consumer<RuntimeException> failure) {
-        VaultSettlementService.Result result;
+        VaultPlayerEconomyService.Result result;
         try {
             result = external.apply(operation);
         } catch (RuntimeException exception) {
-            result = VaultSettlementService.Result.failure(
+            result = VaultPlayerEconomyService.Result.failure(
                     plugin.messages().plainText(EXTERNAL_OPERATION_FAILED,
                             Map.of("detail", safeText(safeMessage(exception)))),
                     false, true);
@@ -420,7 +346,7 @@ final class TownEconomyRuntime {
 
     private void finishFailedExternalOperation(CommandSender sender,
                                                EconomyRepository.EconomyOperation operation,
-                                               VaultSettlementService.Result result,
+                                               VaultPlayerEconomyService.Result result,
                                                Consumer<RuntimeException> failure) {
         plugin.runAsync(() -> {
             boolean refundScheduled = false;
@@ -470,13 +396,12 @@ final class TownEconomyRuntime {
                 return finance.resolveOperation(expected, applied, actorId(sender), sender.getName(), reason);
             }
         }, resolved -> {
-            reconcileSettlement();
             success.accept(resolved);
         });
     }
 
     private String refundHint(EconomyRepository.EconomyOperation operation,
-                              VaultSettlementService.Result result) {
+                              VaultPlayerEconomyService.Result result) {
         if (!result.compensationRequired()) {
             return "";
         }

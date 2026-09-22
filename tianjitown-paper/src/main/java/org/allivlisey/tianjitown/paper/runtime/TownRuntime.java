@@ -17,7 +17,7 @@ import org.allivlisey.tianjitown.core.ports.WorldBoundaryService;
 import org.allivlisey.tianjitown.integrations.globalmarketplus.GlobalMarketPlusIncomeTaxAdapter;
 import org.allivlisey.tianjitown.integrations.jobs.JobsIncomeTaxAdapter;
 import org.allivlisey.tianjitown.integrations.quickshop.QuickShopTaxAdapter;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.bonus.TownBonusRuntime;
 import org.allivlisey.tianjitown.paper.buff.BuffRuntime;
@@ -80,8 +80,7 @@ public final class TownRuntime {
     private final SitePolicy sitePolicy;
     private final TerritoryPreviewService territoryPreviews;
     private final EconomySettings economySettings;
-    private final VaultSettlementService settlement;
-    private final SettlementAccountPrivacy settlementPrivacy;
+    private final VaultPlayerEconomyService wallet;
     private final BuffRuntime buffs;
     private final TownBonusRuntime bonuses;
     private final AtomicBoolean databaseAvailable = new AtomicBoolean(true);
@@ -93,14 +92,6 @@ public final class TownRuntime {
                     LandProtectionService landProtection,
                     WorldBoundaryService worldBoundaries,
                     Set<String> activeResidenceNames) {
-        this(plugin, database, landProtection, worldBoundaries, activeResidenceNames, null);
-    }
-
-    public TownRuntime(TianjiTownPlugin plugin, DatabaseGate database,
-                    LandProtectionService landProtection,
-                    WorldBoundaryService worldBoundaries,
-                    Set<String> activeResidenceNames,
-                    org.allivlisey.tianjitown.integrations.vault.SettlementAccountMigration.Binding accountBinding) {
         this.plugin = plugin;
         this.database = database;
         this.landProtection = landProtection;
@@ -119,25 +110,22 @@ public final class TownRuntime {
                 plugin.getServer()::isPrimaryThread);
         this.economySettings = EconomySettings.load(plugin.getConfig(),
                 plugin.messages()::plainText);
-        this.settlement = new VaultSettlementService(plugin.getServer(),
-                economySettings.settlementAccount(), economySettings.fallbackScale(),
-                plugin.messages()::plainText, accountBinding == null ? null : accountBinding.id());
-        this.settlementPrivacy = new SettlementAccountPrivacy(plugin, settlement,
-                accountBinding == null ? null : accountBinding.formerName());
+        this.wallet = new VaultPlayerEconomyService(plugin.getServer(),
+                economySettings.fallbackScale(), plugin.messages()::plainText);
         applicationFeeMinor();
         TerritoryService territories = new TerritoryService(finance, sitePolicy, plugin.messages(),
-                economySettings, settlement.scale());
+                economySettings, wallet.scale());
         this.tasks = new TownRuntimeTasks(plugin, databaseAvailable);
-        this.taxes = new TownTaxRuntime(plugin, finance, economySettings, settlement,
+        this.taxes = new TownTaxRuntime(plugin, finance, economySettings, wallet,
                 databaseAvailable);
         var provisionCoordinator = new org.allivlisey.tianjitown.paper.land.ProvisionCoordinator();
         this.provisionDeletion = new TownProvisionDeletionGuard(repository, provisionCoordinator);
-        this.applicationFees = new TownApplicationFeeRuntime(plugin, repository, settlement, provisionCoordinator);
+        this.applicationFees = new TownApplicationFeeRuntime(plugin, repository, wallet, provisionCoordinator);
         this.provisioning = new TownProvisionRuntime(plugin, repository, landProtection,
-                sitePolicy, settlement, databaseAvailable, activeResidenceNames, tasks,
+                sitePolicy, wallet, databaseAvailable, activeResidenceNames, tasks,
                 taxes::refreshTaxPolicies, this::applicationFeeMinor, provisionCoordinator);
         this.provisionRecovery = new TownProvisionRecovery(plugin, repository,
-                landProtection, settlement, provisionCoordinator);
+                landProtection, wallet, provisionCoordinator);
         this.expansions = new TownExpansionRuntime(plugin, repository, finance,
                 landProtection, territories, tasks, this::consumptionEnabled);
         this.buffs = new BuffRuntime(plugin, this,
@@ -153,7 +141,7 @@ public final class TownRuntime {
                 java.util.Objects.requireNonNull(
                 plugin.getServer().getPluginManager().getPlugin("QuickShop-Hikari"),
                 "QuickShop-Hikari"));
-        this.economy = new TownEconomyRuntime(plugin, finance, economySettings, settlement,
+        this.economy = new TownEconomyRuntime(plugin, finance, economySettings, wallet,
                 databaseAvailable, tasks, taxes, this::consumptionEnabled);
         this.land = new TownLandRuntime(plugin, repository, finance, landProtection,
                 databaseAvailable, tasks, taxes::refreshTaxPolicies);
@@ -179,20 +167,16 @@ public final class TownRuntime {
         return economySettings;
     }
 
-    public VaultSettlementService settlement() {
-        return settlement;
-    }
-
-    public SettlementAccountPrivacy settlementPrivacy() {
-        return settlementPrivacy;
+    public VaultPlayerEconomyService wallet() {
+        return wallet;
     }
 
     /**
-     * Returns the configured application fee in the settlement provider's minor units. The approval
+     * Returns the configured application fee in the player economy provider's minor units. The approval
      * flow and the submission confirmation use this same conversion.
      */
     public long applicationFeeMinor() {
-        return ApplicationSettings.feeMinor(plugin.getConfig(), settlement.scale(),
+        return ApplicationSettings.feeMinor(plugin.getConfig(), wallet.scale(),
                 plugin.messages()::plainText);
     }
 
@@ -426,9 +410,7 @@ public final class TownRuntime {
         taxes.acceptGlobalMarketPlusIncomeTax(earning);
     }
 
-    public void reconcileSettlement() {
-        economy.reconcileSettlement();
-    }
+
 
     public void donateAction(Player player, long amountMinor,
                       Consumer<EconomyRepository.LedgerMutation> success,
@@ -545,7 +527,7 @@ public final class TownRuntime {
     }
 
     public String money(long minorUnits) {
-        return settlement.formatMinor(minorUnits);
+        return wallet.formatMinor(minorUnits);
     }
 
     public static String percent(int basisPoints) {

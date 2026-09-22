@@ -3,8 +3,6 @@ package org.allivlisey.tianjitown.integrations.vault;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.UUID;
-import java.sql.Connection;
-import java.sql.SQLException;
 import org.bukkit.Server;
 import org.bukkit.plugin.Plugin;
 
@@ -14,37 +12,43 @@ public final class XConomyAccountRenamer implements SettlementAccountMigration.A
     private final Object api;
     private final Method registerName;
     private final Object uuidMode;
-    private final Object database;
-    private final Method connection;
-    private final Method release;
-    private final String table;
-    private final Method cachedAccount;
-    private final Method refreshAccount;
+    private final Method accountById;
+    private final Method accountByName;
 
     public XConomyAccountRenamer(Server server, Plugin provider) {
+        this(server, loadApi(provider), loadUuidMode(provider));
+    }
+
+    XConomyAccountRenamer(Server server, Object api, Object uuidMode) {
         this.server = server;
+        this.api = api;
+        this.uuidMode = uuidMode;
         try {
-            ClassLoader loader = provider.getClass().getClassLoader();
-            Class<?> apiType = Class.forName("me.yic.xconomy.api.XConomyAPI", true, loader);
-            api = apiType.getConstructor().newInstance();
+            Class<?> apiType = api.getClass();
             registerName = apiType.getMethod("createPlayerData", UUID.class, String.class);
-            Class<?> sql = Class.forName("me.yic.xconomy.data.sql.SQL", true, loader);
-            database = sql.getField("database").get(null);
-            connection = database.getClass().getMethod("getConnectionAndCheck");
-            release = database.getClass().getMethod("closeHikariConnection", Connection.class);
-            table = (String) sql.getField("tableName").get(null);
-            if (!table.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-                throw new IllegalStateException("Unsupported XConomy account table name");
-            }
-            cachedAccount = Class.forName("me.yic.xconomy.data.DataCon", true, loader)
-                    .getMethod("getPlayerData", UUID.class);
-            refreshAccount = Class.forName("me.yic.xconomy.data.DataLink", true, loader)
-                    .getMethod("getPlayerData", Object.class);
-            Object config = Class.forName("me.yic.xconomy.XConomyLoad", true, loader)
-                    .getField("Config").get(null);
-            uuidMode = config.getClass().getField("UUIDMODE").get(config);
+            accountById = apiType.getMethod("getPlayerData", UUID.class);
+            accountByName = apiType.getMethod("getPlayerData", String.class);
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException("XConomy account rename API unavailable", exception);
+        }
+    }
+
+    private static Object loadApi(Plugin provider) {
+        try {
+            return Class.forName("me.yic.xconomy.api.XConomyAPI", true,
+                    provider.getClass().getClassLoader()).getConstructor().newInstance();
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("XConomy account rename API unavailable", exception);
+        }
+    }
+
+    private static Object loadUuidMode(Plugin provider) {
+        try {
+            Object config = Class.forName("me.yic.xconomy.XConomyLoad", true,
+                    provider.getClass().getClassLoader()).getField("Config").get(null);
+            return config.getClass().getField("UUIDMODE").get(config);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("XConomy UUID mode unavailable", exception);
         }
     }
 
@@ -69,56 +73,35 @@ public final class XConomyAccountRenamer implements SettlementAccountMigration.A
     @Override public void rename(UUID id, String name) {
         prepare();
         try {
-            var persisted = byId(id);
-            Object cached = cachedAccount.invoke(null, id);
-            if (persisted == null || cached == null || persisted.balance().compareTo(
-                    (BigDecimal) cached.getClass().getMethod("getBalance").invoke(cached)) != 0) {
-                throw new IllegalStateException("XConomy has an unconfirmed settlement balance; restart before migration");
-            }
+            var before = byId(id);
+            if (before == null) throw new IllegalStateException("XConomy settlement account is missing");
             if (!Boolean.TRUE.equals(registerName.invoke(api, id, name))) {
                 throw new IllegalStateException("XConomy rejected account rename");
             }
+            // XConomy 2.26.3 may cache the old name while renaming. With no players
+            // connected, its public lookup clears that cache after reading it.
+            byId(id);
             var renamed = byId(id);
-            if (renamed == null || !name.equals(renamed.name())
-                    || renamed.balance().compareTo(persisted.balance()) != 0) {
+            if (renamed == null || !id.equals(renamed.id()) || !name.equals(renamed.name())
+                    || renamed.balance().compareTo(before.balance()) != 0) {
                 throw new IllegalStateException("XConomy account rename could not be verified");
             }
-            // XConomy's rename path caches the old PlayerData name before changing the row.
-            // With the startup balance verified above, load the new metadata for Vault/QuickShop.
-            refreshAccount.invoke(null, id);
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException("XConomy account rename failed", exception);
         }
     }
 
     private SettlementAccountMigration.Account read(Object key) {
-        Connection opened = null;
         try {
-            // Read only, through the provider's connection. Its convenience lookup swallows
-            // SQL errors as "missing account" and can overwrite a pending balance cache.
-            opened = (Connection) connection.invoke(database);
-            if (opened == null) throw new IllegalStateException("XConomy database unavailable");
-            String predicate = key instanceof UUID ? "UID = ?" : "LOWER(player) = LOWER(?)";
-            try (var query = opened.prepareStatement("SELECT UID, player, balance FROM " + table
-                    + " WHERE " + predicate)) {
-                query.setString(1, key.toString());
-                try (var rows = query.executeQuery()) {
-                    if (!rows.next()) return null;
-                    var result = new SettlementAccountMigration.Account(UUID.fromString(rows.getString(1)),
-                            rows.getString(2), rows.getBigDecimal(3));
-                    if (rows.next()) throw new IllegalStateException("Ambiguous XConomy account name: " + key);
-                    return result;
-                }
-            }
-        } catch (ReflectiveOperationException | SQLException exception) {
+            Object account = (key instanceof UUID ? accountById : accountByName).invoke(api, key);
+            if (account == null) return null;
+            Class<?> type = account.getClass();
+            return new SettlementAccountMigration.Account(
+                    (UUID) type.getMethod("getUniqueId").invoke(account),
+                    (String) type.getMethod("getName").invoke(account),
+                    (BigDecimal) type.getMethod("getBalance").invoke(account));
+        } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException("XConomy account read failed", exception);
-        } finally {
-            if (opened != null) {
-                try { release.invoke(database, opened); }
-                catch (ReflectiveOperationException exception) {
-                    throw new IllegalStateException("Could not release XConomy connection", exception);
-                }
-            }
         }
     }
 }

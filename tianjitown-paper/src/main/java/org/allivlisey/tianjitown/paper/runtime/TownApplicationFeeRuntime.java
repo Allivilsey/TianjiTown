@@ -3,7 +3,7 @@ package org.allivlisey.tianjitown.paper.runtime;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.land.ProvisionCoordinator;
 import org.allivlisey.tianjitown.paper.land.ProvisionResult;
@@ -16,14 +16,14 @@ import org.bukkit.entity.Player;
 public final class TownApplicationFeeRuntime {
     private final TianjiTownPlugin plugin;
     private final TownRepository repository;
-    private final VaultSettlementService settlement;
+    private final VaultPlayerEconomyService wallet;
     private final ProvisionCoordinator provisions;
 
     public TownApplicationFeeRuntime(TianjiTownPlugin plugin, TownRepository repository,
-            VaultSettlementService settlement, ProvisionCoordinator provisions) {
+            VaultPlayerEconomyService wallet, ProvisionCoordinator provisions) {
         this.plugin = plugin;
         this.repository = repository;
-        this.settlement = settlement;
+        this.wallet = wallet;
         this.provisions = provisions;
     }
 
@@ -92,9 +92,9 @@ public final class TownApplicationFeeRuntime {
         try {
             var player = plugin.getServer().getOfflinePlayer(claim.applicantId());
             var result = switch (claim.state()) {
-                case COLLECTING -> settlement.transferFromPlayer(player, claim.amountMinor());
-                case PLAYER_REFUNDING -> settlement.refundDebitedPlayer(player, claim.amountMinor());
-                case REFUNDING -> settlement.transferToPlayer(player, claim.amountMinor());
+                case COLLECTING -> wallet.withdrawPlayer(player, claim.amountMinor());
+                case PLAYER_REFUNDING -> wallet.refundDebitedPlayer(player, claim.amountMinor());
+                case REFUNDING -> wallet.depositPlayer(player, claim.amountMinor());
                 default -> throw new IllegalStateException("未认领的资金操作");
             };
             outcome = result.success() ? Outcome.SUCCESS

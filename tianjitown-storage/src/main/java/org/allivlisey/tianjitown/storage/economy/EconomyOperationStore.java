@@ -27,6 +27,29 @@ final class EconomyOperationStore {
 
     private static final String RECONCILIATION_LOCK = "SETTLEMENT_RECONCILIATION:";
 
+    LedgerMutation adjustFunds(UUID townId, long amountMinor, UUID actorId,
+            String actorName, String businessKey, String reason) {
+        database.requireWorkerThread();
+        if (amountMinor == 0 || reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("调账金额不能为 0，且必须填写原因");
+        }
+        return database.transaction(connection -> {
+            Optional<LedgerMutation> existing = EconomyPersistence.findLedgerByBusinessKey(connection, businessKey);
+            if (existing.isPresent()) return existing.get();
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT 1 FROM towns WHERE town_id = ? AND status = 'ACTIVE'")) {
+                statement.setBytes(1, EconomyPersistence.uuid(townId));
+                try (ResultSet row = statement.executeQuery()) {
+                    if (!row.next()) throw new ConflictException("小镇已停用");
+                }
+            }
+            EconomyPersistence.audit(connection, actorId, actorName, "ADMIN_ADJUSTMENT", townId,
+                    reason, "amount=" + amountMinor);
+            return EconomyPersistence.postLedger(connection, townId, "ADMIN_ADJUSTMENT", amountMinor,
+                    actorId, actorName, businessKey, reason, true);
+        });
+    }
+
     EconomyOperation prepareOperation(UUID townId, String operationType, long amountMinor,
                                              UUID actorId, String actorName, String businessKey,
                                              String note) {
@@ -163,18 +186,16 @@ final class EconomyOperationStore {
             setOperationStatus(connection, operationId, "CANCELLED", EconomyPersistence.safe(detail));
             try (PreparedStatement statement = connection.prepareStatement("""
                     UPDATE town_accounts
-                       SET locked = 1, lock_reason = ?, version = version + 1
+                       SET locked = 0, lock_reason = NULL, version = version + 1
                      WHERE town_id = ? AND lock_reason LIKE ?
                        AND NOT EXISTS (
                            SELECT 1 FROM economy_operations
                             WHERE town_id = ? AND status = 'COMPENSATION_REQUIRED'
                        )
                     """)) {
-                statement.setString(1, RECONCILIATION_LOCK
-                        + " 自动补偿完成，等待清算余额复核");
-                statement.setBytes(2, EconomyPersistence.uuid(current.townId()));
-                statement.setString(3, COMPENSATION_LOCK + "%");
-                statement.setBytes(4, EconomyPersistence.uuid(current.townId()));
+                statement.setBytes(1, EconomyPersistence.uuid(current.townId()));
+                statement.setString(2, COMPENSATION_LOCK + "%");
+                statement.setBytes(3, EconomyPersistence.uuid(current.townId()));
                 statement.executeUpdate();
             }
             return requireOperation(connection, operationId);
@@ -263,7 +284,7 @@ final class EconomyOperationStore {
                     VALUES (?, ?, 'ECONOMY_OPERATION_RESOLVE', 'ECONOMY_OPERATION', ?, ?, ?)
                     """);
                  PreparedStatement unlock = connection.prepareStatement("""
-                    UPDATE town_accounts SET lock_reason = 'SETTLEMENT_RECONCILIATION: 核实完成，等待余额复核',
+                    UPDATE town_accounts SET locked = 0, lock_reason = NULL,
                         version = version + 1
                      WHERE town_id = ? AND lock_reason LIKE 'ECONOMY_COMPENSATION:%'
                        AND NOT EXISTS (SELECT 1 FROM economy_operations o

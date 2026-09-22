@@ -29,8 +29,6 @@ import java.util.function.Consumer;
 
 /** Coordinates database diagnostics, main-thread inspections and report retention. */
 final class TownBonusDiagnostics {
-    private static final String SETTLEMENT_ACCOUNT_UNAVAILABLE =
-            "diagnostic.bonus.settlement-account-unavailable";
     private static final String QUICKSHOP_HISTORY_INCOMPLETE =
             "diagnostic.bonus.quick-shop-reconciliation-incomplete";
     private static final String DIAGNOSTIC_REPORT_WRITE_FAILURE =
@@ -70,8 +68,7 @@ final class TownBonusDiagnostics {
             plugin.messages().send(sender, "chat.bonus.diagnostic-running");
             return;
         }
-        long externalBalance = captureExternalBalance();
-        submitDiagnostic(sender, days, externalBalance, null);
+        submitDiagnostic(sender, days, null);
     }
 
     void diagnoseAtStartup(Consumer<DiagnosticResult> completion) {
@@ -83,24 +80,15 @@ final class TownBonusDiagnostics {
             return;
         }
         submitDiagnostic(plugin.getServer().getConsoleSender(), days,
-                captureExternalBalance(), completion);
+                completion);
     }
 
-    private long captureExternalBalance() {
-        try {
-            return host.settlement().balanceMinor();
-        } catch (RuntimeException | LinkageError exception) {
-            return -1;
-        }
-    }
-
-    private void submitDiagnostic(CommandSender sender, int days, long capturedExternal,
+    private void submitDiagnostic(CommandSender sender, int days,
                                   Consumer<DiagnosticResult> completion) {
         Instant since = Instant.now().minus(java.time.Duration.ofDays(days));
         boolean submitted = plugin.runAsync(() -> {
             try {
-                DiagnosticData data = collectDiagnosticData(days, since, capturedExternal,
-                        completion != null);
+                DiagnosticData data = collectDiagnosticData(days, since);
                 if (!plugin.runMain(() -> completeDiagnostic(sender, data, completion))) {
                     diagnosticRunning.set(false);
                 }
@@ -117,23 +105,16 @@ final class TownBonusDiagnostics {
         }
     }
 
-    private DiagnosticData collectDiagnosticData(int days, Instant since,
-                                                 long capturedExternal, boolean startup) {
+    private DiagnosticData collectDiagnosticData(int days, Instant since) {
         TownDiagnosticRepository.DiagnosticSnapshot database = repository.diagnose(since);
         String schemaVersion = host.database().schemaVersion();
-        if (startup && capturedExternal < 0) {
-            host.finance().lockSettlementUnavailable();
-        }
-        EconomyRepository.Reconciliation settlement = capturedExternal < 0 ? null
-                : startup ? host.finance().reconcileSettlement(capturedExternal)
-                : host.finance().inspectSettlement(capturedExternal);
         QuickShopHistoryProbe.Result history;
         try {
             history = quickShopHistory.inspect(since, database.purchases());
         } catch (RuntimeException | LinkageError exception) {
             history = QuickShopHistoryProbe.Result.unavailable(safeMessage(exception));
         }
-        return new DiagnosticData(days, database, schemaVersion, settlement, history);
+        return new DiagnosticData(days, database, schemaVersion, history);
     }
 
     private void completeDiagnostic(CommandSender sender, DiagnosticData data,
@@ -175,7 +156,6 @@ final class TownBonusDiagnostics {
         int days = data.days();
         TownDiagnosticRepository.DiagnosticSnapshot database = data.database();
         String schemaVersion = data.schemaVersion();
-        EconomyRepository.Reconciliation settlement = data.settlement();
         QuickShopHistoryProbe.Result history = data.history();
         List<String> lines = new ArrayList<>();
         boolean healthy = database.quickCheck().equalsIgnoreCase("ok")
@@ -217,17 +197,7 @@ final class TownBonusDiagnostics {
         healthy &= residenceErrors.isEmpty();
         lines.add("Residence healthy=" + healthyResidence + "/" + database.landStates().size());
         residenceErrors.forEach(error -> lines.add("Residence ERROR " + error));
-        if (settlement == null) {
-            healthy = false;
-            lines.add(plugin.messages().plainText(SETTLEMENT_ACCOUNT_UNAVAILABLE));
-        } else {
-            healthy &= settlement.healthy();
-            lines.add("Vault settlement external=" + settlement.externalBalanceMinor()
-                    + ", internal=" + settlement.internalBalanceMinor()
-                    + ", pending=" + settlement.pendingMinor()
-                    + ", required=" + settlement.requiredMinor()
-                    + ", healthy=" + settlement.healthy());
-        }
+        lines.add("Town economy: SQLite account/ledger; no external settlement account");
         lines.add("QuickShop purchase history available=" + history.available()
                 + ", records=" + history.successfulTaxRecords()
                 + ", taxMinor=" + history.taxMinor() + ", truncated=" + history.truncated()
@@ -349,7 +319,6 @@ final class TownBonusDiagnostics {
     private record DiagnosticData(int days,
                                   TownDiagnosticRepository.DiagnosticSnapshot database,
                                   String schemaVersion,
-                                  EconomyRepository.Reconciliation settlement,
                                   QuickShopHistoryProbe.Result history) {
     }
 }

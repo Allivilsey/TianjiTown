@@ -4,7 +4,7 @@ import java.util.*;
 import java.util.logging.Logger;
 import org.allivlisey.tianjitown.core.land.*;
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.land.*;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
@@ -25,7 +25,7 @@ class TownProvisionRecoveryTest {
     private final TianjiTownPlugin plugin = mock(TianjiTownPlugin.class);
     private final TownRepository repository = mock(TownRepository.class);
     private final LandProtectionService land = mock(LandProtectionService.class);
-    private final VaultSettlementService settlement = mock(VaultSettlementService.class);
+    private final VaultPlayerEconomyService wallet = mock(VaultPlayerEconomyService.class);
     private final Player admin = mock(Player.class);
     private final UUID id = UUID.randomUUID(), actor = UUID.randomUUID(), applicant = UUID.randomUUID();
     private final InitialTerritory territory = new InitialTerritory(new ChunkPosition(UUID.randomUUID(), "world", 0, 0));
@@ -61,7 +61,7 @@ class TownProvisionRecoveryTest {
         when(recovered.id()).thenReturn(id);
         when(recovered.applicantId()).thenReturn(applicant);
         when(recovered.applicationFeeMinor()).thenReturn(500_000L);
-        when(settlement.transferToPlayer(offline, 500_000)).thenReturn(VaultSettlementService.Result.success("refunded"));
+        when(wallet.depositPlayer(offline, 500_000)).thenReturn(VaultPlayerEconomyService.Result.success("refunded"));
         when(repository.completeApplicationFeeRefund(id, actor, "Admin", "refunded")).thenReturn(recovered);
         when(repository.findApplication(id)).thenReturn(Optional.of(recovered));
         when(repository.claimApplicationFeeRefund(id, actor, "Admin"))
@@ -71,7 +71,7 @@ class TownProvisionRecoveryTest {
                         call.getArgument(1) == ApplicationFeeOperation.Outcome.SUCCESS
                                 ? ApplicationFeeOperation.State.REFUNDED : ApplicationFeeOperation.State.REFUND_UNKNOWN,
                         call.getArgument(2), 1));
-        recovery = new TownProvisionRecovery(plugin, repository, land, settlement, coordinator);
+        recovery = new TownProvisionRecovery(plugin, repository, land, wallet, coordinator);
     }
 
     @ParameterizedTest
@@ -80,13 +80,13 @@ class TownProvisionRecoveryTest {
         recover(mode); drain();
         assertEquals(1, results.size());
         assertEquals(ProvisionResult.Status.SUCCESS, results.getFirst().status());
-        var order = inOrder(land, repository, settlement);
+        var order = inOrder(land, repository, wallet);
         order.verify(land).remove("test", territory);
         order.verify(repository).recoverFailedProvision(eq(id), eq(actor), eq("Admin"), anyString(), eq(mode));
         if (mode == RecoveryMode.UNLOCK_FOR_CHANGES) {
-            verifyNoInteractions(settlement);
+            verifyNoInteractions(wallet);
         } else {
-            order.verify(settlement).transferToPlayer(offline, 500_000);
+            order.verify(wallet).depositPlayer(offline, 500_000);
             order.verify(repository).completeApplicationFeeOperation(any(), eq(ApplicationFeeOperation.Outcome.SUCCESS),
                     eq("refunded"), eq(actor), eq("Admin"));
         }
@@ -100,7 +100,7 @@ class TownProvisionRecoveryTest {
         recover(mode); drain();
         assertEquals(ProvisionResult.Status.FAILED, results.getFirst().status());
         verify(repository, never()).recoverFailedProvision(any(), any(), anyString(), anyString(), any());
-        verifyNoInteractions(settlement);
+        verifyNoInteractions(wallet);
         when(land.remove("test", territory)).thenReturn(Result.successCode(ResultCode.PROJECTION_REMOVED));
         recover(mode); drain();
         assertEquals(ProvisionResult.Status.SUCCESS, results.getLast().status());
@@ -130,14 +130,14 @@ class TownProvisionRecoveryTest {
         assertEquals(ProvisionResult.Status.BUSY, results.getFirst().status());
         assertEquals(ProvisionResult.Status.SUCCESS, results.getLast().status());
         verify(land, times(1)).remove("test", territory);
-        verify(settlement, times(1)).transferToPlayer(offline, 500_000);
+        verify(wallet, times(1)).depositPlayer(offline, 500_000);
     }
 
     @Test void inFlightApprovalPreventsRecoveryFromTouchingLand() {
         assertTrue(coordinator.tryBegin(id));
         recover(RecoveryMode.FORCE_CLEANUP); drain();
         assertEquals(ProvisionResult.Status.BUSY, results.getFirst().status());
-        verifyNoInteractions(land, repository, settlement);
+        verifyNoInteractions(land, repository, wallet);
         assertFalse(coordinator.tryBegin(id));
     }
 
@@ -150,11 +150,11 @@ class TownProvisionRecoveryTest {
         assertEquals(1, results.size());
         assertEquals(ProvisionResult.Status.FAILED, results.getFirst().status());
         assertTrue(coordinator.tryBegin(id));
-        verifyNoInteractions(land, settlement);
+        verifyNoInteractions(land, wallet);
     }
 
     @Test void unexpectedRefundExceptionReleasesCoordinator() {
-        when(settlement.transferToPlayer(offline, 500_000)).thenThrow(new IllegalStateException("Vault failed"));
+        when(wallet.depositPlayer(offline, 500_000)).thenThrow(new IllegalStateException("Vault failed"));
         recover(RecoveryMode.CANCEL_AND_REFUND); drain();
         assertEquals(ProvisionResult.Status.FAILED, results.getFirst().status());
         assertTrue(coordinator.tryBegin(id));
@@ -167,7 +167,7 @@ class TownProvisionRecoveryTest {
         recover(RecoveryMode.CANCEL_AND_REFUND); drain();
         verify(repository, never()).failedProvision(any());
         verifyNoInteractions(land);
-        verify(settlement).transferToPlayer(offline, 500_000);
+        verify(wallet).depositPlayer(offline, 500_000);
         assertEquals(ProvisionResult.Status.SUCCESS, results.getFirst().status());
     }
 

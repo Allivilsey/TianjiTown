@@ -9,7 +9,7 @@
 | 依赖 | 用途与启动检查 |
 |---|---|
 | Residence | 领地创建、边界、成员及访客权限、保护对账 |
-| Vault、XConomy | 玩家经济与公共资金清算；Vault 必须已注册可用 Economy provider |
+| Vault 与玩家经济插件（如 XConomy） | 玩家钱包扣款与退款；Vault 必须已注册可用 Economy provider |
 | WorldBorder | 验证选址和扩张边界；需通过公开 API 能力检查 |
 | QuickShop-Hikari | 商店收入税和历史诊断；税务适配要求至少 `6.3.0.0`，并检查事件及交易账户 API |
 | Jobs | 职业收入税 |
@@ -23,7 +23,7 @@
 1. 准备独立预发服务器及空数据库路径，安装上述依赖，确认服务器进程对插件目录可写。
 2. 用 WorldBorder `/wb` 为开放选址的世界配置边界；整镇 5×5 单元网格，即 25×25 区块（625 区块）与默认一圈区块缓冲须完整位于边界内。中心 5×5 区块在建镇后自动激活，其余单元先预留。
 3. 放入 TianjiTown JAR 并启动，生成 `config.yml`、`messages.yml` 和默认 `tianjitown.db`。Paper 首次需下载 `libraries` 声明的存储依赖；离线环境提前准备缓存。
-4. 按 [配置说明](CONFIGURATION.md) 调整清算账户、价格和开关。数据库路径、经济参数和商品定义等修改后重启。
+4. 按 [配置说明](CONFIGURATION.md) 调整价格和开关。数据库路径、经济参数和商品定义等修改后重启。
 5. 执行 `/tianjitown status`，检查启动状态和所有诊断细节。必要依赖、账户初始化及 SQLite 完整性检查失败会阻止启动；待恢复资金、领地差异、余额或历史诊断异常会告警并保留恢复入口，账户按异常范围隔离。`READY` 表示运行时可用，仍需核对诊断中的业务告警。
 6. 在游戏内看向讲台执行 `/tianjitown station create`，测试服务台、手册及玩家 Dialog。
 

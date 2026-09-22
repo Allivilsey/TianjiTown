@@ -86,7 +86,6 @@ public final class TownAdminRecoveryCommands {
                 facade.requireRecoveryAccess(sender, runtime);
                 runtime.write(sender, () -> runtime.finance().resolveTaxSubsidy(reservation, paid,
                         TownAdminCommand.actorId(sender), sender.getName(), reason), result -> {
-                    runtime.reconcileSettlement();
                     facade.send(sender, "chat.admin.recovery-result", Map.of(
                             "id", TownAdminCommand.safeText(businessKey), "state", paid ? "APPLIED" : "CANCELLED"));
                 });
@@ -97,7 +96,7 @@ public final class TownAdminRecoveryCommands {
     private void show(CommandSender sender, TownRuntime runtime, EconomyRepository.EconomyOperation operation) {
         facade.send(sender, "chat.admin.recovery-entry", Map.of("id", operation.operationId(),
                 "town", operation.townId(), "type", operation.operationType(), "state", operation.status(),
-                "amount", runtime.settlement().formatMinor(operation.amountMinor()),
+                "amount", runtime.wallet().formatMinor(operation.amountMinor()),
                 "detail", TownAdminCommand.safeText(operation.lastError())));
     }
 
@@ -138,7 +137,7 @@ public final class TownAdminRecoveryCommands {
         runtime.read(sender, () -> findIncomeTax(runtime, operationId), collection -> {
             showIncomeTax(sender, runtime, collection);
             facade.requestConfirmation(sender, plugin.messages().text("chat.admin.income-tax-refund-confirmation", Map.of(
-                    "id", operationId, "amount", runtime.settlement().formatMinor(collection.tax().taxMinor()),
+                    "id", operationId, "amount", runtime.wallet().formatMinor(collection.tax().taxMinor()),
                     "player", collection.tax().receiverId(), "state", collection.status())), () -> {
                 facade.requireRecoveryAccess(sender, runtime);
                 runtime.refundIncomeTaxCollection(sender, collection,
@@ -157,7 +156,7 @@ public final class TownAdminRecoveryCommands {
         facade.send(sender, "chat.admin.income-tax-recovery-entry", Map.of(
                 "id", collection.operationId(), "town", collection.tax().townId(),
                 "player", collection.tax().receiverId(), "source", collection.tax().source(),
-                "amount", runtime.settlement().formatMinor(collection.tax().taxMinor()),
+                "amount", runtime.wallet().formatMinor(collection.tax().taxMinor()),
                 "state", collection.status(), "version", collection.version(),
                 "detail", TownAdminCommand.safeText(collection.lastError())));
     }
@@ -165,8 +164,8 @@ public final class TownAdminRecoveryCommands {
     private void showSubsidy(CommandSender sender, TownRuntime runtime, EconomyRepository.TaxSubsidyRecovery reservation) {
         facade.send(sender, "chat.admin.subsidy-recovery-entry", Map.of(
                 "id", TownAdminCommand.safeText(reservation.businessKey()), "town", reservation.townId(),
-                "tax", runtime.settlement().formatMinor(reservation.taxMinor()),
-                "subsidy", runtime.settlement().formatMinor(reservation.subsidyMinor()),
+                "tax", runtime.wallet().formatMinor(reservation.taxMinor()),
+                "subsidy", runtime.wallet().formatMinor(reservation.subsidyMinor()),
                 "state", reservation.status(), "recorded", reservation.taxRecorded(),
                 "detail", TownAdminCommand.safeText(reservation.lastError())));
     }

@@ -1,7 +1,7 @@
 package org.allivlisey.tianjitown.paper.economy;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
@@ -32,8 +32,8 @@ class DonationRefundCoordinatorTest {
         EconomyRepository.EconomyOperation operation = operation();
         DonationRefundCoordinator coordinator = new DonationRefundCoordinator(
                 scheduler, (playerId, amountMinor) -> refundAttempts.incrementAndGet() < 3
-                ? VaultSettlementService.Result.failure("INJECTED_COMPFAIL", false, false)
-                : VaultSettlementService.Result.success("RECOVERED"),
+                ? VaultPlayerEconomyService.Result.failure("INJECTED_COMPFAIL", false, false)
+                : VaultPlayerEconomyService.Result.success("RECOVERED"),
                 (operationId, detail) -> {
                     if (storageAttempts.incrementAndGet() == 1) {
                         throw new IllegalStateException("SQLITE_BUSY");
@@ -67,7 +67,7 @@ class DonationRefundCoordinatorTest {
         DonationRefundCoordinator coordinator = new DonationRefundCoordinator(
                 scheduler, (playerId, amountMinor) -> {
                     refundAttempts.incrementAndGet();
-                    return VaultSettlementService.Result.failure("OUTAGE", false, false);
+                    return VaultPlayerEconomyService.Result.failure("OUTAGE", false, false);
                 }, (operationId, detail) -> storageAttempts.incrementAndGet(), listener,
                 3, 5, 20);
 
@@ -114,7 +114,7 @@ class DonationRefundCoordinatorTest {
         TestScheduler scheduler = new TestScheduler();
         List<String> resolvedDetails = new ArrayList<>();
         DonationRefundCoordinator coordinator = new DonationRefundCoordinator(
-                scheduler, (playerId, amountMinor) -> VaultSettlementService.Result.success(
+                scheduler, (playerId, amountMinor) -> VaultPlayerEconomyService.Result.success(
                         "RECOVERED"),
                 (operationId, detail) -> resolvedDetails.add(detail), new TestListener(),
                 1, 5, 20, messages::plainText);

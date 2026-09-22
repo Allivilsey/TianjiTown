@@ -1,5 +1,7 @@
 # 当前未提交改动：人工测试列表
 
+> 历史检查单：schema 1.1 已移除外部清算账户。本文旧账户迁移、隐藏、短款锁及清算入账项目不再适用；当前升级与经济验收以 [经济部署说明](../deployment/ECONOMY_AND_EXPANSION.md) 为准。
+
 编制日期：2026-09-16。基线：`HEAD 027107a`，范围包含编制时已跟踪文件的未提交修改和未跟踪的新增实现。此文档是测试计划，所有项目均未执行；新增的自动化测试也不代表以下实服测试已通过。
 
 用例预期依据当前实现及仓库文档。已确认本次为**旧清算账户 `tax` 升级，已安装 XConomy、CMI、PlaceholderAPI**；测试服实际依赖版本、UUID 模式和可用故障样本仍需执行前记录，不预设其值。TianjiTown 自身数据库为 SQLite，以下 TianjiTown 查询不使用 MySQL；XConomy 的账户数据与 TianjiTown 数据库分开核对。
@@ -139,7 +141,7 @@ JOIN town_applications a ON a.application_id = m.application_id
 WHERE lower(a.residence_name) = 'qatown';
 ```
 
-金额的 `_minor` 是最小货币单位，不可无条件当作元；按本服实际货币精度换算。清算账户真实 UUID/余额来自 XConomy，**不在** `town_accounts`。XConomy 的具体数据库文件和表名前缀先从自身配置/实际结构核实；迁移适配读取的是账户列 `UID`、`player`、`balance`，隐藏列为 `hidden`。在其只读查看器中按名称 `tax`/`tianjitown-tax` 与迁移文件的 UUID 双重过滤核对，不猜表名，不用修改 SQL 修正测试结果。
+金额的 `_minor` 是最小货币单位，不可无条件当作元；按本服实际货币精度换算。清算账户真实 UUID/余额来自 XConomy，**不在** `town_accounts`。XConomy 的具体数据库文件和表名前缀先从自身配置/实际结构核实；迁移适配通过 XConomy API 读取 UUID、名称和余额；人工核对时对应账户列 `UID`、`player`、`balance`，隐藏列为 `hidden`。在其只读查看器中按名称 `tax`/`tianjitown-tax` 与迁移文件的 UUID 双重过滤核对，不猜表名，不用修改 SQL 修正测试结果。
 
 ### S5：信标观察站
 

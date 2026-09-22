@@ -94,7 +94,7 @@ public final class BuffRuntime implements Listener {
             BuffDefinition definition = settings.requireBuff(key);
             host.writeAction(player, () -> repository.purchaseConfirmedBuff(player.getUniqueId(),
                             player.getName(), definition, settings.label(key), weeks, level,
-                            host.settlement().scale(),
+                            host.wallet().scale(),
                             businessKey, Instant.now(), expectedTown, expectedBuff),
                     purchase -> verifyBuffPurchase(player, purchase, success, failure), failure);
         } catch (RuntimeException exception) {

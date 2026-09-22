@@ -2,7 +2,7 @@ package org.allivlisey.tianjitown.paper.bonus;
 
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
 import org.allivlisey.tianjitown.core.town.MemberRole;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.config.TownBonusSettings;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
@@ -71,7 +71,7 @@ class TownBonusRuntimeTest {
         when(plugin.getServer()).thenReturn(mock(Server.class));
         doAnswer(call -> async.add(call.getArgument(0))).when(plugin).runAsync(any());
         when(plugin.runMain(any())).thenAnswer(call -> main.add(call.getArgument(0)));
-        when(host.settlement()).thenReturn(mock(VaultSettlementService.class));
+        when(host.wallet()).thenReturn(mock(VaultPlayerEconomyService.class));
         when(host.landProtection()).thenReturn(land);
         when(player.getUniqueId()).thenReturn(playerId);
         when(player.getGameMode()).thenReturn(GameMode.SURVIVAL);
@@ -91,7 +91,6 @@ class TownBonusRuntimeTest {
                 new TownBonusSettings.BuildingRefund(true, 1, 3000, 12, zone, Set.of(Material.TNT)),
                 new TownBonusSettings.BeaconEnhancement(true, 100),
                 new TownBonusSettings.Operations(7));
-        when(host.settlement().accountId()).thenReturn(UUID.randomUUID());
         runtime = new TownBonusRuntime(plugin, host, repository, mock(org.allivlisey.tianjitown.storage.diagnostics.TownDiagnosticRepository.class), settings, mock(org.bukkit.plugin.Plugin.class));
     }
 

@@ -6,7 +6,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.task.RetryingWorkQueue;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
@@ -19,7 +19,7 @@ import org.bukkit.command.CommandSender;
 final class TownIncomeTaxCollectionRuntime {
     private final TianjiTownPlugin plugin;
     private final EconomyRepository finance;
-    private final VaultSettlementService settlement;
+    private final VaultPlayerEconomyService wallet;
     private final AtomicBoolean databaseAvailable;
     private final Consumer<IncomeTaxCollection> collected;
     private final Predicate<UUID> townActive;
@@ -35,11 +35,11 @@ final class TownIncomeTaxCollectionRuntime {
     private final RetryingWorkQueue<PendingRefund> refundOutcomes;
 
     TownIncomeTaxCollectionRuntime(TianjiTownPlugin plugin, EconomyRepository finance,
-                                   VaultSettlementService settlement, AtomicBoolean databaseAvailable,
+                                   VaultPlayerEconomyService wallet, AtomicBoolean databaseAvailable,
                                    Consumer<IncomeTaxCollection> collected, Predicate<UUID> townActive) {
         this.plugin = plugin;
         this.finance = finance;
-        this.settlement = settlement;
+        this.wallet = wallet;
         this.databaseAvailable = databaseAvailable;
         this.collected = collected;
         this.townActive = townActive;
@@ -74,12 +74,12 @@ final class TownIncomeTaxCollectionRuntime {
             if (pending.outcomeDispatched) return;
             if (pending.result == null) {
                 try {
-                    pending.result = settlement.refundDebitedPlayer(plugin.getServer().getOfflinePlayer(
+                    pending.result = wallet.refundDebitedPlayer(plugin.getServer().getOfflinePlayer(
                             pending.operation.tax().receiverId()), pending.operation.tax().taxMinor());
                 } catch (RuntimeException | LinkageError failure) {
-                    pending.result = VaultSettlementService.Result.failure(RuntimeText.safeMessage(failure), false, true);
+                    pending.result = VaultPlayerEconomyService.Result.failure(RuntimeText.safeMessage(failure), false, true);
                 }
-                if (pending.result == null) pending.result = VaultSettlementService.Result.failure("Vault未返回退款结果", false, true);
+                if (pending.result == null) pending.result = VaultPlayerEconomyService.Result.failure("Vault未返回退款结果", false, true);
             }
             pending.outcomeDispatched = true;
             refundOutcomes.submit(pending);
@@ -111,16 +111,16 @@ final class TownIncomeTaxCollectionRuntime {
     private void pay(PendingCollection pending) {
         if (pending.outcomeDispatched) return;
         if (pending.result == null && !townActive.test(pending.tax.townId())) {
-            pending.result = VaultSettlementService.Result.failure("小镇已归档，取消尚未扣款的收入税", false, false);
+            pending.result = VaultPlayerEconomyService.Result.failure("小镇已归档，取消尚未扣款的收入税", false, false);
         }
         if (pending.result == null) {
             try {
-                pending.result = settlement.transferFromPlayer(pending.player, pending.tax.taxMinor());
+                pending.result = wallet.withdrawPlayer(pending.player, pending.tax.taxMinor());
             } catch (RuntimeException | LinkageError failure) {
-                pending.result = VaultSettlementService.Result.failure(RuntimeText.safeMessage(failure), false, true);
+                pending.result = VaultPlayerEconomyService.Result.failure(RuntimeText.safeMessage(failure), false, true);
             }
             if (pending.result == null) {
-                pending.result = VaultSettlementService.Result.failure("Vault未返回收税结果", false, true);
+                pending.result = VaultPlayerEconomyService.Result.failure("Vault未返回收税结果", false, true);
             }
         }
         pending.outcomeDispatched = true;
@@ -131,7 +131,7 @@ final class TownIncomeTaxCollectionRuntime {
         // Forwarding can enqueue the next stage before its scheduler rejects. Once dispatched,
         // that stage may already have marked RECORDED; never finish the old claim again.
         if (pending.successDispatched) return;
-        VaultSettlementService.Result result = pending.result;
+        VaultPlayerEconomyService.Result result = pending.result;
         String status = result.success() ? "SUCCEEDED"
                 : result.playerRefundRequired() ? "REFUND_REQUIRED"
                 : result.compensationRequired() ? "AMBIGUOUS" : "FAILED";
@@ -241,7 +241,7 @@ final class TownIncomeTaxCollectionRuntime {
         private final ExternalIncomeTax tax;
         private final OfflinePlayer player;
         private IncomeTaxCollection operation;
-        private VaultSettlementService.Result result;
+        private VaultPlayerEconomyService.Result result;
         private boolean outcomeDispatched;
         private boolean successDispatched;
         private PendingCollection(ExternalIncomeTax tax, OfflinePlayer player) {
@@ -253,7 +253,7 @@ final class TownIncomeTaxCollectionRuntime {
     private static final class PendingRefund {
         private final IncomeTaxCollection operation;
         private final Consumer<IncomeTaxCollection> completed;
-        private VaultSettlementService.Result result;
+        private VaultPlayerEconomyService.Result result;
         private boolean outcomeDispatched;
         private boolean callbackDispatched;
         private PendingRefund(IncomeTaxCollection operation, Consumer<IncomeTaxCollection> completed) {

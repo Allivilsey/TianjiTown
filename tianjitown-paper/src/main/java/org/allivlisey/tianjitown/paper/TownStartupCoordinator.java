@@ -285,7 +285,7 @@ final class TownStartupCoordinator {
         boolean healthy = true;
         details.add("INFO Minecraft " + plugin.getServer().getMinecraftVersion()
                 + " / Java " + Runtime.version().feature());
-        for (String name : List.of("Residence", "Vault", "XConomy", "QuickShop-Hikari",
+        for (String name : List.of("Residence", "Vault", "QuickShop-Hikari",
                 "Jobs", "GlobalMarketPlus", "WorldBorder")) {
             try {
                 Plugin dependency = plugin.getServer().getPluginManager().getPlugin(name);
@@ -423,18 +423,10 @@ final class TownStartupCoordinator {
         ResidenceLandProtectionService residenceProtection =
                 new ResidenceLandProtectionService(plugin.getServer(), managedResidenceNames);
         try {
-            var accountBinding = org.allivlisey.tianjitown.paper.runtime.SettlementAccountMigrationStartup.run(plugin);
             runtime = new TownRuntime(plugin, candidate,
-                    residenceProtection,
-                    worldBoundaryService(), activeResidenceNames, accountBinding);
-            org.allivlisey.tianjitown.integrations.vault.VaultSettlementService.Result settlement =
-                    runtime.settlement().ensureAccount();
-            if (!settlement.success()) {
-                throw new IllegalStateException(settlement.message());
-            }
-            runtime.settlementPrivacy().enforce();
-            // Keep the bank identity protected even while asynchronous startup diagnostics run.
-            plugin.getServer().getPluginManager().registerEvents(runtime.settlementPrivacy(), plugin);
+                    residenceProtection, worldBoundaryService(), activeResidenceNames);
+            var wallet = runtime.wallet().checkAvailability();
+            if (!wallet.success()) throw new IllegalStateException(wallet.message());
             actions = new TownActions(plugin, runtime);
             ui = new TownUiController(plugin, runtime, actions);
         } catch (RuntimeException | LinkageError exception) {

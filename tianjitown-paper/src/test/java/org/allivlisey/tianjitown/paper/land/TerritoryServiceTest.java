@@ -108,7 +108,7 @@ class TerritoryServiceTest {
                     () -> service.batchPreview(memberId,
                             Set.of(new TerritoryService.GridSelection(1, 0))));
 
-            EconomySettings noExpansionSettings = new EconomySettings(true, true, "tax", 2,
+            EconomySettings noExpansionSettings = new EconomySettings(true, true, 2,
                     2500, new BigDecimal("3000.00"), 1,
                     new BigDecimal("50000.00"), new BigDecimal("5000.00"));
             TerritoryService noExpansionService = new TerritoryService(finance,

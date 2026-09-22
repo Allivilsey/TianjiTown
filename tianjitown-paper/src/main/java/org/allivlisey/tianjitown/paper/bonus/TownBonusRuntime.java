@@ -55,7 +55,7 @@ public final class TownBonusRuntime implements Listener {
         this.beaconEffects = new TownBeaconEffects(plugin, host, settings.beacon(), index::get);
         this.diagnostics = new TownBonusDiagnostics(plugin, host, diagnosticRepository, settings.operations(),
                 new QuickShopHistoryProbe(quickShop,
-                        host.settlement().scale(), plugin.messages()::plainText));
+                        host.wallet().scale(), plugin.messages()::plainText));
     }
 
     public TownBonusSettings settings() {

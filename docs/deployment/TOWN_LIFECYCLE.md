@@ -30,4 +30,4 @@
 - 执行 `town delete <小镇代码> <原因>` 并确认：先归档，Residence 清理成功后才释放名称、代码和区块。清理失败保持占位，排障后可重新发起删除完成释放。
 - 重启后核对申请、预留、成员、访客、服务台和领地恢复；测试确认按钮过期、重复点击及目标版本变化时不能误执行。
 
-首次建库依次执行 `V1_0__initial_schema.sql` 与 `V1_1__durable_financial_operations.sql`；已发布的 schema `1.0` 通过增量迁移升级到 `1.1`。不提供 YAML 小镇镜像导入或 MySQL 自动转换。已有数据库必须先保留副本，不能为通过校验而删除或重建。数据恢复见 [SQLite 手册](../operations/SQLITE_AND_BACKUP.md)。
+首次建库依次执行 `V1_0` 和 `V1_1`；正式服 schema `1.0` 通过一次增量迁移升级到 `1.1`，保留余额和历史流水。不提供 YAML 小镇镜像导入或 MySQL 自动转换。已有数据库必须先保留副本，不能为通过校验而删除或重建。数据恢复见 [SQLite 手册](../operations/SQLITE_AND_BACKUP.md)。

@@ -7,7 +7,7 @@ import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 class TownIncomeTaxCollectionRuntimeTest {
     private final TianjiTownPlugin plugin = mock(TianjiTownPlugin.class);
     private final EconomyRepository finance = mock(EconomyRepository.class);
-    private final VaultSettlementService vault = mock(VaultSettlementService.class);
+    private final VaultPlayerEconomyService vault = mock(VaultPlayerEconomyService.class);
     private final OfflinePlayer player = mock(OfflinePlayer.class);
     private final CommandSender sender = mock(CommandSender.class);
     private final Queue<Runnable> workers = new ArrayDeque<>(), main = new ArrayDeque<>(), delayed = new ArrayDeque<>();
@@ -58,11 +58,11 @@ class TownIncomeTaxCollectionRuntimeTest {
     @ValueSource(strings = {"success", "failure", "partial", "unknown", "exception", "null"})
     void persistsAttemptBeforeDebitAndStoresEveryResult(String outcome) {
         switch (outcome) {
-            case "success" -> when(vault.transferFromPlayer(player, 500)).thenReturn(VaultSettlementService.Result.success("paid"));
-            case "failure" -> when(vault.transferFromPlayer(player, 500)).thenReturn(VaultSettlementService.Result.failure("failed", false, false));
-            case "partial" -> when(vault.transferFromPlayer(player, 500)).thenReturn(new VaultSettlementService.Result(false, "refund owed", false, true, true));
-            case "unknown" -> when(vault.transferFromPlayer(player, 500)).thenReturn(VaultSettlementService.Result.failure("unknown", false, true));
-            case "exception" -> when(vault.transferFromPlayer(player, 500)).thenThrow(new IllegalStateException("response lost"));
+            case "success" -> when(vault.withdrawPlayer(player, 500)).thenReturn(VaultPlayerEconomyService.Result.success("paid"));
+            case "failure" -> when(vault.withdrawPlayer(player, 500)).thenReturn(VaultPlayerEconomyService.Result.failure("failed", false, false));
+            case "partial" -> when(vault.withdrawPlayer(player, 500)).thenReturn(new VaultPlayerEconomyService.Result(false, "refund owed", false, true, true));
+            case "unknown" -> when(vault.withdrawPlayer(player, 500)).thenReturn(VaultPlayerEconomyService.Result.failure("unknown", false, true));
+            case "exception" -> when(vault.withdrawPlayer(player, 500)).thenThrow(new IllegalStateException("response lost"));
             default -> { }
         }
         runtime.collect(tax, player);
@@ -80,13 +80,13 @@ class TownIncomeTaxCollectionRuntimeTest {
             default -> "AMBIGUOUS";
         };
         verify(finance).finishIncomeTaxCollection(any(), eq(expected), anyString());
-        verify(vault).transferFromPlayer(player, 500);
+        verify(vault).withdrawPlayer(player, 500);
         assertEquals(outcome.equals("success") ? 1 : 0, collected.size());
     }
 
     @Test
     void databaseRetryAndQueueRejectionNeverRepeatDebitOrForwardSubsidy() {
-        when(vault.transferFromPlayer(player, 500)).thenReturn(VaultSettlementService.Result.success("paid"));
+        when(vault.withdrawPlayer(player, 500)).thenReturn(VaultPlayerEconomyService.Result.success("paid"));
         doThrow(new EconomyRepository.StorageUnavailableException("offline", null))
                 .doReturn(withState(prepared, "SUCCEEDED", 2)).when(finance)
                 .finishIncomeTaxCollection(any(), anyString(), anyString());
@@ -104,7 +104,7 @@ class TownIncomeTaxCollectionRuntimeTest {
         delayed.remove().run();
         workers.remove().run();
         assertEquals(1, collected.size());
-        verify(vault).transferFromPlayer(player, 500);
+        verify(vault).withdrawPlayer(player, 500);
         // Once downstream accepted the collection it may already be RECORDED. Never re-finish
         // the stale ATTEMPTED claim merely because its downstream scheduler initially rejected.
         verify(finance, times(2)).finishIncomeTaxCollection(any(), anyString(), anyString());
@@ -143,7 +143,7 @@ class TownIncomeTaxCollectionRuntimeTest {
         IncomeTaxCollection attempted = withState(prepared, "REFUND_ATTEMPTED", 3);
         IncomeTaxCollection refunded = withState(prepared, "REFUNDED", 4);
         when(finance.claimIncomeTaxRefund(eq(expected), isNull(), eq("Admin"))).thenReturn(attempted);
-        when(vault.refundDebitedPlayer(player, 500)).thenReturn(VaultSettlementService.Result.success("returned"));
+        when(vault.refundDebitedPlayer(player, 500)).thenReturn(VaultPlayerEconomyService.Result.success("returned"));
         when(finance.finishIncomeTaxRefund(eq(attempted), eq("REFUNDED"), anyString()))
                 .thenThrow(new EconomyRepository.StorageUnavailableException("offline", null)).thenReturn(refunded);
         List<IncomeTaxCollection> callback = new ArrayList<>();

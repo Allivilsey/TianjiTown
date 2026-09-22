@@ -54,11 +54,9 @@
 
 | 配置键 | 默认值 | 含义 |
 |---|---|---|
-| `economy.settlement-account` | `tianjitown-tax` | 自动隐藏排行和对应总额统计；已有 `tax` 配置启动时自动更名，保留原 UUID/余额，迁移记录必须保留；其他自定义账户不自动迁移 |
 | `economy.money-scale` | `2` | 经济提供者未声明小数位时的后备精度；有效精度按 provider 优先 |
 | `economy.tax.subsidy.weekly-limit` | `'10000.00'` | 每镇三个收入来源共用的每周补贴上限 |
 | `economy.tax.subsidy.twelve-hour-limit` | `'2000.00'` | 每镇共用的 12 小时补贴上限 |
-| `economy.reconciliation-interval-minutes` | `5` | 清算对账周期，重启才重新调度 |
 | `economy.expansion.base-cost` | `'5000.00'` | 首次扩张价格，此后每次增加 5%，批量逐块累计 |
 
 补贴固定上海时间周一 04:00、每天 04:00/16:00 分窗。两种额度同时约束，剩余额度不足时部分补贴；税款仍正常入账。税率范围固定 5%～25%，按 1% 步进，不在配置中定义。
@@ -95,3 +93,5 @@
 ## 消息自定义
 
 修改 `messages.yml` 后执行 `reload`。保留占位符名称，例如 `{town}`、`{player}`、`{reason}`；它们由调用处填入，改名会造成信息缺失。已有自定义值不会被内置文案覆盖，缺少的消息使用内置默认值。配置开关和提示文字是两回事，改提示不能改变业务限制。
+
+旧 `economy.settlement-account` 和 `economy.reconciliation-interval-minutes` 已停用，升级时可保留但不再读取。公共资金仅存于小镇数据库。

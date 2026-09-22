@@ -31,12 +31,10 @@ town:
     preview-vertical-range-blocks: 24
 
 economy:
-  # 专用 Vault 托管账户；自动排除 XConomy/CMI 排行与对应统计。
-  # 已有配置为 tax 时启动自动改名并保留原 UUID/余额；迁移记录必须随插件数据一起备份。
-  settlement-account: 'tianjitown-tax'
+  # 公共资金仅保存在小镇数据库；Vault 只处理玩家钱包。
   # Economy provider 未声明 fractionalDigits 时使用此精度。
   money-scale: 2
-  # 可立即停止新税收；已存在账本查询和清算对账仍保持可用。
+  # 可立即停止新税收；已存在账本查询和待处理操作恢复仍保持可用。
   tax:
     enabled: true
     subsidy:
@@ -46,7 +44,6 @@ economy:
   # 可立即停止捐款、激活等新资金写入，不影响税款入账、退款和查询。
   consumption:
     enabled: true
-  reconciliation-interval-minutes: 5
   expansion:
     # 首次激活价格；第 n 次收费 = 基础价 × 1.05^(n-1)，批量选择逐块累计。
     base-cost: '5000.00'

@@ -5,7 +5,7 @@ import org.allivlisey.tianjitown.core.land.ChunkPosition;
 import org.allivlisey.tianjitown.core.land.InitialTerritory;
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
 import org.allivlisey.tianjitown.integrations.quickshop.QuickShopHistoryProbe;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.config.TownBonusSettings;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
@@ -55,7 +55,7 @@ class TownBonusDiagnosticsTest {
     private final TownRuntime host = mock(TownRuntime.class);
     private final TownDiagnosticRepository repository = mock(TownDiagnosticRepository.class);
     private final QuickShopHistoryProbe history = mock(QuickShopHistoryProbe.class);
-    private final VaultSettlementService settlement = mock(VaultSettlementService.class);
+    private final VaultPlayerEconomyService wallet = mock(VaultPlayerEconomyService.class);
     private final EconomyRepository finance = mock(EconomyRepository.class);
     private final LandProtectionService land = mock(LandProtectionService.class);
     private final ConsoleCommandSender sender = mock(ConsoleCommandSender.class);
@@ -76,13 +76,12 @@ class TownBonusDiagnosticsTest {
         when(meta.getVersion()).thenReturn("test");
         doAnswer(call -> async.add(call.getArgument(0))).when(plugin).runAsync(any());
         when(plugin.runMain(any())).thenAnswer(call -> main.add(call.getArgument(0)));
-        when(host.settlement()).thenReturn(settlement);
+        when(host.wallet()).thenReturn(wallet);
         when(host.finance()).thenReturn(finance);
         when(host.landProtection()).thenReturn(land);
         DatabaseGate database = mock(DatabaseGate.class);
         when(host.database()).thenReturn(database);
         when(database.schemaVersion()).thenReturn("7");
-        when(settlement.balanceMinor()).thenReturn(100L);
         EconomyRepository.Reconciliation reconciliation = mock(EconomyRepository.Reconciliation.class);
         when(reconciliation.healthy()).thenReturn(true);
         when(finance.inspectSettlement(100)).thenReturn(reconciliation);
@@ -106,10 +105,10 @@ class TownBonusDiagnosticsTest {
         AtomicReference<TownBonusRuntime.DiagnosticResult> completed = new AtomicReference<>();
 
         diagnostics.diagnoseAtStartup(completed::set);
-        verify(settlement).balanceMinor();
+        verifyNoInteractions(wallet);
         verifyNoInteractions(repository, history, land, finance);
         async.getFirst().run();
-        verify(finance).reconcileSettlement(100);
+        verify(finance, never()).reconcileSettlement(anyLong());
         verify(finance, never()).inspectSettlement(anyLong());
         verifyNoInteractions(land);
         assertNull(completed.get());
@@ -215,14 +214,14 @@ class TownBonusDiagnosticsTest {
     }
 
     @Test
-    void settlementShortfallStillAllowsStartupAfterAccountReconciliation() {
+    void obsoleteBankShortfallHasNoEffectOnStartup() {
         when(finance.reconcileSettlement(100)).thenReturn(mock(EconomyRepository.Reconciliation.class));
 
         TownBonusRuntime.DiagnosticResult result = startupDiagnostic();
 
-        assertFalse(result.healthy());
+        assertTrue(result.healthy());
         assertTrue(result.startupAllowed());
-        verify(finance).reconcileSettlement(100);
+        verify(finance, never()).reconcileSettlement(anyLong());
         verify(finance, never()).inspectSettlement(anyLong());
     }
 
@@ -232,7 +231,6 @@ class TownBonusDiagnosticsTest {
                 List.of(), List.of());
         when(repository.diagnose(any())).thenReturn(new TownDiagnosticRepository.DiagnosticSnapshot(
                 "ok", 0, Map.of(), 2, 50, List.of(state), List.of()));
-        when(settlement.balanceMinor()).thenThrow(new IllegalStateException("balance temporarily unavailable"));
         when(history.inspect(any(), any())).thenThrow(new LinkageError("history API unavailable"));
         when(land.inspect("res", List.of(), List.of())).thenThrow(new IllegalStateException("Residence unavailable"));
 
@@ -273,7 +271,7 @@ class TownBonusDiagnosticsTest {
         async.getFirst().run();
         main.getFirst().run();
 
-        verify(finance).inspectSettlement(100);
+        verify(finance, never()).inspectSettlement(anyLong());
         verify(finance, never()).reconcileSettlement(anyLong());
         assertTrue(diagnostics.lastDiagnostic().healthy());
     }
@@ -299,7 +297,7 @@ class TownBonusDiagnosticsTest {
         diagnostics.diagnoseAtStartup(rejected::set);
         assertFalse(rejected.get().healthy());
         assertEquals(1, async.size());
-        verify(settlement, times(1)).balanceMinor();
+        verifyNoInteractions(wallet);
     }
 
     @Test
@@ -340,7 +338,6 @@ class TownBonusDiagnosticsTest {
 
     @Test
     void unavailableSettlementOrIncompleteHistoryCannotReportHealthy() {
-        when(settlement.balanceMinor()).thenThrow(new IllegalStateException("offline"));
         when(history.inspect(any(), any())).thenReturn(QuickShopHistoryProbe.Result.available(2, 50, true, "limit"));
         diagnostics.diagnose(sender, 7);
         async.getFirst().run();

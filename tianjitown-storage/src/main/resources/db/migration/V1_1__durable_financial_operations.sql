@@ -34,3 +34,18 @@ CREATE TABLE income_tax_collections (
     updated_at INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER))
 );
 CREATE INDEX ix_income_tax_collection_recovery ON income_tax_collections (status, created_at);
+
+-- Public funds now live exclusively in town_accounts. Never import the legacy bank balance.
+-- Release only the obsolete global settlement lock; preserve all other lock reasons.
+UPDATE town_accounts
+   SET locked = 0, lock_reason = NULL, version = version + 1
+ WHERE locked = 1 AND lock_reason LIKE 'SETTLEMENT_RECONCILIATION:%'
+   AND NOT EXISTS (SELECT 1 FROM economy_operations o
+       WHERE o.town_id = town_accounts.town_id AND o.status = 'COMPENSATION_REQUIRED');
+
+-- A bank lock must not hide an unresolved operation's own lock after the bank is retired.
+UPDATE town_accounts
+   SET lock_reason = 'ECONOMY_COMPENSATION: 升级前资金操作待核实', version = version + 1
+ WHERE locked = 1 AND lock_reason LIKE 'SETTLEMENT_RECONCILIATION:%'
+   AND EXISTS (SELECT 1 FROM economy_operations o
+       WHERE o.town_id = town_accounts.town_id AND o.status = 'COMPENSATION_REQUIRED');

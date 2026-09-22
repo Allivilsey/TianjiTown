@@ -169,6 +169,21 @@ public final class EconomyRepository {
         return economyTaxStore.taxSubsidyQuota(townId, weeklyLimitMinor, twelveHourLimitMinor, now, zoneId);
     }
 
+    public LedgerMutation recordQuickShopTax(QuickShopTax tax, long weeklyLimit, long twelveHourLimit,
+            Instant now, ZoneId zoneId) {
+        return economyTaxStore.recordQuickShopTax(tax, weeklyLimit, twelveHourLimit, now, zoneId);
+    }
+
+    public LedgerMutation recordExternalIncomeTax(ExternalIncomeTax tax, long weeklyLimit, long twelveHourLimit,
+            Instant now, ZoneId zoneId) {
+        return economyTaxStore.recordExternalIncomeTax(tax, weeklyLimit, twelveHourLimit, now, zoneId);
+    }
+
+    public LedgerMutation adjustFunds(UUID townId, long amountMinor, UUID actorId,
+            String actorName, String businessKey, String reason) {
+        return economyOperationStore.adjustFunds(townId, amountMinor, actorId, actorName, businessKey, reason);
+    }
+
     public LedgerMutation recordQuickShopTaxWithoutSubsidy(QuickShopTax tax, String detail) {
         return economyTaxStore.recordQuickShopTax(tax, false, detail);
     }

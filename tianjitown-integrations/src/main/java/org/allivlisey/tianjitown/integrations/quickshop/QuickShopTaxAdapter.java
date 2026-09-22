@@ -34,15 +34,12 @@ public final class QuickShopTaxAdapter {
             "com.ghostchu.quickshop.api.event.economy.EconomyTransactionEvent";
     private static final String SUCCESS_EVENT =
             "com.ghostchu.quickshop.api.event.economy.ShopSuccessPurchaseEvent";
-    private static final String QUSER_IMPL = "com.ghostchu.quickshop.obj.QUserImpl";
     private final Plugin owner;
     private final Plugin quickShop;
     private final BooleanSupplier taxEnabled;
     private final Function<UUID, TaxPolicy> policyLookup;
     private final Consumer<SuccessfulTax> successConsumer;
     private final BiFunction<String, Map<String, ?>, String> messageResolver;
-    private final String settlementAccount;
-    private final UUID settlementAccountId;
     private final int moneyScale;
     private final ThreadLocal<PendingTax> pending = new ThreadLocal<>();
     private final Set<Event> seenSuccessEvents = Collections.newSetFromMap(
@@ -50,14 +47,12 @@ public final class QuickShopTaxAdapter {
     private final AtomicLong successSequence = new AtomicLong();
     private final AtomicBoolean eventFailureLogged = new AtomicBoolean();
     private final UUID startupId = UUID.randomUUID();
-    private Object settlementUser;
     private Class<?> qUserType;
 
     public QuickShopTaxAdapter(Plugin owner, Plugin quickShop,
                                BooleanSupplier taxEnabled,
                                Function<UUID, TaxPolicy> policyLookup,
                                Consumer<SuccessfulTax> successConsumer,
-                               String settlementAccount, UUID settlementAccountId,
                                int moneyScale,
                                BiFunction<String, Map<String, ?>, String> messageResolver) {
         this.owner = Objects.requireNonNull(owner, "owner");
@@ -66,9 +61,6 @@ public final class QuickShopTaxAdapter {
         this.policyLookup = Objects.requireNonNull(policyLookup, "policyLookup");
         this.successConsumer = Objects.requireNonNull(successConsumer, "successConsumer");
         this.messageResolver = Objects.requireNonNull(messageResolver, "messageResolver");
-        this.settlementAccount = Objects.requireNonNull(settlementAccount, "settlementAccount");
-        this.settlementAccountId = Objects.requireNonNull(settlementAccountId,
-                "settlementAccountId");
         this.moneyScale = moneyScale;
     }
 
@@ -87,9 +79,6 @@ public final class QuickShopTaxAdapter {
             Class<? extends Event> successEvent = eventClass(loader, SUCCESS_EVENT);
             qUserType = Class.forName("com.ghostchu.quickshop.api.obj.QUser", true, loader);
             verifyApi(taxEvent, transactionEvent, successEvent, qUserType);
-            Class<?> qUser = Class.forName(QUSER_IMPL, true, loader);
-            settlementUser = qUser.getMethod("createFullFilled", UUID.class, String.class,
-                    boolean.class).invoke(null, settlementAccountId, settlementAccount, true);
             Listener listener = new Listener() {
             };
             owner.getServer().getPluginManager().registerEvent(taxEvent, listener,
@@ -158,7 +147,7 @@ public final class QuickShopTaxAdapter {
             if (!tax.receiverId().equals(recipientId)) {
                 return;
             }
-            call(transaction, "taxer", qUserType, settlementUser);
+            call(transaction, "taxer", qUserType, null);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError exception) {
             pending.remove();
             logEventFailure("log.quick-shop.transaction-account-failure", exception);

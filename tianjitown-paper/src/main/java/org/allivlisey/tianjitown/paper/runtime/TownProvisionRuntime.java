@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
 import org.allivlisey.tianjitown.core.town.TownStatus;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.land.ProvisionCoordinator;
 import org.allivlisey.tianjitown.paper.land.ProvisionResult;
@@ -86,7 +86,7 @@ final class TownProvisionRuntime {
     private final TownRepository repository;
     private final LandProtectionService landProtection;
     private final SitePolicy sitePolicy;
-    private final VaultSettlementService settlement;
+    private final VaultPlayerEconomyService wallet;
     private final AtomicBoolean databaseAvailable;
     private final Set<String> activeResidenceNames;
     private final TownRuntimeTasks tasks;
@@ -99,7 +99,7 @@ final class TownProvisionRuntime {
             TownRepository repository,
             LandProtectionService landProtection,
             SitePolicy sitePolicy,
-            VaultSettlementService settlement,
+            VaultPlayerEconomyService wallet,
             AtomicBoolean databaseAvailable,
             Set<String> activeResidenceNames,
             TownRuntimeTasks tasks,
@@ -110,14 +110,14 @@ final class TownProvisionRuntime {
         this.repository = repository;
         this.landProtection = landProtection;
         this.sitePolicy = sitePolicy;
-        this.settlement = settlement;
+        this.wallet = wallet;
         this.databaseAvailable = databaseAvailable;
         this.activeResidenceNames = activeResidenceNames;
         this.tasks = tasks;
         this.refreshTaxPolicies = refreshTaxPolicies;
         this.applicationFeeMinor = applicationFeeMinor;
         this.provisions = provisions;
-        this.applicationFees = new TownApplicationFeeRuntime(plugin, repository, settlement, provisions);
+        this.applicationFees = new TownApplicationFeeRuntime(plugin, repository, wallet, provisions);
     }
 
     void provision(CommandSender sender, UUID applicationId, UUID reviewerId,

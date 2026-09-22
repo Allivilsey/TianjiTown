@@ -1,6 +1,6 @@
 package org.allivlisey.tianjitown.paper.economy;
 
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.storage.economy.EconomyRepository;
 import org.junit.jupiter.api.Test;
 import java.time.Instant;
@@ -24,7 +24,7 @@ class AuditRefundRegressionTest {
             attempts.incrementAndGet();
             if (outcome.equals("exception")) throw new IllegalStateException("response lost");
             if (outcome.equals("null")) return null;
-            return VaultSettlementService.Result.failure("credit applied but response lost", false, true);
+            return VaultPlayerEconomyService.Result.failure("credit applied but response lost", false, true);
         }, (operation, detail) -> resolved.incrementAndGet(), mock(DonationRefundCoordinator.Listener.class));
         var operation = new EconomyRepository.EconomyOperation(UUID.randomUUID(), UUID.randomUUID(),
                 "DONATION", "audit:refund", 100, UUID.randomUUID(), "Player", "audit", "COMPENSATION_REQUIRED", "refund needed", Instant.now());

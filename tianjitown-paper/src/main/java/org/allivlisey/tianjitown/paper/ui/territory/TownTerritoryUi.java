@@ -167,7 +167,7 @@ public final class TownTerritoryUi {
 
     private long selectionPrice(TerritoryService.TerritoryMap map, int count) {
         return ExpansionPricing.batchPriceMinor(facade.runtime().economySettings().expansionCost(),
-                map.currentUnits() - 1, count, facade.runtime().settlement().scale());
+                map.currentUnits() - 1, count, facade.runtime().wallet().scale());
     }
 
     public void confirmExpansionBatch(Player player) {

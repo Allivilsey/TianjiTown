@@ -176,9 +176,8 @@ class EconomyRepositorySqliteTest {
                     uncertain.operationId(), "玩家余额已自动恢复");
             assertEquals("CANCELLED", resolved.status());
             assertEquals("玩家余额已自动恢复", resolved.lastError());
-            assertTrue(repository.findFinanceByTown(townId).orElseThrow().locked());
-            assertTrue(repository.findFinanceByTown(townId).orElseThrow().lockReason()
-                    .startsWith("SETTLEMENT_RECONCILIATION:"));
+            assertFalse(repository.findFinanceByTown(townId).orElseThrow().locked());
+            assertEquals(null, repository.findFinanceByTown(townId).orElseThrow().lockReason());
             assertEquals(resolved, repository.resolveCompensation(uncertain.operationId(),
                     "重复收尾不应改写结果"));
             assertTrue(repository.reconcileSettlement(2_000).healthy());

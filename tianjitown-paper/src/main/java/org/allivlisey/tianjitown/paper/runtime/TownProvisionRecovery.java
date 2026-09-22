@@ -5,7 +5,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.land.ProvisionResult;
 import org.allivlisey.tianjitown.paper.land.ProvisionCoordinator;
@@ -58,20 +58,20 @@ final class TownProvisionRecovery {
     private final TianjiTownPlugin plugin;
     private final TownRepository repository;
     private final LandProtectionService landProtection;
-    private final VaultSettlementService settlement;
+    private final VaultPlayerEconomyService wallet;
     private final ProvisionCoordinator provisions;
     private final TownApplicationFeeRuntime applicationFees;
 
     TownProvisionRecovery(TianjiTownPlugin plugin,
             TownRepository repository,
             LandProtectionService landProtection,
-            VaultSettlementService settlement, ProvisionCoordinator provisions) {
+            VaultPlayerEconomyService wallet, ProvisionCoordinator provisions) {
         this.plugin = plugin;
         this.repository = repository;
         this.landProtection = landProtection;
-        this.settlement = settlement;
+        this.wallet = wallet;
         this.provisions = provisions;
-        this.applicationFees = new TownApplicationFeeRuntime(plugin, repository, settlement, provisions);
+        this.applicationFees = new TownApplicationFeeRuntime(plugin, repository, wallet, provisions);
     }
 
     void recoverFailedApplication(Player administrator, UUID applicationId,

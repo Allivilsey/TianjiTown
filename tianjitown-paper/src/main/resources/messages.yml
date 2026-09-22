@@ -345,7 +345,7 @@ chat:
     money-adjust-zero: '调整金额不能为 0'
     application-fee-list: '&e申请费用待处理记录（最多 100 条）：{count}'
     application-fee-entry: '&7申请 {id} / 玩家 {player} / 金额 {amount} / 状态 {state} / 版本 {version} / {detail}'
-    application-fee-help: '&e/tianjitown application fee <list|inspect|retry|resolve>；inspect/retry 指定申请 UUID；resolve 还需结论及核实依据。COLLECTED=玩家扣款且清算已收；NO_PAYMENT=双方均无净变动；PLAYER_DEBIT_ONLY=仅玩家扣款；REFUNDED=已从正确来源全额退款；REFUND_NOT_PAID=玩家未收到退款且应退资金仍完整保留。未知结果必须先查账，resolve 只登记核实结论，retry 才实际退款。'
+    application-fee-help: '&e/tianjitown application fee <list|inspect|retry|resolve>；inspect/retry 指定申请 UUID；resolve 还需结论及核实依据。COLLECTED=玩家已扣款，申请费应入账；NO_PAYMENT=双方均无净变动；PLAYER_DEBIT_ONLY=旧托管流程仅玩家扣款、需退款；REFUNDED=已从正确来源全额退款；REFUND_NOT_PAID=玩家未收到退款且应退资金仍完整保留。未知结果必须先查账，resolve 只登记核实结论，retry 才实际退款。'
     application-fee-refund-confirmation: '重新尝试申请 {id} 的退款：金额 {amount}，当前状态 {state}；仅确定未退款的记录允许执行'
     application-fee-resolve-confirmation: '登记申请 {id} 的费用核实结论：{state} → {resolution}，版本 {version}；依据：{reason}。本操作不会付款'
     application-fee-result: '&e申请费用处理：{state}；{detail}；{action}'
@@ -356,8 +356,8 @@ chat:
     recovery-confirmation: '登记 {id} 的资金核实结论：{state} → {resolution}；依据：{reason}。本操作不会付款，请先核对完整外部资金流'
     recovery-result: '&a已登记 {id} 的资金状态：{state}'
     subsidy-recovery-entry: '&7业务键 {id} / 小镇 {town} / 已收税 {tax} / 补贴 {subsidy} / 状态 {state} / 税款已记账 {recorded} / {detail}'
-    subsidy-recovery-help: '&e/tianjitown money subsidy resolve <业务键> <paid|cancelled> <核实依据>。paid=补贴已完整进入清算账户，补记内部补贴；cancelled=补贴未付或已完整撤回，释放补贴额度。命令不会再次付款。'
-    income-tax-recovery-help: '&e/tianjitown money tax pending；resolve <操作UUID> <paid|cancelled> <核实依据>。paid=玩家已扣且清算已收，补记税款；cancelled=未扣玩家或已全额退回。refund <操作UUID> 仅退款给确定被扣款而清算未收到的玩家。未知付款或退款先查账，不能直接重试。'
+    subsidy-recovery-help: '&e/tianjitown money subsidy resolve <业务键> <paid|cancelled> <核实依据>。paid=确认应补记升级前遗留补贴；cancelled=取消遗留补贴并释放额度。命令不会再次付款。'
+    income-tax-recovery-help: '&e/tianjitown money tax pending；resolve <操作UUID> <paid|cancelled> <核实依据>。paid=玩家已扣税，补记小镇税款；cancelled=未扣玩家或已全额退回。refund <操作UUID> 仅处理明确欠退的旧收税操作。未知付款或退款先查账，不能直接重试。'
     income-tax-recovery-entry: '&7收税 {id} / 小镇 {town} / 玩家 {player} / 来源 {source} / 金额 {amount} / 状态 {state} / 版本 {version} / {detail}'
     income-tax-refund-confirmation: '退还税款 {id}：向玩家 {player} 退回 {amount}，当前状态 {state}；仅明确玩家已扣款且退款未成功时可执行'
     money-action-unsupported: 'money 只支持 view 或 adjust'
@@ -635,7 +635,7 @@ diagnostic:
     startup-diagnostic-gate-failed: '启动统一诊断未通过，插件初始化已停止'
     runtime-activation-failure: 'FAIL 业务运行时激活异常: {detail}'
     runtime-gate-failed: '业务运行时门禁未通过'
-    runtime-initialization-failure: 'FAIL 业务配置、WorldBorder、玩家界面或清算账户: {detail}'
+    runtime-initialization-failure: 'FAIL 业务配置、WorldBorder、玩家界面或玩家经济服务: {detail}'
     world-border-ready: 'OK WorldBorder 边界 API 已接入'
     dialog-ui-ready: 'OK 玩家界面=DIALOG'
     runtime-features-ready: 'OK 建筑返还、信标增强与启动诊断已启用'
@@ -835,16 +835,16 @@ log:
     collection-pending: '收入税 {businessKey} 收取状态为 {status}，已保留持久记录，可用 /tianjitown money tax pending 核实: {detail}'
     subsidy-settlement-failure: '收入税补贴 {businessKey} 清算失败，原税款已入账，补贴待人工核实，不自动重复付款: {detail}'
     subsidy-settlement-ambiguous: '收入税补贴 {businessKey} 清算结果不明，原税款已入账，补贴额度保留待核实: {detail}'
-    ledger-write-failure: '{source} 税款 {businessKey} 已进入清算账户但账本暂未写入，将自动重试: {detail}'
+    ledger-write-failure: '{source} 税款 {businessKey} 已扣除但小镇账本暂未写入，将自动重试: {detail}'
   # QuickShop 税务事件和 TownRuntime 入账日志；{detail}=异常详情，{businessKey}=交易业务键
   quick-shop:
     tax-event-failure: 'QuickShop 税率事件处理失败: {detail}'
-    transaction-account-failure: 'QuickShop 税款账户切换失败: {detail}'
+    transaction-account-failure: 'QuickShop 直接扣税设置失败: {detail}'
     success-settlement-failure: 'QuickShop 成功交易入账事件处理失败: {detail}'
     boundary-failure: 'QuickShop 事件边界捕获异常: {detail}'
     subsidy-quota-exhausted: '本周期补贴额度已用完'
     subsidy-settlement-failure: 'QuickShop 服务器补贴失败或结果不明，原税款已入账；未知补贴需人工核实: {detail}'
-    tax-ledger-write-failure: 'QuickShop 税款 {businessKey} 已进入清算账户但账本暂未写入，将自动重试: {detail}'
+    tax-ledger-write-failure: 'QuickShop 税款 {businessKey} 已扣除但小镇账本暂未写入，将自动重试: {detail}'
   # Residence 命令、成员同步和删除保护日志；{detail}=异常详情，{residence}=领地名，
   # {town}=小镇 UUID，同类错误只记录一次
   residence:
@@ -1129,7 +1129,7 @@ dialog:
     tax-rate: '&7税率: &f{rate}'
     subsidy-twelve-hour: '&7税收补贴剩余（12 小时）: &f{amount} &8· 刷新 {refresh}'
     subsidy-week: '&7税收补贴剩余（本周）: &f{amount} &8· 刷新 {refresh}'
-    locked: '&c资金已因清算差异锁定: {reason}'
+    locked: '&c资金操作已锁定: {reason}'
     donation: '&a自定义金额捐款'
     tax: '&e税率设置'
     ledger: '&6小镇账本'
@@ -1527,7 +1527,7 @@ dialog:
     recovery-refund-failed-detail: '&f临时数据已安全清理，但申请费退款失败: {detail}'
     recovery-refund-action: '&7申请费保持 REFUND_PENDING'
     recovery-refund-confirmation-failed-detail: '&fVault 已退款但数据库确认失败: {detail}'
-    recovery-refund-confirmation-action: '&7停止重复退款并由管理员执行清算对账'
+    recovery-refund-confirmation-action: '&7停止重复退款并由管理员核实玩家到账记录'
 
   # 税率设置及保存结果
   tax:

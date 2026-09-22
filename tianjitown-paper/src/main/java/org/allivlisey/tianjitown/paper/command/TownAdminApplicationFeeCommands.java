@@ -48,7 +48,7 @@ public final class TownAdminApplicationFeeCommands {
         runtime.read(sender, () -> runtime.repository().applicationFeeOperation(applicationId), operation -> {
             show(sender, runtime, operation);
             facade.requestConfirmation(sender, plugin.messages().text("chat.admin.application-fee-refund-confirmation",
-                    Map.of("id", applicationId, "amount", runtime.settlement().formatMinor(operation.amountMinor()),
+                    Map.of("id", applicationId, "amount", runtime.wallet().formatMinor(operation.amountMinor()),
                             "state", operation.state())),
                     () -> {
                         facade.requireRecoveryAccess(sender, runtime);
@@ -81,7 +81,7 @@ public final class TownAdminApplicationFeeCommands {
 
     private void show(CommandSender sender, TownRuntime runtime, ApplicationFeeOperation operation) {
         facade.send(sender, "chat.admin.application-fee-entry", Map.of("id", operation.applicationId(),
-                "player", operation.applicantId(), "amount", runtime.settlement().formatMinor(operation.amountMinor()),
+                "player", operation.applicantId(), "amount", runtime.wallet().formatMinor(operation.amountMinor()),
                 "state", operation.state(), "version", operation.version(),
                 "detail", TownAdminCommand.safeText(operation.detail())));
     }

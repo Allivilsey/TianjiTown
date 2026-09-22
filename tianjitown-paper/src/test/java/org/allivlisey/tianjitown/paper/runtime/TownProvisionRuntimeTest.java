@@ -4,7 +4,7 @@ import org.allivlisey.tianjitown.core.application.*;
 import org.allivlisey.tianjitown.core.land.*;
 import org.allivlisey.tianjitown.core.ports.LandProtectionService;
 import org.allivlisey.tianjitown.core.town.TownStatus;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.land.*;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
@@ -27,7 +27,7 @@ class TownProvisionRuntimeTest {
     private final TownRepository repository = mock(TownRepository.class);
     private final LandProtectionService land = mock(LandProtectionService.class);
     private final SitePolicy sites = mock(SitePolicy.class);
-    private final VaultSettlementService settlement = mock(VaultSettlementService.class);
+    private final VaultPlayerEconomyService wallet = mock(VaultPlayerEconomyService.class);
     private final CommandSender sender = mock(CommandSender.class);
     private final UUID appId = UUID.randomUUID(), townId = UUID.randomUUID(), applicant = UUID.randomUUID();
     private final Queue<Runnable> work = new ArrayDeque<>(), main = new ArrayDeque<>();
@@ -59,12 +59,12 @@ class TownProvisionRuntimeTest {
         when(repository.provisioningForProjection(appId)).thenReturn(new TownRepository.Provisioning(appId, town, List.of(applicant)));
         when(sites.validateReservationEnvironment(territory)).thenReturn(SitePolicy.Validation.success(territory));
         when(land.findNameCollision("amu")).thenReturn(LandProtectionService.Collision.none());
-        when(settlement.transferFromPlayer(offline, 100)).thenReturn(VaultSettlementService.Result.success("paid"));
+        when(wallet.withdrawPlayer(offline, 100)).thenReturn(VaultPlayerEconomyService.Result.success("paid"));
         when(repository.claimApplicationFeeCollection(eq(appId), anyLong(), eq(100L), any(), anyString()))
                 .thenReturn(new ApplicationFeeOperation(appId, applicant, 100, ApplicationFeeOperation.State.COLLECTING, "claim", 0));
         when(repository.completeApplicationFeeOperation(any(), eq(ApplicationFeeOperation.Outcome.SUCCESS), anyString(), any(), anyString()))
                 .thenReturn(new ApplicationFeeOperation(appId, applicant, 100, ApplicationFeeOperation.State.ESCROWED, "paid", 1));
-        runtime = new TownProvisionRuntime(plugin, repository, land, sites, settlement, available,
+        runtime = new TownProvisionRuntime(plugin, repository, land, sites, wallet, available,
                 new HashSet<>(), new TownRuntimeTasks(plugin, available), refresh, () -> 100, coordinator);
     }
 
@@ -99,7 +99,7 @@ class TownProvisionRuntimeTest {
         assertEquals(status == TownStatus.ACTIVE ? ProvisionResult.Status.SUCCESS : ProvisionResult.Status.FAILED,
                 results.getFirst().status());
         if (status == TownStatus.ACTIVE) assertFalse(results.getFirst().notifyDecision());
-        verifyNoInteractions(sites, settlement, land);
+        verifyNoInteractions(sites, wallet, land);
         verify(repository, never()).beginProvision(any(), any(), any(), any(), any(), anyLong(), any());
     }
 
@@ -109,7 +109,7 @@ class TownProvisionRuntimeTest {
         approve(); approve(); drain();
         assertEquals(2, results.size());
         assertTrue(results.stream().allMatch(result -> result.status() == ProvisionResult.Status.BUSY));
-        verifyNoInteractions(sites, settlement, land);
+        verifyNoInteractions(sites, wallet, land);
     }
 
     @Test void retryUsesTownTerritoryAndDoesNotCharge() {
@@ -123,7 +123,7 @@ class TownProvisionRuntimeTest {
         when(repository.finishProvision(eq(appId), eq(false), any())).thenReturn(failed);
         approve(); drain();
         verify(sites, times(2)).validateReservationEnvironment(territory);
-        verifyNoInteractions(settlement);
+        verifyNoInteractions(wallet);
         assertEquals(1, results.size());
     }
 
@@ -162,14 +162,14 @@ class TownProvisionRuntimeTest {
         drain();
         assertEquals(1, results.size());
         assertEquals(ProvisionResult.Status.SUCCESS, results.getFirst().status(), results.getFirst().toString());
-        verify(settlement).transferFromPlayer(any(), eq(100L));
+        verify(wallet).withdrawPlayer(any(), eq(100L));
         verify(repository).finishProvision(eq(appId), eq(true), anyString());
         verify(repository, never()).finishProvision(eq(appId), eq(false), anyString());
         verify(plugin.messages(), never()).send(eq(sender), eq("chat.runtime.operation-failed"), anyMap());
         when(repository.findApplication(appId)).thenReturn(Optional.of(completed));
         when(town.status()).thenReturn(TownStatus.ACTIVE);
         approve(); drain();
-        verify(settlement, times(1)).transferFromPlayer(any(), anyLong());
+        verify(wallet, times(1)).withdrawPlayer(any(), anyLong());
         assertFalse(results.getLast().notifyDecision());
     }
 
@@ -217,7 +217,7 @@ class TownProvisionRuntimeTest {
         approve(); drain();
         verify(land).remove("amu", territory);
         verify(repository).finishProvision(eq(appId), eq(false), anyString());
-        verifyNoInteractions(settlement);
+        verifyNoInteractions(wallet);
         assertEquals(1, results.size());
         assertEquals(ProvisionResult.Status.FAILED, results.getFirst().status());
         assertTrue(coordinator.tryBegin(appId));
@@ -265,14 +265,14 @@ class TownProvisionRuntimeTest {
         verify(land, times(1)).remove("amu", territory);
         verify(land, times(1)).setTeleportPoint(eq("amu"), any(), eq("world"),
                 eq(8.5), eq(65.0), eq(8.5), eq(0.0F), eq(0.0F));
-        verifyNoInteractions(settlement);
+        verifyNoInteractions(wallet);
     }
 
     @Test void recoveryInFlightPreventsApprovalFromTouchingDatabaseOrLand() {
         assertTrue(coordinator.tryBegin(appId));
         approve(); drain();
         assertEquals(ProvisionResult.Status.BUSY, results.getFirst().status());
-        verifyNoInteractions(repository, sites, settlement, land);
+        verifyNoInteractions(repository, sites, wallet, land);
         assertFalse(coordinator.tryBegin(appId));
     }
 

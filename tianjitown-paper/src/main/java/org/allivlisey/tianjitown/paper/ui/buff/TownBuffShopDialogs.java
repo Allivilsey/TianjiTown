@@ -49,7 +49,7 @@ public final class TownBuffShopDialogs {
                 try {
                     quotes.put(definition.key(), runtime.buffs().repository().quoteBuff(
                             player.getUniqueId(), definition, 1, 1,
-                            runtime.settlement().scale(), Instant.now()));
+                            runtime.wallet().scale(), Instant.now()));
                 } catch (IllegalArgumentException | CommerceRepository.ConflictException exception) {
                     errors.put(definition.key(), exception.getMessage());
                 }
@@ -89,7 +89,7 @@ public final class TownBuffShopDialogs {
         runtime.read(player, () -> {
             BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey);
             CommerceRepository.SelectedBuffQuote quote = runtime.buffs().repository().quoteBuff(
-                    player.getUniqueId(), definition, 1, 1, runtime.settlement().scale(),
+                    player.getUniqueId(), definition, 1, 1, runtime.wallet().scale(),
                     Instant.now());
             return quote;
         }, quote -> {
@@ -149,7 +149,7 @@ public final class TownBuffShopDialogs {
         runtime.read(player, () -> {
             BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey);
             return runtime.buffs().repository().quoteBuff(player.getUniqueId(), definition,
-                    weeks, level, runtime.settlement().scale(), Instant.now());
+                    weeks, level, runtime.wallet().scale(), Instant.now());
         }, quote -> presentation.openConfirmation(player, presentation.dialogText("buff.confirm-title"), "BUY_BUFF",
                 buffKey + ":" + weeks + ":" + level + ":" + quote.context().townId()
                         + ":" + (quote.current() == null ? "none" : quote.current().buffId())

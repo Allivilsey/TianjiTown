@@ -63,7 +63,7 @@ class EconomyOperationRecoveryTest {
             assertEquals(5000, repository.findFinanceByTown(bravo.id()).orElseThrow().balanceMinor());
             assertEquals(1, countByKey(gate, "ledger_entries", "business_key", "resolved-paid"));
             assertEquals(1, countByKey(gate, "audit_logs", "target_id", operation.operationId().toString()));
-            assertTrue(repository.findFinanceByTown(alpha.id()).orElseThrow().locked());
+            assertFalse(repository.findFinanceByTown(alpha.id()).orElseThrow().locked());
             assertTrue(repository.reconcileSettlement(10_200).healthy());
             assertFalse(repository.findFinanceByTown(alpha.id()).orElseThrow().locked());
             assertFalse(repository.findFinanceByTown(bravo.id()).orElseThrow().locked());
@@ -88,7 +88,7 @@ class EconomyOperationRecoveryTest {
             assertEquals(5000, repository.findFinanceByTown(alpha.id()).orElseThrow().balanceMinor());
             assertEquals(0, countByKey(gate, "ledger_entries", "business_key", "resolved-unpaid"));
             assertEquals(1, countByKey(gate, "audit_logs", "target_id", operation.operationId().toString()));
-            assertTrue(repository.findFinanceByTown(alpha.id()).orElseThrow().locked());
+            assertFalse(repository.findFinanceByTown(alpha.id()).orElseThrow().locked());
             assertTrue(repository.reconcileSettlement(5000).healthy());
             assertFalse(repository.findFinanceByTown(alpha.id()).orElseThrow().locked());
         }

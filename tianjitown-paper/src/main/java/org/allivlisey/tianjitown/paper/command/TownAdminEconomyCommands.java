@@ -52,7 +52,7 @@ public final class TownAdminEconomyCommands {
                             candidate.profile().residenceName(), parsed.townName())).findFirst()
                     .orElseThrow(() -> facade.messageArgument("chat.admin.town-not-found-generic"));
             long amount = MoneyAmount.from(new BigDecimal(parsed.amount()),
-                    runtime.settlement().scale()).minorUnits();
+                    runtime.wallet().scale()).minorUnits();
             if (amount == 0) {
                 throw facade.messageArgument("chat.admin.money-adjust-zero");
             }
@@ -90,7 +90,7 @@ public final class TownAdminEconomyCommands {
         int level = Integer.parseInt(intensity);
         BuffDefinition definition = runtime.buffs().settings().requireBuff(buffKey.toLowerCase(Locale.ROOT));
         org.allivlisey.tianjitown.core.consumption.BuffPricing.weeklyPrice(definition, weeks, level,
-                runtime.settlement().scale());
+                runtime.wallet().scale());
         runtime.read(sender, () -> facade.requireTown(runtime, townCode), town ->
                 runtime.buffs().setBuffAction(sender, town.id(), definition, weeks, level,
                         purchase -> facade.send(sender, "chat.admin.buff-set-complete", Map.of(

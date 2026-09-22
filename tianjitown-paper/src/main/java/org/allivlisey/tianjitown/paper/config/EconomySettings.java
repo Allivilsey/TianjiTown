@@ -9,14 +9,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
 
-public record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, String settlementAccount,
+public record EconomySettings(boolean taxEnabled, boolean consumptionEnabled,
                           int fallbackScale, int maximumTaxBps, BigDecimal expansionCost,
                           int maximumUnits, BigDecimal weeklySubsidyLimit,
                           BigDecimal twelveHourSubsidyLimit) {
     private static final int MINIMUM_MONEY_SCALE = 0;
     private static final int MAXIMUM_MONEY_SCALE = 8;
-    private static final String SETTLEMENT_ACCOUNT_REQUIRED =
-            "validation.common.value-required";
     private static final String MONEY_SCALE_RANGE = "validation.economy.money-scale-range";
     private static final String EXPANSION_COST_POSITIVE =
             "validation.economy.expansion-cost-positive";
@@ -52,8 +50,6 @@ public record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, St
                                 BiFunction<String, Map<String, ?>, String> messageResolver) {
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(messageResolver, "messageResolver");
-        String account = ConfigurationValues.text(config, "economy.settlement-account", "tianjitown-tax",
-                messageResolver);
         int scale = ConfigurationValues.integer(config, "economy.money-scale", 2,
                 messageResolver);
         int maximumTaxBps = 2500;
@@ -64,11 +60,6 @@ public record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, St
         BigDecimal twelveHourSubsidyLimit = ConfigurationValues.decimalText(config,
                 "economy.tax.subsidy.twelve-hour-limit", "2000.00", messageResolver);
         int maximumUnits = org.allivlisey.tianjitown.core.land.TerritoryRules.MAXIMUM_UNITS;
-        if (account == null || account.isBlank()) {
-            throw new IllegalArgumentException(resolveMessage(messageResolver,
-                    SETTLEMENT_ACCOUNT_REQUIRED,
-                    Map.of("path", "economy.settlement-account")));
-        }
         if (scale < MINIMUM_MONEY_SCALE || scale > MAXIMUM_MONEY_SCALE) {
             throw new IllegalArgumentException(resolveMessage(messageResolver, MONEY_SCALE_RANGE,
                     Map.of("path", "economy.money-scale", "minimum", MINIMUM_MONEY_SCALE,
@@ -112,7 +103,7 @@ public record EconomySettings(boolean taxEnabled, boolean consumptionEnabled, St
                         messageResolver),
                 ConfigurationValues.bool(config, "economy.consumption.enabled", true,
                         messageResolver),
-                account.strip(), scale, maximumTaxBps, expansionCost, maximumUnits,
+                scale, maximumTaxBps, expansionCost, maximumUnits,
                 weeklySubsidyLimit, twelveHourSubsidyLimit);
     }
 

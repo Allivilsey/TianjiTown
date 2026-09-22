@@ -2,7 +2,7 @@ package org.allivlisey.tianjitown.paper.command;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
-import org.allivlisey.tianjitown.integrations.vault.VaultSettlementService;
+import org.allivlisey.tianjitown.integrations.vault.VaultPlayerEconomyService;
 import org.allivlisey.tianjitown.paper.TianjiTownPlugin;
 import org.allivlisey.tianjitown.paper.message.PluginMessages;
 import org.allivlisey.tianjitown.paper.runtime.TownApplicationFeeRuntime;
@@ -39,7 +39,7 @@ class TownAdminRecoveryCommandsTest {
     private final EconomyRepository finance = mock(EconomyRepository.class);
     private final TownRepository towns = mock(TownRepository.class);
     private final TownApplicationFeeRuntime fees = mock(TownApplicationFeeRuntime.class);
-    private final VaultSettlementService vault = mock(VaultSettlementService.class);
+    private final VaultPlayerEconomyService vault = mock(VaultPlayerEconomyService.class);
     private final CommandSender sender = mock(CommandSender.class);
     private final Player targetPlayer = mock(Player.class);
     private final BukkitCommandActor actor = mock(BukkitCommandActor.class);
@@ -67,7 +67,7 @@ class TownAdminRecoveryCommandsTest {
         when(runtime.finance()).thenReturn(finance);
         when(runtime.repository()).thenReturn(towns);
         when(runtime.applicationFees()).thenReturn(fees);
-        when(runtime.settlement()).thenReturn(vault);
+        when(runtime.wallet()).thenReturn(vault);
         when(vault.formatMinor(anyLong())).thenReturn("1.00");
         when(actor.sender()).thenReturn(sender);
         when(sender.getName()).thenReturn("Admin");
@@ -144,7 +144,6 @@ class TownAdminRecoveryCommandsTest {
 
         verify(finance).resolveTaxSubsidy(eq(subsidy), eq(true), any(),
                 eq("Admin"), eq("verified external statement"));
-        verify(runtime).reconcileSettlement();
     }
 
     @ParameterizedTest

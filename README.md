@@ -19,6 +19,8 @@
 
 ## 构建与安装
 
+升级前正常停服并备份 TianjiTown 与依赖数据。公共资金现由小镇数据库独立管理，玩家钱包继续通过 Vault 接入；不再创建或迁移 tax 账户，也不导入旧账户余额。旧配置兼容与 schema 1.1 升级见 [经济部署说明](docs/deployment/ECONOMY_AND_EXPANSION.md)。
+
 GitHub Actions 仅在分支 push 涉及根目录 `pom.xml` 时检查项目版本号；与本次 push 前相比，只有项目 `<version>` 变化才执行构建、测试、可复现性检查并上传 JAR。普通代码提交、PR 事件和新建分支不会构建；只修改依赖版本也不会构建。升级项目版本时应同步更新各子模块的父项目版本。构建产物使用仓库默认保留期限，不再单独设置 7 天；这不表示永久保存。
 
 使用 Maven 3.9+、JDK 25+：
@@ -29,7 +31,7 @@ mvn -B clean verify
 
 安装包为 `tianjitown-paper/target/TianjiTown-1.0.0.jar`。当前声明的 Paper API 版本为 `26.2`；服务端必须能加载该 API 并支持 Paper Dialog，具体服务器组合需在预发环境验证。
 
-1. 安装并启用 Residence、Vault、XConomy、WorldBorder、QuickShop-Hikari、Jobs、GlobalMarketPlus，确认 Vault 提供可用 Economy 服务。QuickShop 税务适配要求至少 `6.3.0.0` 并通过 API 能力检查。HuskSync 为可选集成。
+1. 安装并启用 Residence、Vault、WorldBorder、QuickShop-Hikari、Jobs、GlobalMarketPlus，安装 XConomy 或其他兼容玩家经济插件，确认 Vault 提供可用 Economy 服务。QuickShop 税务适配要求至少 `6.3.0.0` 并通过 API 能力检查。HuskSync 为可选集成。
 2. 通过 WorldBorder `/wb` 为开放选址的世界配置边界。选址检查整镇 5×5 单元网格，即 25×25 区块（625 区块）及缓冲范围，必须完整位于边界内；中心 5×5 区块是建镇后自动激活的初始单元。
 3. 将构建 JAR 放入 `plugins` 并启动。首次运行创建 `plugins/TianjiTown/config.yml`、`messages.yml` 和默认 SQLite 文件 `tianjitown.db`。
 4. 执行 `/tianjitown status`，待初始化完成、状态为 `READY` 后，核对诊断告警，再由游戏内管理员看向讲台执行 `/tianjitown station create`。待恢复业务不会阻止恢复入口启动；数据库完整性和必要依赖失败仍会阻止启动。
@@ -43,4 +45,4 @@ Paper API、Residence 和 Vault API 不打入安装包；项目模块和重定�
 
 SQLite 文件可由 `database.file` 指定，支持绝对路径和相对插件目录的路径。使用单连接、WAL、外键约束，默认连接等待和忙等待均为 5 秒。数据库路径和超时修改后需要重启插件或服务器。
 
-配置不设版本号。正式版数据库 schema 为 `1.1`，保留已发布的 `V1_0__initial_schema.sql`，通过 `V1_1__durable_financial_operations.sql` 为原 schema `1.0` 新增申请费与收入税操作表。首次安装依次执行两份迁移；已有生产数据库只执行新增迁移，保留原数据。不自动修复被改写的迁移历史，也不提供 MySQL 自动导入。升级、备份和回退步骤见 [SQLite 备份手册](docs/operations/SQLITE_AND_BACKUP.md)。
+配置不设版本号，插件版本与数据库 schema 版本分别管理。当前数据库目标 schema 为 `1.1`，保留已发布的 `V1_0__initial_schema.sql`；本次升级统一由 `V1_1` 新增申请费与收入税操作表，并清理停用外部税收账户后的旧清算锁。正式服 schema `1.0` 只执行一次 `V1_1` 迁移升级到 `1.1`；首次安装依次执行两份迁移，既有数据库保留原数据。不自动修复被改写的迁移历史，也不提供 MySQL 自动导入。升级、备份和回退步骤见 [SQLite 备份手册](docs/operations/SQLITE_AND_BACKUP.md)。

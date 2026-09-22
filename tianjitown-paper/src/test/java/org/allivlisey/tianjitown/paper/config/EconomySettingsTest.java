@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -26,7 +27,6 @@ class EconomySettingsTest {
 
         assertTrue(settings.taxEnabled());
         assertTrue(settings.consumptionEnabled());
-        assertEquals("tianjitown-tax", settings.settlementAccount());
         assertEquals(2, settings.fallbackScale());
         assertEquals(2500, settings.maximumTaxBps());
         assertEquals(new BigDecimal("5000.00"), settings.expansionCost());
@@ -73,9 +73,7 @@ class EconomySettingsTest {
             assertFalse(rendered.contains("{"));
         }
 
-        assertEquals(messages.plainText("validation.common.value-required",
-                Map.of("path", "economy.settlement-account")),
-                reject(configuration("economy.settlement-account", ""), messages).getMessage());
+        assertDoesNotThrow(() -> EconomySettings.load(configuration("economy.settlement-account", ""), messages::plainText));
         assertEquals(messages.plainText("validation.economy.money-scale-range",
                 Map.of("path", "economy.money-scale", "minimum", 0, "maximum", 8)),
                 reject(configuration("economy.money-scale", 9), messages).getMessage());
@@ -107,14 +105,14 @@ class EconomySettingsTest {
         assertEquals(messages.plainText("validation.economy.expansion-cost-overflow"),
                 overflow.getCause().getMessage());
 
-        String key = "validation.common.value-required";
+        String key = "validation.economy.money-scale-range";
         YamlConfiguration override = new YamlConfiguration();
         override.set(key, "自定义经济配置错误: {path}");
         override.save(temporaryDirectory.resolve("messages.yml").toFile());
         messages.reload();
 
-        assertEquals("自定义经济配置错误: economy.settlement-account",
-                reject(configuration("economy.settlement-account", ""), messages).getMessage());
+        assertEquals("自定义经济配置错误: economy.money-scale",
+                reject(configuration("economy.money-scale", 9), messages).getMessage());
     }
 
     private static IllegalArgumentException reject(MemoryConfiguration config,

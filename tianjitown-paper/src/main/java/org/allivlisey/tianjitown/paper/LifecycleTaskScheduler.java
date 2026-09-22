@@ -167,9 +167,6 @@ final class LifecycleTaskScheduler {
     }
 
     void registerPeriodic(TownRuntime runtime) {
-        registerPeriodicTask(
-                () -> runPeriodic("log.scheduler.periodic.settlement-privacy-failure",
-                        runtime.settlementPrivacy()::enforce), 20L * 60, 20L * 60);
         registerPeriodicTask(() -> {
             if (plugin.townUi() != null) plugin.townUi().deliverPlayerChanges();
         }, 20L, 20L);
@@ -184,11 +181,6 @@ final class LifecycleTaskScheduler {
                 () -> runPeriodic(PERIODIC_VOTE_SETTLEMENT_FAILURE,
                         runtime::settleDueVotes), 20L * 30,
                 20L * 60);
-        registerPeriodicTask(
-                () -> runPeriodic(PERIODIC_SETTLEMENT_RECONCILIATION_FAILURE,
-                        runtime::reconcileSettlement), 20L * 20,
-                20L * 60 * Math.max(1,
-                        plugin.getConfig().getLong("economy.reconciliation-interval-minutes", 5)));
         registerPeriodicTask(
                 () -> runPeriodic(PERIODIC_TERRITORY_BONUS_INDEX_FAILURE,
                         runtime.bonuses()::refreshIndex),

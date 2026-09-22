@@ -104,7 +104,7 @@ public final class TownFinanceDialogs {
                 && account.unitCount() < runtime.economySettings().maximumUnits()) {
             long expansionPriceMinor = ExpansionPricing.price(
                     runtime.economySettings().expansionCost(), account.unitCount() - 1,
-                    runtime.settlement().scale())
+                    runtime.wallet().scale())
                     .minorUnits();
             items.add(new MenuItem(16, presentation.button(Material.FILLED_MAP, presentation.dialogText("finance.expansion"),
                     List.of(presentation.dialogText("tooltip.finance.expansion", Map.of("price",
@@ -342,7 +342,7 @@ public final class TownFinanceDialogs {
                     presentation.dialogText("donation.balance", Map.of(
                             "balance", TownUiLegacyFacade.safeText(runtime.money(account.balanceMinor())))),
                     presentation.dialogText("donation.amount-hint", Map.of(
-                            "scale", runtime.settlement().scale()))));
+                            "scale", runtime.wallet().scale()))));
             if (error != null && !error.isBlank()) {
                 description.add(presentation.dialogText("common.error", Map.of("error", TownUiLegacyFacade.safeText(error))));
             }
@@ -373,7 +373,7 @@ public final class TownFinanceDialogs {
         String value = Objects.requireNonNullElse(response.getText("donation_amount"), "").strip();
         try {
             BigDecimal decimal = new BigDecimal(value);
-            MoneyAmount amount = MoneyAmount.from(decimal, runtime.settlement().scale());
+            MoneyAmount amount = MoneyAmount.from(decimal, runtime.wallet().scale());
             if (!amount.positive()) {
                 throw new IllegalArgumentException(plugin.messages().plainText(
                         "validation.vault.donation-amount-positive"));
