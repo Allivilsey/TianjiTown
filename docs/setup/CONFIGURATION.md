@@ -93,4 +93,6 @@
 
 修改 `messages.yml` 后执行 `reload`。保留占位符名称，例如 `{town}`、`{player}`、`{reason}`；它们由调用处填入，改名会造成信息缺失。已有自定义值不会被内置文案覆盖，缺少的消息使用内置默认值。配置开关和提示文字是两回事，改提示不能改变业务限制。
 
-旧 `economy.settlement-account`、`economy.reconciliation-interval-minutes` 和 `operations.quickshop-diagnostic-days` 已停用，升级时可保留但不再读取。公共资金仅存于小镇数据库。
+旧 `economy.settlement-account` 仍在启动时读取，仅用于一次性旧账户清理：明确配置为 `tax` 或 `tianjitown-tax` 且满足清理条件时，删除旧版 TianjiTown 绑定的 XConomy 账户及其余额，不导入小镇资金。缺少该键或使用自定义账户名时跳过。升级时保留旧配置及身份绑定、清理记录文件，具体条件见 [临时旧 tax 账户清理](../deployment/ECONOMY_AND_EXPANSION.md#临时旧-tax-账户清理)。
+
+旧 `economy.reconciliation-interval-minutes` 和 `operations.quickshop-diagnostic-days` 不再读取。公共资金仅存于小镇数据库。

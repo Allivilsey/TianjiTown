@@ -10,7 +10,7 @@
 | `TownRuntimeTasks` | 工作线程执行、主线程回调、共享数据库可用状态和失败处理 |
 | `TownTaxRuntime` | 税率缓存、QuickShop/Jobs/GlobalMarketPlus 税收结算、账本重试队列 |
 | `TownIncomeTaxCollectionRuntime` | Jobs/GMP 收税前持久化、外部付款结果记录、异常税款核实与退款 |
-| `TownEconomyRuntime` | 捐款、管理员调账、税率修改、外部清算与补偿退款 |
+| `TownEconomyRuntime` | 捐款、管理员调账、税率修改、玩家钱包扣款、资金操作核实与补偿退款 |
 | `TownProvisionRuntime` | 审核扣费、建镇、初始 Residence 投影与传送点 |
 | `TownProvisionRecovery` | 失败建镇的检查、投影清理和申请费退款 |
 | `TownApplicationFeeRuntime` / `TownProvisionDeletionGuard` | 申请费用核实和退款、建镇与删除的共享互斥 |
@@ -68,7 +68,7 @@
 | 组件 | 职责 |
 | --- | --- |
 | `EconomyTaxStore` | 税率、补贴周期与额度、交易税款入账 |
-| `EconomyOperationStore` | 外部经济操作状态机、补偿和清算对账 |
+| `EconomyOperationStore` | 外部经济操作状态机、补偿；保留旧清算对账接口，当前运行时不调用 |
 | `IncomeTaxCollectionStore` | Jobs/GMP 每次税款收取及退款状态、幂等认领、重启核实 |
 | `EconomyLedgerStore` | 账本分页、展示聚合和操作人名称补全 |
 | `TerritoryExpansionStore` | 领地预留、单格/批量扩张、结算与退款 |
@@ -92,7 +92,7 @@
 
 ## 验证
 
-执行 `mvn -B clean verify`。存储测试覆盖真实 SQLite 的申请/成员流程、事务回滚、并发约束和扩张退款；运行时行为测试覆盖数据库写入门禁、工作线程与主线程回调，以及税款账本重试不会重复外部清算。
+执行 `mvn -B clean verify`。存储测试覆盖真实 SQLite 的申请/成员流程、事务回滚、并发约束和扩张退款；运行时行为测试覆盖数据库写入门禁、工作线程与主线程回调，以及税款账本重试不会重复扣除玩家钱包。
 
 `BuffExpirationSchedulerTest` 覆盖到期时间选择、旧回调失效、退出取消本服任务、调度失败恢复与停服取消；`BuffRuntimeTest` 覆盖异步刷新顺序、重生清理与恢复、应用失败退款，以及离线玩家到期清理失败后的重试。
 

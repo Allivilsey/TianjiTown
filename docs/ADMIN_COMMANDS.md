@@ -133,7 +133,7 @@ Jobs 汇总为“职业收入”，QuickShop 与 GlobalMarketPlus 合并为“�
 
 | 命令 | 具体用途与执行后果 | 权限 |
 |---|---|---|
-| `/tianjitown buff list <小镇代码>` | 查看当前有效 Buff 的 UUID、商品键、等级、层数和到期时间；不是商店商品目录 | 全部 |
+| `/tianjitown buff list <小镇代码>` | 查看当前有效 Buff 的 UUID、商品键、等级和到期时间；不是商店商品目录 | 全部 |
 | `/tianjitown buff set <小镇代码> <buffKey> [周数] [等级]` | 免费设置并覆盖同类效果；默认 1 周、1 级，周数 1～4，等级不超过 min(5, 商品上限)，余额不变 | 全部 |
 
 默认商品键：`speed`、`health`、`diving`、`safe_fall`、`mining`。完整价格见 [定价说明](deployment/PRICING.md)。

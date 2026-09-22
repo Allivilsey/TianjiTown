@@ -70,9 +70,8 @@ TianjiTown 使用标准 Bukkit 插件启停流程，无需安装 PlugMan API 依
 | Residence 缺失或权限不符 | 先 `land reconcile <小镇代码>` 只读检查，排除世界未加载、同名外部领地和 API 故障，再显式加 `repair`；`rebuild` 会先删除投影，需要确认 |
 | 捐款退款失败 | 当前进程有界自动重试，成功后完成数据库收尾并解除对应操作锁；不要重复手工入账。重试耗尽或中途停服时，按操作 ID 核对玩家、小镇账户与流水 |
 | QuickShop 收税异常 | 查看税务适配和入账错误日志，核实交易方向、收款人、税额及本地账本；需要纠正时使用管理员调账 |
-| 诊断 INCOMPLETE | 检查查询失败和 1000 条上限，可缩短回看窗口复核；不能把扫描不完整当成一致 |
 
-`diagnose` 只读，检查 SQLite 和 Residence，不读取 QuickShop 历史。后台自动对账会修复领地，手动 `land reconcile ... repair` 可立即触发；两者与诊断是不同操作。
+`diagnose` 只读，检查 SQLite 和 Residence，不读取 QuickShop 历史，也不接受回看天数参数。诊断告警应按报告中的数据库异常计数、世界 UUID 和 Residence 差异逐项处理。后台自动对账会修复领地，手动 `land reconcile ... repair` 可立即触发；两者与诊断是不同操作。
 
 领地权限核对直接读取玩家 UUID 对应的权限条目，按 Residence 当前 `padd` 权限组及小镇额外授权检查，不依赖玩家是否在线或已进入 Residence 玩家缓存。后台自动修复写入成功后会再次检查领地；复查通过才记录“已修复”，仍有差异则报告具体失败原因，API 异常也不会记作修复成功。
 
